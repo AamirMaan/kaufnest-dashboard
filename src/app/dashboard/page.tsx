@@ -1,12 +1,15 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useAppSelector } from "@/store/hooks";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { getMonthRange } from "@/lib/utils/date";
-import type { Expense, Purchase, Sale } from "@/types";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
+export default function DashboardPage() {
+  const sales = useAppSelector((s) => s.sales.items);
+  const expenses = useAppSelector((s) => s.expenses.items);
+  const purchases = useAppSelector((s) => s.purchases.items);
 
   const now = new Date();
   const { from: firstDay, to: lastDay } = getMonthRange(
@@ -14,31 +17,13 @@ export default async function DashboardPage() {
     now.getMonth() + 1
   );
 
-  const [{ data: sales }, { data: expenses }, { data: purchases }] =
-    await Promise.all([
-      supabase
-        .from("sales")
-        .select("total_amount, currency")
-        .gte("date", firstDay)
-        .lte("date", lastDay)
-        .returns<Pick<Sale, "total_amount" | "currency">[]>(),
-      supabase
-        .from("expenses")
-        .select("amount, currency")
-        .gte("date", firstDay)
-        .lte("date", lastDay)
-        .returns<Pick<Expense, "amount" | "currency">[]>(),
-      supabase
-        .from("purchases")
-        .select("total_amount, currency")
-        .gte("date", firstDay)
-        .lte("date", lastDay)
-        .returns<Pick<Purchase, "total_amount" | "currency">[]>(),
-    ]);
+  const thisMonthSales = sales.filter((s) => s.date >= firstDay && s.date <= lastDay);
+  const thisMonthExpenses = expenses.filter((e) => e.date >= firstDay && e.date <= lastDay);
+  const thisMonthPurchases = purchases.filter((p) => p.date >= firstDay && p.date <= lastDay);
 
-  const totalRevenue = (sales ?? []).reduce((s, r) => s + r.total_amount, 0);
-  const totalExpenses = (expenses ?? []).reduce((s, r) => s + r.amount, 0);
-  const totalPurchases = (purchases ?? []).reduce((s, r) => s + r.total_amount, 0);
+  const totalRevenue = thisMonthSales.reduce((s, r) => s + r.total_amount, 0);
+  const totalExpenses = thisMonthExpenses.reduce((s, r) => s + r.amount, 0);
+  const totalPurchases = thisMonthPurchases.reduce((s, r) => s + r.total_amount, 0);
   const netProfit = calculateNetProfit(totalRevenue, totalExpenses, totalPurchases);
 
   const monthLabel = now.toLocaleString("de-DE", { month: "long", year: "numeric" });
@@ -74,9 +59,12 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-700 mb-1">Quick Start</h2>
-        <p className="text-sm text-slate-500">
+      <div
+        className="bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border)] p-6"
+        style={{ boxShadow: "var(--shadow-card)" }}
+      >
+        <h2 className="text-sm font-semibold text-[var(--color-text-base)] mb-1">Quick Start</h2>
+        <p className="text-sm text-[var(--color-text-muted)]">
           Use the sidebar to navigate to Sales, Expenses, and Purchases. All
           figures above are for the current calendar month and use EUR as the
           base currency.

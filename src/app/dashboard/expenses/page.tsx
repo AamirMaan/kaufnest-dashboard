@@ -1,20 +1,56 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { DataTable } from "@/components/ui/DataTable";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import type { Expense } from "@/types";
 import Link from "next/link";
 
-export default async function ExpensesPage() {
-  const supabase = await createClient();
+export default function ExpensesPage() {
+  const expenses = useAppSelector((s) => s.expenses.items);
 
-  const { data: expenses } = await supabase
-    .from("expenses")
-    .select("*")
-    .order("date", { ascending: false })
-    .limit(100)
-    .returns<Expense[]>();
+  const columns = [
+    {
+      header: "Date",
+      render: (e: Expense) => (
+        <span className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">
+          {formatDate(e.date)}
+        </span>
+      ),
+    },
+    {
+      header: "Title",
+      render: (e: Expense) => (
+        <span className="text-sm font-medium text-[var(--color-text-strong)]">
+          {e.title}
+        </span>
+      ),
+    },
+    {
+      header: "Category",
+      render: (e: Expense) => <CategoryBadge category={e.category} />,
+    },
+    {
+      header: "Vendor",
+      render: (e: Expense) => (
+        <span className="text-sm text-[var(--color-text-muted)]">
+          {e.vendor ?? "—"}
+        </span>
+      ),
+    },
+    {
+      header: "Amount",
+      render: (e: Expense) => (
+        <span className="text-sm font-semibold text-[var(--color-danger)] tabular-nums">
+          {formatCurrency(e.amount, e.currency)}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -22,60 +58,17 @@ export default async function ExpensesPage() {
         title="Expenses"
         description="All business expenses"
         action={
-          <Link
-            href="/dashboard/expenses/new"
-            className="inline-flex items-center rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition-colors"
-          >
-            + Add Expense
+          <Link href="/dashboard/expenses/new">
+            <Button>+ Add Expense</Button>
           </Link>
         }
       />
-
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              {["Date", "Title", "Category", "Vendor", "Amount"].map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {(expenses ?? []).length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">
-                  No expenses yet. Add your first expense.
-                </td>
-              </tr>
-            ) : (
-              (expenses ?? []).map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                    {formatDate(e.date)}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                    {e.title}
-                  </td>
-                  <td className="px-4 py-3">
-                    <CategoryBadge category={e.category} />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-500">
-                    {e.vendor ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-red-600 tabular-nums">
-                    {formatCurrency(e.amount, e.currency)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={expenses}
+        keyField="id"
+        emptyMessage="No expenses yet. Add your first expense."
+      />
     </div>
   );
 }

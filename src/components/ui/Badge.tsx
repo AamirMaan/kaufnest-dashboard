@@ -3,11 +3,11 @@ import type { ExpenseCategory, Platform, UserRole, AuditAction } from "@/types";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  default: "bg-slate-100 text-slate-700",
-  success: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-red-50 text-red-700",
-  info: "bg-indigo-50 text-indigo-700",
+  default: "bg-[var(--color-surface-subtle)] text-[var(--color-text-base)]",
+  success: "bg-[var(--color-success-bg)] text-[var(--color-success-text)]",
+  warning: "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]",
+  danger:  "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]",
+  info:    "bg-[var(--color-info-bg)] text-[var(--color-info-text)]",
 };
 
 const ROLE_VARIANTS: Record<UserRole, BadgeVariant> = {
@@ -33,7 +33,7 @@ interface BadgeProps {
 export function Badge({ label, variant = "default" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${VARIANT_CLASSES[variant]}`}
+      className={`inline-flex items-center rounded-[var(--radius-badge)] px-2.5 py-0.5 text-xs font-medium ${VARIANT_CLASSES[variant]}`}
     >
       {label}
     </span>

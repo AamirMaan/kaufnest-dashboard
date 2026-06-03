@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/Sidebar";
-import type { Profile } from "@/types";
+import { StoreProvider } from "@/store/StoreProvider";
+import type { Profile, Sale, Expense, Purchase, AuditLog } from "@/types";
 
 export default async function DashboardLayout({
   children,
@@ -14,9 +15,7 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -24,18 +23,63 @@ export default async function DashboardLayout({
     .eq("id", user.id)
     .single<Profile>();
 
-  if (!profile) {
-    redirect("/login");
-  }
+  if (!profile) redirect("/login");
+
+  // Fetch all collections once — hydrated into Redux so pages never refetch.
+  const [
+    { data: sales },
+    { data: expenses },
+    { data: purchases },
+    { data: auditLogs },
+    { data: users },
+  ] = await Promise.all([
+    supabase
+      .from("sales")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(100)
+      .returns<Sale[]>(),
+    supabase
+      .from("expenses")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(100)
+      .returns<Expense[]>(),
+    supabase
+      .from("purchases")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(100)
+      .returns<Purchase[]>(),
+    supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .returns<AuditLog[]>(),
+    supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .returns<Profile[]>(),
+  ]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar
-        role={profile.role}
-        fullName={profile.full_name}
-        email={profile.email}
-      />
-      <main className="flex-1 p-8 overflow-auto">{children}</main>
-    </div>
+    <StoreProvider
+      sales={sales ?? []}
+      expenses={expenses ?? []}
+      purchases={purchases ?? []}
+      auditLogs={auditLogs ?? []}
+      users={users ?? []}
+    >
+      <div className="flex min-h-screen bg-[var(--color-surface-subtle)]">
+        <Sidebar
+          role={profile.role}
+          fullName={profile.full_name}
+          email={profile.email}
+        />
+        <main className="flex-1 p-8 overflow-auto">{children}</main>
+      </div>
+    </StoreProvider>
   );
 }

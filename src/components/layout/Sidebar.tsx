@@ -72,13 +72,13 @@ export function Sidebar({ role, fullName, email }: SidebarProps) {
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
   return (
-    <aside className="w-64 min-h-screen bg-slate-900 border-r border-slate-800 flex flex-col">
+    <aside className="w-64 min-h-screen bg-[var(--color-sidebar-bg)] border-r border-[var(--color-sidebar-border)] flex flex-col">
       {/* Brand */}
-      <div className="px-6 py-5 border-b border-slate-800">
+      <div className="px-6 py-5 border-b border-[var(--color-sidebar-border)]">
         <span className="text-xl font-bold text-white tracking-tight">
-          Kauf<span className="text-indigo-400">Nest</span>
+          Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
         </span>
-        <p className="text-xs text-slate-500 mt-0.5">Business Dashboard</p>
+        <p className="text-xs text-[var(--color-text-faint)] mt-0.5">Business Dashboard</p>
       </div>
 
       {/* Navigation */}
@@ -93,10 +93,10 @@ export function Sidebar({ role, fullName, email }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-[var(--radius-btn)] text-sm font-medium transition-colors ${
                 isActive
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  ? "bg-[var(--color-sidebar-active)] text-white"
+                  : "text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)]"
               }`}
             >
               <span className="text-base leading-none">{item.icon}</span>
@@ -107,17 +107,17 @@ export function Sidebar({ role, fullName, email }: SidebarProps) {
       </nav>
 
       {/* User info + sign-out */}
-      <div className="px-4 py-4 border-t border-slate-800 space-y-2">
+      <div className="px-4 py-4 border-t border-[var(--color-sidebar-border)] space-y-2">
         <div className="px-2">
           <p className="text-sm font-medium text-white truncate">{fullName || email}</p>
-          <p className="text-xs text-slate-500 truncate">{email}</p>
-          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-800 text-indigo-300">
+          <p className="text-xs text-[var(--color-text-faint)] truncate">{email}</p>
+          <span className="inline-block mt-1 px-2 py-0.5 rounded-[var(--radius-badge)] text-xs font-medium bg-[var(--color-sidebar-border)] text-[var(--color-primary-hover)]">
             {role.replace("_", " ")}
           </span>
         </div>
         <button
           onClick={handleSignOut}
-          className="w-full text-left px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="w-full text-left px-3 py-2 rounded-[var(--radius-btn)] text-sm text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors"
         >
           Sign out
         </button>
