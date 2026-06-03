@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { canAccessRoute } from "@/lib/utils/permissions";
 import type { UserRole } from "@/types";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

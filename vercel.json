@@ -1,0 +1,6 @@
+{
+  "regions": ["fra1"],
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}
