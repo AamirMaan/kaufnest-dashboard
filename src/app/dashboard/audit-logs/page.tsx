@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
 import { ActionBadge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { AuditLogDetailModal } from "@/components/modals/AuditLogDetailModal";
 import { formatDateTime } from "@/lib/utils/date";
 import type { AuditLog } from "@/types";
 
 export default function AuditLogsPage() {
   const logs = useAppSelector((s) => s.auditLogs.items);
+  const [viewTarget, setViewTarget] = useState<AuditLog | null>(null);
 
   const columns = [
     {
@@ -22,9 +26,7 @@ export default function AuditLogsPage() {
     {
       header: "User",
       render: (log: AuditLog) => (
-        <span className="text-sm text-[var(--color-text-base)]">
-          {log.user_email ?? "—"}
-        </span>
+        <span className="text-sm text-[var(--color-text-base)]">{log.user_email ?? "—"}</span>
       ),
     },
     {
@@ -45,11 +47,9 @@ export default function AuditLogsPage() {
       ),
     },
     {
-      header: "Details",
+      header: "View",
       render: (log: AuditLog) => (
-        <span className="text-xs font-mono text-[var(--color-text-faint)] max-w-xs truncate block">
-          {log.metadata ? JSON.stringify(log.metadata) : "—"}
-        </span>
+        <Button size="sm" variant="ghost" onClick={() => setViewTarget(log)}>View</Button>
       ),
     },
   ];
@@ -66,6 +66,7 @@ export default function AuditLogsPage() {
         keyField="id"
         emptyMessage="No audit logs yet."
       />
+      <AuditLogDetailModal log={viewTarget} onClose={() => setViewTarget(null)} />
     </div>
   );
 }

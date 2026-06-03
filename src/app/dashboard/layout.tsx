@@ -71,6 +71,7 @@ export default async function DashboardLayout({
       purchases={purchases ?? []}
       auditLogs={auditLogs ?? []}
       users={users ?? []}
+      currentUser={profile}
     >
       <div className="flex min-h-screen bg-[var(--color-surface-subtle)]">
         <Sidebar
