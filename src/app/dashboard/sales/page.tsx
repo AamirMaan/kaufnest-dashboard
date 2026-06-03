@@ -1,17 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { PlatformBadge } from "@/components/ui/Badge";
+import { AddSaleModal } from "@/components/modals/AddSaleModal";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import type { Sale } from "@/types";
-import Link from "next/link";
 
 export default function SalesPage() {
   const sales = useAppSelector((s) => s.sales.items);
+  const [open, setOpen] = useState(false);
 
   const columns = [
     {
@@ -65,11 +67,7 @@ export default function SalesPage() {
       <PageHeader
         title="Sales"
         description="Revenue from all platforms"
-        action={
-          <Link href="/dashboard/sales/new">
-            <Button>+ Add Sale</Button>
-          </Link>
-        }
+        action={<Button onClick={() => setOpen(true)}>+ Add Sale</Button>}
       />
       <DataTable
         columns={columns}
@@ -77,6 +75,7 @@ export default function SalesPage() {
         keyField="id"
         emptyMessage="No sales yet. Add your first sale."
       />
+      <AddSaleModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

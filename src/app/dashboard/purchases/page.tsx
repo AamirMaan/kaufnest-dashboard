@@ -1,16 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
+import { AddPurchaseModal } from "@/components/modals/AddPurchaseModal";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import type { Purchase } from "@/types";
-import Link from "next/link";
 
 export default function PurchasesPage() {
   const purchases = useAppSelector((s) => s.purchases.items);
+  const [open, setOpen] = useState(false);
 
   const columns = [
     {
@@ -68,11 +70,7 @@ export default function PurchasesPage() {
       <PageHeader
         title="Purchases"
         description="Inventory and stock purchases"
-        action={
-          <Link href="/dashboard/purchases/new">
-            <Button>+ Add Purchase</Button>
-          </Link>
-        }
+        action={<Button onClick={() => setOpen(true)}>+ Add Purchase</Button>}
       />
       <DataTable
         columns={columns}
@@ -80,6 +78,7 @@ export default function PurchasesPage() {
         keyField="id"
         emptyMessage="No purchases yet. Add your first purchase."
       />
+      <AddPurchaseModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

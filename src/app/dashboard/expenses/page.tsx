@@ -1,17 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { CategoryBadge } from "@/components/ui/Badge";
+import { AddExpenseModal } from "@/components/modals/AddExpenseModal";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import type { Expense } from "@/types";
-import Link from "next/link";
 
 export default function ExpensesPage() {
   const expenses = useAppSelector((s) => s.expenses.items);
+  const [open, setOpen] = useState(false);
 
   const columns = [
     {
@@ -57,11 +59,7 @@ export default function ExpensesPage() {
       <PageHeader
         title="Expenses"
         description="All business expenses"
-        action={
-          <Link href="/dashboard/expenses/new">
-            <Button>+ Add Expense</Button>
-          </Link>
-        }
+        action={<Button onClick={() => setOpen(true)}>+ Add Expense</Button>}
       />
       <DataTable
         columns={columns}
@@ -69,6 +67,7 @@ export default function ExpensesPage() {
         keyField="id"
         emptyMessage="No expenses yet. Add your first expense."
       />
+      <AddExpenseModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }
