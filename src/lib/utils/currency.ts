@@ -1,0 +1,42 @@
+import type { Currency } from "@/types";
+
+/**
+ * Format a number as a German-locale currency string.
+ * e.g. formatCurrency(1234.5, "EUR") → "1.234,50 €"
+ */
+export function formatCurrency(amount: number, currency: Currency = "EUR"): string {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/**
+ * Calculate net profit: revenue - expenses - purchases.
+ */
+export function calculateNetProfit(
+  revenue: number,
+  expenses: number,
+  purchases: number
+): number {
+  return revenue - expenses - purchases;
+}
+
+/**
+ * Sum an array of amounts, rounding to 2 decimal places.
+ */
+export function sumAmounts(amounts: number[]): number {
+  const total = amounts.reduce((acc, v) => acc + v, 0);
+  return Math.round(total * 100) / 100;
+}
+
+/**
+ * Calculate margin percentage.
+ * Returns null if revenue is 0 to avoid division by zero.
+ */
+export function calculateMargin(revenue: number, cost: number): number | null {
+  if (revenue === 0) return null;
+  return Math.round(((revenue - cost) / revenue) * 10000) / 100; // 2 decimal %
+}
