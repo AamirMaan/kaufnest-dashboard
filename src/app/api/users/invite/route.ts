@@ -51,8 +51,12 @@ export async function POST(request: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+
   const { data: inviteData, error: inviteError } =
-    await adminClient.auth.admin.inviteUserByEmail(email);
+    await adminClient.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+    });
 
   if (inviteError) {
     return NextResponse.json({ error: inviteError.message }, { status: 400 });

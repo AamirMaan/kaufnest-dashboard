@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkError = searchParams.get("error") === "invalid_link";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +51,12 @@ export default function LoginPage() {
       >
         <h1 className="text-lg font-semibold text-white mb-1">Sign in</h1>
 
+        {linkError && (
+          <div className="rounded-lg bg-yellow-950 border border-yellow-800 px-4 py-3 text-sm text-yellow-300">
+            Your link has expired or is invalid. Please sign in or request a new one.
+          </div>
+        )}
+
         {error && (
           <div className="rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300">
             {error}
@@ -71,9 +80,14 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="password" className="block text-sm font-medium text-slate-300">
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+              Password
+            </label>
+            <Link href="/forgot-password" className="text-xs text-slate-400 hover:text-white transition-colors">
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"
