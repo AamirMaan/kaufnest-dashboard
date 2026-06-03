@@ -48,7 +48,7 @@ export function Textarea(props: TextareaProps) {
   return <textarea rows={3} className={inputClass} {...props} />;
 }
 
-/** Two columns side by side on ≥ sm screens */
+/** Two columns side by side on ≥ sm screens, single column on mobile */
 export function Row({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-4">{children}</div>;
+  return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>;
 }

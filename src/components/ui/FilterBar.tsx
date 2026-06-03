@@ -55,7 +55,7 @@ export function FilterBar({
   children,
 }: FilterBarProps) {
   return (
-    <div className="mb-4 flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
+    <div className="mb-4 grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
       {/* Date preset */}
       <div>
         <FilterLabel>Date Range</FilterLabel>

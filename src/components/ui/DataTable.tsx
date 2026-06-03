@@ -47,9 +47,10 @@ export function DataTable<T>({
 
   return (
     <div
-      className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border)]"
+      className="rounded-[var(--radius-card)] border border-[var(--color-border)] overflow-hidden"
       style={{ boxShadow: "var(--shadow-card)" }}
     >
+      <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-[var(--color-border)]">
         <thead className="bg-[var(--color-surface-subtle)]">
           <tr>
@@ -117,6 +118,7 @@ export function DataTable<T>({
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
