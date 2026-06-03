@@ -30,6 +30,23 @@ describe("formatCurrency", () => {
     // Negative sign or minus symbol should appear
     expect(result).toMatch(/-|−/);
   });
+
+  it("formats USD amounts and includes dollar symbol", () => {
+    const result = formatCurrency(99.99, "USD");
+    expect(result).toContain("99");
+    expect(result).toMatch(/\$|USD/);
+  });
+
+  it("formats GBP amounts and includes pound symbol", () => {
+    const result = formatCurrency(50, "GBP");
+    expect(result).toMatch(/£|GBP/);
+  });
+
+  it("formats large amounts correctly", () => {
+    const result = formatCurrency(1_000_000, "EUR");
+    expect(result).toContain("€");
+    expect(result).toContain("1");
+  });
 });
 
 describe("calculateNetProfit", () => {
@@ -43,6 +60,14 @@ describe("calculateNetProfit", () => {
 
   it("returns zero when all inputs are zero", () => {
     expect(calculateNetProfit(0, 0, 0)).toBe(0);
+  });
+
+  it("handles decimal values correctly", () => {
+    expect(calculateNetProfit(1000.50, 200.25, 300.25)).toBe(500);
+  });
+
+  it("returns revenue when costs are zero", () => {
+    expect(calculateNetProfit(750, 0, 0)).toBe(750);
   });
 });
 
@@ -58,6 +83,19 @@ describe("sumAmounts", () => {
   it("rounds to 2 decimal places", () => {
     // Floating point: 0.1 + 0.2 = 0.30000000000000004 without rounding
     expect(sumAmounts([0.1, 0.2])).toBe(0.3);
+  });
+
+  it("handles a single-element array", () => {
+    expect(sumAmounts([42.99])).toBe(42.99);
+  });
+
+  it("handles large arrays", () => {
+    const amounts = Array.from({ length: 100 }, () => 1.01);
+    expect(sumAmounts(amounts)).toBe(101);
+  });
+
+  it("handles negative amounts in the array", () => {
+    expect(sumAmounts([100, -30, 20])).toBe(90);
   });
 });
 
@@ -76,5 +114,13 @@ describe("calculateMargin", () => {
 
   it("returns negative margin when cost exceeds revenue", () => {
     expect(calculateMargin(100, 200)).toBe(-100);
+  });
+
+  it("returns 0% margin when cost equals revenue", () => {
+    expect(calculateMargin(500, 500)).toBe(0);
+  });
+
+  it("returns 50% margin when cost is half of revenue", () => {
+    expect(calculateMargin(200, 100)).toBe(50);
   });
 });

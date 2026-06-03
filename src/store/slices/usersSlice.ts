@@ -19,6 +19,9 @@ export const usersSlice = createSlice({
       state.items = action.payload;
       state.loaded = true;
     },
+    addUser(state, action: PayloadAction<Profile>) {
+      state.items.push(action.payload);
+    },
     updateUserRole(
       state,
       action: PayloadAction<{ id: string; role: Profile["role"] }>
@@ -29,4 +32,4 @@ export const usersSlice = createSlice({
   },
 });
 
-export const { hydrate: hydrateUsers, updateUserRole } = usersSlice.actions;
+export const { hydrate: hydrateUsers, addUser, updateUserRole } = usersSlice.actions;

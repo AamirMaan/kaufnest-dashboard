@@ -15,6 +15,7 @@ const PERMISSIONS = {
   delete_sale: ["super_admin", "admin"],
   // User management
   manage_users: ["super_admin"],
+  invite_user: ["super_admin"],
   change_user_role: ["super_admin"],
   // Audit logs
   view_audit_logs: ["super_admin", "admin"],

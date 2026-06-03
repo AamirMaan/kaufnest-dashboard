@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { addSale } from "@/store/slices/salesSlice";
+import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
+import { writeAuditLog } from "@/lib/utils/audit";
 import type { Platform, Currency, Sale } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -70,7 +72,6 @@ export function AddSaleModal({ open, onClose }: Props) {
         product_name: form.product_name.trim(),
         quantity: qty,
         unit_price: price,
-        total_amount: total,
         currency: form.currency,
         date: form.date,
         description: form.description.trim() || null,
@@ -86,6 +87,17 @@ export function AddSaleModal({ open, onClose }: Props) {
     }
 
     dispatch(addSale(data));
+
+    const log = await writeAuditLog(supabase, {
+      userId: user!.id,
+      userEmail: user!.email ?? "",
+      action: "create",
+      entityType: "sale",
+      entityId: data.id,
+      metadata: { product_name: data.product_name, platform: data.platform, total_amount: data.total_amount },
+    });
+    if (log) dispatch(addAuditLog(log));
+
     setForm({ ...defaults, date: today() });
     setSaving(false);
     onClose();

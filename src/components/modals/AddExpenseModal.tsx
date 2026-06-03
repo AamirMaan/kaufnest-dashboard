@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { addExpense } from "@/store/slices/expensesSlice";
+import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
+import { writeAuditLog } from "@/lib/utils/audit";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -85,6 +87,17 @@ export function AddExpenseModal({ open, onClose }: Props) {
     }
 
     dispatch(addExpense(data));
+
+    const log = await writeAuditLog(supabase, {
+      userId: user!.id,
+      userEmail: user!.email ?? "",
+      action: "create",
+      entityType: "expense",
+      entityId: data.id,
+      metadata: { title: data.title, category: data.category, amount: data.amount },
+    });
+    if (log) dispatch(addAuditLog(log));
+
     setForm({ ...defaults, date: today() });
     setSaving(false);
     onClose();

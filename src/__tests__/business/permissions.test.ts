@@ -31,10 +31,48 @@ describe("hasPermission", () => {
     expect(hasPermission("accountant", "manage_users")).toBe(false);
   });
 
+  it("restricts invite_user to super_admin only", () => {
+    expect(hasPermission("super_admin", "invite_user")).toBe(true);
+    expect(hasPermission("admin", "invite_user")).toBe(false);
+    expect(hasPermission("accountant", "invite_user")).toBe(false);
+  });
+
+  it("restricts change_user_role to super_admin only", () => {
+    expect(hasPermission("super_admin", "change_user_role")).toBe(true);
+    expect(hasPermission("admin", "change_user_role")).toBe(false);
+    expect(hasPermission("accountant", "change_user_role")).toBe(false);
+  });
+
   it("allows admin and super_admin to view audit logs", () => {
     expect(hasPermission("super_admin", "view_audit_logs")).toBe(true);
     expect(hasPermission("admin", "view_audit_logs")).toBe(true);
     expect(hasPermission("accountant", "view_audit_logs")).toBe(false);
+  });
+
+  it("allows admin and super_admin to view analytics", () => {
+    expect(hasPermission("super_admin", "view_analytics")).toBe(true);
+    expect(hasPermission("admin", "view_analytics")).toBe(true);
+    expect(hasPermission("accountant", "view_analytics")).toBe(false);
+  });
+
+  it("allows all roles to create and update sales", () => {
+    const roles: UserRole[] = ["super_admin", "admin", "accountant"];
+    roles.forEach((role) => {
+      expect(hasPermission(role, "create_sale")).toBe(true);
+      expect(hasPermission(role, "update_sale")).toBe(true);
+    });
+  });
+
+  it("denies accountant from deleting sales and purchases", () => {
+    expect(hasPermission("accountant", "delete_sale")).toBe(false);
+    expect(hasPermission("accountant", "delete_purchase")).toBe(false);
+  });
+
+  it("allows admin and super_admin to delete sales and purchases", () => {
+    expect(hasPermission("admin", "delete_sale")).toBe(true);
+    expect(hasPermission("super_admin", "delete_sale")).toBe(true);
+    expect(hasPermission("admin", "delete_purchase")).toBe(true);
+    expect(hasPermission("super_admin", "delete_purchase")).toBe(true);
   });
 });
 
@@ -59,10 +97,35 @@ describe("canAccessRoute", () => {
     expect(canAccessRoute("admin", "/dashboard/audit-logs")).toBe(true);
   });
 
+  it("allows super_admin to access /dashboard/audit-logs", () => {
+    expect(canAccessRoute("super_admin", "/dashboard/audit-logs")).toBe(true);
+  });
+
   it("allows all roles to access /dashboard/expenses", () => {
     const roles: UserRole[] = ["super_admin", "admin", "accountant"];
     roles.forEach((role) => {
       expect(canAccessRoute(role, "/dashboard/expenses")).toBe(true);
+    });
+  });
+
+  it("allows all roles to access /dashboard/sales", () => {
+    const roles: UserRole[] = ["super_admin", "admin", "accountant"];
+    roles.forEach((role) => {
+      expect(canAccessRoute(role, "/dashboard/sales")).toBe(true);
+    });
+  });
+
+  it("allows all roles to access /dashboard/purchases", () => {
+    const roles: UserRole[] = ["super_admin", "admin", "accountant"];
+    roles.forEach((role) => {
+      expect(canAccessRoute(role, "/dashboard/purchases")).toBe(true);
+    });
+  });
+
+  it("allows all roles to access the base dashboard", () => {
+    const roles: UserRole[] = ["super_admin", "admin", "accountant"];
+    roles.forEach((role) => {
+      expect(canAccessRoute(role, "/dashboard")).toBe(true);
     });
   });
 });
@@ -86,5 +149,13 @@ describe("hasMinimumRole", () => {
 
   it("admin does not satisfy minimum of super_admin", () => {
     expect(hasMinimumRole("admin", "super_admin")).toBe(false);
+  });
+
+  it("accountant satisfies minimum of accountant", () => {
+    expect(hasMinimumRole("accountant", "accountant")).toBe(true);
+  });
+
+  it("admin satisfies minimum of accountant", () => {
+    expect(hasMinimumRole("admin", "accountant")).toBe(true);
   });
 });

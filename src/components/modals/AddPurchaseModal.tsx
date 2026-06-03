@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { addPurchase } from "@/store/slices/purchasesSlice";
+import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
+import { writeAuditLog } from "@/lib/utils/audit";
 import type { Currency, Purchase } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -68,7 +70,6 @@ export function AddPurchaseModal({ open, onClose }: Props) {
         product_name: form.product_name.trim(),
         quantity: qty,
         unit_price: price,
-        total_amount: total,
         currency: form.currency,
         vendor: form.vendor.trim() || null,
         date: form.date,
@@ -85,6 +86,17 @@ export function AddPurchaseModal({ open, onClose }: Props) {
     }
 
     dispatch(addPurchase(data));
+
+    const log = await writeAuditLog(supabase, {
+      userId: user!.id,
+      userEmail: user!.email ?? "",
+      action: "create",
+      entityType: "purchase",
+      entityId: data.id,
+      metadata: { product_name: data.product_name, vendor: data.vendor, total_amount: data.total_amount },
+    });
+    if (log) dispatch(addAuditLog(log));
+
     setForm({ ...defaults, date: today() });
     setSaving(false);
     onClose();

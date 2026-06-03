@@ -19,7 +19,10 @@ export const auditLogsSlice = createSlice({
       state.items = action.payload;
       state.loaded = true;
     },
+    addAuditLog(state, action: PayloadAction<AuditLog>) {
+      state.items.unshift(action.payload);
+    },
   },
 });
 
-export const { hydrate: hydrateAuditLogs } = auditLogsSlice.actions;
+export const { hydrate: hydrateAuditLogs, addAuditLog } = auditLogsSlice.actions;
