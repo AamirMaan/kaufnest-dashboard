@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import type { Profile, Sale, Expense, Purchase, AuditLog } from "@/types";
@@ -75,14 +75,13 @@ export default async function DashboardLayout({
       currentUser={profile}
     >
       <ToastProvider>
-        <div className="flex min-h-screen bg-[var(--color-surface-subtle)]">
-          <Sidebar
-            role={profile.role}
-            fullName={profile.full_name}
-            email={profile.email}
-          />
-          <main className="flex-1 p-8 overflow-auto">{children}</main>
-        </div>
+        <DashboardShell
+          role={profile.role}
+          fullName={profile.full_name}
+          email={profile.email}
+        >
+          {children}
+        </DashboardShell>
       </ToastProvider>
     </StoreProvider>
   );
