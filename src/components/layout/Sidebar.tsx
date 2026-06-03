@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -11,13 +10,10 @@ import {
   ClipboardList,
   Users,
   Settings,
-  User,
-  LogOut,
+  X,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types";
 
 type LucideIcon = React.ComponentType<{
@@ -98,61 +94,43 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
+  const displayName = fullName || email;
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
-  const displayName = fullName || email;
 
   return (
     <aside
       className={[
-        // Mobile: fixed overlay sliding in from left
+        // Mobile: fixed overlay sliding in from left (covers full screen height incl. header)
         "fixed md:relative inset-y-0 left-0 z-30",
-        "flex flex-col h-full md:min-h-screen",
+        "flex flex-col h-full",
         "bg-[var(--color-sidebar-bg)] border-r border-[var(--color-sidebar-border)]",
         "transition-[transform,width] duration-300 ease-in-out",
-        // Mobile visibility
         mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-        // Width: mobile always full, desktop depends on collapsed
         "w-64",
         collapsed ? "md:w-16" : "md:w-64",
       ].join(" ")}
     >
-      {/* Brand + controls row */}
-      <div
-        className={[
-          "flex items-center border-b border-[var(--color-sidebar-border)] shrink-0",
-          collapsed ? "md:justify-center px-3 py-[18px]" : "justify-between px-5 py-4",
-        ].join(" ")}
+      {/* Desktop collapse toggle — floats on the right edge of the sidebar */}
+      <button
+        onClick={onToggle}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className="hidden md:flex absolute right-0 translate-x-1/2 top-[72px] w-6 h-6 rounded-full items-center justify-center bg-[var(--color-sidebar-bg)] border border-[var(--color-sidebar-border)] text-[var(--color-sidebar-text)] hover:text-white hover:border-[var(--color-primary)] transition-colors cursor-pointer z-10 shadow-sm"
       >
-        {/* Brand text — hidden when collapsed on desktop */}
-        <div className={collapsed ? "md:hidden" : ""}>
+        {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
+      </button>
+
+      {/* Mobile-only header: brand + close button */}
+      <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-[var(--color-sidebar-border)] shrink-0">
+        <div>
           <span className="text-xl font-bold text-white tracking-tight">
             Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
           </span>
           <p className="text-xs text-[var(--color-text-faint)] mt-0.5">Business Dashboard</p>
         </div>
-
-        {/* Desktop: collapse toggle */}
-        <button
-          onClick={onToggle}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="hidden md:flex items-center justify-center p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
-
-        {/* Mobile: close button */}
         <button
           onClick={onMobileClose}
-          className="md:hidden p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
           aria-label="Close navigation"
         >
           <X size={16} />
@@ -175,7 +153,6 @@ export function Sidebar({
               title={collapsed ? item.label : undefined}
               className={[
                 "flex items-center gap-3 rounded-[var(--radius-btn)] text-sm font-medium transition-colors",
-                // Desktop collapsed: center icon, hide label
                 collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
                 isActive
                   ? "bg-[var(--color-sidebar-active)] text-white"
@@ -188,53 +165,6 @@ export function Sidebar({
           );
         })}
       </nav>
-
-      {/* User section */}
-      <div
-        className={[
-          "shrink-0 border-t border-[var(--color-sidebar-border)]",
-          collapsed ? "px-2 py-3 flex flex-col items-center gap-2" : "px-4 py-3 space-y-2",
-        ].join(" ")}
-      >
-        {/* User info row — hidden when collapsed on desktop */}
-        <div className={["flex items-center gap-3", collapsed ? "md:hidden" : "px-1"].join(" ")}>
-          <div className="shrink-0 w-8 h-8 rounded-full bg-[var(--color-sidebar-border)] flex items-center justify-center">
-            <User size={15} className="text-[var(--color-primary-hover)]" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate leading-tight">{displayName}</p>
-            <p className="text-xs text-[var(--color-text-faint)] truncate">{email}</p>
-            <span className="inline-block mt-0.5 px-1.5 py-px rounded text-[10px] font-medium bg-[var(--color-sidebar-border)] text-[var(--color-primary-hover)]">
-              {role.replace("_", " ")}
-            </span>
-          </div>
-        </div>
-
-        {/* Collapsed user avatar (desktop only) */}
-        <div
-          title={`${displayName} · ${role.replace("_", " ")}`}
-          className={[
-            "w-8 h-8 rounded-full bg-[var(--color-sidebar-border)] items-center justify-center",
-            collapsed ? "md:flex hidden" : "hidden",
-          ].join(" ")}
-        >
-          <User size={15} className="text-[var(--color-primary-hover)]" />
-        </div>
-
-        {/* Sign out */}
-        <button
-          onClick={handleSignOut}
-          title={collapsed ? "Sign out" : undefined}
-          className={[
-            "flex items-center gap-2.5 rounded-[var(--radius-btn)] text-sm transition-colors cursor-pointer",
-            "text-[var(--color-sidebar-text)] hover:text-red-400 hover:bg-[var(--color-sidebar-border)]",
-            collapsed ? "md:justify-center md:p-2.5 w-full px-3 py-2" : "w-full px-3 py-2",
-          ].join(" ")}
-        >
-          <LogOut size={16} strokeWidth={1.75} className="shrink-0" />
-          <span className={collapsed ? "md:hidden" : ""}>Sign out</span>
-        </button>
-      </div>
     </aside>
   );
 }
