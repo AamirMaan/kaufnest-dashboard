@@ -16,6 +16,7 @@ const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 interface Props {
   purchase: Purchase | null;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 interface FormState {
@@ -42,7 +43,7 @@ function purchaseToForm(p: Purchase): FormState {
   };
 }
 
-export function EditPurchaseModal({ purchase, onClose }: Props) {
+export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const [form, setForm] = useState<FormState>(() =>
     purchase ? purchaseToForm(purchase) : { product_name: "", quantity: "1", unit_price: "", currency: "EUR", vendor: "", date: "", description: "", reason: "" }
@@ -115,6 +116,7 @@ export function EditPurchaseModal({ purchase, onClose }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setSaving(false);
+    onSuccess?.();
     onClose();
   }
 

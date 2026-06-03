@@ -1,35 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removePurchase } from "@/store/slices/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
-import { Pencil, Trash2 } from "lucide-react";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { useToast } from "@/components/ui/Toast";
+import { Pencil, Trash2, FileDown } from "lucide-react";
 import { AddPurchaseModal } from "@/components/modals/AddPurchaseModal";
 import { EditPurchaseModal } from "@/components/modals/EditPurchaseModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
+import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
+import {
+  filterPurchases,
+  isDefaultFilters,
+  DEFAULT_PURCHASE_FILTERS,
+  type PurchaseFilters,
+  type DatePreset,
+} from "@/lib/utils/filters";
 import type { Purchase } from "@/types";
+
+const filterInputCls =
+  "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
 
 export default function PurchasesPage() {
   const dispatch = useAppDispatch();
+  const { success, error: toastError, warning } = useToast();
   const purchases = useAppSelector((s) => s.purchases.items);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+
+  const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_PURCHASE_FILTERS);
+  const filtered = useMemo(() => filterPurchases(purchases, filters), [purchases, filters]);
+  const hasActive = !isDefaultFilters(filters);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectedItems = useMemo(
+    () => filtered.filter((p) => selectedIds.has(p.id)),
+    [filtered, selectedIds]
+  );
+  const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Purchase | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+
+  function setFilter<K extends keyof PurchaseFilters>(key: K, value: PurchaseFilters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
     const supabase = createClient();
-    await supabase.from("purchases").delete().eq("id", deleteTarget.id);
+    const { error: dbError } = await supabase.from("purchases").delete().eq("id", deleteTarget.id);
+    if (dbError) { toastError("Delete failed", dbError.message); return; }
     dispatch(removePurchase(deleteTarget.id));
     const { data: { user } } = await supabase.auth.getUser();
     const log = await writeAuditLog(supabase, {
@@ -41,6 +72,7 @@ export default function PurchasesPage() {
       metadata: { before: deleteTarget, reason },
     });
     if (log) dispatch(addAuditLog(log));
+    success("Purchase deleted", `"${deleteTarget.product_name}" has been removed.`);
     setDeleteTarget(null);
   }
 
@@ -88,8 +120,21 @@ export default function PurchasesPage() {
           <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
             <Pencil size={15} />
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => { setSelectedIds(new Set([p.id])); setInvoiceOpen(true); }}
+            title="Generate invoice for this row"
+          >
+            <FileDown size={15} />
+          </Button>
           {isSuperAdmin && (
-            <Button size="icon" variant="danger" onClick={() => setDeleteTarget(p)} title="Delete">
+            <Button
+              size="icon"
+              variant="danger"
+              onClick={() => { warning("Confirm deletion", `You are about to delete "${p.product_name}".`); setDeleteTarget(p); }}
+              title="Delete"
+            >
               <Trash2 size={15} />
             </Button>
           )}
@@ -103,11 +148,59 @@ export default function PurchasesPage() {
       <PageHeader
         title="Purchases"
         description="Inventory and stock purchases"
-        action={<Button onClick={() => setAddOpen(true)}>+ Add Purchase</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setInvoiceOpen(true)}>
+              <FileDown size={15} />
+              {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
+            </Button>
+            <Button onClick={() => setAddOpen(true)}>+ Add Purchase</Button>
+          </div>
+        }
       />
-      <DataTable columns={columns} rows={purchases} keyField="id" emptyMessage="No purchases yet. Add your first purchase." />
-      <AddPurchaseModal open={addOpen} onClose={() => setAddOpen(false)} />
-      <EditPurchaseModal purchase={editTarget} onClose={() => setEditTarget(null)} />
+
+      <FilterBar
+        preset={filters.preset}
+        onPresetChange={(v) => setFilter("preset", v as DatePreset)}
+        dateFrom={filters.dateFrom}
+        onDateFromChange={(v) => setFilter("dateFrom", v)}
+        dateTo={filters.dateTo}
+        onDateToChange={(v) => setFilter("dateTo", v)}
+        currency={filters.currency}
+        onCurrencyChange={(v) => setFilter("currency", v)}
+        hasActive={hasActive}
+        onClear={() => setFilters(DEFAULT_PURCHASE_FILTERS)}
+      >
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Vendor</span>
+          <input
+            type="text"
+            value={filters.vendor}
+            onChange={(e) => setFilter("vendor", e.target.value)}
+            placeholder="Search vendor…"
+            className={filterInputCls}
+          />
+        </div>
+      </FilterBar>
+
+      <DataTable
+        columns={columns}
+        rows={filtered}
+        keyField="id"
+        emptyMessage="No purchases match the current filters."
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
+      <AddPurchaseModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={(name) => success("Purchase added", `"${name}" was recorded successfully.`)}
+      />
+      <EditPurchaseModal
+        purchase={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSuccess={() => success("Purchase updated", "Changes have been saved.")}
+      />
       <DeleteConfirmModal
         open={!!deleteTarget}
         title="Delete Purchase"
@@ -115,6 +208,14 @@ export default function PurchasesPage() {
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
       />
+      <InvoiceModal
+        open={invoiceOpen}
+        type="purchase"
+        items={invoiceItems}
+        onClose={() => { setInvoiceOpen(false); setSelectedIds(new Set()); }}
+        onSuccess={() => success("Invoice downloaded", `PDF generated for ${invoiceItems.length} record${invoiceItems.length !== 1 ? "s" : ""}.`)}
+      />
     </div>
   );
 }
+

@@ -50,6 +50,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: "◉",
     roles: ["super_admin"],
   },
+  {
+    label: "Settings",
+    href: "/dashboard/settings",
+    icon: "⚙",
+    roles: ["super_admin", "admin", "accountant"],
+  },
 ];
 
 interface SidebarProps {

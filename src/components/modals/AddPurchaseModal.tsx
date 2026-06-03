@@ -16,6 +16,7 @@ const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 interface Props {
   open: boolean;
   onClose: () => void;
+  onSuccess?: (productName: string) => void;
 }
 
 interface FormState {
@@ -40,7 +41,7 @@ const defaults: FormState = {
   description: "",
 };
 
-export function AddPurchaseModal({ open, onClose }: Props) {
+export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const [form, setForm] = useState<FormState>(defaults);
   const [saving, setSaving] = useState(false);
@@ -99,6 +100,7 @@ export function AddPurchaseModal({ open, onClose }: Props) {
 
     setForm({ ...defaults, date: today() });
     setSaving(false);
+    onSuccess?.(data.product_name);
     onClose();
   }
 

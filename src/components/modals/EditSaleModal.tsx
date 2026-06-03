@@ -17,6 +17,7 @@ const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 interface Props {
   sale: Sale | null; // non-null = modal open
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 interface FormState {
@@ -43,7 +44,7 @@ function saleToForm(sale: Sale): FormState {
   };
 }
 
-export function EditSaleModal({ sale, onClose }: Props) {
+export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const [form, setForm] = useState<FormState>(() =>
     sale ? saleToForm(sale) : saleToForm({ platform: "amazon", product_name: "", quantity: 1, unit_price: 0, total_amount: 0, currency: "EUR", date: "", description: null, id: "", created_by: "", created_at: "" })
@@ -116,6 +117,7 @@ export function EditSaleModal({ sale, onClose }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setSaving(false);
+    onSuccess?.();
     onClose();
   }
 

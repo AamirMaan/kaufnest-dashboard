@@ -20,6 +20,7 @@ const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 interface Props {
   expense: Expense | null;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
 interface FormState {
@@ -46,7 +47,7 @@ function expenseToForm(e: Expense): FormState {
   };
 }
 
-export function EditExpenseModal({ expense, onClose }: Props) {
+export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const [form, setForm] = useState<FormState>(() =>
     expense ? expenseToForm(expense) : { title: "", amount: "", currency: "EUR", category: "other", vendor: "", date: "", description: "", reason: "" }
@@ -117,6 +118,7 @@ export function EditExpenseModal({ expense, onClose }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setSaving(false);
+    onSuccess?.();
     onClose();
   }
 
