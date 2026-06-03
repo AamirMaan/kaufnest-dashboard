@@ -29,7 +29,11 @@ export const usersSlice = createSlice({
       const user = state.items.find((u) => u.id === action.payload.id);
       if (user) user.role = action.payload.role;
     },
+    updateUser(state, action: PayloadAction<Profile>) {
+      const idx = state.items.findIndex((u) => u.id === action.payload.id);
+      if (idx !== -1) state.items[idx] = action.payload;
+    },
   },
 });
 
-export const { hydrate: hydrateUsers, addUser, updateUserRole } = usersSlice.actions;
+export const { hydrate: hydrateUsers, addUser, updateUserRole, updateUser } = usersSlice.actions;

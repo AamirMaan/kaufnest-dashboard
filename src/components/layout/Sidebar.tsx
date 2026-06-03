@@ -117,7 +117,7 @@ export function Sidebar({ role, fullName, email }: SidebarProps) {
         </div>
         <button
           onClick={handleSignOut}
-          className="w-full text-left px-3 py-2 rounded-[var(--radius-btn)] text-sm text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors"
+          className="w-full text-left px-3 py-2 rounded-[var(--radius-btn)] text-sm text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
         >
           Sign out
         </button>

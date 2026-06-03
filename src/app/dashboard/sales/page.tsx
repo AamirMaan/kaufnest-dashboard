@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { PlatformBadge } from "@/components/ui/Badge";
+import { Pencil, Trash2 } from "lucide-react";
 import { AddSaleModal } from "@/components/modals/AddSaleModal";
 import { EditSaleModal } from "@/components/modals/EditSaleModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
@@ -82,10 +83,14 @@ export default function SalesPage() {
     {
       header: "Actions",
       render: (s: Sale) => (
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => setEditTarget(s)}>Edit</Button>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => setEditTarget(s)} title="Edit">
+            <Pencil size={15} />
+          </Button>
           {isSuperAdmin && (
-            <Button size="sm" variant="danger" onClick={() => setDeleteTarget(s)}>Delete</Button>
+            <Button size="icon" variant="danger" onClick={() => setDeleteTarget(s)} title="Delete">
+              <Trash2 size={15} />
+            </Button>
           )}
         </div>
       ),

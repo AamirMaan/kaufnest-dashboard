@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { RoleBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "@/components/modals/InviteUserModal";
+import { EditUserModal } from "@/components/modals/EditUserModal";
+import { Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDateTime } from "@/lib/utils/date";
@@ -24,6 +26,7 @@ export default function UsersPage() {
   const dispatch = useAppDispatch();
   const users = useAppSelector((s) => s.users.items);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
 
   async function handleRoleChange(profile: Profile, newRole: UserRole) {
@@ -98,6 +101,14 @@ export default function UsersPage() {
         </select>
       ),
     },
+    {
+      header: "Actions",
+      render: (p: Profile) => (
+        <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
+          <Pencil size={15} />
+        </Button>
+      ),
+    },
   ];
 
   return (
@@ -116,6 +127,7 @@ export default function UsersPage() {
         emptyMessage="No users found."
       />
       <InviteUserModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <EditUserModal user={editTarget} onClose={() => setEditTarget(null)} />
     </div>
   );
 }

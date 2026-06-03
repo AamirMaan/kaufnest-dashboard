@@ -5,6 +5,7 @@ import { useAppSelector } from "@/store/hooks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
 import { ActionBadge } from "@/components/ui/Badge";
+import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { AuditLogDetailModal } from "@/components/modals/AuditLogDetailModal";
 import { formatDateTime } from "@/lib/utils/date";
@@ -49,7 +50,9 @@ export default function AuditLogsPage() {
     {
       header: "View",
       render: (log: AuditLog) => (
-        <Button size="sm" variant="ghost" onClick={() => setViewTarget(log)}>View</Button>
+        <Button size="icon" variant="ghost" onClick={() => setViewTarget(log)} title="View details">
+          <Eye size={15} />
+        </Button>
       ),
     },
   ];
