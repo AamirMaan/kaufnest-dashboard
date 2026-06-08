@@ -88,3 +88,25 @@ first, minimal file set for a typical change, test command, feature-specific got
 "Project structure" section: feature-folder convention explained, list of feature
 folders with paths, instruction to read the feature's CLAUDE.md/SKILL.md before editing
 rather than exploring the whole tree.
+
+---
+
+## Feature roadmap — future work (separate from this reorg, tracked here for continuity)
+
+> Once the reorg above is fully checked off and this file is deleted, copy this
+> roadmap section into AGENTS.md (or a dedicated ROADMAP.md) so it isn't lost.
+
+5 phases, in order:
+
+- **MVP (Done)** — existing foundation: auth, roles, multi-platform sales/expenses/
+  purchases, monthly overview, audit log, user management.
+- **Phase 1 (Up Next)** — Dynamic totals on filtered views + a proper dashboard with
+  time-range filters and stat cards. Highest-value, lowest-complexity work to do next —
+  **recommended starting point**, since slicing data by time period is foundational and
+  almost everything else builds on it.
+- **Phase 2 (Near Term)** — VAT calculations for purchases and sales, multi-rate
+  support, VAT summary reports for filing, and CSV/PDF export.
+- **Phase 3 (Future)** — Budget planner with actuals vs. plan, profit targets, cash
+  flow forecasting, and inventory reorder planning.
+- **Phase 4 (AI & Advanced)** — AI tax saving suggestions, anomaly alerts, business
+  plan assistant, platform optimisation, and natural language querying of your data.
