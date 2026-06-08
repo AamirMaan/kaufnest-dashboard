@@ -16,7 +16,7 @@ import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { formatCurrency } from "@/lib/utils/currency";
+import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import {
   filterPurchases,
@@ -25,7 +25,7 @@ import {
   type PurchaseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
-import type { Purchase } from "@/types";
+import type { Purchase, Currency } from "@/types";
 
 const filterInputCls =
   "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
@@ -46,6 +46,19 @@ export default function PurchasesPage() {
     [filtered, selectedIds]
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
+
+  const totals = useMemo(() => {
+    const byCurrency = new Map<Currency, number[]>();
+    for (const p of filtered) {
+      const amounts = byCurrency.get(p.currency) ?? [];
+      amounts.push(p.total_amount);
+      byCurrency.set(p.currency, amounts);
+    }
+    return Array.from(byCurrency.entries()).map(([currency, amounts]) => ({
+      currency,
+      total: sumAmounts(amounts),
+    }));
+  }, [filtered]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Purchase | null>(null);
@@ -79,36 +92,42 @@ export default function PurchasesPage() {
   const columns = [
     {
       header: "Date",
+      sortValue: (p: Purchase) => p.date,
       render: (p: Purchase) => (
         <span className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">{formatDate(p.date)}</span>
       ),
     },
     {
       header: "Product",
+      sortValue: (p: Purchase) => p.product_name.toLowerCase(),
       render: (p: Purchase) => (
         <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.product_name}</span>
       ),
     },
     {
       header: "Vendor",
+      sortValue: (p: Purchase) => p.vendor?.toLowerCase() ?? "",
       render: (p: Purchase) => (
         <span className="text-sm text-[var(--color-text-muted)]">{p.vendor ?? "—"}</span>
       ),
     },
     {
       header: "Qty",
+      sortValue: (p: Purchase) => p.quantity,
       render: (p: Purchase) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{p.quantity}</span>
       ),
     },
     {
       header: "Unit Price",
+      sortValue: (p: Purchase) => p.unit_price,
       render: (p: Purchase) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(p.unit_price, p.currency)}</span>
       ),
     },
     {
       header: "Total",
+      sortValue: (p: Purchase) => p.total_amount,
       render: (p: Purchase) => (
         <span className="text-sm font-semibold text-[var(--color-warning)] tabular-nums">{formatCurrency(p.total_amount, p.currency)}</span>
       ),
@@ -182,6 +201,15 @@ export default function PurchasesPage() {
           />
         </div>
       </FilterBar>
+
+      <div className="flex items-center justify-between mb-3 text-sm text-[var(--color-text-muted)]">
+        <span>{filtered.length} purchase{filtered.length !== 1 ? "s" : ""} shown</span>
+        {totals.length > 0 && (
+          <span className="font-medium text-[var(--color-text-strong)]">
+            Total: {totals.map((t) => formatCurrency(t.total, t.currency)).join(" + ")}
+          </span>
+        )}
+      </div>
 
       <DataTable
         columns={columns}

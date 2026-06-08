@@ -4,6 +4,16 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Working agreement — how we proceed
+
+- **Don't run `npm test`, `npx tsc --noEmit`, or `npm run lint` yourself.** Ask the
+  user to run them and paste the output back. Running these repeatedly burns tokens
+  on output the user can capture in one shot locally.
+- **Don't start the dev server or `curl` routes to verify functionality.** Instead,
+  add/extend unit tests in the feature's `_store/` (or `_components/`/lib) folder
+  alongside the code you changed, then ask the user to manually exercise the feature
+  in the browser and report back what they see.
+
 # Project structure: feature folders
 
 KaufNest Dashboard is a Next.js App Router app (Supabase + Redux Toolkit). To

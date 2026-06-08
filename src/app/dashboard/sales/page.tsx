@@ -17,7 +17,7 @@ import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { formatCurrency } from "@/lib/utils/currency";
+import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import {
   filterSales,
@@ -26,7 +26,7 @@ import {
   type SalesFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
-import type { Platform, Sale } from "@/types";
+import type { Platform, Sale, Currency } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 
@@ -49,6 +49,19 @@ export default function SalesPage() {
     [filtered, selectedIds]
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
+
+  const totals = useMemo(() => {
+    const byCurrency = new Map<Currency, number[]>();
+    for (const s of filtered) {
+      const amounts = byCurrency.get(s.currency) ?? [];
+      amounts.push(s.total_amount);
+      byCurrency.set(s.currency, amounts);
+    }
+    return Array.from(byCurrency.entries()).map(([currency, amounts]) => ({
+      currency,
+      total: sumAmounts(amounts),
+    }));
+  }, [filtered]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Sale | null>(null);
@@ -82,34 +95,40 @@ export default function SalesPage() {
   const columns = [
     {
       header: "Date",
+      sortValue: (s: Sale) => s.date,
       render: (s: Sale) => (
         <span className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">{formatDate(s.date)}</span>
       ),
     },
     {
       header: "Product",
+      sortValue: (s: Sale) => s.product_name.toLowerCase(),
       render: (s: Sale) => (
         <span className="text-sm font-medium text-[var(--color-text-strong)]">{s.product_name}</span>
       ),
     },
     {
       header: "Platform",
+      sortValue: (s: Sale) => s.platform,
       render: (s: Sale) => <PlatformBadge platform={s.platform} />,
     },
     {
       header: "Qty",
+      sortValue: (s: Sale) => s.quantity,
       render: (s: Sale) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{s.quantity}</span>
       ),
     },
     {
       header: "Unit Price",
+      sortValue: (s: Sale) => s.unit_price,
       render: (s: Sale) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(s.unit_price, s.currency)}</span>
       ),
     },
     {
       header: "Total",
+      sortValue: (s: Sale) => s.total_amount,
       render: (s: Sale) => (
         <span className="text-sm font-semibold text-[var(--color-success)] tabular-nums">{formatCurrency(s.total_amount, s.currency)}</span>
       ),
@@ -186,6 +205,15 @@ export default function SalesPage() {
           </select>
         </div>
       </FilterBar>
+
+      <div className="flex items-center justify-between mb-3 text-sm text-[var(--color-text-muted)]">
+        <span>{filtered.length} sale{filtered.length !== 1 ? "s" : ""} shown</span>
+        {totals.length > 0 && (
+          <span className="font-medium text-[var(--color-text-strong)]">
+            Total: {totals.map((t) => formatCurrency(t.total, t.currency)).join(" + ")}
+          </span>
+        )}
+      </div>
 
       <DataTable
         columns={columns}
