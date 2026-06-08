@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updatePurchase } from "../_store/purchasesSlice";
+import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
-import type { Currency, Purchase } from "@/types";
+import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
@@ -67,6 +68,15 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function selectProduct(id: string) {
+    const product = products.find((p) => p.id === id);
+    setForm((prev) => ({
+      ...prev,
+      product_id: id,
+      product_name: product ? product.name : prev.product_name,
+    }));
+  }
+
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
   const total = qty * price;
@@ -110,6 +120,16 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     }
 
     dispatch(updatePurchase(data));
+
+    // Re-fetch product(s) whose stock the trigger may have changed.
+    // product_id could have changed, so refresh both old and new if they differ.
+    const productIdsToRefresh = new Set(
+      [purchase.product_id, data.product_id].filter((id): id is string => !!id)
+    );
+    for (const pid of productIdsToRefresh) {
+      const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
+      if (fresh) dispatch(updateProduct(fresh));
+    }
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,
@@ -156,7 +176,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
         </Field>
 
         <Field label="Inventory Product">
-          <Select value={form.product_id} onChange={(e) => set("product_id", e.target.value)}>
+          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
             <option value="">— Not tracked —</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>

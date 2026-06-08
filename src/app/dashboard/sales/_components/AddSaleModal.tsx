@@ -12,7 +12,8 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
-import type { Platform, Currency, Sale } from "@/types";
+import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import type { Platform, Currency, Sale, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -116,6 +117,13 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     }
 
     dispatch(addSale(data));
+
+    // Re-fetch only the linked product to reflect the stock-sync trigger result.
+    if (data.product_id) {
+      const { data: freshProduct } = await supabase
+        .from("products").select("*").eq("id", data.product_id).single<Product>();
+      if (freshProduct) dispatch(updateProduct(freshProduct));
+    }
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,

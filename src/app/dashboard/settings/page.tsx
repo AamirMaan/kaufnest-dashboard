@@ -12,6 +12,7 @@ import type { Sale } from "@/types";
 
 const DEMO_SALE: Sale = {
   id: "demo",
+  product_id: null,
   product_name: "Sample Product",
   platform: "amazon",
   quantity: 2,
@@ -22,6 +23,8 @@ const DEMO_SALE: Sale = {
   description: "This is a demo invoice item",
   created_by: "",
   created_at: "",
+  vat_rate: 19,
+  vat_amount: 15.97,
 };
 
 export default function SettingsPage() {

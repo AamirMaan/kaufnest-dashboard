@@ -26,7 +26,8 @@ import {
   type SalesFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
-import type { Platform, Sale, Currency } from "@/types";
+import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import type { Platform, Sale, Currency, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 
@@ -78,6 +79,14 @@ export default function SalesPage() {
     const { error: dbError } = await supabase.from("sales").delete().eq("id", deleteTarget.id);
     if (dbError) { toastError("Delete failed", dbError.message); return; }
     dispatch(removeSale(deleteTarget.id));
+
+    // Re-fetch the affected product — the delete trigger restored its stock.
+    if (deleteTarget.product_id) {
+      const { data: fresh } = await supabase
+        .from("products").select("*").eq("id", deleteTarget.product_id).single<Product>();
+      if (fresh) dispatch(updateProduct(fresh));
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     const log = await writeAuditLog(supabase, {
       userId: user!.id,

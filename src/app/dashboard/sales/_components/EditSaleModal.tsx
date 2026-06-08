@@ -12,7 +12,8 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
-import type { Platform, Currency, Sale } from "@/types";
+import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import type { Platform, Currency, Sale, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -123,6 +124,15 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     }
 
     dispatch(updateSale(data));
+
+    // Re-fetch product(s) whose stock the trigger may have changed.
+    const productIdsToRefresh = new Set(
+      [sale.product_id, data.product_id].filter((id): id is string => !!id)
+    );
+    for (const pid of productIdsToRefresh) {
+      const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
+      if (fresh) dispatch(updateProduct(fresh));
+    }
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,

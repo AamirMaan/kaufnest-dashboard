@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addPurchase } from "../_store/purchasesSlice";
+import { addProduct, updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
-import type { Currency, Purchase } from "@/types";
+import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
@@ -32,6 +33,8 @@ interface FormState {
   description: string;
   vat_included: boolean;
   vat_rate: string;
+  add_to_inventory: boolean;
+  new_sku: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -48,6 +51,8 @@ function makeDefaults(): FormState {
     description: "",
     vat_included: false,
     vat_rate: String(readInvoiceSettings().vatRate),
+    add_to_inventory: false,
+    new_sku: "",
   };
 }
 
@@ -61,6 +66,25 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  // When an existing inventory product is selected, auto-fill name and clear the
+  // "add to inventory" section (it's already there).
+  function selectProduct(id: string) {
+    const product = products.find((p) => p.id === id);
+    setForm((prev) => ({
+      ...prev,
+      product_id: id,
+      product_name: product ? product.name : prev.product_name,
+      add_to_inventory: false,
+      new_sku: "",
+    }));
+  }
+
+  // Show "Add to inventory?" prompt when the typed name is new (no match in inventory).
+  const isNewProductName =
+    form.product_id === "" &&
+    form.product_name.trim().length > 1 &&
+    !products.some((p) => p.name.toLowerCase() === form.product_name.trim().toLowerCase());
 
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
@@ -78,11 +102,24 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
+    // If the user wants to register this product in inventory, create it first.
+    let resolvedProductId = form.product_id || null;
+    if (form.add_to_inventory && isNewProductName) {
+      const { data: newProduct, error: productError } = await supabase
+        .from("products")
+        .insert({ name: form.product_name.trim(), sku: form.new_sku.trim() || null, created_by: user!.id })
+        .select()
+        .single<Product>();
+      if (productError) { setError(productError.message); setSaving(false); return; }
+      dispatch(addProduct(newProduct));
+      resolvedProductId = newProduct.id;
+    }
+
     const { data, error: dbError } = await supabase
       .from("purchases")
       .insert({
         product_name: form.product_name.trim(),
-        product_id: form.product_id || null,
+        product_id: resolvedProductId,
         quantity: qty,
         unit_price: price,
         currency: form.currency,
@@ -103,6 +140,13 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
     }
 
     dispatch(addPurchase(data));
+
+    // Re-fetch only the affected product to reflect the stock-sync trigger result.
+    if (data.product_id) {
+      const { data: freshProduct } = await supabase
+        .from("products").select("*").eq("id", data.product_id).single<Product>();
+      if (freshProduct) dispatch(updateProduct(freshProduct));
+    }
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,
@@ -159,10 +203,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
         </Field>
 
         <Field label="Inventory Product">
-          <Select
-            value={form.product_id}
-            onChange={(e) => set("product_id", e.target.value)}
-          >
+          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
             <option value="">— Not tracked —</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
@@ -171,6 +212,25 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
             ))}
           </Select>
         </Field>
+
+        {isNewProductName && (
+          <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+            <Checkbox
+              label={`Add "${form.product_name.trim()}" to inventory`}
+              checked={form.add_to_inventory}
+              onChange={(e) => set("add_to_inventory", e.target.checked)}
+            />
+            {form.add_to_inventory && (
+              <Field label="SKU (optional)">
+                <Input
+                  value={form.new_sku}
+                  onChange={(e) => set("new_sku", e.target.value)}
+                  placeholder="e.g. WM-100"
+                />
+              </Field>
+            )}
+          </div>
+        )}
 
         <Row>
           <Field label="Vendor">
