@@ -42,7 +42,11 @@ export function getPresetRange(preset: DatePreset): { from: string; to: string }
   }
 }
 
-function resolveRange(
+/**
+ * Resolve a preset (or custom from/to pair) into a concrete date range.
+ * Returns null when no filtering should be applied (e.g. "all").
+ */
+export function resolveDateRange(
   preset: DatePreset,
   dateFrom: string,
   dateTo: string
@@ -104,7 +108,7 @@ export const DEFAULT_PURCHASE_FILTERS: PurchaseFilters = {
 
 export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   let result = sales;
-  const range = resolveRange(f.preset, f.dateFrom, f.dateTo);
+  const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
   if (range) result = result.filter((s) => s.date >= range.from && s.date <= range.to);
   if (f.platform !== "all") result = result.filter((s) => s.platform === f.platform);
   if (f.currency !== "all") result = result.filter((s) => s.currency === f.currency);
@@ -113,7 +117,7 @@ export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
 
 export function filterExpenses(expenses: Expense[], f: ExpenseFilters): Expense[] {
   let result = expenses;
-  const range = resolveRange(f.preset, f.dateFrom, f.dateTo);
+  const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
   if (range) result = result.filter((e) => e.date >= range.from && e.date <= range.to);
   if (f.category !== "all") result = result.filter((e) => e.category === f.category);
   if (f.currency !== "all") result = result.filter((e) => e.currency === f.currency);
@@ -122,7 +126,7 @@ export function filterExpenses(expenses: Expense[], f: ExpenseFilters): Expense[
 
 export function filterPurchases(purchases: Purchase[], f: PurchaseFilters): Purchase[] {
   let result = purchases;
-  const range = resolveRange(f.preset, f.dateFrom, f.dateTo);
+  const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
   if (range) result = result.filter((p) => p.date >= range.from && p.date <= range.to);
   if (f.vendor.trim())
     result = result.filter((p) =>
