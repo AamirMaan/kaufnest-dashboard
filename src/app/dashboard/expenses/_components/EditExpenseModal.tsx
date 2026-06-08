@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { updateExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -31,6 +33,8 @@ interface FormState {
   vendor: string;
   date: string;
   description: string;
+  vat_included: boolean;
+  vat_rate: string;
   reason: string;
 }
 
@@ -43,15 +47,20 @@ function expenseToForm(e: Expense): FormState {
     vendor: e.vendor ?? "",
     date: e.date,
     description: e.description ?? "",
+    vat_included: e.vat_rate != null,
+    vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(readInvoiceSettings().vatRate),
     reason: "",
   };
 }
 
+const blankForm: FormState = {
+  title: "", amount: "", currency: "EUR", category: "other", vendor: "", date: "",
+  description: "", vat_included: false, vat_rate: "0", reason: "",
+};
+
 export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(() =>
-    expense ? expenseToForm(expense) : { title: "", amount: "", currency: "EUR", category: "other", vendor: "", date: "", description: "", reason: "" }
-  );
+  const [form, setForm] = useState<FormState>(() => (expense ? expenseToForm(expense) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +69,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   }
 
   const amount = parseFloat(form.amount) || 0;
+  const vatRate = parseFloat(form.vat_rate) || 0;
+  const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,6 +94,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         vendor: form.vendor.trim() || null,
         date: form.date,
         description: form.description.trim() || null,
+        vat_rate: form.vat_included ? vatRate : null,
+        vat_amount: form.vat_included ? vatAmount : null,
       })
       .eq("id", expense.id)
       .select()
@@ -103,8 +116,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
       entityType: "expense",
       entityId: expense.id,
       metadata: {
-        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date },
-        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date },
+        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date, vat_rate: expense.vat_rate, vat_amount: expense.vat_amount },
+        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
         reason: form.reason.trim(),
       },
     });
@@ -167,6 +180,33 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         <Field label="Vendor">
           <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
         </Field>
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Checkbox
+            label="Amount includes VAT"
+            checked={form.vat_included}
+            onChange={(e) => set("vat_included", e.target.checked)}
+          />
+          {form.vat_included && (
+            <>
+              <Field label="VAT Rate (%)">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={form.vat_rate}
+                  onChange={(e) => set("vat_rate", e.target.value)}
+                />
+              </Field>
+              {amount > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Net {form.currency} {(amount - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />

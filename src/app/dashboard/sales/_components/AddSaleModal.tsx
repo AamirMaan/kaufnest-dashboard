@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
+import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { vatAmountFromGross } from "@/lib/utils/currency";
+import { selectableProducts, productNameFor } from "./productOptions";
 import type { Platform, Currency, Sale } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -23,28 +26,37 @@ interface Props {
 interface FormState {
   platform: Platform;
   product_name: string;
+  product_id: string;
   quantity: string;
   unit_price: string;
   currency: Currency;
   date: string;
   description: string;
+  vat_included: boolean;
+  vat_rate: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const defaults: FormState = {
-  platform: "amazon",
-  product_name: "",
-  quantity: "1",
-  unit_price: "",
-  currency: "EUR",
-  date: today(),
-  description: "",
-};
+function makeDefaults(): FormState {
+  return {
+    platform: "amazon",
+    product_name: "",
+    product_id: "",
+    quantity: "1",
+    unit_price: "",
+    currency: "EUR",
+    date: today(),
+    description: "",
+    vat_included: false,
+    vat_rate: String(readInvoiceSettings().vatRate),
+  };
+}
 
 export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(defaults);
+  const products = useAppSelector((s) => s.inventory.items);
+  const [form, setForm] = useState<FormState>(makeDefaults);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,9 +64,22 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const availableProducts = selectableProducts(products);
+
+  function selectProduct(id: string) {
+    const name = productNameFor(products, id);
+    setForm((prev) => ({
+      ...prev,
+      product_id: id,
+      product_name: name ?? prev.product_name,
+    }));
+  }
+
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
   const total = qty * price;
+  const vatRate = parseFloat(form.vat_rate) || 0;
+  const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,12 +96,15 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
       .insert({
         platform: form.platform,
         product_name: form.product_name.trim(),
+        product_id: form.product_id || null,
         quantity: qty,
         unit_price: price,
         currency: form.currency,
         date: form.date,
         description: form.description.trim() || null,
         created_by: user!.id,
+        vat_rate: form.vat_included ? vatRate : null,
+        vat_amount: form.vat_included ? vatAmount : null,
       })
       .select()
       .single<Sale>();
@@ -99,14 +127,14 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    setForm({ ...defaults, date: today() });
+    setForm(makeDefaults());
     setSaving(false);
     onSuccess?.(data.product_name);
     onClose();
   }
 
   function handleClose() {
-    setForm({ ...defaults, date: today() });
+    setForm(makeDefaults());
     setError(null);
     onClose();
   }
@@ -141,6 +169,25 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             placeholder="e.g. Wireless Headphones"
             required
           />
+        </Field>
+
+        <Field label="Inventory Product">
+          <Select
+            value={form.product_id}
+            onChange={(e) => selectProduct(e.target.value)}
+          >
+            <option value="">— Not tracked —</option>
+            {availableProducts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
+              </option>
+            ))}
+          </Select>
+          {availableProducts.length === 0 && (
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              No products currently have stock — record a purchase first to make one sellable here.
+            </p>
+          )}
         </Field>
 
         <Row>
@@ -210,6 +257,33 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             </span>
           </p>
         )}
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Checkbox
+            label="Total includes VAT"
+            checked={form.vat_included}
+            onChange={(e) => set("vat_included", e.target.checked)}
+          />
+          {form.vat_included && (
+            <>
+              <Field label="VAT Rate (%)">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={form.vat_rate}
+                  onChange={(e) => set("vat_rate", e.target.value)}
+                />
+              </Field>
+              {total > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Net {form.currency} {(total - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {total.toFixed(2)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Description">
           <Textarea

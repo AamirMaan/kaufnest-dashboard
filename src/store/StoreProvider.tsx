@@ -6,16 +6,18 @@ import { makeStore } from "@/store/store";
 import { hydrateSales } from "@/app/dashboard/sales/_store/salesSlice";
 import { hydrateExpenses } from "@/app/dashboard/expenses/_store/expensesSlice";
 import { hydratePurchases } from "@/app/dashboard/purchases/_store/purchasesSlice";
+import { hydrateProducts } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
 import { setCurrentUser } from "@/store/slices/currentUserSlice";
-import type { Sale, Expense, Purchase, AuditLog, Profile } from "@/types";
+import type { Sale, Expense, Purchase, Product, AuditLog, Profile } from "@/types";
 
 interface StoreProviderProps {
   children: React.ReactNode;
   sales?: Sale[];
   expenses?: Expense[];
   purchases?: Purchase[];
+  products?: Product[];
   auditLogs?: AuditLog[];
   users?: Profile[];
   currentUser?: Profile;
@@ -26,6 +28,7 @@ export function StoreProvider({
   sales,
   expenses,
   purchases,
+  products,
   auditLogs,
   users,
   currentUser,
@@ -35,6 +38,7 @@ export function StoreProvider({
     if (sales)       store.dispatch(hydrateSales(sales));
     if (expenses)    store.dispatch(hydrateExpenses(expenses));
     if (purchases)   store.dispatch(hydratePurchases(purchases));
+    if (products)    store.dispatch(hydrateProducts(products));
     if (auditLogs)   store.dispatch(hydrateAuditLogs(auditLogs));
     if (users)       store.dispatch(hydrateUsers(users));
     if (currentUser) store.dispatch(setCurrentUser(currentUser));

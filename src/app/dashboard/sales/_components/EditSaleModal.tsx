@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
+import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { vatAmountFromGross } from "@/lib/utils/currency";
+import { selectableProducts, productNameFor } from "./productOptions";
 import type { Platform, Currency, Sale } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -23,11 +26,14 @@ interface Props {
 interface FormState {
   platform: Platform;
   product_name: string;
+  product_id: string;
   quantity: string;
   unit_price: string;
   currency: Currency;
   date: string;
   description: string;
+  vat_included: boolean;
+  vat_rate: string;
   reason: string;
 }
 
@@ -35,20 +41,27 @@ function saleToForm(sale: Sale): FormState {
   return {
     platform: sale.platform,
     product_name: sale.product_name,
+    product_id: sale.product_id ?? "",
     quantity: String(sale.quantity),
     unit_price: String(sale.unit_price),
     currency: sale.currency,
     date: sale.date,
     description: sale.description ?? "",
+    vat_included: sale.vat_rate != null,
+    vat_rate: sale.vat_rate != null ? String(sale.vat_rate) : String(readInvoiceSettings().vatRate),
     reason: "",
   };
 }
 
+const blankForm: FormState = {
+  platform: "amazon", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
+  date: "", description: "", vat_included: false, vat_rate: "0", reason: "",
+};
+
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(() =>
-    sale ? saleToForm(sale) : saleToForm({ platform: "amazon", product_name: "", quantity: 1, unit_price: 0, total_amount: 0, currency: "EUR", date: "", description: null, id: "", created_by: "", created_at: "" })
-  );
+  const products = useAppSelector((s) => s.inventory.items);
+  const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,9 +69,22 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const availableProducts = selectableProducts(products, form.product_id);
+
+  function selectProduct(id: string) {
+    const name = productNameFor(products, id);
+    setForm((prev) => ({
+      ...prev,
+      product_id: id,
+      product_name: name ?? prev.product_name,
+    }));
+  }
+
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
   const total = qty * price;
+  const vatRate = parseFloat(form.vat_rate) || 0;
+  const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,11 +103,14 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       .update({
         platform: form.platform,
         product_name: form.product_name.trim(),
+        product_id: form.product_id || null,
         quantity: qty,
         unit_price: price,
         currency: form.currency,
         date: form.date,
         description: form.description.trim() || null,
+        vat_rate: form.vat_included ? vatRate : null,
+        vat_amount: form.vat_included ? vatAmount : null,
       })
       .eq("id", sale.id)
       .select()
@@ -102,8 +131,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       entityType: "sale",
       entityId: sale.id,
       metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description },
-        after:  { platform: data.platform, product_name: data.product_name, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description },
+        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount },
+        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
         reason: form.reason.trim(),
       },
     });
@@ -141,6 +170,17 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           <Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} required />
         </Field>
 
+        <Field label="Inventory Product">
+          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
+            <option value="">— Not tracked —</option>
+            {availableProducts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
+              </option>
+            ))}
+          </Select>
+        </Field>
+
         <Row>
           <Field label="Platform" required>
             <Select value={form.platform} onChange={(e) => set("platform", e.target.value as Platform)}>
@@ -174,6 +214,33 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             Total: <span className="font-semibold text-[var(--color-success)]">{form.currency} {total.toFixed(2)}</span>
           </p>
         )}
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Checkbox
+            label="Total includes VAT"
+            checked={form.vat_included}
+            onChange={(e) => set("vat_included", e.target.checked)}
+          />
+          {form.vat_included && (
+            <>
+              <Field label="VAT Rate (%)">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={form.vat_rate}
+                  onChange={(e) => set("vat_rate", e.target.value)}
+                />
+              </Field>
+              {total > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Net {form.currency} {(total - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {total.toFixed(2)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />

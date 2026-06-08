@@ -116,23 +116,28 @@ export async function generateSalesInvoice(sales: Sale[], settings: InvoiceSetti
     s.quantity,
     formatMoney(s.unit_price, s.currency),
     formatMoney(s.total_amount, s.currency),
+    s.vat_rate != null ? `${s.vat_rate}%\n${formatMoney(s.vat_amount ?? 0, s.currency)}` : "—",
   ]);
 
   autoTable(doc, {
     startY,
-    head: [["#", "Date", "Product", "Platform", "Qty", "Unit Price", "Total"]],
+    head: [["#", "Date", "Product", "Platform", "Qty", "Unit Price", "Total", "VAT"]],
     body: rows,
     styles: { fontSize: 9, cellPadding: 3 },
     headStyles: { fillColor: [45, 90, 200], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [248, 249, 255] },
-    columnStyles: { 0: { cellWidth: 8 }, 4: { halign: "center" }, 5: { halign: "right" }, 6: { halign: "right" } },
+    columnStyles: { 0: { cellWidth: 8 }, 4: { halign: "center" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } },
   });
 
   // Totals by currency
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalY = (doc as any).lastAutoTable.finalY + 6;
   const byCurrency: Record<string, number> = {};
-  sales.forEach((s) => { byCurrency[s.currency] = (byCurrency[s.currency] ?? 0) + s.total_amount; });
+  const vatByCurrency: Record<string, number> = {};
+  sales.forEach((s) => {
+    byCurrency[s.currency] = (byCurrency[s.currency] ?? 0) + s.total_amount;
+    if (s.vat_amount) vatByCurrency[s.currency] = (vatByCurrency[s.currency] ?? 0) + s.vat_amount;
+  });
   const pageW = doc.internal.pageSize.getWidth();
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -141,6 +146,11 @@ export async function generateSalesInvoice(sales: Sale[], settings: InvoiceSetti
   Object.entries(byCurrency).forEach(([cur, total]) => {
     doc.text(`Total (${cur}): ${formatMoney(total, cur)}`, pageW - 14, ty, { align: "right" });
     ty += 7;
+    const vat = vatByCurrency[cur];
+    if (vat) {
+      doc.text(`VAT (${cur}): ${formatMoney(vat, cur)}`, pageW - 14, ty, { align: "right" });
+      ty += 7;
+    }
   });
 
   addFooter(doc, settings);
@@ -162,22 +172,27 @@ export async function generateExpensesInvoice(expenses: Expense[], settings: Inv
     e.category.charAt(0).toUpperCase() + e.category.slice(1),
     e.vendor ?? "—",
     formatMoney(e.amount, e.currency),
+    e.vat_rate != null ? `${e.vat_rate}%\n${formatMoney(e.vat_amount ?? 0, e.currency)}` : "—",
   ]);
 
   autoTable(doc, {
     startY,
-    head: [["#", "Date", "Title", "Category", "Vendor", "Amount"]],
+    head: [["#", "Date", "Title", "Category", "Vendor", "Amount", "VAT"]],
     body: rows,
     styles: { fontSize: 9, cellPadding: 3 },
     headStyles: { fillColor: [200, 50, 50], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [255, 248, 248] },
-    columnStyles: { 0: { cellWidth: 8 }, 5: { halign: "right" } },
+    columnStyles: { 0: { cellWidth: 8 }, 5: { halign: "right" }, 6: { halign: "right" } },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalY = (doc as any).lastAutoTable.finalY + 6;
   const byCurrency: Record<string, number> = {};
-  expenses.forEach((e) => { byCurrency[e.currency] = (byCurrency[e.currency] ?? 0) + e.amount; });
+  const vatByCurrency: Record<string, number> = {};
+  expenses.forEach((e) => {
+    byCurrency[e.currency] = (byCurrency[e.currency] ?? 0) + e.amount;
+    if (e.vat_amount) vatByCurrency[e.currency] = (vatByCurrency[e.currency] ?? 0) + e.vat_amount;
+  });
   const pageW = doc.internal.pageSize.getWidth();
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -186,6 +201,11 @@ export async function generateExpensesInvoice(expenses: Expense[], settings: Inv
   Object.entries(byCurrency).forEach(([cur, total]) => {
     doc.text(`Total (${cur}): ${formatMoney(total, cur)}`, pageW - 14, ty, { align: "right" });
     ty += 7;
+    const vat = vatByCurrency[cur];
+    if (vat) {
+      doc.text(`VAT (${cur}): ${formatMoney(vat, cur)}`, pageW - 14, ty, { align: "right" });
+      ty += 7;
+    }
   });
 
   addFooter(doc, settings);
@@ -208,22 +228,27 @@ export async function generatePurchasesInvoice(purchases: Purchase[], settings: 
     p.quantity,
     formatMoney(p.unit_price, p.currency),
     formatMoney(p.total_amount, p.currency),
+    p.vat_rate != null ? `${p.vat_rate}%\n${formatMoney(p.vat_amount ?? 0, p.currency)}` : "—",
   ]);
 
   autoTable(doc, {
     startY,
-    head: [["#", "Date", "Product", "Vendor", "Qty", "Unit Price", "Total"]],
+    head: [["#", "Date", "Product", "Vendor", "Qty", "Unit Price", "Total", "VAT"]],
     body: rows,
     styles: { fontSize: 9, cellPadding: 3 },
     headStyles: { fillColor: [180, 100, 0], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [255, 252, 240] },
-    columnStyles: { 0: { cellWidth: 8 }, 4: { halign: "center" }, 5: { halign: "right" }, 6: { halign: "right" } },
+    columnStyles: { 0: { cellWidth: 8 }, 4: { halign: "center" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalY = (doc as any).lastAutoTable.finalY + 6;
   const byCurrency: Record<string, number> = {};
-  purchases.forEach((p) => { byCurrency[p.currency] = (byCurrency[p.currency] ?? 0) + p.total_amount; });
+  const vatByCurrency: Record<string, number> = {};
+  purchases.forEach((p) => {
+    byCurrency[p.currency] = (byCurrency[p.currency] ?? 0) + p.total_amount;
+    if (p.vat_amount) vatByCurrency[p.currency] = (vatByCurrency[p.currency] ?? 0) + p.vat_amount;
+  });
   const pageW = doc.internal.pageSize.getWidth();
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -232,6 +257,11 @@ export async function generatePurchasesInvoice(purchases: Purchase[], settings: 
   Object.entries(byCurrency).forEach(([cur, total]) => {
     doc.text(`Total (${cur}): ${formatMoney(total, cur)}`, pageW - 14, ty, { align: "right" });
     ty += 7;
+    const vat = vatByCurrency[cur];
+    if (vat) {
+      doc.text(`VAT (${cur}): ${formatMoney(vat, cur)}`, pageW - 14, ty, { align: "right" });
+      ty += 7;
+    }
   });
 
   addFooter(doc, settings);

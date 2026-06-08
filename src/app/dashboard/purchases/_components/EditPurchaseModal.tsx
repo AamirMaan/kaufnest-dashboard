@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
+import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updatePurchase } from "../_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { Currency, Purchase } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -21,33 +23,43 @@ interface Props {
 
 interface FormState {
   product_name: string;
+  product_id: string;
   quantity: string;
   unit_price: string;
   currency: Currency;
   vendor: string;
   date: string;
   description: string;
+  vat_included: boolean;
+  vat_rate: string;
   reason: string;
 }
 
 function purchaseToForm(p: Purchase): FormState {
   return {
     product_name: p.product_name,
+    product_id: p.product_id ?? "",
     quantity: String(p.quantity),
     unit_price: String(p.unit_price),
     currency: p.currency,
     vendor: p.vendor ?? "",
     date: p.date,
     description: p.description ?? "",
+    vat_included: p.vat_rate != null,
+    vat_rate: p.vat_rate != null ? String(p.vat_rate) : String(readInvoiceSettings().vatRate),
     reason: "",
   };
 }
 
+const blankForm: FormState = {
+  product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
+  vendor: "", date: "", description: "", vat_included: false, vat_rate: "0", reason: "",
+};
+
 export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(() =>
-    purchase ? purchaseToForm(purchase) : { product_name: "", quantity: "1", unit_price: "", currency: "EUR", vendor: "", date: "", description: "", reason: "" }
-  );
+  const products = useAppSelector((s) => s.inventory.items);
+  const [form, setForm] = useState<FormState>(() => (purchase ? purchaseToForm(purchase) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +70,8 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
   const total = qty * price;
+  const vatRate = parseFloat(form.vat_rate) || 0;
+  const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,12 +89,15 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
       .from("purchases")
       .update({
         product_name: form.product_name.trim(),
+        product_id: form.product_id || null,
         quantity: qty,
         unit_price: price,
         currency: form.currency,
         vendor: form.vendor.trim() || null,
         date: form.date,
         description: form.description.trim() || null,
+        vat_rate: form.vat_included ? vatRate : null,
+        vat_amount: form.vat_included ? vatAmount : null,
       })
       .eq("id", purchase.id)
       .select()
@@ -101,8 +118,8 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
       entityType: "purchase",
       entityId: purchase.id,
       metadata: {
-        before: { product_name: purchase.product_name, quantity: purchase.quantity, unit_price: purchase.unit_price, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date },
-        after:  { product_name: data.product_name, quantity: data.quantity, unit_price: data.unit_price, vendor: data.vendor, currency: data.currency, date: data.date },
+        before: { product_name: purchase.product_name, product_id: purchase.product_id, quantity: purchase.quantity, unit_price: purchase.unit_price, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date, vat_rate: purchase.vat_rate, vat_amount: purchase.vat_amount },
+        after:  { product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
         reason: form.reason.trim(),
       },
     });
@@ -138,6 +155,17 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           <Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} required />
         </Field>
 
+        <Field label="Inventory Product">
+          <Select value={form.product_id} onChange={(e) => set("product_id", e.target.value)}>
+            <option value="">— Not tracked —</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.sku ? ` (${p.sku})` : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
         <Row>
           <Field label="Vendor">
             <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
@@ -167,6 +195,33 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
             Total: <span className="font-semibold text-[var(--color-warning)]">{form.currency} {total.toFixed(2)}</span>
           </p>
         )}
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Checkbox
+            label="Total includes VAT"
+            checked={form.vat_included}
+            onChange={(e) => set("vat_included", e.target.checked)}
+          />
+          {form.vat_included && (
+            <>
+              <Field label="VAT Rate (%)">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={form.vat_rate}
+                  onChange={(e) => set("vat_rate", e.target.value)}
+                />
+              </Field>
+              {total > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Net {form.currency} {(total - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {total.toFixed(2)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />

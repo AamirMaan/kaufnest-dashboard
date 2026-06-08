@@ -134,6 +134,19 @@ export default function SalesPage() {
       ),
     },
     {
+      header: "VAT",
+      sortValue: (s: Sale) => s.vat_amount ?? -1,
+      render: (s: Sale) =>
+        s.vat_rate != null ? (
+          <div className="tabular-nums">
+            <span className="text-sm text-[var(--color-text-base)]">{s.vat_rate}%</span>
+            <span className="block text-xs text-[var(--color-text-muted)]">{formatCurrency(s.vat_amount ?? 0, s.currency)}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-[var(--color-text-muted)]">—</span>
+        ),
+    },
+    {
       header: "Actions",
       render: (s: Sale) => (
         <div className="flex items-center gap-1">

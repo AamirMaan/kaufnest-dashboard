@@ -35,3 +35,8 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   features.
 - Every create/update must call `writeAuditLog` + `dispatch(addAuditLog(...))` —
   the audit log is the compliance trail for this bookkeeping app, don't skip it.
+- `Expense.vat_rate`/`vat_amount` are populated only when "Amount includes VAT"
+  is checked (`Checkbox` + `vatAmountFromGross`); send `null` for both when
+  it's off — see `CLAUDE.md` → "VAT" for the full pattern. Note expenses get
+  **no** product-link `Select` (that's Sales/Purchases only — expenses aren't
+  inventory items).

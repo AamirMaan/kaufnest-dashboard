@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { addExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -31,23 +33,29 @@ interface FormState {
   vendor: string;
   date: string;
   description: string;
+  vat_included: boolean;
+  vat_rate: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const defaults: FormState = {
-  title: "",
-  amount: "",
-  currency: "EUR",
-  category: "other",
-  vendor: "",
-  date: today(),
-  description: "",
-};
+function makeDefaults(): FormState {
+  return {
+    title: "",
+    amount: "",
+    currency: "EUR",
+    category: "other",
+    vendor: "",
+    date: today(),
+    description: "",
+    vat_included: false,
+    vat_rate: String(readInvoiceSettings().vatRate),
+  };
+}
 
 export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(defaults);
+  const [form, setForm] = useState<FormState>(makeDefaults);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,10 +63,13 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const amount = parseFloat(form.amount) || 0;
+  const vatRate = parseFloat(form.vat_rate) || 0;
+  const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return setError("Title is required.");
-    const amount = parseFloat(form.amount);
     if (!(amount > 0)) return setError("Amount must be greater than 0.");
     setError(null);
     setSaving(true);
@@ -77,6 +88,8 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
         date: form.date,
         description: form.description.trim() || null,
         created_by: user!.id,
+        vat_rate: form.vat_included ? vatRate : null,
+        vat_amount: form.vat_included ? vatAmount : null,
       })
       .select()
       .single<Expense>();
@@ -99,14 +112,14 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    setForm({ ...defaults, date: today() });
+    setForm(makeDefaults());
     setSaving(false);
     onSuccess?.(data.title);
     onClose();
   }
 
   function handleClose() {
-    setForm({ ...defaults, date: today() });
+    setForm(makeDefaults());
     setError(null);
     onClose();
   }
@@ -199,6 +212,33 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             placeholder="e.g. DHL, Google Ads…"
           />
         </Field>
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Checkbox
+            label="Amount includes VAT"
+            checked={form.vat_included}
+            onChange={(e) => set("vat_included", e.target.checked)}
+          />
+          {form.vat_included && (
+            <>
+              <Field label="VAT Rate (%)">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={form.vat_rate}
+                  onChange={(e) => set("vat_rate", e.target.value)}
+                />
+              </Field>
+              {amount > 0 && (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Net {form.currency} {(amount - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
 
         <Field label="Description">
           <Textarea

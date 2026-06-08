@@ -27,10 +27,20 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 before/after diff in the audit metadata — follow that shape if you add new
 editable fields.
 
+## VAT (additive fields on `Expense`)
+
+- `vat_rate`/`vat_amount: number | null` — populated when the user checks
+  "Amount includes VAT" (a `Checkbox` from `FormFields`). The rate defaults to
+  `readInvoiceSettings().vatRate` but is editable per-record; the amount is
+  extracted from the gross `amount` via `vatAmountFromGross`
+  (`lib/utils/currency`). Both stay `null` when the toggle is off. Unlike
+  Sales/Purchases, expenses have **no product link** — they aren't inventory
+  items, so there's no `product_id`/`Select`.
+
 ## Shared dependencies (live outside this folder on purpose)
 
-- `components/ui/*` — `Modal`, `Button`, `FormFields`, `DataTable`, `FilterBar`,
-  `Badge` (`CategoryBadge`), `Toast`
+- `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
+  `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`), `Toast`
 - `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
   Purchases (don't fork these; extend them if you need new shared behavior)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written

@@ -14,11 +14,17 @@ Currently a single hook backing the invoice-template settings feature.
 purely client-side config.
 
 - `export interface InvoiceSettings` — company/bank/invoice-template fields
-  (`companyName`, `iban`, `invoicePrefix`, `footerNotes`, etc). This is the
-  single source of truth for the shape; `generateInvoice.ts` imports the type
-  from here rather than `src/types`.
+  (`companyName`, `iban`, `invoicePrefix`, `footerNotes`, `vatRate`, etc). This
+  is the single source of truth for the shape; `generateInvoice.ts` imports the
+  type from here rather than `src/types`.
 - `export const DEFAULT_INVOICE_SETTINGS` — all-blank defaults except
-  `country: "Germany"`, `invoicePrefix: "INV-"`, `paymentTerms: "30 days"`.
+  `country: "Germany"`, `invoicePrefix: "INV-"`, `paymentTerms: "30 days"`,
+  `vatRate: 19`.
+- `vatRate: number` — the default VAT rate (%) shown as a starting point on the
+  per-record "Includes VAT?" toggle in the Sales/Purchases/Expenses Add/Edit
+  modals (`readInvoiceSettings().vatRate`, paired with `vatAmountFromGross` from
+  `lib/utils/currency` — see `lib/utils/SKILL.md`). It's editable per-record;
+  this is just the seed value, not an enforced rate.
 - `export function useInvoiceSettings()` → `{ settings, save }`. `save(updated)`
   replaces the whole object (no partial merge) and writes through to
   `localStorage` synchronously.

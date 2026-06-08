@@ -12,6 +12,8 @@ export interface InvoiceSettings {
   email: string;
   vatId: string;
   taxId: string;
+  /** Default VAT rate (%) applied when "includes VAT" is toggled on a record */
+  vatRate: number;
   bankName: string;
   iban: string;
   bic: string;
@@ -30,6 +32,7 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceSettings = {
   email: "",
   vatId: "",
   taxId: "",
+  vatRate: 19,
   bankName: "",
   iban: "",
   bic: "",

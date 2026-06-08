@@ -3,6 +3,7 @@ import {
   calculateNetProfit,
   sumAmounts,
   calculateMargin,
+  vatAmountFromGross,
 } from "./currency";
 
 describe("formatCurrency", () => {
@@ -122,5 +123,31 @@ describe("calculateMargin", () => {
 
   it("returns 50% margin when cost is half of revenue", () => {
     expect(calculateMargin(200, 100)).toBe(50);
+  });
+});
+
+describe("vatAmountFromGross", () => {
+  it("extracts the VAT portion from a VAT-inclusive gross amount", () => {
+    expect(vatAmountFromGross(119, 19)).toBe(19);
+  });
+
+  it("returns 0 when the rate is 0", () => {
+    expect(vatAmountFromGross(100, 0)).toBe(0);
+  });
+
+  it("returns 0 when the rate is negative", () => {
+    expect(vatAmountFromGross(100, -5)).toBe(0);
+  });
+
+  it("returns 0 when gross is 0", () => {
+    expect(vatAmountFromGross(0, 19)).toBe(0);
+  });
+
+  it("rounds to 2 decimal places", () => {
+    expect(vatAmountFromGross(100, 19)).toBe(15.97);
+  });
+
+  it("handles a reduced rate (e.g. 7%)", () => {
+    expect(vatAmountFromGross(107, 7)).toBe(7);
   });
 });

@@ -130,6 +130,19 @@ export default function ExpensesPage() {
       ),
     },
     {
+      header: "VAT",
+      sortValue: (e: Expense) => e.vat_amount ?? -1,
+      render: (e: Expense) =>
+        e.vat_rate != null ? (
+          <div className="tabular-nums">
+            <span className="text-sm text-[var(--color-text-base)]">{e.vat_rate}%</span>
+            <span className="block text-xs text-[var(--color-text-muted)]">{formatCurrency(e.vat_amount ?? 0, e.currency)}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-[var(--color-text-muted)]">—</span>
+        ),
+    },
+    {
       header: "Actions",
       render: (e: Expense) => (
         <div className="flex items-center gap-1">

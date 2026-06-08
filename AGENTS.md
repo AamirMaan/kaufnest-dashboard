@@ -27,6 +27,13 @@ opts them out of routing per the App Router docs at
 They name the exact files to touch for common changes — you should rarely need
 to explore outside that folder plus the shared dependencies it lists.
 
+**After editing a feature, if you learned something important** — a new
+gotcha, a changed data-flow pattern, a moved/renamed file, a new shared
+dependency — update that feature's `SKILL.md` (and `CLAUDE.md` if the file map
+changed) before you finish. Treat these docs as the project's context cache:
+keeping them current means the next agent (or your future self) picks up where
+you left off instead of re-deriving everything from scratch.
+
 ## Feature folders
 
 | Folder | Route | Owns |
@@ -36,6 +43,7 @@ to explore outside that folder plus the shared dependencies it lists.
 | `src/app/dashboard/sales/` | `/dashboard/sales` | sales records + `salesSlice` |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
+| `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
 | `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles + `usersSlice` |
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
 | `src/app/dashboard/settings/` | `/dashboard/settings` | invoice template settings (thin — no private state) |

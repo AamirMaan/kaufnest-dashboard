@@ -88,6 +88,11 @@ Lightweight form primitives shared by all "Add"/"Edit" modals:
 - `Input(props: InputHTMLAttributes<HTMLInputElement>)`
 - `Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectElement>)`
 - `Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>)` — fixed `rows={3}`
+- `Checkbox({ label, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "type">)`
+  — labeled native `<input type="checkbox">`, token-styled. Used for the
+  "Total/Amount includes VAT" toggle in the Sales/Purchases/Expenses Add/Edit
+  modals (paired with a VAT-rate `Field`+`Input` and `vatAmountFromGross` —
+  see those features' `CLAUDE.md` "VAT" sections).
 - `Row({ children })` — 2-column grid on `sm:`+, single column on mobile; use to
   pair two `Field`s side by side
 

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
-import type { Profile, Sale, Expense, Purchase, AuditLog } from "@/types";
+import type { Profile, Sale, Expense, Purchase, Product, AuditLog } from "@/types";
 
 export default async function DashboardLayout({
   children,
@@ -31,6 +31,7 @@ export default async function DashboardLayout({
     { data: sales },
     { data: expenses },
     { data: purchases },
+    { data: products },
     { data: auditLogs },
     { data: users },
   ] = await Promise.all([
@@ -53,6 +54,11 @@ export default async function DashboardLayout({
       .limit(100)
       .returns<Purchase[]>(),
     supabase
+      .from("products")
+      .select("*")
+      .order("name", { ascending: true })
+      .returns<Product[]>(),
+    supabase
       .from("audit_logs")
       .select("*")
       .order("created_at", { ascending: false })
@@ -70,6 +76,7 @@ export default async function DashboardLayout({
       sales={sales ?? []}
       expenses={expenses ?? []}
       purchases={purchases ?? []}
+      products={products ?? []}
       auditLogs={auditLogs ?? []}
       users={users ?? []}
       currentUser={profile}

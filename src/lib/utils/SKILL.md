@@ -39,6 +39,12 @@ them with `npx jest lib/utils`.
 - `calculateMargin(revenue, cost)` → `number | null` — percentage rounded to
   2 decimals; **returns `null` when `revenue === 0`** to avoid `Infinity`/`NaN`
   — callers must handle the null case (e.g. render "—").
+- `vatAmountFromGross(gross, ratePercent)` — extracts the VAT portion from a
+  VAT-inclusive total: `gross * rate / (100 + rate)`, rounded to 2 decimals.
+  Used by the Add/Edit modals in Sales/Purchases/Expenses (and
+  `generateInvoice.ts`'s totals block) wherever a record's `total_amount`/`amount`
+  is gross and `vat_rate`/`vat_amount` need deriving — never *add* VAT on top,
+  the stored total is already the gross/paid figure.
 
 ## date.ts
 
@@ -107,6 +113,11 @@ bundle — keep that pattern if you touch the imports.
   an `autoTable` of rows, a per-currency totals block, a footer, then
   `doc.save(...)`. All `async`, all trigger a browser download directly —
   there's no return value to await for.
+- The per-currency totals block sums both `total_amount`/`amount` (→ `byCurrency`)
+  and `vat_amount` (→ `vatByCurrency`, only entries with a non-zero sum) and
+  renders a "Total (CUR): …" line followed by an optional "VAT (CUR): …" line
+  right under it. Mirror this `byCurrency`/`vatByCurrency` pair if you add
+  another summed line.
 - The three functions are near-identical (different columns, header color,
   filename suffix) — when changing shared layout/header/footer behavior, edit
   `addHeader`/`addFooter`/`formatDate`/`formatMoney`/`generateInvoiceNumber`

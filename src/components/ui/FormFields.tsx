@@ -52,3 +52,21 @@ export function Textarea(props: TextareaProps) {
 export function Row({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>;
 }
+
+type CheckboxProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  label: string;
+};
+
+/** Labeled checkbox — e.g. the "includes VAT" toggle on financial-record forms */
+export function Checkbox({ label, className, ...props }: CheckboxProps) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-[var(--color-text-base)]">
+      <input
+        type="checkbox"
+        className={`h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] ${className ?? ""}`}
+        {...props}
+      />
+      {label}
+    </label>
+  );
+}

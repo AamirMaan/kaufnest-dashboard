@@ -133,6 +133,19 @@ export default function PurchasesPage() {
       ),
     },
     {
+      header: "VAT",
+      sortValue: (p: Purchase) => p.vat_amount ?? -1,
+      render: (p: Purchase) =>
+        p.vat_rate != null ? (
+          <div className="tabular-nums">
+            <span className="text-sm text-[var(--color-text-base)]">{p.vat_rate}%</span>
+            <span className="block text-xs text-[var(--color-text-muted)]">{formatCurrency(p.vat_amount ?? 0, p.currency)}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-[var(--color-text-muted)]">—</span>
+        ),
+    },
+    {
       header: "Actions",
       render: (p: Purchase) => (
         <div className="flex items-center gap-1">

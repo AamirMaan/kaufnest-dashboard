@@ -8,10 +8,11 @@ broadly when working on a specific feature.**
 
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
-  (sales/expenses/purchases/audit_logs/profiles) from Supabase **once**, and
-  hydrates them into Redux via `<StoreProvider>` so individual pages never
-  refetch on mount. Wraps everything in `<ToastProvider>` and `<DashboardShell>`.
-  **If you add a new feature with its own collection, hydrate it here.**
+  (sales/expenses/purchases/products/audit_logs/profiles) from Supabase
+  **once**, and hydrates them into Redux via `<StoreProvider>` so individual
+  pages never refetch on mount. Wraps everything in `<ToastProvider>` and
+  `<DashboardShell>`. **If you add a new feature with its own collection,
+  hydrate it here.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
   `sales`/`expenses`/`purchases` from Redux, computes this-month totals via
   `getMonthRange` + `calculateNetProfit`, renders `StatCard`s. No
@@ -24,6 +25,7 @@ broadly when working on a specific feature.**
 | `sales/` | `/dashboard/sales` | sales records, `salesSlice` |
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
+| `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |
 | `users/` | `/dashboard/users` | user invites/roles, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
 | `settings/` | `/dashboard/settings` | invoice template settings |

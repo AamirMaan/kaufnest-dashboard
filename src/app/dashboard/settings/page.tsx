@@ -144,6 +144,22 @@ export default function SettingsPage() {
               />
             </Field>
           </Row>
+
+          <Field label="Default VAT Rate (%)">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={form.vatRate}
+              onChange={(e) => set("vatRate", parseFloat(e.target.value) || 0)}
+              placeholder="19"
+            />
+          </Field>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Used as the default rate when you mark a purchase, sale, or expense
+            as &ldquo;includes VAT&rdquo; — editable per record.
+          </p>
         </section>
 
         {/* Banking Details */}

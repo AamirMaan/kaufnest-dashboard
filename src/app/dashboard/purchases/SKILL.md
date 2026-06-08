@@ -35,3 +35,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   features.
 - Every create/update must call `writeAuditLog` + `dispatch(addAuditLog(...))` —
   the audit log is the compliance trail for this bookkeeping app, don't skip it.
+- `Purchase.product_id` is optional and FK's to `products` (Inventory feature) —
+  the modals just set it via a `Select`; a DB trigger keeps `current_stock` in
+  sync (purchases *increment* stock, sales decrement). Never write to
+  `products.current_stock` from here.
+- `Purchase.vat_rate`/`vat_amount` are populated only when "Total includes VAT"
+  is checked (`Checkbox` + `vatAmountFromGross`); send `null` for both when
+  it's off — see `CLAUDE.md` → "Inventory link + VAT" for the full pattern,
+  which is identical across Purchases/Sales/Expenses modals.

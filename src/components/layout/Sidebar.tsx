@@ -7,6 +7,7 @@ import {
   TrendingUp,
   TrendingDown,
   ShoppingCart,
+  Boxes,
   ClipboardList,
   Users,
   Settings,
@@ -52,6 +53,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Purchases",
     href: "/dashboard/purchases",
     Icon: ShoppingCart,
+    roles: ["super_admin", "admin", "accountant"],
+  },
+  {
+    label: "Inventory",
+    href: "/dashboard/inventory",
+    Icon: Boxes,
     roles: ["super_admin", "admin", "accountant"],
   },
   {

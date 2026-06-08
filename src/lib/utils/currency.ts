@@ -40,3 +40,14 @@ export function calculateMargin(revenue: number, cost: number): number | null {
   if (revenue === 0) return null;
   return Math.round(((revenue - cost) / revenue) * 10000) / 100; // 2 decimal %
 }
+
+/**
+ * Extract the VAT portion from a VAT-inclusive gross total.
+ * e.g. vatAmountFromGross(119, 19) → 19 (net would be 100)
+ * Returns 0 when the rate is 0 or negative.
+ */
+export function vatAmountFromGross(gross: number, ratePercent: number): number {
+  if (ratePercent <= 0) return 0;
+  const vat = (gross * ratePercent) / (100 + ratePercent);
+  return Math.round(vat * 100) / 100;
+}
