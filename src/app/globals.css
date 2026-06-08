@@ -65,3 +65,42 @@ body {
   color: var(--color-text-base);
   background: var(--color-surface-subtle);
 }
+
+/* ─── Light theme overrides ────────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Sidebar stays dark — only content area surfaces go light */
+  --color-surface:        #ffffff;
+  --color-surface-subtle: #f1f5f9; /* slate-100 */
+  --color-border:         #cbd5e1; /* slate-300 */
+  --color-border-subtle:  #e2e8f0; /* slate-200 */
+
+  --color-text-strong:    #0f172a;
+  --color-text-base:      #334155;
+  --color-text-muted:     #64748b;
+  --color-text-faint:     #94a3b8;
+
+  --color-success-bg:     #ecfdf5;
+  --color-warning-bg:     #fffbeb;
+  --color-danger-bg:      #fef2f2;
+  --color-info-bg:        #eef2ff;
+  --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .08), 0 1px 2px -1px rgb(0 0 0 / .08);
+}
+
+/* ─── Dark theme overrides ─────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-surface:        #1e293b; /* slate-800 */
+  --color-surface-subtle: #0f172a; /* slate-900 */
+  --color-border:         #334155; /* slate-700 */
+  --color-border-subtle:  #1e293b; /* slate-800 */
+
+  --color-text-strong:    #f1f5f9; /* slate-100 */
+  --color-text-base:      #cbd5e1; /* slate-300 */
+  --color-text-muted:     #94a3b8; /* slate-400 */
+  --color-text-faint:     #64748b; /* slate-500 */
+
+  --color-success-bg:     #052e16;
+  --color-warning-bg:     #1c1007;
+  --color-danger-bg:      #1c0606;
+  --color-info-bg:        #1e1b4b;
+  --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+}

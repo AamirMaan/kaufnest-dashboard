@@ -3,7 +3,7 @@ import {
   calculateNetProfit,
   sumAmounts,
   calculateMargin,
-} from "@/lib/utils/currency";
+} from "./currency";
 
 describe("formatCurrency", () => {
   it("formats EUR amounts with German locale", () => {

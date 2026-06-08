@@ -1,9 +1,9 @@
 import { configureStore } from "@reduxjs/toolkit";
-import { salesSlice } from "./slices/salesSlice";
-import { expensesSlice } from "./slices/expensesSlice";
-import { purchasesSlice } from "./slices/purchasesSlice";
+import { salesSlice } from "@/app/dashboard/sales/_store/salesSlice";
+import { expensesSlice } from "@/app/dashboard/expenses/_store/expensesSlice";
+import { purchasesSlice } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { auditLogsSlice } from "./slices/auditLogsSlice";
-import { usersSlice } from "./slices/usersSlice";
+import { usersSlice } from "@/app/dashboard/users/_store/usersSlice";
 import { currentUserSlice } from "./slices/currentUserSlice";
 
 export const makeStore = () =>

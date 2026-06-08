@@ -1,4 +1,4 @@
-import { getMonthRange, formatDate, formatDateTime } from "@/lib/utils/date";
+import { getMonthRange, formatDate, formatDateTime } from "./date";
 
 describe("getMonthRange", () => {
   it("returns correct first and last day for January", () => {

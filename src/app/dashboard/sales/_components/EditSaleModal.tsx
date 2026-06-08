@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
-import { updateSale } from "@/store/slices/salesSlice";
+import { updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -51,13 +51,6 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (sale) {
-      setForm(saleToForm(sale));
-      setError(null);
-    }
-  }, [sale?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

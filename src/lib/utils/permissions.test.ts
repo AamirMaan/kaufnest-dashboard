@@ -2,7 +2,7 @@ import {
   hasPermission,
   canAccessRoute,
   hasMinimumRole,
-} from "@/lib/utils/permissions";
+} from "./permissions";
 import type { UserRole } from "@/types";
 
 describe("hasPermission", () => {

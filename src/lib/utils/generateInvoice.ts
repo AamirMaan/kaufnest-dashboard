@@ -2,9 +2,7 @@ import type { InvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import type { Sale, Expense, Purchase } from "@/types";
 
 // jsPDF + autotable are loaded dynamically to avoid SSR issues
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const getJsPDF = () => import("jspdf").then((m) => m.default);
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const getAutoTable = () => import("jspdf-autotable").then((m) => m.default);
 
 function generateInvoiceNumber(prefix: string): string {

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
-import { updateUser } from "@/store/slices/usersSlice";
+import { updateUser } from "../_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -29,16 +29,11 @@ interface FormState {
 
 export function EditUserModal({ user, onClose }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>({ full_name: "", role: "accountant" });
+  const [form, setForm] = useState<FormState>(() =>
+    user ? { full_name: user.full_name ?? "", role: user.role } : { full_name: "", role: "accountant" }
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user) {
-      setForm({ full_name: user.full_name ?? "", role: user.role });
-      setError(null);
-    }
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

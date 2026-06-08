@@ -1,0 +1,43 @@
+# Expenses feature
+
+Route: `/dashboard/expenses`. Lists expenses by category (shipping, advertising,
+tax, office, etc.), with add/edit/delete and PDF invoice generation.
+
+## Files in this folder
+
+- `page.tsx` — list view: filtering (`FilterBar` + `filterExpenses`), row
+  selection, invoice trigger, wires up the modals below.
+- `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`).
+  Actions: `hydrateExpenses`, `addExpense`, `updateExpense`, `removeExpense`. Used
+  **only** by this feature — registered centrally in `src/store/store.ts` and
+  hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
+- `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
+- `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
+
+## Data flow (the pattern every mutation follows)
+
+1. Write to Supabase (`createClient()` from `@/lib/supabase/client`, table `expenses`).
+2. On success, dispatch the local slice action (`addExpense`/`updateExpense`/`removeExpense`)
+   so the UI updates without a refetch.
+3. Call `writeAuditLog` (`@/lib/utils/audit`) to persist an audit row, then dispatch
+   `addAuditLog` (`@/store/slices/auditLogsSlice`) to reflect it immediately in the
+   shared audit log state.
+
+`EditExpenseModal` additionally requires a "reason for edit" and records a
+before/after diff in the audit metadata — follow that shape if you add new
+editable fields.
+
+## Shared dependencies (live outside this folder on purpose)
+
+- `components/ui/*` — `Modal`, `Button`, `FormFields`, `DataTable`, `FilterBar`,
+  `Badge` (`CategoryBadge`), `Toast`
+- `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
+  Purchases (don't fork these; extend them if you need new shared behavior)
+- `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
+  by every CRUD feature
+- `lib/utils/{audit,currency,date,filters,generateInvoice}`, `lib/hooks/useInvoiceSettings`
+- `types` (`Expense`, `ExpenseCategory`)
+
+## Tests
+
+`npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`.

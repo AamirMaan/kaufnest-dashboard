@@ -7,7 +7,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { ActionBadge } from "@/components/ui/Badge";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { AuditLogDetailModal } from "@/components/modals/AuditLogDetailModal";
+import { AuditLogDetailModal } from "./_components/AuditLogDetailModal";
 import { formatDateTime } from "@/lib/utils/date";
 import type { AuditLog } from "@/types";
 

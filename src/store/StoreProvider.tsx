@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 import { Provider } from "react-redux";
-import { makeStore, type AppStore } from "@/store/store";
-import { hydrateSales } from "@/store/slices/salesSlice";
-import { hydrateExpenses } from "@/store/slices/expensesSlice";
-import { hydratePurchases } from "@/store/slices/purchasesSlice";
+import { makeStore } from "@/store/store";
+import { hydrateSales } from "@/app/dashboard/sales/_store/salesSlice";
+import { hydrateExpenses } from "@/app/dashboard/expenses/_store/expensesSlice";
+import { hydratePurchases } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
-import { hydrateUsers } from "@/store/slices/usersSlice";
+import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
 import { setCurrentUser } from "@/store/slices/currentUserSlice";
 import type { Sale, Expense, Purchase, AuditLog, Profile } from "@/types";
 
@@ -30,19 +30,16 @@ export function StoreProvider({
   users,
   currentUser,
 }: StoreProviderProps) {
-  const storeRef = useRef<AppStore | null>(null);
-
-  if (storeRef.current === null) {
-    storeRef.current = makeStore();
-
-    const store = storeRef.current;
+  const [store] = useState(() => {
+    const store = makeStore();
     if (sales)       store.dispatch(hydrateSales(sales));
     if (expenses)    store.dispatch(hydrateExpenses(expenses));
     if (purchases)   store.dispatch(hydratePurchases(purchases));
     if (auditLogs)   store.dispatch(hydrateAuditLogs(auditLogs));
     if (users)       store.dispatch(hydrateUsers(users));
     if (currentUser) store.dispatch(setCurrentUser(currentUser));
-  }
+    return store;
+  });
 
-  return <Provider store={storeRef.current}>{children}</Provider>;
+  return <Provider store={store}>{children}</Provider>;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removePurchase } from "@/store/slices/purchasesSlice";
+import { removePurchase } from "./_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -10,8 +10,8 @@ import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown } from "lucide-react";
-import { AddPurchaseModal } from "@/components/modals/AddPurchaseModal";
-import { EditPurchaseModal } from "@/components/modals/EditPurchaseModal";
+import { AddPurchaseModal } from "./_components/AddPurchaseModal";
+import { EditPurchaseModal } from "./_components/EditPurchaseModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
@@ -197,6 +197,7 @@ export default function PurchasesPage() {
         onSuccess={(name) => success("Purchase added", `"${name}" was recorded successfully.`)}
       />
       <EditPurchaseModal
+        key={editTarget?.id ?? "edit-purchase"}
         purchase={editTarget}
         onClose={() => setEditTarget(null)}
         onSuccess={() => success("Purchase updated", "Changes have been saved.")}

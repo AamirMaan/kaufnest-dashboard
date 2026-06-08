@@ -76,8 +76,6 @@ const NAV_ITEMS: NavItem[] = [
 
 interface SidebarProps {
   role: UserRole;
-  fullName: string;
-  email: string;
   collapsed: boolean;
   onToggle: () => void;
   mobileOpen: boolean;
@@ -86,15 +84,12 @@ interface SidebarProps {
 
 export function Sidebar({
   role,
-  fullName,
-  email,
   collapsed,
   onToggle,
   mobileOpen,
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const displayName = fullName || email;
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
 

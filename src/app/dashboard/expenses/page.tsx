@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeExpense } from "@/store/slices/expensesSlice";
+import { removeExpense } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -11,8 +11,8 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown } from "lucide-react";
-import { AddExpenseModal } from "@/components/modals/AddExpenseModal";
-import { EditExpenseModal } from "@/components/modals/EditExpenseModal";
+import { AddExpenseModal } from "./_components/AddExpenseModal";
+import { EditExpenseModal } from "./_components/EditExpenseModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
@@ -198,6 +198,7 @@ export default function ExpensesPage() {
         onSuccess={(title) => success("Expense added", `"${title}" was recorded successfully.`)}
       />
       <EditExpenseModal
+        key={editTarget?.id ?? "edit-expense"}
         expense={editTarget}
         onClose={() => setEditTarget(null)}
         onSuccess={() => success("Expense updated", "Changes have been saved.")}

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeSale } from "@/store/slices/salesSlice";
+import { removeSale } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -11,8 +11,8 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { PlatformBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown } from "lucide-react";
-import { AddSaleModal } from "@/components/modals/AddSaleModal";
-import { EditSaleModal } from "@/components/modals/EditSaleModal";
+import { AddSaleModal } from "./_components/AddSaleModal";
+import { EditSaleModal } from "./_components/EditSaleModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
@@ -201,6 +201,7 @@ export default function SalesPage() {
         onSuccess={(name) => success("Sale added", `"${name}" was recorded successfully.`)}
       />
       <EditSaleModal
+        key={editTarget?.id ?? "edit-sale"}
         sale={editTarget}
         onClose={() => setEditTarget(null)}
         onSuccess={() => success("Sale updated", "Changes have been saved.")}

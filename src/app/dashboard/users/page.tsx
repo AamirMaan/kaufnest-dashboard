@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { updateUserRole } from "@/store/slices/usersSlice";
+import { updateUserRole } from "./_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { RoleBadge } from "@/components/ui/Badge";
-import { InviteUserModal } from "@/components/modals/InviteUserModal";
-import { EditUserModal } from "@/components/modals/EditUserModal";
+import { InviteUserModal } from "./_components/InviteUserModal";
+import { EditUserModal } from "./_components/EditUserModal";
 import { Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -127,7 +127,7 @@ export default function UsersPage() {
         emptyMessage="No users found."
       />
       <InviteUserModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
-      <EditUserModal user={editTarget} onClose={() => setEditTarget(null)} />
+      <EditUserModal key={editTarget?.id ?? "edit-user"} user={editTarget} onClose={() => setEditTarget(null)} />
     </div>
   );
 }

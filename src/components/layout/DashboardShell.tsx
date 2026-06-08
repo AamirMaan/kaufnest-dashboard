@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, User, LogOut, ChevronDown } from "lucide-react";
+import { Menu, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "./Sidebar";
+import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
 interface Props {
@@ -19,6 +20,7 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const { theme, toggle: toggleTheme } = useTheme();
   const router = useRouter();
   const displayName = fullName || email;
 
@@ -58,8 +60,19 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
           </span>
         </div>
 
-        {/* Right: user menu */}
-        <div className="relative" ref={userMenuRef}>
+        {/* Right: theme toggle + user menu */}
+        <div className="flex items-center gap-1">
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            {theme === "dark" ? <Sun size={17} strokeWidth={1.75} /> : <Moon size={17} strokeWidth={1.75} />}
+          </button>
+
+          {/* User menu */}
+          <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((o) => !o)}
             className="flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-btn)] text-[var(--color-sidebar-text)] hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
@@ -107,6 +120,7 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
               </div>
             </div>
           )}
+          </div>
         </div>
       </header>
 
@@ -123,8 +137,6 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           role={role}
-          fullName={fullName}
-          email={email}
           collapsed={collapsed}
           onToggle={() => setCollapsed((c) => !c)}
           mobileOpen={mobileOpen}

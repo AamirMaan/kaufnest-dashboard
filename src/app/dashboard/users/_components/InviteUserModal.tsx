@@ -5,7 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
-import { addUser } from "@/store/slices/usersSlice";
+import { addUser } from "../_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole, AuditLog } from "@/types";
