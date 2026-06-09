@@ -65,6 +65,15 @@ export default function DashboardPage() {
   const totalPurchases = periodPurchases.reduce((s, r) => s + r.total_amount, 0);
   const netProfit = calculateNetProfit(totalRevenue, totalExpenses, totalPurchases);
 
+  // VAT position — output VAT (collected from customers via sales) minus
+  // input VAT (paid to suppliers via purchases + expenses).
+  const vatCollected = periodSales.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
+  const vatPaid =
+    periodPurchases.reduce((s, r) => s + (r.vat_amount ?? 0), 0) +
+    periodExpenses.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
+  const vatPosition = vatCollected - vatPaid;
+  const hasVatData = vatCollected > 0 || vatPaid > 0;
+
   return (
     <div>
       <PageHeader
@@ -135,6 +144,35 @@ export default function DashboardPage() {
           subtext={netProfit >= 0 ? "Profitable in this period" : "Loss in this period"}
         />
       </div>
+
+      {hasVatData && (
+        <div
+          className="bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border)] p-6 mb-8"
+          style={{ boxShadow: "var(--shadow-card)" }}
+        >
+          <h2 className="text-sm font-semibold text-[var(--color-text-base)] mb-4">VAT Position</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              label="VAT Collected"
+              value={formatCurrency(vatCollected)}
+              subtext="Output VAT — charged to customers"
+              trend="neutral"
+            />
+            <StatCard
+              label="VAT Paid"
+              value={formatCurrency(vatPaid)}
+              subtext="Input VAT — purchases & expenses"
+              trend="neutral"
+            />
+            <StatCard
+              label={vatPosition >= 0 ? "Due to Government" : "Government Refund"}
+              value={formatCurrency(Math.abs(vatPosition))}
+              subtext={vatPosition >= 0 ? "Net VAT payable" : "Net VAT reclaimable"}
+              trend={vatPosition >= 0 ? "down" : "up"}
+            />
+          </div>
+        </div>
+      )}
 
       <div
         className="bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border)] p-6"

@@ -51,18 +51,21 @@ export default function SalesPage() {
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
 
-  const totals = useMemo(() => {
-    const byCurrency = new Map<Currency, number[]>();
+  const summary = useMemo(() => {
+    const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
     for (const s of filtered) {
-      const amounts = byCurrency.get(s.currency) ?? [];
-      amounts.push(s.total_amount);
-      byCurrency.set(s.currency, amounts);
+      const entry = byCurrency.get(s.currency) ?? { gross: [], vat: [] };
+      entry.gross.push(s.total_amount);
+      if (s.vat_amount != null) entry.vat.push(s.vat_amount);
+      byCurrency.set(s.currency, entry);
     }
-    return Array.from(byCurrency.entries()).map(([currency, amounts]) => ({
+    return Array.from(byCurrency.entries()).map(([currency, { gross, vat }]) => ({
       currency,
-      total: sumAmounts(amounts),
+      gross: sumAmounts(gross),
+      vat: sumAmounts(vat),
     }));
   }, [filtered]);
+  const hasVat = summary.some((s) => s.vat > 0);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Sale | null>(null);
@@ -228,12 +231,30 @@ export default function SalesPage() {
         </div>
       </FilterBar>
 
-      <div className="flex items-center justify-between mb-3 text-sm text-[var(--color-text-muted)]">
-        <span>{filtered.length} sale{filtered.length !== 1 ? "s" : ""} shown</span>
-        {totals.length > 0 && (
-          <span className="font-medium text-[var(--color-text-strong)]">
-            Total: {totals.map((t) => formatCurrency(t.total, t.currency)).join(" + ")}
-          </span>
+      <div className="flex items-start justify-between mb-3 text-sm">
+        <span className="text-[var(--color-text-muted)] pt-0.5">
+          {filtered.length} sale{filtered.length !== 1 ? "s" : ""} shown
+        </span>
+        {summary.length > 0 && (
+          <div className="text-right space-y-0.5">
+            {hasVat ? (
+              <>
+                <p className="font-medium text-[var(--color-text-strong)]">
+                  Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                </p>
+                <p className="text-[var(--color-text-muted)]">
+                  VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
+                </p>
+                <p className="font-medium text-[var(--color-text-strong)]">
+                  Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
+                </p>
+              </>
+            ) : (
+              <p className="font-medium text-[var(--color-text-strong)]">
+                Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
