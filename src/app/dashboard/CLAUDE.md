@@ -24,9 +24,16 @@ broadly when working on a specific feature.**
     Government / Government Refund
   - **Expenses by Category** section (hidden when no expenses): per-category totals
     sorted by spend, rendered with `CategoryBadge`
+  - **Charts** section (hidden when no data in period): 2-column row with a
+    `recharts` `AreaChart` (Revenue/Expenses/Purchases by month, 2/3 width) and a
+    `PieChart` donut (Revenue by Platform, 1/3 width + custom legend)
+  - **Top Products** and **Expenses by Category** side-by-side in a 2-col grid
+    (each hidden when empty)
+  Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
+  are passed to recharts props (CSS variables don't render reliably inside SVG).
   No feature-private code — has no `_components`/`_store` of its own. Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `ExpenseCategory` type.
+  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`.
 
 ## Feature folders (each documents itself — start there)
 
