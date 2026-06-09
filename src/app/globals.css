@@ -10,11 +10,13 @@
   --color-primary-muted:  #eef2ff; /* indigo-50  */
   --color-primary-text:   #4338ca; /* indigo-700 */
 
-  /* Secondary – slate (sidebar, borders, muted text) */
-  --color-sidebar-bg:     #0f172a; /* slate-900  */
-  --color-sidebar-border: #1e293b; /* slate-800  */
-  --color-sidebar-text:   #94a3b8; /* slate-400  */
-  --color-sidebar-active: var(--color-primary);
+  /* Secondary – slate (sidebar, header) */
+  --color-sidebar-bg:          #0f172a; /* slate-900  */
+  --color-sidebar-border:      #1e293b; /* slate-800  */
+  --color-sidebar-text:        #94a3b8; /* slate-400  */
+  --color-sidebar-text-strong: #ffffff; /* prominent labels, active icons */
+  --color-sidebar-hover:       #1e293b; /* slate-800 — nav/button hover bg */
+  --color-sidebar-active:      var(--color-primary);
 
   /* Surface */
   --color-surface:        #ffffff;
@@ -68,9 +70,16 @@ body {
 
 /* ─── Light theme overrides ────────────────────────────────────────────────── */
 [data-theme="light"] {
-  /* Sidebar stays dark — only content area surfaces go light */
+  /* Sidebar — light gray panel */
+  --color-sidebar-bg:          #f1f5f9; /* slate-100 */
+  --color-sidebar-border:      #cbd5e1; /* slate-300 */
+  --color-sidebar-text:        #475569; /* slate-600 */
+  --color-sidebar-text-strong: #0f172a; /* slate-900 */
+  --color-sidebar-hover:       #e2e8f0; /* slate-200 */
+
+  /* Content surfaces */
   --color-surface:        #ffffff;
-  --color-surface-subtle: #f1f5f9; /* slate-100 */
+  --color-surface-subtle: #f8fafc; /* slate-50  */
   --color-border:         #cbd5e1; /* slate-300 */
   --color-border-subtle:  #e2e8f0; /* slate-200 */
 

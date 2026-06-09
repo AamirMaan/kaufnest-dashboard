@@ -117,7 +117,7 @@ export function Sidebar({
       <button
         onClick={onToggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="hidden md:flex absolute right-0 translate-x-1/2 top-[72px] w-6 h-6 rounded-full items-center justify-center bg-[var(--color-sidebar-bg)] border border-[var(--color-sidebar-border)] text-[var(--color-sidebar-text)] hover:text-white hover:border-[var(--color-primary)] transition-colors cursor-pointer z-10 shadow-sm"
+        className="hidden md:flex absolute right-0 translate-x-1/2 top-[72px] w-6 h-6 rounded-full items-center justify-center bg-[var(--color-sidebar-bg)] border border-[var(--color-sidebar-border)] text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:border-[var(--color-primary)] transition-colors cursor-pointer z-10 shadow-sm"
       >
         {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
       </button>
@@ -125,14 +125,14 @@ export function Sidebar({
       {/* Mobile-only header: brand + close button */}
       <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-[var(--color-sidebar-border)] shrink-0">
         <div>
-          <span className="text-xl font-bold text-white tracking-tight">
+          <span className="text-xl font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
             Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
           </span>
-          <p className="text-xs text-[var(--color-text-faint)] mt-0.5">Business Dashboard</p>
+          <p className="text-xs text-[var(--color-sidebar-text)] mt-0.5">Business Dashboard</p>
         </div>
         <button
           onClick={onMobileClose}
-          className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)] transition-colors cursor-pointer"
           aria-label="Close navigation"
         >
           <X size={16} />
@@ -158,7 +158,7 @@ export function Sidebar({
                 collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
                 isActive
                   ? "bg-[var(--color-sidebar-active)] text-white"
-                  : "text-[var(--color-sidebar-text)] hover:text-white hover:bg-[var(--color-sidebar-border)]",
+                  : "text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)]",
               ].join(" ")}
             >
               <item.Icon size={18} strokeWidth={1.75} className="shrink-0" />
@@ -170,5 +170,3 @@ export function Sidebar({
     </aside>
   );
 }
-
-

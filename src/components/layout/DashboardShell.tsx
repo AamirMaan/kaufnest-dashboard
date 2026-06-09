@@ -50,12 +50,12 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(true)}
-            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="md:hidden p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)] transition-colors"
             aria-label="Open navigation"
           >
             <Menu size={20} />
           </button>
-          <span className="text-base font-bold text-white tracking-tight">
+          <span className="text-base font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
             Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
           </span>
         </div>
@@ -66,7 +66,7 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
           <button
             onClick={toggleTheme}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)] transition-colors cursor-pointer"
           >
             {theme === "dark" ? <Sun size={17} strokeWidth={1.75} /> : <Moon size={17} strokeWidth={1.75} />}
           </button>
@@ -75,12 +75,12 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
           <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((o) => !o)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-btn)] text-[var(--color-sidebar-text)] hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-2 py-1.5 rounded-[var(--radius-btn)] text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)] transition-colors cursor-pointer"
           >
-            <div className="w-7 h-7 rounded-full bg-[var(--color-sidebar-border)] flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-full bg-[var(--color-sidebar-hover)] flex items-center justify-center shrink-0">
               <User size={14} className="text-[var(--color-primary-hover)]" />
             </div>
-            <span className="hidden sm:block text-sm font-medium text-white max-w-[140px] truncate leading-none">
+            <span className="hidden sm:block text-sm font-medium text-[var(--color-sidebar-text-strong)] max-w-[140px] truncate leading-none">
               {displayName}
             </span>
             <ChevronDown
@@ -95,13 +95,13 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
               {/* User identity block */}
               <div className="px-4 py-3 border-b border-[var(--color-border)]">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[var(--color-sidebar-border)] flex items-center justify-center shrink-0">
-                    <User size={16} className="text-[var(--color-primary-hover)]" />
+                  <div className="w-9 h-9 rounded-full bg-[var(--color-surface-subtle)] flex items-center justify-center shrink-0 border border-[var(--color-border)]">
+                    <User size={16} className="text-[var(--color-primary)]" />
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[var(--color-text-strong)] truncate">{displayName}</p>
                     <p className="text-xs text-[var(--color-text-faint)] truncate">{email}</p>
-                    <span className="inline-block mt-0.5 px-1.5 py-px rounded text-[10px] font-medium bg-[var(--color-sidebar-border)] text-[var(--color-primary-hover)]">
+                    <span className="inline-block mt-0.5 px-1.5 py-px rounded text-[10px] font-medium bg-[var(--color-primary-muted)] text-[var(--color-primary-text)]">
                       {role.replace("_", " ")}
                     </span>
                   </div>
@@ -112,7 +112,7 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
               <div className="p-1.5">
                 <button
                   onClick={() => { setUserMenuOpen(false); handleSignOut(); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-btn)] text-sm text-[var(--color-text-base)] hover:text-red-400 hover:bg-[var(--color-surface-subtle)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-btn)] text-sm text-[var(--color-text-base)] hover:text-red-500 hover:bg-[var(--color-surface-subtle)] transition-colors cursor-pointer"
                 >
                   <LogOut size={15} strokeWidth={1.75} />
                   Sign out
