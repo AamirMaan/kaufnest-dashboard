@@ -7,6 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, type DatePreset } from "@/lib/utils/filters";
+import { CategoryBadge } from "@/components/ui/Badge";
+import type { ExpenseCategory } from "@/types";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "this_month", label: "This Month" },
@@ -74,6 +76,16 @@ export default function DashboardPage() {
   const vatPosition = vatCollected - vatPaid;
   const hasVatData = vatCollected > 0 || vatPaid > 0;
 
+  const unitsSold = periodSales.reduce((s, r) => s + r.quantity, 0);
+
+  const expensesByCategory = useMemo(() => {
+    const map = new Map<ExpenseCategory, number>();
+    for (const e of periodExpenses) {
+      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [periodExpenses]);
+
   return (
     <div>
       <PageHeader
@@ -121,7 +133,7 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
           label="Revenue"
           value={formatCurrency(totalRevenue)}
@@ -142,6 +154,12 @@ export default function DashboardPage() {
           value={formatCurrency(netProfit)}
           trend={netProfit >= 0 ? "up" : "down"}
           subtext={netProfit >= 0 ? "Profitable in this period" : "Loss in this period"}
+        />
+        <StatCard
+          label="Orders"
+          value={periodSales.length.toLocaleString()}
+          subtext={`${unitsSold} unit${unitsSold !== 1 ? "s" : ""} sold`}
+          trend="neutral"
         />
       </div>
 
@@ -170,6 +188,25 @@ export default function DashboardPage() {
               subtext={vatPosition >= 0 ? "Net VAT payable" : "Net VAT reclaimable"}
               trend={vatPosition >= 0 ? "down" : "up"}
             />
+          </div>
+        </div>
+      )}
+
+      {expensesByCategory.length > 0 && (
+        <div
+          className="bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border)] p-6 mb-8"
+          style={{ boxShadow: "var(--shadow-card)" }}
+        >
+          <h2 className="text-sm font-semibold text-[var(--color-text-base)] mb-4">Expenses by Category</h2>
+          <div className="divide-y divide-[var(--color-border)]">
+            {expensesByCategory.map(([category, amount]) => (
+              <div key={category} className="flex items-center justify-between py-2.5">
+                <CategoryBadge category={category} />
+                <span className="text-sm font-semibold tabular-nums text-[var(--color-danger)]">
+                  {formatCurrency(amount)}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
