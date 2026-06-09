@@ -13,6 +13,9 @@ const makeSale = (overrides: Partial<Sale> = {}): Sale => ({
   description: null,
   created_by: "user-1",
   created_at: "2026-06-01T10:00:00.000Z",
+  product_id: null,
+  vat_rate: null,
+  vat_amount: null,
   ...overrides,
 });
 

@@ -6,13 +6,66 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Working agreement — how we proceed
 
-- **Don't run `npm test`, `npx tsc --noEmit`, or `npm run lint` yourself.** Ask the
-  user to run them and paste the output back. Running these repeatedly burns tokens
-  on output the user can capture in one shot locally.
+## During development (feature work)
+
 - **Don't start the dev server or `curl` routes to verify functionality.** Instead,
   add/extend unit tests in the feature's `_store/` (or `_components/`/lib) folder
   alongside the code you changed, then ask the user to manually exercise the feature
   in the browser and report back what they see.
+- **Don't run `npm test`, `npx tsc --noEmit`, or `npm run lint` mid-task** just to
+  check your work. Ask the user to run the relevant test command and paste output
+  back. Running these repeatedly burns tokens on output the user can capture in one
+  shot locally.
+
+## Unit tests — when to write them
+
+Write or extend tests whenever you:
+- Add a new utility function or pure helper (e.g. in `lib/utils/` or a colocated
+  `_components/*.ts` pure module)
+- Add a new Redux slice action or change reducer logic
+- Add import/export logic, validation, or data-transformation code
+
+Tests live next to the code they cover (`*.test.ts` / `*.test.tsx`). `jest.config.ts`
+discovers any `src/**/*.test.ts(x)`. Keep tests pure (no Supabase/Redux deps where
+possible) — the CSV helpers, `productOptions.ts`, `vatAmountFromGross`, etc. are all
+good examples of the kind of logic that deserves a test.
+
+## Mandatory docs update — SKILL.md and CLAUDE.md
+
+**After every feature edit, you MUST update the affected feature's docs before
+finishing — no exceptions.** This is the project's context cache; skipping it means
+the next agent re-derives everything from scratch.
+
+- **CLAUDE.md** — update the file map whenever a file is added, removed, or
+  renamed; update shared-deps list when a new shared utility is used; update any
+  data-flow description that changed.
+- **SKILL.md** — add or update the minimal-file-set entry for the change type you
+  just made; add a Gotcha entry for any non-obvious constraint, TypeScript quirk,
+  or pattern you had to figure out.
+
+Both files should be committed in the **same commit** as the code change, not as a
+follow-up.
+
+## Commit and push gates
+
+Follow this workflow for every `git commit` and `git push`:
+
+### Before `git commit`
+Run both checks. Only commit if **both pass**:
+```
+npx tsc --noEmit
+npm run lint
+```
+If either fails, fix the errors first, then commit.
+
+### Before `git push`
+Run both checks. Only push if **both pass**:
+```
+npx jest
+npm run build
+```
+If either fails, fix the errors first, then push. Report results to the user
+before pushing so they can see the test/build output.
 
 # Project structure: feature folders
 
