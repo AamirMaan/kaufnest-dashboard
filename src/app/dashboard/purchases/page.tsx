@@ -9,14 +9,16 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { useToast } from "@/components/ui/Toast";
-import { Pencil, Trash2, FileDown } from "lucide-react";
+import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import { AddPurchaseModal } from "./_components/AddPurchaseModal";
 import { EditPurchaseModal } from "./_components/EditPurchaseModal";
+import { ImportPurchasesModal } from "./_components/ImportPurchasesModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
+import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
   filterPurchases,
@@ -68,6 +70,16 @@ export default function PurchasesPage() {
   const [editTarget, setEditTarget] = useState<Purchase | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  function handleExport() {
+    const headers = ["date", "product_name", "vendor", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "description"];
+    const rows = filtered.map((p) => [
+      p.date, p.product_name, p.vendor ?? "", p.quantity, p.unit_price, p.total_amount,
+      p.currency, p.vat_rate ?? "", p.vat_amount ?? "", p.description ?? "",
+    ]);
+    exportToCsv(`purchases-${new Date().toISOString().split("T")[0]}`, headers, rows);
+  }
 
   function setFilter<K extends keyof PurchaseFilters>(key: K, value: PurchaseFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -198,6 +210,14 @@ export default function PurchasesPage() {
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
+            <Button variant="secondary" onClick={handleExport} disabled={filtered.length === 0}>
+              <Download size={15} />
+              Export
+            </Button>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload size={15} />
+              Import
+            </Button>
             <Button onClick={() => setAddOpen(true)}>+ Add Purchase</Button>
           </div>
         }
@@ -286,6 +306,11 @@ export default function PurchasesPage() {
         items={invoiceItems}
         onClose={() => { setInvoiceOpen(false); setSelectedIds(new Set()); }}
         onSuccess={() => success("Invoice downloaded", `PDF generated for ${invoiceItems.length} record${invoiceItems.length !== 1 ? "s" : ""}.`)}
+      />
+      <ImportPurchasesModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={(count) => success("Import complete", `${count} purchase${count !== 1 ? "s" : ""} imported successfully.`)}
       />
     </div>
   );

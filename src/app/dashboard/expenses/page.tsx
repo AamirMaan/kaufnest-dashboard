@@ -10,14 +10,16 @@ import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { Pencil, Trash2, FileDown } from "lucide-react";
+import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import { AddExpenseModal } from "./_components/AddExpenseModal";
 import { EditExpenseModal } from "./_components/EditExpenseModal";
+import { ImportExpensesModal } from "./_components/ImportExpensesModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
+import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
   filterExpenses,
@@ -73,6 +75,16 @@ export default function ExpensesPage() {
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  function handleExport() {
+    const headers = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "vat_amount", "description"];
+    const rows = filtered.map((e) => [
+      e.date, e.title, e.category, e.vendor ?? "", e.amount,
+      e.currency, e.vat_rate ?? "", e.vat_amount ?? "", e.description ?? "",
+    ]);
+    exportToCsv(`expenses-${new Date().toISOString().split("T")[0]}`, headers, rows);
+  }
 
   function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -186,6 +198,14 @@ export default function ExpensesPage() {
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
+            <Button variant="secondary" onClick={handleExport} disabled={filtered.length === 0}>
+              <Download size={15} />
+              Export
+            </Button>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Upload size={15} />
+              Import
+            </Button>
             <Button onClick={() => setAddOpen(true)}>+ Add Expense</Button>
           </div>
         }
@@ -277,6 +297,11 @@ export default function ExpensesPage() {
         items={invoiceItems}
         onClose={() => { setInvoiceOpen(false); setSelectedIds(new Set()); }}
         onSuccess={() => success("Invoice downloaded", `PDF generated for ${invoiceItems.length} record${invoiceItems.length !== 1 ? "s" : ""}.`)}
+      />
+      <ImportExpensesModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onSuccess={(count) => success("Import complete", `${count} expense${count !== 1 ? "s" : ""} imported successfully.`)}
       />
     </div>
   );
