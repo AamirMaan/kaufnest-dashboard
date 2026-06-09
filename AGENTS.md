@@ -48,24 +48,9 @@ follow-up.
 
 ## Commit and push gates
 
-Follow this workflow for every `git commit` and `git push`:
-
-### Before `git commit`
-Run both checks. Only commit if **both pass**:
-```
-npx tsc --noEmit
-npm run lint
-```
-If either fails, fix the errors first, then commit.
-
-### Before `git push`
-Run both checks. Only push if **both pass**:
-```
-npx jest
-npm run build
-```
-If either fails, fix the errors first, then push. Report results to the user
-before pushing so they can see the test/build output.
+Enforced automatically by Husky git hooks (`.husky/pre-commit` and
+`.husky/pre-push`) — no manual steps required. If a hook fails, fix the
+reported errors before retrying the commit or push.
 
 # Project structure: feature folders
 
