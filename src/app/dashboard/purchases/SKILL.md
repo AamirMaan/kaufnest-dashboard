@@ -16,9 +16,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   audit diff), `_store/purchasesSlice.ts` only if the shape stored in Redux
   changes, and `src/types/index.ts` for the `Purchase` type. Also check
   `page.tsx` if the field needs to render in the table or be filterable
-  (`lib/utils/filters.ts`).
+  (`lib/utils/filters.ts`). **Also update `ImportPurchasesModal.tsx`** if the
+  field needs import support.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change reducer logic**: `_store/purchasesSlice.ts` + its test.
+- **Change export columns**: `handleExport()` in `page.tsx`.
+- **Change import validation / accepted columns**: `validateRow()` in
+  `_components/ImportPurchasesModal.tsx` only.
 
 ## Test command
 
@@ -43,3 +47,5 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   is checked (`Checkbox` + `vatAmountFromGross`); send `null` for both when
   it's off — see `CLAUDE.md` → "Inventory link + VAT" for the full pattern,
   which is identical across Purchases/Sales/Expenses modals.
+- `writeAuditLog` `entityId` is `string | undefined` — omit it for bulk-import
+  batch entries rather than passing `null` (which is a TypeScript error).

@@ -6,13 +6,17 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: filtering (`FilterBar` + `filterExpenses`), row
-  selection, invoice trigger, wires up the modals below.
+  selection, invoice trigger, Gross/VAT/Net summary, **Export CSV** button
+  (exports `filtered` via `lib/utils/csv`), **Import CSV** button, wires up the
+  modals below.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`).
   Actions: `hydrateExpenses`, `addExpense`, `updateExpense`, `removeExpense`. Used
   **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
 - `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
+- `_components/ImportExpensesModal.tsx` — bulk CSV import: same pattern as the
+  Sales/Purchases import modals but for expenses. See "CSV import/export" below.
 
 ## Data flow (the pattern every mutation follows)
 
@@ -45,8 +49,19 @@ editable fields.
   Purchases (don't fork these; extend them if you need new shared behavior)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
-- `lib/utils/{audit,currency,date,filters,generateInvoice}`, `lib/hooks/useInvoiceSettings`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `lib/hooks/useInvoiceSettings`
 - `types` (`Expense`, `ExpenseCategory`)
+
+## CSV import/export
+
+**Export**: `handleExport()` in `page.tsx` maps `filtered` to rows and calls
+`exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
+vat_rate, vat_amount, description`.
+
+**Import** (`ImportExpensesModal`): Required: `date` (YYYY-MM-DD), `title`,
+`amount`. Optional: `category` (default "other"), `vendor`, `currency`
+(default EUR), `vat_rate`, `description`. `vat_amount` is computed. All rows
+must be valid; one audit log entry for the batch (omit `entityId`).
 
 ## Tests
 

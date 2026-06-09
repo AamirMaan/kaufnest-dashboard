@@ -14,9 +14,19 @@ broadly when working on a specific feature.**
   `<DashboardShell>`. **If you add a new feature with its own collection,
   hydrate it here.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
-  `sales`/`expenses`/`purchases` from Redux, computes this-month totals via
-  `getMonthRange` + `calculateNetProfit`, renders `StatCard`s. No
-  feature-private code — has no `_components`/`_store` of its own.
+  `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
+  filter (`resolveDateRange` from `lib/utils/filters`, preset + custom from/to),
+  and renders:
+  - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
+    units sold) — grid expands to `lg:grid-cols-5`
+  - **VAT Position** section (hidden when no VAT data in period): VAT Collected
+    (output, from sales), VAT Paid (input, purchases + expenses), net Due to
+    Government / Government Refund
+  - **Expenses by Category** section (hidden when no expenses): per-category totals
+    sorted by spend, rendered with `CategoryBadge`
+  No feature-private code — has no `_components`/`_store` of its own. Shared deps:
+  `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
+  `resolveDateRange`, `ExpenseCategory` type.
 
 ## Feature folders (each documents itself — start there)
 

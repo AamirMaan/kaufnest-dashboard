@@ -6,13 +6,18 @@ Shopify, other), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: filtering (`FilterBar` + `filterSales`), row selection,
-  invoice trigger, wires up the modals below.
+  invoice trigger, Gross/VAT/Net summary, **Export CSV** button (exports `filtered`
+  via `lib/utils/csv`), **Import CSV** button, wires up the modals below.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`).
   Actions: `hydrateSales`, `addSale`, `updateSale`, `removeSale`. Used **only** by
   this feature — registered centrally in `src/store/store.ts` and hydrated in
   `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/salesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/sales`.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
+- `_components/ImportSalesModal.tsx` — bulk CSV import: parses + validates a
+  user-uploaded CSV, shows per-row errors, batch-inserts valid rows via Supabase,
+  dispatches `addSale` for each, writes one audit log entry for the batch. See
+  "CSV import/export" section below.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -69,8 +74,25 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
-- `lib/utils/{audit,currency,date,filters,generateInvoice}`, `lib/hooks/useInvoiceSettings`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `lib/hooks/useInvoiceSettings`
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
+
+## CSV import/export
+
+**Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
+to rows and calls `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
+Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
+currency, vat_rate, vat_amount, description`. Export button is disabled when no
+rows match the filter.
+
+**Import** (`ImportSalesModal`): Required CSV columns: `date` (YYYY-MM-DD),
+`product_name`, `platform` (amazon/ebay/etsy/shopify/other), `quantity`, `unit_price`.
+Optional: `currency` (default EUR), `vat_rate` (0–100), `description`. `product_id`
+is NOT in the import format — imports create unlinked records; user can link via
+Edit afterward. `total_amount` is computed (`qty × unit_price`); `vat_amount` is
+computed via `vatAmountFromGross`. All rows must pass validation before import
+proceeds. Audit log: one entry for the whole batch (omit `entityId` — it's
+`string | undefined`, not nullable).
 
 ## Tests
 

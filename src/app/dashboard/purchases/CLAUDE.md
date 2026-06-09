@@ -6,7 +6,9 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: filtering (`FilterBar` + `filterPurchases`), row
-  selection, invoice trigger, wires up the modals below.
+  selection, invoice trigger, Gross/VAT/Net summary, **Export CSV** button
+  (exports `filtered` via `lib/utils/csv`), **Import CSV** button, wires up the
+  modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
   `loaded`). Actions: `hydratePurchases`, `addPurchase`, `updatePurchase`,
   `removePurchase`. Used **only** by this feature — registered centrally in
@@ -14,6 +16,8 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   otherwise self-contained here.
 - `_store/purchasesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/purchases`.
 - `_components/AddPurchaseModal.tsx` / `EditPurchaseModal.tsx` — create/edit forms.
+- `_components/ImportPurchasesModal.tsx` — bulk CSV import: same pattern as
+  `ImportSalesModal` but for purchases. See "CSV import/export" below.
 
 ## Data flow (the pattern every mutation follows)
 
@@ -54,8 +58,20 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
-- `lib/utils/{audit,currency,date,filters,generateInvoice}`, `lib/hooks/useInvoiceSettings`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `lib/hooks/useInvoiceSettings`
 - `types` (`Purchase`, `Product`)
+
+## CSV import/export
+
+**Export**: `handleExport()` in `page.tsx` maps `filtered` to rows and calls
+`exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
+total_amount, currency, vat_rate, vat_amount, description`.
+
+**Import** (`ImportPurchasesModal`): Required: `date` (YYYY-MM-DD),
+`product_name`, `quantity`, `unit_price`. Optional: `vendor`, `currency`
+(default EUR), `vat_rate`, `description`. `product_id` is NOT in the import
+format. `total_amount` and `vat_amount` are computed. All rows must be valid;
+one audit log entry for the batch (omit `entityId`).
 
 ## Tests
 
