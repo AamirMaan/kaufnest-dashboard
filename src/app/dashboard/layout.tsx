@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
-import type { Profile, Sale, Expense, Purchase, Product, AuditLog } from "@/types";
+import type { Profile, Sale, Expense, Purchase, Product, AuditLog, CompanyProfile } from "@/types";
 
 export default async function DashboardLayout({
   children,
@@ -34,6 +35,7 @@ export default async function DashboardLayout({
     { data: products },
     { data: auditLogs },
     { data: users },
+    { data: companyProfile },
   ] = await Promise.all([
     supabase
       .from("sales")
@@ -69,7 +71,15 @@ export default async function DashboardLayout({
       .select("*")
       .order("created_at", { ascending: true })
       .returns<Profile[]>(),
+    supabase
+      .from("company_profile")
+      .select("*")
+      .single<CompanyProfile>(),
   ]);
+
+  // Read impersonation cookie — set by /api/admin/impersonate
+  const cookieStore = await cookies();
+  const impersonatingTenant = cookieStore.get("kaufnest_impersonating")?.value ?? null;
 
   return (
     <StoreProvider
@@ -80,12 +90,14 @@ export default async function DashboardLayout({
       auditLogs={auditLogs ?? []}
       users={users ?? []}
       currentUser={profile}
+      companyProfile={companyProfile ?? undefined}
     >
       <ToastProvider>
         <DashboardShell
           role={profile.role}
           fullName={profile.full_name}
           email={profile.email}
+          impersonatingTenant={impersonatingTenant}
         >
           {children}
         </DashboardShell>

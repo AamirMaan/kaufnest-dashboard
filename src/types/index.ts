@@ -129,3 +129,35 @@ export interface PaginatedResult<T> {
   page: number;
   pageSize: number;
 }
+
+// ─── Company Profile (per-tenant) ─────────────────────────────────────────────
+
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  vat_number: string | null;
+  address: string | null;
+  currency: Currency;
+  timezone: string;
+  updated_at: string;
+}
+
+// ─── SaaS / Multi-Tenant ──────────────────────────────────────────────────────
+
+export type TenantPlan = "trial" | "starter" | "pro" | "business";
+export type TenantStatus = "active" | "inactive" | "cancelled";
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  schema_name: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan: TenantPlan;
+  status: TenantStatus;
+  trial_ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

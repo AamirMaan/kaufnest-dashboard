@@ -13,9 +13,10 @@ interface Props {
   fullName: string;
   email: string;
   children: React.ReactNode;
+  impersonatingTenant?: string | null;
 }
 
-export function DashboardShell({ role, fullName, email, children }: Props) {
+export function DashboardShell({ role, fullName, email, children, impersonatingTenant }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -42,8 +43,25 @@ export function DashboardShell({ role, fullName, email, children }: Props) {
     router.refresh();
   }
 
+  async function exitImpersonation() {
+    await fetch("/api/admin/exit-impersonation", { method: "POST" });
+    window.location.href = "/admin";
+  }
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-surface-subtle)]">
+      {/* Impersonation banner — only shown when a KaufNest admin is viewing a tenant */}
+      {impersonatingTenant && (
+        <div className="shrink-0 bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center justify-between z-20">
+          <span>Impersonating tenant: <strong>{impersonatingTenant}</strong></span>
+          <button
+            onClick={exitImpersonation}
+            className="underline hover:no-underline cursor-pointer"
+          >
+            Exit impersonation
+          </button>
+        </div>
+      )}
       {/* Universal top header */}
       <header className="shrink-0 z-10 flex items-center justify-between px-4 h-14 bg-[var(--color-sidebar-bg)] border-b border-[var(--color-sidebar-border)]">
         {/* Left: hamburger (mobile) + brand */}

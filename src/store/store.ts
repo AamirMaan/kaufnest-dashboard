@@ -6,6 +6,7 @@ import { inventorySlice } from "@/app/dashboard/inventory/_store/inventorySlice"
 import { auditLogsSlice } from "./slices/auditLogsSlice";
 import { usersSlice } from "@/app/dashboard/users/_store/usersSlice";
 import { currentUserSlice } from "./slices/currentUserSlice";
+import { companyProfileSlice } from "./slices/companyProfileSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -17,6 +18,7 @@ export const makeStore = () =>
       auditLogs: auditLogsSlice.reducer,
       users: usersSlice.reducer,
       currentUser: currentUserSlice.reducer,
+      companyProfile: companyProfileSlice.reducer,
     },
   });
 

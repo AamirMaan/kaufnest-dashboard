@@ -8,11 +8,12 @@ broadly when working on a specific feature.**
 
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
-  (sales/expenses/purchases/products/audit_logs/profiles) from Supabase
-  **once**, and hydrates them into Redux via `<StoreProvider>` so individual
-  pages never refetch on mount. Wraps everything in `<ToastProvider>` and
-  `<DashboardShell>`. **If you add a new feature with its own collection,
-  hydrate it here.**
+  (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**)
+  from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
+  individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
+  cookie and passes it to `<DashboardShell>` for the impersonation banner.
+  Wraps everything in `<ToastProvider>` and `<DashboardShell>`.
+  **If you add a new feature with its own collection, hydrate it here.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
   `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
   filter (`resolveDateRange` from `lib/utils/filters`, preset + custom from/to),
@@ -31,7 +32,8 @@ broadly when working on a specific feature.**
     (each hidden when empty)
   Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
   are passed to recharts props (CSS variables don't render reliably inside SVG).
-  No feature-private code — has no `_components`/`_store` of its own. Shared deps:
+  No feature-private code — has no `_components`/`_store` of its own.
+  Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
   `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`.
 

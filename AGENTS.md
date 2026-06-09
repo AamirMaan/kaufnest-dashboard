@@ -1,3 +1,25 @@
+## SaaS migration (in progress)
+
+This project is being converted to a multi-tenant SaaS product. The full plan
+is in `SAAS_MIGRATION.md` — read it before touching auth, Supabase clients, or
+the admin panel. Phases 1–6 are scaffolded in code; the DB migrations and
+external services (Supabase Project A, Stripe) still need to be applied.
+
+**Key rules that apply once Phase 3 DB migration is live:**
+1. Never query `public.*` — all tenant data lives in `tenant_<slug>` schemas.
+2. Never hardcode a schema name — read it from `user.app_metadata.tenant_schema`.
+3. Control plane client (`createControlClient`) is server-only — never in Client Components.
+4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
+
+New shared code from the migration:
+- `src/lib/supabase/control.ts` — control plane (Project A) client
+- `src/middleware.ts` — request-level auth guard
+- `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
+- `src/lib/stripe.ts` + `src/lib/utils/planGating.ts` — billing helpers
+- `src/app/admin/` — KaufNest platform admin panel (`/admin`)
+- `src/app/api/admin/` — provision/impersonate/list API routes
+- `src/app/api/billing/` — Stripe checkout + webhook routes
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
