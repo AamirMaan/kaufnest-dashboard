@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
-import { PlatformBadge } from "@/components/ui/Badge";
+import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import { AddSaleModal } from "./_components/AddSaleModal";
@@ -16,7 +16,7 @@ import { EditSaleModal } from "./_components/EditSaleModal";
 import { ImportSalesModal } from "./_components/ImportSalesModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
@@ -29,6 +29,7 @@ import {
   type DatePreset,
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import type { Platform, Sale, Currency, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -53,9 +54,12 @@ export default function SalesPage() {
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
 
+  const returnedCount = useMemo(() => filtered.filter((s) => s.status === "returned").length, [filtered]);
+
   const summary = useMemo(() => {
     const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
     for (const s of filtered) {
+      if (s.status === "returned") continue;
       const entry = byCurrency.get(s.currency) ?? { gross: [], vat: [] };
       entry.gross.push(s.total_amount);
       if (s.vat_amount != null) entry.vat.push(s.vat_amount);
@@ -69,6 +73,12 @@ export default function SalesPage() {
   }, [filtered]);
   const hasVat = summary.some((s) => s.vat > 0);
 
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>(ORDER_STATUSES);
+    for (const s of sales) set.add(s.status);
+    return Array.from(set);
+  }, [sales]);
+
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Sale | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
@@ -76,10 +86,10 @@ export default function SalesPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   function handleExport() {
-    const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "description"];
+    const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description"];
     const rows = filtered.map((s) => [
       s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
-      s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.description ?? "",
+      s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
     ]);
     exportToCsv(`sales-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
@@ -90,7 +100,7 @@ export default function SalesPage() {
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { error: dbError } = await supabase.from("sales").delete().eq("id", deleteTarget.id);
     if (dbError) { toastError("Delete failed", dbError.message); return; }
     dispatch(removeSale(deleteTarget.id));
@@ -112,7 +122,7 @@ export default function SalesPage() {
       metadata: { before: deleteTarget, reason },
     });
     if (log) dispatch(addAuditLog(log));
-    success("Sale deleted", `"${deleteTarget.product_name}" has been removed.`);
+    success("Order deleted", `"${deleteTarget.product_name}" has been removed.`);
     setDeleteTarget(null);
   }
 
@@ -135,6 +145,11 @@ export default function SalesPage() {
       header: "Platform",
       sortValue: (s: Sale) => s.platform,
       render: (s: Sale) => <PlatformBadge platform={s.platform} />,
+    },
+    {
+      header: "Status",
+      sortValue: (s: Sale) => s.status,
+      render: (s: Sale) => <StatusBadge status={s.status} />,
     },
     {
       header: "Qty",
@@ -203,7 +218,7 @@ export default function SalesPage() {
   return (
     <div>
       <PageHeader
-        title="Sales"
+        title="Orders"
         description="Revenue from all platforms"
         action={
           <div className="flex items-center gap-2">
@@ -219,7 +234,7 @@ export default function SalesPage() {
               <Upload size={15} />
               Import
             </Button>
-            <Button onClick={() => setAddOpen(true)}>+ Add Sale</Button>
+            <Button onClick={() => setAddOpen(true)}>+ Add Order</Button>
           </div>
         }
       />
@@ -249,29 +264,49 @@ export default function SalesPage() {
             ))}
           </select>
         </div>
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Status</span>
+          <select
+            value={filters.status}
+            onChange={(e) => setFilter("status", e.target.value)}
+            className={filterInputCls}
+          >
+            <option value="all">All Statuses</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>{statusLabel(s)}</option>
+            ))}
+          </select>
+        </div>
       </FilterBar>
 
       <div className="flex items-start justify-between mb-3 text-sm">
         <span className="text-[var(--color-text-muted)] pt-0.5">
-          {filtered.length} sale{filtered.length !== 1 ? "s" : ""} shown
+          {filtered.length} order{filtered.length !== 1 ? "s" : ""} shown
         </span>
-        {summary.length > 0 && (
+        {(summary.length > 0 || returnedCount > 0) && (
           <div className="text-right space-y-0.5">
-            {hasVat ? (
-              <>
+            {summary.length > 0 && (
+              hasVat ? (
+                <>
+                  <p className="font-medium text-[var(--color-text-strong)]">
+                    Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                  </p>
+                  <p className="text-[var(--color-text-muted)]">
+                    VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
+                  </p>
+                  <p className="font-medium text-[var(--color-text-strong)]">
+                    Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
+                  </p>
+                </>
+              ) : (
                 <p className="font-medium text-[var(--color-text-strong)]">
-                  Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                  Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
                 </p>
-                <p className="text-[var(--color-text-muted)]">
-                  VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                </p>
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                </p>
-              </>
-            ) : (
-              <p className="font-medium text-[var(--color-text-strong)]">
-                Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+              )
+            )}
+            {returnedCount > 0 && (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                {returnedCount} returned order{returnedCount !== 1 ? "s" : ""} excluded from totals
               </p>
             )}
           </div>
@@ -282,24 +317,24 @@ export default function SalesPage() {
         columns={columns}
         rows={filtered}
         keyField="id"
-        emptyMessage="No sales match the current filters."
+        emptyMessage="No orders match the current filters."
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
       />
       <AddSaleModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onSuccess={(name) => success("Sale added", `"${name}" was recorded successfully.`)}
+        onSuccess={(name) => success("Order added", `"${name}" was recorded successfully.`)}
       />
       <EditSaleModal
         key={editTarget?.id ?? "edit-sale"}
         sale={editTarget}
         onClose={() => setEditTarget(null)}
-        onSuccess={() => success("Sale updated", "Changes have been saved.")}
+        onSuccess={() => success("Order updated", "Changes have been saved.")}
       />
       <DeleteConfirmModal
         open={!!deleteTarget}
-        title="Delete Sale"
+        title="Delete Order"
         description={`This will permanently delete "${deleteTarget?.product_name}". This action cannot be undone.`}
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
@@ -314,7 +349,7 @@ export default function SalesPage() {
       <ImportSalesModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onSuccess={(count) => success("Import complete", `${count} sale${count !== 1 ? "s" : ""} imported successfully.`)}
+        onSuccess={(count) => success("Import complete", `${count} order${count !== 1 ? "s" : ""} imported successfully.`)}
       />
     </div>
   );

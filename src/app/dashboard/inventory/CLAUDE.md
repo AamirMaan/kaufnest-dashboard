@@ -31,7 +31,7 @@ this slice.
 
 ## Data flow (the pattern every mutation follows)
 
-1. Write to Supabase (`createClient()` from `@/lib/supabase/client`, table `products`).
+1. Write to Supabase (`await createTenantClient()` from `@/lib/supabase/client`, table `products`).
 2. On success, dispatch the local slice action (`addProduct`/`updateProduct`/`removeProduct`)
    so the UI updates without a refetch.
 3. Call `writeAuditLog` (`@/lib/utils/audit`) with `entityType: "product"`, then

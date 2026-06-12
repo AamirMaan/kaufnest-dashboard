@@ -17,9 +17,14 @@ broadly when working on a specific feature.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
   `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
   filter (`resolveDateRange` from `lib/utils/filters`, preset + custom from/to),
+  derives `effectiveSales = periodSales.filter(s => s.status !== "returned")`
   and renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
-    units sold) — grid expands to `lg:grid-cols-5`
+    units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
+    Collected, monthly trend revenue, Revenue by Platform, and Top Products all
+    use `effectiveSales` (excludes `status === "returned"` orders) — only the
+    "Orders" StatCard's count uses the unfiltered `periodSales.length` (total
+    orders placed, including returns).
   - **VAT Position** section (hidden when no VAT data in period): VAT Collected
     (output, from sales), VAT Paid (input, purchases + expenses), net Due to
     Government / Government Refund
@@ -41,7 +46,7 @@ broadly when working on a specific feature.**
 
 | Folder | Route | What it owns |
 | --- | --- | --- |
-| `sales/` | `/dashboard/sales` | sales records, `salesSlice` |
+| `sales/` | `/dashboard/sales` | sales records ("Orders" in UI), `salesSlice` |
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
 | `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |

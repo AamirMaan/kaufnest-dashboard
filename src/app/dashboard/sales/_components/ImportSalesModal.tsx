@@ -6,7 +6,7 @@ import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
@@ -15,8 +15,8 @@ import type { Sale, Platform, Currency } from "@/types";
 const VALID_PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
-const TEMPLATE_HEADERS = ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "description"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "Sample sale"];
+const TEMPLATE_HEADERS = ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description"];
+const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale"];
 
 interface ParsedRow {
   rowNum: number;
@@ -56,6 +56,7 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
   }
   const totalAmount = quantity * unitPrice;
   const vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
+  const status = raw.status?.trim() || "pending";
   return {
     rowNum,
     data: {
@@ -69,6 +70,8 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       description: raw.description?.trim() || null,
       vat_rate: vatRate,
       vat_amount: vatAmount,
+      status,
+      restock: false,
     },
     error: null,
   };
@@ -127,7 +130,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     if (!canImport) return;
     setLoading(true);
     setImportError(null);
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
@@ -160,7 +163,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     <Modal
       open={open}
       onClose={handleClose}
-      title="Import Sales"
+      title="Import Orders"
       footer={
         <>
           <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>

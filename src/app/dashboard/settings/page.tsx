@@ -25,6 +25,8 @@ const DEMO_SALE: Sale = {
   created_at: "",
   vat_rate: 19,
   vat_amount: 15.97,
+  status: "pending",
+  restock: false,
 };
 
 export default function SettingsPage() {

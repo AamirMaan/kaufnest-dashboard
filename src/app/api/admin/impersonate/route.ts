@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   const { data: linkData, error } = await service.auth.admin.generateLink({

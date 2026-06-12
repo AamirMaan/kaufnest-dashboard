@@ -51,7 +51,10 @@ export async function proxy(request: NextRequest) {
 
   // RBAC: check route-level permissions
   if (user && isDashboardRoute) {
+    const tenantSchema =
+      (user.app_metadata?.tenant_schema as string | undefined) ?? "public";
     const { data: profile } = await supabase
+      .schema(tenantSchema)
       .from("profiles")
       .select("role")
       .eq("id", user.id)

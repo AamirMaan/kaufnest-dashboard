@@ -8,7 +8,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addPurchase } from "../_store/purchasesSlice";
 import { addProduct, updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
@@ -99,7 +99,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     // If the user wants to register this product in inventory, create it first.

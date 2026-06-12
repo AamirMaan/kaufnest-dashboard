@@ -73,6 +73,8 @@ export interface Sale {
   created_at: string;
   vat_rate: number | null;
   vat_amount: number | null;
+  status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | custom
+  restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────

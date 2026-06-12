@@ -15,7 +15,7 @@ import { EditPurchaseModal } from "./_components/EditPurchaseModal";
 import { ImportPurchasesModal } from "./_components/ImportPurchasesModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
@@ -87,7 +87,7 @@ export default function PurchasesPage() {
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { error: dbError } = await supabase.from("purchases").delete().eq("id", deleteTarget.id);
     if (dbError) { toastError("Delete failed", dbError.message); return; }
     dispatch(removePurchase(deleteTarget.id));

@@ -23,13 +23,19 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
   to live at their URL path (`/api/users/invite`), so it can't move into this
   feature's private folder — but it is conceptually part of this feature.
   `InviteUserModal` calls it via `fetch("/api/users/invite")`.
+  Tenant-aware: reads the calling super_admin's `tenant_schema` from
+  `user.app_metadata`, inserts the new user's profile directly into
+  `tenant_<schema>.profiles` via `createServiceClientForTenant()`, and stamps
+  the invitee's own `app_metadata.tenant_schema` via the `set_user_tenant` RPC
+  (`public.handle_new_user` no longer auto-creates profile rows — see
+  `supabase/migrations/006_remove_handle_new_user_trigger.sql`).
 
 ## Data flow
 
 1. Invite: `InviteUserModal` POSTs to `/api/users/invite` (uses the Supabase
    admin client server-side), then dispatches `addUser` with the returned profile.
 2. Edit/role-change: write to Supabase (`profiles` table) via
-   `createClient()` (`@/lib/supabase/client`), dispatch `updateUser`/`updateUserRole`.
+   `await createTenantClient()` (`@/lib/supabase/client`), dispatch `updateUser`/`updateUserRole`.
 3. Both call `writeAuditLog` (`@/lib/utils/audit`) then dispatch `addAuditLog`
    (`@/store/slices/auditLogsSlice`) — role changes use the `role_change` audit action.
 

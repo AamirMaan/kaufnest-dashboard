@@ -21,7 +21,7 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 
 ## Data flow (the pattern every mutation follows)
 
-1. Write to Supabase (`createClient()` from `@/lib/supabase/client`, table `purchases`).
+1. Write to Supabase (`await createTenantClient()` from `@/lib/supabase/client`, table `purchases`).
 2. On success, dispatch the local slice action (`addPurchase`/`updatePurchase`/`removePurchase`)
    so the UI updates without a refetch.
 3. Call `writeAuditLog` (`@/lib/utils/audit`) to persist an audit row, then dispatch

@@ -7,7 +7,7 @@ import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { updateUser } from "../_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import type { Profile, UserRole } from "@/types";
 
@@ -46,7 +46,7 @@ export function EditUserModal({ user, onClose }: Props) {
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data, error: dbError } = await supabase
       .from("profiles")
       .update({ full_name: form.full_name.trim(), role: form.role })

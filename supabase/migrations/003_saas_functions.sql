@@ -19,9 +19,16 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- Stamp all existing users with the kaufnest schema (run once after Phase 2.2).
 -- SELECT public.set_user_tenant(id, 'tenant_kaufnest') FROM auth.users;
 
--- ─── Phase 3.3 — set_tenant_search_path RPC ───────────────────────────────────
+-- ─── Phase 3.3 — set_tenant_search_path RPC (UNUSED by app code) ─────────────
 
--- Callable by authenticated users (via server.ts) to set their session search_path.
+-- NOT used by src/lib/supabase/server.ts. `SET LOCAL search_path` only lasts
+-- for the RPC's own transaction — supabase-js issues a separate HTTP
+-- request/transaction per .from()/.rpc() call, so it has no effect on
+-- subsequent queries from the same client. server.ts instead uses the
+-- `db: { schema }` client option (Accept-Profile/Content-Profile headers),
+-- which routes per-client without this limitation.
+-- Kept here only for ad-hoc use from a direct (non-PostgREST) Postgres
+-- session, where SET LOCAL search_path works as expected within one transaction.
 -- Validates that schema_name starts with 'tenant_' to prevent SQL injection.
 CREATE OR REPLACE FUNCTION public.set_tenant_search_path(schema_name text)
 RETURNS void AS $$
@@ -158,6 +165,17 @@ BEGIN
       created_at timestamptz NOT NULL DEFAULT now()
     )
   $sql$, schema_name);
+
+  -- Grant PostgREST roles access to the new schema. create schema does NOT
+  -- grant anything by default — without this every request against the new
+  -- schema fails with "permission denied for schema ..." (42501) before RLS
+  -- is even evaluated. See 005_grant_tenant_kaufnest_privileges.sql for the
+  -- one-off equivalent that was needed for tenant_kaufnest.
+  EXECUTE format('GRANT USAGE ON SCHEMA %I TO anon, authenticated, service_role', schema_name);
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO anon, authenticated, service_role', schema_name);
+  EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO anon, authenticated, service_role', schema_name);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role', schema_name);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role', schema_name);
 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;

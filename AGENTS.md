@@ -13,7 +13,9 @@ external services (Supabase Project A, Stripe) still need to be applied.
 
 New shared code from the migration:
 - `src/lib/supabase/control.ts` — control plane (Project A) client
-- `src/middleware.ts` — request-level auth guard
+- `src/proxy.ts` — existing route-protection proxy (this Next.js version's
+  middleware equivalent — do NOT add `src/middleware.ts`, having both crashes
+  the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
 - `src/lib/stripe.ts` + `src/lib/utils/planGating.ts` — billing helpers
 - `src/app/admin/` — KaufNest platform admin panel (`/admin`)
@@ -100,7 +102,7 @@ you left off instead of re-deriving everything from scratch.
 | --- | --- | --- |
 | `src/app/(auth)/` | `/login`, `/forgot-password`, `/set-password` | auth pages (+ related `app/auth/callback`, `app/api/users/invite` routes) |
 | `src/app/dashboard/` | `/dashboard` (Overview) | shell-level layout/data-hydration + overview stats — see its `CLAUDE.md` for the full feature table |
-| `src/app/dashboard/sales/` | `/dashboard/sales` | sales records + `salesSlice` |
+| `src/app/dashboard/sales/` | `/dashboard/sales` | sales records ("Orders" in UI) + `salesSlice` |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import type { UserRole, Profile } from "@/types";
 
 export async function POST(request: Request) {
@@ -12,6 +12,14 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const tenantSchema = user.app_metadata?.tenant_schema as string | undefined;
+  if (!tenantSchema) {
+    return NextResponse.json(
+      { error: "Your account is not associated with a tenant yet. Log out and back in, then retry." },
+      { status: 400 }
+    );
   }
 
   const { data: callerProfile } = await supabase
@@ -56,18 +64,30 @@ export async function POST(request: Request) {
   const { data: inviteData, error: inviteError } =
     await adminClient.auth.admin.inviteUserByEmail(email, {
       redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+      data: { full_name, tenant_schema: tenantSchema, role },
     });
 
   if (inviteError) {
     return NextResponse.json({ error: inviteError.message }, { status: 400 });
   }
 
-  // 4. Update the auto-created profile with the desired full_name and role
+  // 4. Create the profile row directly in the caller's tenant schema and
+  // stamp app_metadata.tenant_schema — handle_new_user no longer does this,
+  // see supabase/migrations/006_remove_handle_new_user_trigger.sql
+  const tenantService = createServiceClientForTenant(tenantSchema);
+
   if (inviteData.user) {
-    await adminClient
-      .from("profiles")
-      .update({ full_name, role })
-      .eq("id", inviteData.user.id);
+    await tenantService.from("profiles").insert({
+      id: inviteData.user.id,
+      email,
+      full_name,
+      role,
+    });
+
+    await adminClient.rpc("set_user_tenant", {
+      user_id: inviteData.user.id,
+      schema_name: tenantSchema,
+    });
   }
 
   // 5. Write audit log
@@ -81,7 +101,7 @@ export async function POST(request: Request) {
   });
 
   // 6. Return the freshly created profile
-  const { data: newProfile } = await adminClient
+  const { data: newProfile } = await tenantService
     .from("profiles")
     .select("*")
     .eq("id", inviteData.user!.id)

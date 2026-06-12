@@ -64,6 +64,7 @@ export interface SalesFilters {
   dateTo: string;
   platform: string;
   currency: string;
+  status: string;
 }
 
 export interface ExpenseFilters {
@@ -88,6 +89,7 @@ export const DEFAULT_SALES_FILTERS: SalesFilters = {
   dateTo: "",
   platform: "all",
   currency: "all",
+  status: "all",
 };
 
 export const DEFAULT_EXPENSE_FILTERS: ExpenseFilters = {
@@ -112,6 +114,7 @@ export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   if (range) result = result.filter((s) => s.date >= range.from && s.date <= range.to);
   if (f.platform !== "all") result = result.filter((s) => s.platform === f.platform);
   if (f.currency !== "all") result = result.filter((s) => s.currency === f.currency);
+  if (f.status !== "all") result = result.filter((s) => s.status === f.status);
   return result;
 }
 
@@ -143,6 +146,7 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     f.dateTo === "" &&
     f.currency === "all" &&
     ("platform" in f ? f.platform === "all" : true) &&
+    ("status" in f ? f.status === "all" : true) &&
     ("category" in f ? f.category === "all" : true) &&
     ("vendor" in f ? f.vendor === "" : true)
   );

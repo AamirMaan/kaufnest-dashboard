@@ -96,16 +96,24 @@ export default function DashboardPage() {
     [purchases, range]
   );
 
-  const totalRevenue = periodSales.reduce((s, r) => s + r.total_amount, 0);
+  // Returned orders don't contribute to revenue/profit — exclude them from
+  // every revenue-derived figure below, but keep periodSales.length (total
+  // orders placed, including returns) for the "Orders" StatCard.
+  const effectiveSales = useMemo(
+    () => periodSales.filter((s) => s.status !== "returned"),
+    [periodSales]
+  );
+
+  const totalRevenue = effectiveSales.reduce((s, r) => s + r.total_amount, 0);
   const totalExpenses = periodExpenses.reduce((s, r) => s + r.amount, 0);
   const totalPurchases = periodPurchases.reduce((s, r) => s + r.total_amount, 0);
   const netProfit = calculateNetProfit(totalRevenue, totalExpenses, totalPurchases);
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
-  const avgOrderValue = periodSales.length > 0 ? totalRevenue / periodSales.length : null;
-  const unitsSold = periodSales.reduce((s, r) => s + r.quantity, 0);
+  const avgOrderValue = effectiveSales.length > 0 ? totalRevenue / effectiveSales.length : null;
+  const unitsSold = effectiveSales.reduce((s, r) => s + r.quantity, 0);
 
   // VAT position
-  const vatCollected = periodSales.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
+  const vatCollected = effectiveSales.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
   const vatPaid =
     periodPurchases.reduce((s, r) => s + (r.vat_amount ?? 0), 0) +
     periodExpenses.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
@@ -116,7 +124,7 @@ export default function DashboardPage() {
   const monthlyTrend = useMemo(() => {
     const map = new Map<string, { revenue: number; expenses: number; purchases: number }>();
     const get = (k: string) => map.get(k) ?? { revenue: 0, expenses: 0, purchases: 0 };
-    for (const s of periodSales) {
+    for (const s of effectiveSales) {
       const k = s.date.slice(0, 7);
       const e = get(k);
       map.set(k, { ...e, revenue: e.revenue + s.total_amount });
@@ -137,12 +145,12 @@ export default function DashboardPage() {
         month: new Date(`${ym}-15`).toLocaleString("default", { month: "short", year: "2-digit" }),
         ...data,
       }));
-  }, [periodSales, periodExpenses, periodPurchases]);
+  }, [effectiveSales, periodExpenses, periodPurchases]);
 
   // Revenue by platform — includes fill colour so recharts v3 Pie can skip Cell
   const platformData = useMemo(() => {
     const map = new Map<string, number>();
-    for (const s of periodSales) {
+    for (const s of effectiveSales) {
       map.set(s.platform, (map.get(s.platform) ?? 0) + s.total_amount);
     }
     return Array.from(map.entries())
@@ -153,12 +161,12 @@ export default function DashboardPage() {
         fill: platformColor(key, index),
       }))
       .sort((a, b) => b.value - a.value);
-  }, [periodSales]);
+  }, [effectiveSales]);
 
   // Top 5 products by revenue
   const topProducts = useMemo(() => {
     const map = new Map<string, { revenue: number; units: number }>();
-    for (const s of periodSales) {
+    for (const s of effectiveSales) {
       const e = map.get(s.product_name) ?? { revenue: 0, units: 0 };
       map.set(s.product_name, { revenue: e.revenue + s.total_amount, units: e.units + s.quantity });
     }
@@ -166,7 +174,7 @@ export default function DashboardPage() {
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
-  }, [periodSales]);
+  }, [effectiveSales]);
 
   // Expenses by category
   const expensesByCategory = useMemo(() => {
@@ -490,7 +498,7 @@ export default function DashboardPage() {
       <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
         <h2 className="text-sm font-semibold text-(--color-text-base) mb-1">Quick Start</h2>
         <p className="text-sm text-(--color-text-muted)">
-          Use the sidebar to navigate to Sales, Expenses, and Purchases. Figures
+          Use the sidebar to navigate to Orders, Expenses, and Purchases. Figures
           above reflect the selected date range and use EUR as the base currency.
         </p>
       </div>

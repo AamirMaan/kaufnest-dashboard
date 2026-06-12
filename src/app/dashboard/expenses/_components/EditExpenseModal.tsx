@@ -7,7 +7,7 @@ import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/F
 import { useAppDispatch } from "@/store/hooks";
 import { updateExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
@@ -81,7 +81,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error: dbError } = await supabase

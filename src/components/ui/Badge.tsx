@@ -87,3 +87,17 @@ export function PlatformBadge({ platform }: { platform: Platform }) {
     />
   );
 }
+
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  pending: "default",
+  processing: "info",
+  shipped: "info",
+  delivered: "success",
+  returned: "danger",
+  cancelled: "warning",
+};
+
+export function StatusBadge({ status }: { status: string }) {
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  return <Badge label={label} variant={STATUS_VARIANTS[status] ?? "default"} />;
+}

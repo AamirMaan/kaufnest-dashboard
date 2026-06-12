@@ -18,6 +18,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   needs to render in the table or be filterable (`lib/utils/filters.ts`).
   **Also update `ImportSalesModal.tsx`** if the new field is required or needs
   validation — add it to the `validateRow` function and `TEMPLATE_HEADERS`.
+- **Add/change an order status**: `_components/orderStatus.ts` (`ORDER_STATUSES`
+  preset list + `statusLabel`/`isPresetStatus`) and its colocated test. Also
+  check `StatusBadge` in `src/components/ui/Badge.tsx` for a variant mapping if
+  you add a new preset that should render with a non-default color.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx` — edit the `headers`
@@ -58,3 +62,15 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - `writeAuditLog` `entityId` param is `string | undefined` — **not nullable**.
   For bulk-import audit entries (one log per batch), simply omit `entityId`
   rather than passing `null`. Passing `null` is a TypeScript error.
+- **Returned orders are excluded from revenue/profit everywhere.** The stock
+  delta formula in `apply_sale_stock_change()` (migration
+  `007_add_order_status.sql`, both `public` and `tenant_kaufnest` schemas) is
+  `(status = 'returned' AND restock) ? 0 : -quantity`. If you add a new
+  revenue/profit aggregation (in this page's `summary` or in
+  `app/dashboard/page.tsx`'s StatCards/charts), filter out
+  `status === "returned"` rows first (`page.tsx` does this inline in the
+  `summary` useMemo; Overview uses an `effectiveSales` array) — otherwise
+  written-off/returned orders will inflate those figures.
+- The UI says "Orders" everywhere (page title, Sidebar, modal titles, toast
+  messages) but the route, table, type, and slice all stay "sales" — don't
+  rename files/exports when making more "Orders"-flavored UI tweaks.

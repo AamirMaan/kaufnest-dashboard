@@ -16,6 +16,8 @@ const makeSale = (overrides: Partial<Sale> = {}): Sale => ({
   product_id: null,
   vat_rate: null,
   vat_amount: null,
+  status: "pending",
+  restock: false,
   ...overrides,
 });
 

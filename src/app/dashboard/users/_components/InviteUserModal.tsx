@@ -7,7 +7,7 @@ import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { addUser } from "../_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import type { UserRole, AuditLog } from "@/types";
 
 const ROLES: { value: UserRole; label: string }[] = [
@@ -74,7 +74,7 @@ export function InviteUserModal({ open, onClose }: Props) {
 
     // Append audit log entry to Redux (the server already wrote it to DB;
     // we build a local entry so the Audit Logs page reflects it immediately)
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
     const logEntry: AuditLog = {
       id: crypto.randomUUID(),

@@ -11,7 +11,7 @@ import { RoleBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
 import { Pencil } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDateTime } from "@/lib/utils/date";
 import type { Profile, UserRole } from "@/types";
@@ -33,7 +33,7 @@ export default function UsersPage() {
     if (newRole === profile.role) return;
     setChangingRole(profile.id);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { error } = await supabase
       .from("profiles")
       .update({ role: newRole })

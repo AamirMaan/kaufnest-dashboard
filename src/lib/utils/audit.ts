@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { TenantClient } from "@/lib/supabase/client";
 import type { AuditAction, AuditEntity, AuditLog } from "@/types";
 
 interface WriteAuditLogParams {
@@ -15,7 +15,7 @@ interface WriteAuditLogParams {
  * Fire-and-forget safe: errors are swallowed so they never block the primary action.
  */
 export async function writeAuditLog(
-  supabase: SupabaseClient,
+  supabase: TenantClient,
   params: WriteAuditLogParams
 ): Promise<AuditLog | null> {
   const { data } = await supabase

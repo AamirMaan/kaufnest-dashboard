@@ -11,8 +11,27 @@ there's nothing else to configure here.
 
 ## client.ts
 
-`export function createClient()` — wraps `createBrowserClient`. Use in Client
-Components (`"use client"`) and other browser-side code. Synchronous.
+- `export function createClient()` — wraps `createBrowserClient`. Synchronous,
+  returns a `public`-schema singleton. Use **only** for auth-only operations
+  (sign in/out, password reset/invite callbacks) — `(auth)/*`,
+  `DashboardShell`'s sign-out.
+- `export async function createTenantClient()` — **use this for all tenant
+  table access from Client Components** (`pages.tsx`/`_components/*Modal.tsx`
+  in Sales/Purchases/Expenses/Inventory/Users). Reads the current session via
+  `createClient().auth.getSession()`, then returns
+  `{ auth, from, rpc }` where `from`/`rpc` are bound to
+  `client.schema(tenantSchema)`. Always `await` it — it's async because
+  reading the session is async.
+  - Returns a `TenantClient` (exported type) — `writeAuditLog`
+    (`@/lib/utils/audit`) takes this type, not `SupabaseClient`.
+  - **Why not `db: { schema }` like server.ts**: `createBrowserClient` caches
+    a singleton and *ignores* the `options` argument (including `db.schema`)
+    on every call after the first — see
+    `node_modules/@supabase/ssr/dist/main/createBrowserClient.js`. So
+    `createTenantClient()` instead calls `.schema(tenantSchema)` per call on
+    the singleton (same mechanism `proxy.ts` uses for its RBAC lookup) — this
+    still goes through the singleton's authenticated fetch, so RLS/`auth.uid()`
+    work normally.
 
 ## server.ts
 
@@ -25,6 +44,33 @@ Handlers.
   this is expected when called from a Server Component (cookies can only be
   set in a Server Action/Route Handler/middleware); the comment in the file
   explains middleware handles it in that case.
+- **Tenant-scoped (post Phase 3)**: `createClient()` first builds a
+  public-schema client to call `auth.getUser()`, reads
+  `user.app_metadata.tenant_schema`, then — if present — builds and returns a
+  *second* client constructed with `db: { schema: tenantSchema }`. All
+  `.from()`/`.rpc()` calls on the returned client are routed to that schema
+  via the `Accept-Profile`/`Content-Profile` headers. If there's no
+  `tenant_schema` in the JWT, the public-schema client is returned as-is.
+- `createServiceClientForTenant(schemaName)` likewise passes
+  `db: { schema: schemaName }` to the service-role client — used by
+  `/api/admin/provision-tenant` for inserts into a newly created tenant
+  schema, and by `/api/users/invite` to write the invited user's profile row
+  into the inviting super_admin's tenant schema.
+- `createServiceClientForTenant` and the other Project B service-role clients
+  (`provision-tenant`, `impersonate`, `users/invite`) all read
+  `process.env.SUPABASE_SERVICE_ROLE_KEY` — the same var name `.env.local`
+  already had pre-migration. Don't introduce a differently-named
+  `SUPABASE_SERVICE_KEY`; keep this one name everywhere.
+- **Do not use `set_tenant_search_path`** (an RPC defined in
+  `supabase/migrations/003_saas_functions.sql`) for routing — `SET LOCAL
+  search_path` only lasts for that RPC's own transaction, and supabase-js
+  makes a separate request/transaction per call, so it has no effect on
+  subsequent queries. `db.schema` is the working alternative.
+- **Gotcha**: any schema passed via `db.schema` (or `.schema()`, see below)
+  must be listed in the Supabase project's "Exposed schemas" API setting
+  (Project Settings → API → Data API Settings) or PostgREST rejects the
+  request. `tenant_kaufnest` needs to be added there; new tenant schemas
+  created by the provisioning route need the same treatment (manual for now).
 
 ## Gotcha: `src/proxy.ts` doesn't use either of these
 
@@ -35,6 +81,13 @@ because middleware needs to mutate cookies directly on the in-flight
 `NextRequest`/`NextResponse` pair, which `cookies()` from `next/headers`
 can't do. If you change the cookie-handling shape in `server.ts`, check
 whether `src/proxy.ts` needs the same treatment.
+
+For its RBAC `profiles` lookup, `proxy.ts` uses the **per-call** `.schema()`
+method (`supabase.schema(tenantSchema).from("profiles")`, defaulting to
+`"public"` if the JWT has no `tenant_schema` yet) — this is the same
+underlying header-based mechanism as `db.schema`, just applied per-query
+instead of at client construction, since the proxy reuses one client for both
+`auth.getUser()` (default schema) and the profiles query (tenant schema).
 
 ## Where these are used
 

@@ -8,7 +8,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updatePurchase } from "../_store/purchasesSlice";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
@@ -92,7 +92,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error: dbError } = await supabase

@@ -20,7 +20,7 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 
 ## Data flow (the pattern every mutation follows)
 
-1. Write to Supabase (`createClient()` from `@/lib/supabase/client`, table `expenses`).
+1. Write to Supabase (`await createTenantClient()` from `@/lib/supabase/client`, table `expenses`).
 2. On success, dispatch the local slice action (`addExpense`/`updateExpense`/`removeExpense`)
    so the UI updates without a refetch.
 3. Call `writeAuditLog` (`@/lib/utils/audit`) to persist an audit row, then dispatch

@@ -7,7 +7,7 @@ import { Field, Input, Textarea, Row } from "@/components/ui/FormFields";
 import { useAppDispatch } from "@/store/hooks";
 import { updateProduct } from "../_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import type { Product } from "@/types";
 
@@ -53,7 +53,7 @@ export function EditProductModal({ product, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     const reorderThreshold = form.reorder_threshold.trim()

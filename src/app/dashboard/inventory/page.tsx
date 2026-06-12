@@ -13,7 +13,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { AddProductModal } from "./_components/AddProductModal";
 import { EditProductModal } from "./_components/EditProductModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import type { Product } from "@/types";
 
@@ -33,7 +33,7 @@ export default function InventoryPage() {
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { error: dbError } = await supabase.from("products").delete().eq("id", deleteTarget.id);
     if (dbError) { toastError("Delete failed", dbError.message); return; }
     dispatch(removeProduct(deleteTarget.id));

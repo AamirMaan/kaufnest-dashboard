@@ -6,7 +6,7 @@ import { addExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
@@ -123,7 +123,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     if (!canImport) return;
     setLoading(true);
     setImportError(null);
-    const supabase = createClient();
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 

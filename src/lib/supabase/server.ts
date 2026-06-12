@@ -3,16 +3,25 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
- * Browser-session-aware server client.
- * After Phase 3 of SAAS_MIGRATION.md is applied, reads tenant_schema from the
- * user's JWT app_metadata and calls set_tenant_search_path so every query
- * automatically hits the correct tenant schema. Falls back to the public schema
- * if the RPC is not yet deployed (Phases 1–2 in progress).
+ * Browser-session-aware server client, scoped to the user's tenant schema.
+ *
+ * PostgREST routes a request to a schema via the Accept-Profile /
+ * Content-Profile headers (the `db.schema` client option), fixed when the
+ * client is constructed. `SET LOCAL search_path` via an RPC call does NOT
+ * work for this: supabase-js issues a separate HTTP request (and Postgres
+ * transaction) per .from()/.rpc() call, so a search_path set during one
+ * request has no effect on the next. We therefore resolve the tenant schema
+ * first with a public-schema client, then build the real client with
+ * `db.schema` set.
+ *
+ * The resolved schema must be listed in the project's "Exposed schemas" API
+ * setting (Project Settings -> API -> Data API Settings) or PostgREST
+ * rejects it.
  */
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const client = createServerClient(
+  const authClient = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -33,32 +42,47 @@ export async function createClient() {
     }
   );
 
-  // Set tenant search_path so all subsequent queries hit the right schema.
-  // Wrapped in try/catch — the RPC doesn't exist until Phase 3 DB migration is
-  // applied, so the app falls back gracefully to the public schema until then.
   const {
     data: { user },
-  } = await client.auth.getUser();
+  } = await authClient.auth.getUser();
 
   const tenantSchema = user?.app_metadata?.tenant_schema as string | undefined;
-  if (tenantSchema) {
-    try {
-      await client.rpc("set_tenant_search_path", { schema_name: tenantSchema });
-    } catch {
-      // Phase 3 not yet applied — queries fall back to public schema
-    }
+  if (!tenantSchema) {
+    return authClient;
   }
 
-  return client;
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Server Component — middleware handles cookie refresh
+          }
+        },
+      },
+      db: { schema: tenantSchema },
+    }
+  );
 }
 
 /**
- * Service-role client for a specific tenant schema.
+ * Service-role client scoped to a specific tenant schema via the `db.schema`
+ * option (see createClient for why SET search_path / RPC doesn't work here).
  * Use in server-side provisioning and admin operations only — never client-side.
  */
-export function createServiceClientForTenant(_schemaName: string) {
+export function createServiceClientForTenant(schemaName: string) {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { db: { schema: schemaName } }
   );
 }

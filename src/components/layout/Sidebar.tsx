@@ -38,7 +38,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["super_admin", "admin", "accountant"],
   },
   {
-    label: "Sales",
+    label: "Orders",
     href: "/dashboard/sales",
     Icon: TrendingUp,
     roles: ["super_admin", "admin", "accountant"],

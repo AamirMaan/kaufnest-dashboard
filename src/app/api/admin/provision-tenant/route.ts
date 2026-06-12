@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createControlClient } from "@/lib/supabase/control";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 async function verifyPlatformAdmin() {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
   const service = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   try {
@@ -67,9 +67,15 @@ export async function POST(req: NextRequest) {
     });
     if (schemaError) throw schemaError;
 
+    // Tenant-scoped service client (db.schema = schemaName) for inserts into
+    // the new schema's tables. NOTE: schemaName must also be added to this
+    // project's "Exposed schemas" API setting (Project Settings -> API ->
+    // Data API Settings) or these requests will fail with a 406 — see
+    // SAAS_MIGRATION.md Phase 4 for the dynamic-tenant follow-up.
+    const tenantService = createServiceClientForTenant(schemaName);
+
     // 2. Seed company_profile
-    await service.rpc("set_tenant_search_path", { schema_name: schemaName });
-    await service.from("company_profile").insert({ name, currency: "EUR", timezone: "UTC" });
+    await tenantService.from("company_profile").insert({ name, currency: "EUR", timezone: "UTC" });
 
     // 3. Invite admin user
     const { data: inviteData, error: inviteError } =
@@ -80,8 +86,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Create profile row + stamp app_metadata
     if (inviteData.user) {
-      await service.rpc("set_tenant_search_path", { schema_name: schemaName });
-      await service.from("profiles").insert({
+      await tenantService.from("profiles").insert({
         id: inviteData.user.id,
         email: adminEmail,
         full_name: adminName,

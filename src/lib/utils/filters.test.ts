@@ -1,4 +1,5 @@
-import { resolveDateRange, getPresetRange } from "./filters";
+import { resolveDateRange, getPresetRange, filterSales, DEFAULT_SALES_FILTERS } from "./filters";
+import type { Sale } from "@/types";
 
 describe("resolveDateRange", () => {
   it("delegates non-custom presets to getPresetRange", () => {
@@ -29,5 +30,50 @@ describe("resolveDateRange", () => {
       from: "2026-01-01",
       to: "9999-99-99",
     });
+  });
+});
+
+function makeSale(overrides: Partial<Sale> = {}): Sale {
+  return {
+    id: "s1",
+    platform: "amazon",
+    product_name: "Widget",
+    product_id: null,
+    quantity: 1,
+    unit_price: 10,
+    total_amount: 10,
+    currency: "EUR",
+    date: "2026-01-15",
+    description: null,
+    created_by: "user-1",
+    created_at: "2026-01-15T00:00:00Z",
+    vat_rate: null,
+    vat_amount: null,
+    status: "pending",
+    restock: false,
+    ...overrides,
+  };
+}
+
+describe("filterSales", () => {
+  it("returns all sales when status filter is 'all'", () => {
+    const pending = makeSale({ id: "s1", status: "pending" });
+    const returned = makeSale({ id: "s2", status: "returned" });
+
+    expect(filterSales([pending, returned], DEFAULT_SALES_FILTERS)).toEqual([pending, returned]);
+  });
+
+  it("filters to only the selected status", () => {
+    const pending = makeSale({ id: "s1", status: "pending" });
+    const returned = makeSale({ id: "s2", status: "returned" });
+
+    expect(filterSales([pending, returned], { ...DEFAULT_SALES_FILTERS, status: "returned" })).toEqual([returned]);
+  });
+
+  it("matches custom ('Other') status values exactly", () => {
+    const custom = makeSale({ id: "s1", status: "awaiting customs" });
+    const pending = makeSale({ id: "s2", status: "pending" });
+
+    expect(filterSales([custom, pending], { ...DEFAULT_SALES_FILTERS, status: "awaiting customs" })).toEqual([custom]);
   });
 });

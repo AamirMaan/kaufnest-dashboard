@@ -1,7 +1,9 @@
 # Sales feature
 
-Route: `/dashboard/sales`. Lists sales records (per platform: Amazon, eBay, Etsy,
-Shopify, other), with add/edit/delete and PDF invoice generation.
+Route: `/dashboard/sales`. UI label is **"Orders"** (Sidebar, page title) —
+internals (table `sales`, route, `Sale` type, `salesSlice`) keep the "sales"
+name. Lists sales records (per platform: Amazon, eBay, Etsy, Shopify, other),
+each with an order **status**, with add/edit/delete and PDF invoice generation.
 
 ## Files in this folder
 
@@ -21,10 +23,13 @@ Shopify, other), with add/edit/delete and PDF invoice generation.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
+- `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
+  order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
+  `statusLabel`. See "Order status + returns" below.
 
 ## Data flow (the pattern every mutation follows)
 
-1. Write to Supabase (`createClient()` from `@/lib/supabase/client`, table `sales`).
+1. Write to Supabase (`await createTenantClient()` from `@/lib/supabase/client`, table `sales`).
 2. On success, dispatch the local slice action (`addSale`/`updateSale`/`removeSale`)
    so the UI updates without a refetch.
 3. Call `writeAuditLog` (`@/lib/utils/audit`) to persist an audit row, then dispatch
@@ -64,6 +69,35 @@ editable fields.
   Both stay `null` when the toggle is off — `total_amount` (generated column)
   remains the gross/paid figure either way.
 
+## Order status + returns (additive fields on `Sale`)
+
+- `status: string` — defaults to `"pending"`. Both modals render a `Select`
+  populated from `ORDER_STATUSES` (`pending`, `processing`, `shipped`,
+  `delivered`, `returned`, `cancelled`) plus an `"Other…"` option that reveals
+  a free-text "Custom Status" `Input`. `EditSaleModal.saleToForm()` uses
+  `isPresetStatus()` to decide whether to show the preset or fall into
+  "Other" with the existing custom value prefilled. `page.tsx` renders it via
+  `StatusBadge` (`components/ui/Badge.tsx`) and exposes a Status filter
+  (`ORDER_STATUSES` ∪ any custom values currently in `sales`, via `statusOptions`).
+- `restock: boolean` — only meaningful when `status === "returned"`; both
+  modals show a "Item can be resold (restock inventory)" `Checkbox` only in
+  that case, and force `restock = false` for every other status before
+  writing.
+- **Stock trigger** (`apply_sale_stock_change()`, migration
+  `007_add_order_status.sql`, mirrored in `public` and `tenant_kaufnest`):
+  the stock delta for a row is `0` when `status = 'returned' AND restock`
+  (net stock effect of the sale cancels out — item goes back to sellable
+  stock), otherwise `-quantity` as before (normal sale, or a returned/written-off
+  item that can't be resold). **Don't add client-side stock math** — same rule
+  as the inventory link below.
+- **Revenue/profit exclusion**: any row with `status === "returned"` is
+  excluded from the Gross/VAT/Net summary in `page.tsx` (see `summary` useMemo
+  — `if (s.status === "returned") continue;`) and from every revenue-derived
+  figure on the Overview page (`effectiveSales` in `app/dashboard/page.tsx`).
+  `page.tsx` shows a "N returned order(s) excluded from totals" note when
+  `returnedCount > 0`. If you add new revenue aggregations in either page,
+  apply the same exclusion.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
@@ -82,16 +116,19 @@ editable fields.
 **Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
 to rows and calls `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
 Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
-currency, vat_rate, vat_amount, description`. Export button is disabled when no
-rows match the filter.
+currency, vat_rate, vat_amount, status, description`. Export button is disabled
+when no rows match the filter.
 
 **Import** (`ImportSalesModal`): Required CSV columns: `date` (YYYY-MM-DD),
 `product_name`, `platform` (amazon/ebay/etsy/shopify/other), `quantity`, `unit_price`.
-Optional: `currency` (default EUR), `vat_rate` (0–100), `description`. `product_id`
-is NOT in the import format — imports create unlinked records; user can link via
-Edit afterward. `total_amount` is computed (`qty × unit_price`); `vat_amount` is
-computed via `vatAmountFromGross`. All rows must pass validation before import
-proceeds. Audit log: one entry for the whole batch (omit `entityId` — it's
+Optional: `currency` (default EUR), `vat_rate` (0–100), `status` (defaults to
+`"pending"`, no validation against the preset list — custom strings allowed),
+`description`. `product_id` is NOT in the import format — imports create unlinked
+records; user can link via Edit afterward. `total_amount` is computed
+(`qty × unit_price`); `vat_amount` is computed via `vatAmountFromGross`.
+`restock` is always `false` for imported rows (not importable — edit the record
+afterward to mark it returned/restockable). All rows must pass validation before
+import proceeds. Audit log: one entry for the whole batch (omit `entityId` — it's
 `string | undefined`, not nullable).
 
 ## Tests

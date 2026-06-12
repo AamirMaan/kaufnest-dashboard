@@ -44,7 +44,10 @@ CONTROL_SUPABASE_SERVICE_KEY=<project-a-service-role-key>
 # Data Plane (Project B — existing project)
 NEXT_PUBLIC_SUPABASE_URL=https://<project-b-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<project-b-anon-key>
-SUPABASE_SERVICE_KEY=<project-b-service-role-key>
+# Already present in .env.local from before the SaaS migration — reused as-is,
+# all Project B service-role clients (createServiceClientForTenant,
+# provision-tenant, impersonate) read this same var.
+SUPABASE_SERVICE_ROLE_KEY=<project-b-service-role-key>
 
 # Stripe (added in Phase 4)
 STRIPE_SECRET_KEY=
@@ -76,46 +79,12 @@ export function createControlClient() {
 
 ### Step 1.4 — Run control plane migration
 
-In the Supabase SQL editor for **Project A**, run:
+Run `supabase/control-plane/001_schema.sql` in the Supabase SQL editor for
+**Project A**. ✅ Already applied.
 
-```sql
--- Control plane schema
-CREATE SCHEMA IF NOT EXISTS control;
-
-CREATE TABLE control.tenants (
-  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name          text NOT NULL,
-  slug          text NOT NULL UNIQUE,          -- used as schema name: tenant_<slug>
-  schema_name   text NOT NULL UNIQUE,          -- e.g. tenant_acme
-  stripe_customer_id     text,
-  stripe_subscription_id text,
-  plan          text NOT NULL DEFAULT 'trial', -- trial | starter | pro | business
-  status        text NOT NULL DEFAULT 'active',-- active | inactive | cancelled
-  trial_ends_at timestamptz,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE control.admin_users (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  email            text NOT NULL UNIQUE,
-  can_impersonate  boolean NOT NULL DEFAULT true,
-  created_at       timestamptz NOT NULL DEFAULT now()
-);
-
--- Seed yourself as the first admin
-INSERT INTO control.admin_users (email) VALUES ('muhammadaamir.sohail94@gmail.com');
-
--- Auto-update updated_at
-CREATE OR REPLACE FUNCTION control.set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN NEW.updated_at = now(); RETURN NEW; END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER tenants_updated_at
-  BEFORE UPDATE ON control.tenants
-  FOR EACH ROW EXECUTE FUNCTION control.set_updated_at();
-```
+No policies are needed on these tables — `createControlClient()` (Step 1.3) always
+uses the service-role key, which bypasses RLS. RLS is enabled purely so anon/
+authenticated keys are denied by default if ever pointed at this schema.
 
 ### Step 1.5 — Add Tenant type
 
@@ -269,60 +238,46 @@ CREATE TRIGGER sales_stock_change
 
 ### Step 2.2 — Migrate your own data into tenant_kaufnest schema
 
-In the Supabase SQL editor for **Project B**, run:
+Run `supabase/migrations/003_saas_functions.sql` in **Project B** first (if you
+haven't already) — it defines `public.set_user_tenant`, used in step 9 below.
 
-```sql
--- 1. Create schema for the first tenant (your own company)
-CREATE SCHEMA tenant_kaufnest;
+Then run `supabase/migrations/004_phase2_tenant_kaufnest.sql` in **Project B**.
+It does everything in one pass:
 
--- 2. Copy table definitions (run tenant-schema-template.sql with search_path set)
-SET search_path TO tenant_kaufnest;
--- ... paste full contents of tenant-schema-template.sql here ...
+1. Creates the `tenant_kaufnest` schema with all tables (mirrors
+   `tenant-schema-template.sql`, plus the full INSERT/UPDATE/DELETE-aware stock
+   triggers from `002_inventory_and_vat.sql`)
+2. Enables RLS with tenant-membership + role-based policies
+3. Copies existing `public.*` data into `tenant_kaufnest.*` (casting enum
+   columns to `text`)
+4. Seeds `tenant_kaufnest.company_profile`
+5. Stamps every existing `auth.users` row with `tenant_schema='tenant_kaufnest'`
 
--- 3. Copy existing data from public schema
-INSERT INTO tenant_kaufnest.profiles SELECT * FROM public.profiles;
-INSERT INTO tenant_kaufnest.expenses SELECT * FROM public.expenses;
-INSERT INTO tenant_kaufnest.sales    SELECT * FROM public.sales;
-INSERT INTO tenant_kaufnest.purchases SELECT * FROM public.purchases;
-INSERT INTO tenant_kaufnest.products  SELECT * FROM public.products;
-INSERT INTO tenant_kaufnest.audit_logs SELECT * FROM public.audit_logs;
+✅ Already applied.
 
--- 4. Seed company_profile for your tenant
-INSERT INTO tenant_kaufnest.company_profile (name, currency, timezone)
-VALUES ('KaufNest', 'EUR', 'UTC');
+After running it, register the tenant in the control plane — run
+`supabase/control-plane/002_register_tenant_kaufnest.sql` in **Project A**.
 
--- 5. Register in control plane (run this in Project A)
--- INSERT INTO control.tenants (name, slug, schema_name, plan, status)
--- VALUES ('KaufNest', 'kaufnest', 'tenant_kaufnest', 'business', 'active');
-```
+> ⚠️  **Required follow-up**: also run
+> `supabase/migrations/005_grant_tenant_kaufnest_privileges.sql` in **Project
+> B**. `create schema` does not grant `anon`/`authenticated`/`service_role`
+> any access — without this every PostgREST request against `tenant_kaufnest`
+> fails with `permission denied for schema tenant_kaufnest` (42501), checked
+> *before* RLS, so correct RLS policies alone aren't enough. ✅ Already applied.
 
 > ⚠️  Do NOT drop the public schema tables until Phase 3 is complete and tested.
 
+> ⚠️  After step 9 of `004_phase2_tenant_kaufnest.sql` runs, existing logged-in
+> sessions won't see `app_metadata.tenant_schema` until their JWT refreshes —
+> log out and back in to force it. Until then, RLS denies them via
+> `is_tenant_member()`.
+
 ### Step 2.3 — Link auth.users to tenant schemas
 
-Each user in `auth.users` needs to know which tenant schema they belong to.
-Store this in Supabase Auth app_metadata (set server-side, never writable by
-the user):
-
-In **Project B** SQL editor:
-
-```sql
--- Helper function to stamp tenant_schema onto a user's app_metadata
-CREATE OR REPLACE FUNCTION public.set_user_tenant(
-  user_id uuid,
-  schema_name text
-) RETURNS void AS $$
-BEGIN
-  UPDATE auth.users
-  SET raw_app_meta_data = raw_app_meta_data || jsonb_build_object('tenant_schema', schema_name)
-  WHERE id = user_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Stamp all existing users with the kaufnest schema
-SELECT public.set_user_tenant(id, 'tenant_kaufnest')
-FROM auth.users;
-```
+Already handled by `public.set_user_tenant` (defined in
+`supabase/migrations/003_saas_functions.sql`) and called in step 9 of
+`supabase/migrations/004_phase2_tenant_kaufnest.sql` — no separate action
+needed.
 
 ---
 
@@ -331,56 +286,35 @@ FROM auth.users;
 **Goal**: Every request reads `tenant_schema` from the JWT and routes queries to
 the correct schema automatically. No query needs a tenant filter.
 
-### Step 3.1 — Update Next.js middleware
+### Step 3.1 — Update the route-protection proxy
 
-Replace or create `src/middleware.ts`:
+> ⚠️ **Do not create `src/middleware.ts`.** This Next.js version uses the
+> `proxy.ts` file convention instead — having both `src/middleware.ts` and
+> `src/proxy.ts` crashes the dev server with "Both middleware file ... and
+> proxy file ... are detected." `src/proxy.ts` already exists and handles
+> `/dashboard`/`/login` redirects + RBAC; `/admin` already has its own
+> server-side guard in `src/app/admin/layout.tsx` (redirects to `/login` if no
+> user, to `/dashboard` if not in `control.admin_users`), so no middleware-level
+> `/admin` check is needed.
 
-```ts
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
-
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (cookies) => {
-          cookies.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            response.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
-
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // Protect /dashboard routes
-  if (request.nextUrl.pathname.startsWith("/dashboard") && !user) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // Protect /admin routes — check control plane admin_users table
-  if (request.nextUrl.pathname.startsWith("/admin") && !user) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  return response;
-}
-
-export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
-};
-```
+✅ Already applied — `src/proxy.ts`'s RBAC `profiles` lookup uses
+`supabase.schema(tenantSchema ?? "public").from("profiles")`, where
+`tenantSchema` comes from `user.app_metadata.tenant_schema`. See
+`src/lib/supabase/SKILL.md` for why `.schema()` (per-call) is used here
+instead of `db.schema` (per-client, used in `server.ts`).
 
 ### Step 3.2 — Create schema-aware server client
 
-Replace `src/lib/supabase/server.ts`:
+> ⚠️ **`SET LOCAL search_path` via RPC does NOT work here.** supabase-js
+> issues a separate PostgREST HTTP request (and Postgres transaction) per
+> `.from()`/`.rpc()` call, so a search_path set during one request has no
+> effect on the next. Use the `db: { schema }` client option instead — it sets
+> the `Accept-Profile`/`Content-Profile` headers per client instance, which
+> PostgREST honours on every request from that client. This is the same
+> mechanism as the `.schema('control')` calls in `src/lib/supabase/control.ts`,
+> which already work correctly.
+
+✅ Already applied — `src/lib/supabase/server.ts`:
 
 ```ts
 import { createServerClient } from "@supabase/ssr";
@@ -388,77 +322,84 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
- * Browser-session-aware server client.
- * Reads tenant_schema from the user's JWT app_metadata and sets
- * search_path so every query automatically hits the right schema.
+ * Browser-session-aware server client, scoped to the user's tenant schema.
+ * Resolves tenant_schema from the JWT (via a public-schema client), then
+ * builds the real client with `db.schema` set to that tenant schema.
  */
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const client = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (cookies) => {
-          try {
-            cookies.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch { /* Server Component — middleware handles it */ }
-        },
-      },
-    }
-  );
+  const authClient = createServerClient(/* ...anon key, default schema... */);
 
-  // Read tenant_schema from JWT and set search_path
-  const { data: { user } } = await client.auth.getUser();
+  const { data: { user } } = await authClient.auth.getUser();
   const tenantSchema = user?.app_metadata?.tenant_schema as string | undefined;
+  if (!tenantSchema) return authClient;
 
-  if (tenantSchema) {
-    // Set search_path for this connection so table references resolve to the
-    // tenant schema without needing schema prefixes in every query.
-    await client.rpc("set_tenant_search_path", { schema_name: tenantSchema });
-  }
-
-  return client;
+  return createServerClient(/* ...anon key..., */ { db: { schema: tenantSchema } });
 }
 
 /**
- * Service-role client for a specific tenant schema.
- * Use in server-side provisioning and admin operations only.
+ * Service-role client scoped to a specific tenant schema via `db.schema`.
  */
 export function createServiceClientForTenant(schemaName: string) {
-  const client = createServiceClient(
+  return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { db: { schema: schemaName } }
   );
-  // Caller must set search_path before querying:
-  // await client.rpc("set_tenant_search_path", { schema_name: schemaName });
-  return client;
 }
 ```
 
-### Step 3.3 — Create the set_tenant_search_path RPC
+### Step 3.3 — Add the tenant schema to "Exposed schemas"
 
-In **Project B** SQL editor:
+PostgREST refuses requests for any schema not explicitly listed. In **Project
+B** dashboard: **Project Settings → API → Data API Settings → Exposed
+schemas**, add `tenant_kaufnest` (comma-separated alongside `public`,
+`graphql_public`). Without this, every `.from()` call from a client built with
+`db: { schema: "tenant_kaufnest" }` fails with a 406/404.
 
-```sql
--- Callable by authenticated users to set their session search_path.
--- This is safe — each tenant's schema is isolated by RLS and by not
--- having cross-tenant references.
-CREATE OR REPLACE FUNCTION public.set_tenant_search_path(schema_name text)
-RETURNS void AS $$
-BEGIN
-  -- Validate: schema must start with 'tenant_' to prevent injection
-  IF schema_name NOT LIKE 'tenant_%' THEN
-    RAISE EXCEPTION 'Invalid schema name: %', schema_name;
-  END IF;
-  EXECUTE format('SET LOCAL search_path TO %I, public', schema_name);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
+For Phase 4 (dynamically provisioned tenants), each newly created
+`tenant_<slug>` schema must also be added here — there's no per-request way
+around the exposed-schemas allowlist. Either:
+- automate it via the Supabase Management API (`PATCH /v1/projects/{ref}/postgrest`,
+  updating `db_schema`) from the provisioning route, or
+- accept a manual dashboard step per new tenant until that automation is built.
+
+`public.set_tenant_search_path` (defined in `003_saas_functions.sql`) is no
+longer used by app code — kept only for ad-hoc direct-Postgres sessions where
+`SET LOCAL search_path` works as expected within a single transaction.
+
+### Step 3.3b — Verify routing before continuing
+
+Before relying on the dashboard "it shows records" check (which is
+inconclusive — `public.*` still has the same data copied into
+`tenant_kaufnest.*`), prove the client is actually hitting
+`tenant_kaufnest`. `company_profile` isn't rendered anywhere in the UI yet, so
+use `profiles.full_name` instead — `dashboard/layout.tsx` fetches it via
+`createClient()` as the very first query after auth, and `DashboardShell`
+renders it in the header and user menu.
+
+1. Find your user id (Project B → Authentication → Users, or
+   `select id from auth.users where email = '...'`).
+2. In Project B SQL editor, make the same row diverge between schemas:
+   ```sql
+   update tenant_kaufnest.profiles set full_name = 'Aamir (TENANT)' where id = '<your-user-id>';
+   update public.profiles set full_name = 'Aamir (PUBLIC)' where id = '<your-user-id>';
+   ```
+3. Add `tenant_kaufnest` to Exposed schemas (Step 3.3).
+4. Log out and back in — `app_metadata.tenant_schema` was written via SQL
+   (Step 2.3), so your *current* session's JWT predates it. A fresh login
+   issues a JWT with the updated `app_metadata`.
+5. Reload `/dashboard` and check the name shown top-right / in the user menu:
+   - **"Aamir (TENANT)"** → routing works correctly.
+   - **Redirected back to `/login` in a loop** → the `profiles` query
+     returned no row, almost always because `tenant_kaufnest` isn't in
+     Exposed schemas yet (Step 3.3) — PostgREST errors on `db.schema`,
+     `.single()` returns `null`, and `dashboard/layout.tsx` redirects on
+     `!profile`. Fix Step 3.3 and reload.
+   - **"Aamir (PUBLIC)"** → still on `public`, meaning `tenant_schema` is
+     missing from your JWT — log out/in again and confirm Step 2.3's
+     `set_user_tenant` ran for your user id.
 
 ### Step 3.4 — Add CompanyProfile to types and Redux
 
@@ -496,7 +437,34 @@ const { data: companyProfile } = await supabase
 
 ### Step 3.6 — Delete public schema tables (after testing)
 
-Only after Phase 3 is confirmed working in your browser for all features:
+> ✅ Resolved: `handle_new_user()` (from `001_init.sql`) was an `AFTER INSERT
+> ON auth.users` trigger that inserted into `public.profiles` on every
+> signup/invite — if `public.profiles` were dropped first, every new
+> signup/invite would fail (the trigger's exception rolls back the entire
+> `auth.users` insert). `supabase/migrations/006_remove_handle_new_user_trigger.sql`
+> drops the trigger and function. `src/app/api/users/invite/route.ts` no
+> longer relies on it: it now reads the caller's `tenant_schema` from
+> `app_metadata`, inserts the new user's profile directly into
+> `tenant_<schema>.profiles` via `createServiceClientForTenant()`, and stamps
+> the new user's own `app_metadata.tenant_schema` via `set_user_tenant`.
+> Run `006_remove_handle_new_user_trigger.sql` before proceeding below.
+
+> ✅ Resolved: `src/lib/supabase/client.ts` (the browser client used by every
+> Add/Edit/Delete/Import modal in Sales/Purchases/Expenses/Inventory/Users) had
+> no schema awareness and defaulted to `public` for all `.from()` calls — these
+> writes would all break the moment `public.*` is dropped. `createBrowserClient`
+> caches a singleton and ignores `db.schema` on every call after the first, so
+> the server-side fix (build a second client with `db: { schema }`) doesn't work
+> here. Instead, added `createTenantClient()`, an async helper that calls
+> `.schema(tenantSchema)` per call on the existing singleton (same mechanism
+> `src/proxy.ts` uses) — `.schema()` still routes through the singleton's
+> authenticated fetch, so RLS/`auth.uid()` work normally. All 18 client-component
+> call sites and `lib/utils/audit.ts` (`writeAuditLog`) now use
+> `await createTenantClient()` instead of `createClient()`. See
+> `src/lib/supabase/SKILL.md` for the full writeup.
+
+Only after Phase 3 is confirmed working in your browser for all features
+(Step 3.3b) **and** migration 006 has been run:
 
 ```sql
 -- Run in Project B — this is irreversible
@@ -943,17 +911,19 @@ These rules apply to every task that touches this codebase after Phase 1 is
 complete:
 
 1. **Never query `public.*` tables** — all data lives in tenant schemas.
-   Queries must go through `createClient()` (which sets `search_path`) or
-   `createServiceClientForTenant(schemaName)` followed by
-   `set_tenant_search_path`.
+   Queries must go through `createClient()` (which sets `db.schema` to the
+   tenant's schema) or `createServiceClientForTenant(schemaName)`. Do not use
+   `set_tenant_search_path` for routing — see Step 3.2.
 
 2. **Never hardcode a schema name** — always read it from
    `user.app_metadata.tenant_schema` or the `Tenant` object from the control
    plane.
 
 3. **Never skip the schema validation guard** — the
-   `set_tenant_search_path` and `provision_tenant_schema` SQL functions both
-   reject schema names that don't start with `tenant_`. Do not bypass this.
+   `provision_tenant_schema` SQL function rejects schema names that don't
+   start with `tenant_`. Do not bypass this. Any new tenant schema must also
+   be added to Project B's "Exposed schemas" API setting (Step 3.3) or
+   PostgREST will reject all requests to it.
 
 4. **Control plane access is server-only** — `createControlClient()` uses the
    service-role key. Never import it into Client Components or expose its
@@ -985,15 +955,25 @@ Before marking a phase done, verify:
 - [ ] `createControlClient()` file exists and imports from correct env vars
 
 ### Phase 2
-- [ ] `tenant_kaufnest` schema exists in Project B with all tables
-- [ ] All existing data copied and row counts match
-- [ ] `set_user_tenant()` function exists and all existing users are stamped
-- [ ] `set_tenant_search_path()` RPC exists and rejects non-`tenant_` names
+- [x] `tenant_kaufnest` schema exists in Project B with all tables
+- [x] All existing data copied and row counts match
+- [x] `set_user_tenant()` function exists and all existing users are stamped
+- [x] `anon`/`authenticated`/`service_role` granted USAGE + table privileges on
+      `tenant_kaufnest` (`005_grant_tenant_kaufnest_privileges.sql`)
 
 ### Phase 3
-- [ ] `createClient()` in `server.ts` calls `set_tenant_search_path` on every request
-- [ ] Loading `/dashboard` still works — data loads from `tenant_kaufnest`
-- [ ] Public schema tables dropped (only after browser testing)
+- [x] `createClient()` in `server.ts` builds a `db: { schema: tenantSchema }` client
+- [x] `tenant_kaufnest` added to Project B's "Exposed schemas" API setting (Step 3.3)
+- [x] Routing verified with the diverging-value test (Step 3.3b) — confirmed
+      `/dashboard` reads from `tenant_kaufnest`, not `public`
+- [x] `handle_new_user` trigger reworked/removed
+      (`006_remove_handle_new_user_trigger.sql`) and `users/invite/route.ts`
+      made tenant-aware
+- [x] Browser client (`createTenantClient()` in `lib/supabase/client.ts`) is
+      schema-aware; all 18 client-component CRUD call sites + `writeAuditLog`
+      updated — pending manual browser test of Sales/Purchases/Expenses/
+      Inventory/Users CRUD against `tenant_kaufnest`
+- [ ] Public schema tables dropped (only after the above are confirmed)
 
 ### Phase 4
 - [ ] `/api/admin/provision-tenant` creates schema + profile + auth user in one call

@@ -7,11 +7,12 @@ import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/F
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { createClient } from "@/lib/supabase/client";
+import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
+import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import type { Platform, Currency, Sale, Product } from "@/types";
 
@@ -35,10 +36,14 @@ interface FormState {
   description: string;
   vat_included: boolean;
   vat_rate: string;
+  status: string; // one of ORDER_STATUSES, or "other"
+  customStatus: string;
+  restock: boolean;
   reason: string;
 }
 
 function saleToForm(sale: Sale): FormState {
+  const preset = isPresetStatus(sale.status);
   return {
     platform: sale.platform,
     product_name: sale.product_name,
@@ -50,13 +55,17 @@ function saleToForm(sale: Sale): FormState {
     description: sale.description ?? "",
     vat_included: sale.vat_rate != null,
     vat_rate: sale.vat_rate != null ? String(sale.vat_rate) : String(readInvoiceSettings().vatRate),
+    status: preset ? sale.status : "other",
+    customStatus: preset ? "" : sale.status,
+    restock: sale.restock,
     reason: "",
   };
 }
 
 const blankForm: FormState = {
   platform: "amazon", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
-  date: "", description: "", vat_included: false, vat_rate: "0", reason: "",
+  date: "", description: "", vat_included: false, vat_rate: "0",
+  status: "pending", customStatus: "", restock: false, reason: "",
 };
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
@@ -92,11 +101,15 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     if (!sale) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (price <= 0) return setError("Unit price must be greater than 0.");
+    if (form.status === "other" && !form.customStatus.trim()) return setError("Custom status is required.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     setError(null);
     setSaving(true);
 
-    const supabase = createClient();
+    const status = form.status === "other" ? form.customStatus.trim() : form.status;
+    const restock = status === "returned" ? form.restock : false;
+
+    const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error: dbError } = await supabase
@@ -112,6 +125,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         description: form.description.trim() || null,
         vat_rate: form.vat_included ? vatRate : null,
         vat_amount: form.vat_included ? vatAmount : null,
+        status,
+        restock,
       })
       .eq("id", sale.id)
       .select()
@@ -141,8 +156,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       entityType: "sale",
       entityId: sale.id,
       metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount },
-        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
+        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, status: sale.status, restock: sale.restock },
+        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, status: data.status, restock: data.restock },
         reason: form.reason.trim(),
       },
     });
@@ -155,7 +170,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
 
   return (
     <Modal
-      title="Edit Sale"
+      title="Edit Order"
       open={!!sale}
       onClose={onClose}
       footer={
@@ -249,6 +264,37 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
                 </p>
               )}
             </>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
+          <Field label="Status" required>
+            <Select
+              value={form.status}
+              onChange={(e) => set("status", e.target.value)}
+            >
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>{statusLabel(s)}</option>
+              ))}
+              <option value="other">Other…</option>
+            </Select>
+          </Field>
+          {form.status === "other" && (
+            <Field label="Custom Status" required>
+              <Input
+                value={form.customStatus}
+                onChange={(e) => set("customStatus", e.target.value)}
+                placeholder="e.g. Awaiting customs"
+                required
+              />
+            </Field>
+          )}
+          {form.status === "returned" && (
+            <Checkbox
+              label="Item can be resold (restock inventory)"
+              checked={form.restock}
+              onChange={(e) => set("restock", e.target.checked)}
+            />
           )}
         </div>
 

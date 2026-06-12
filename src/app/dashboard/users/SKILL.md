@@ -34,3 +34,9 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   `s.currentUser.profile?.role` checks before changing access logic.
 - Role changes must go through `writeAuditLog` with action `role_change` —
   this is the audit trail super-admins rely on to review who changed what.
+- `src/app/api/users/invite/route.ts` invites users into the **caller's own**
+  tenant (`user.app_metadata.tenant_schema`) — it 400s with a friendly message
+  if that's missing (stale JWT from before Phase 2.3 stamping; user needs to
+  re-login). It writes the new profile via `createServiceClientForTenant()`,
+  not a plain `public`-schema client — there is no `handle_new_user` trigger
+  to fall back on anymore.
