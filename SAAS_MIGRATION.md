@@ -118,166 +118,57 @@ export interface Tenant {
 **Goal**: Move all existing tables out of the `public` schema into a per-tenant
 schema. The existing data (your own company) becomes the first tenant.
 
-### Step 2.1 — Create the base migration SQL template
+### Step 2.1 — Canonical tenant schema definition
 
-Create `supabase/tenant-schema-template.sql`. This file is the canonical
-definition of a tenant schema — every new tenant gets exactly this structure.
-
-```sql
--- Run with search_path already set to the target schema, e.g.:
---   SET search_path TO tenant_acme;
--- OR pass the schema name as a parameter and prefix every table.
-
-CREATE TABLE profiles (
-  id         uuid PRIMARY KEY,               -- matches auth.users.id
-  email      text NOT NULL,
-  full_name  text NOT NULL DEFAULT '',
-  role       text NOT NULL DEFAULT 'accountant'
-               CHECK (role IN ('super_admin', 'admin', 'accountant')),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE expenses (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  title       text NOT NULL,
-  amount      numeric(12,2) NOT NULL,
-  currency    text NOT NULL DEFAULT 'EUR',
-  category    text NOT NULL,
-  vendor      text,
-  date        date NOT NULL,
-  description text,
-  created_by  uuid NOT NULL REFERENCES profiles(id),
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  vat_rate    numeric(5,2),
-  vat_amount  numeric(12,2)
-);
-
-CREATE TABLE sales (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  platform     text NOT NULL,
-  product_name text NOT NULL,
-  product_id   uuid,
-  quantity     integer NOT NULL DEFAULT 1,
-  unit_price   numeric(12,2) NOT NULL,
-  total_amount numeric(12,2) NOT NULL,
-  currency     text NOT NULL DEFAULT 'EUR',
-  date         date NOT NULL,
-  description  text,
-  created_by   uuid NOT NULL REFERENCES profiles(id),
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  vat_rate     numeric(5,2),
-  vat_amount   numeric(12,2)
-);
-
-CREATE TABLE purchases (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_name text NOT NULL,
-  product_id   uuid,
-  quantity     integer NOT NULL DEFAULT 1,
-  unit_price   numeric(12,2) NOT NULL,
-  total_amount numeric(12,2) NOT NULL,
-  currency     text NOT NULL DEFAULT 'EUR',
-  vendor       text,
-  date         date NOT NULL,
-  description  text,
-  created_by   uuid NOT NULL REFERENCES profiles(id),
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  vat_rate     numeric(5,2),
-  vat_amount   numeric(12,2)
-);
-
-CREATE TABLE products (
-  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name              text NOT NULL,
-  sku               text,
-  current_stock     integer NOT NULL DEFAULT 0,
-  reorder_threshold integer,
-  created_by        uuid NOT NULL REFERENCES profiles(id),
-  created_at        timestamptz NOT NULL DEFAULT now(),
-  updated_at        timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE audit_logs (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     uuid NOT NULL,
-  user_email  text,
-  action      text NOT NULL,
-  entity_type text NOT NULL,
-  entity_id   uuid,
-  metadata    jsonb,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE company_profile (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name         text NOT NULL,
-  logo_url     text,
-  vat_number   text,
-  address      text,
-  currency     text NOT NULL DEFAULT 'EUR',
-  timezone     text NOT NULL DEFAULT 'UTC',
-  updated_at   timestamptz NOT NULL DEFAULT now()
-);
-
--- Stock trigger (same as existing migration 002)
-CREATE OR REPLACE FUNCTION update_stock_on_sale()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.product_id IS NOT NULL THEN
-    UPDATE products SET current_stock = current_stock - NEW.quantity
-    WHERE id = NEW.product_id;
-  END IF;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER sales_stock_change
-  AFTER INSERT ON sales
-  FOR EACH ROW EXECUTE FUNCTION update_stock_on_sale();
-```
+The canonical definition of a tenant schema — every tenant gets exactly this
+structure (`profiles`, `company_profile`, `products`, `expenses`, `sales`,
+`purchases`, `audit_logs`, with `updated_at` triggers, the
+INSERT/UPDATE/DELETE-aware stock-sync triggers from `002_inventory_and_vat.sql`
++ the returns/restock delta logic, `is_tenant_member()`/`current_user_role()`,
+RLS policies, growth indexes, and grants) — now lives entirely in
+`public.provision_tenant_schema(schema_name text)`, defined in
+`supabase/migrations/005_tenant_provisioning.sql`. There is no separate
+template file; read that migration directly for the exact column/index/policy
+definitions.
 
 ### Step 2.2 — Migrate your own data into tenant_kaufnest schema
 
-Run `supabase/migrations/003_saas_functions.sql` in **Project B** first (if you
-haven't already) — it defines `public.set_user_tenant`, used in step 9 below.
+✅ Already applied. `tenant_kaufnest` exists in Project B with all data
+copied, RLS/grants in place, and every existing user stamped with
+`tenant_schema='tenant_kaufnest'`. The canonical record of what was run is
+`supabase/migrations/006_bootstrap_tenant_kaufnest.sql` (do not re-run it —
+see the warning at the top of that file). It:
 
-Then run `supabase/migrations/004_phase2_tenant_kaufnest.sql` in **Project B**.
-It does everything in one pass:
-
-1. Creates the `tenant_kaufnest` schema with all tables (mirrors
-   `tenant-schema-template.sql`, plus the full INSERT/UPDATE/DELETE-aware stock
-   triggers from `002_inventory_and_vat.sql`)
-2. Enables RLS with tenant-membership + role-based policies
-3. Copies existing `public.*` data into `tenant_kaufnest.*` (casting enum
+1. Calls `provision_tenant_schema('tenant_kaufnest')` to create the schema
+   with all tables, RLS, stock triggers, indexes, and grants
+2. Copies existing `public.*` data into `tenant_kaufnest.*` (casting enum
    columns to `text`)
-4. Seeds `tenant_kaufnest.company_profile`
-5. Stamps every existing `auth.users` row with `tenant_schema='tenant_kaufnest'`
+3. Seeds `tenant_kaufnest.company_profile`
+4. Stamps every existing `auth.users` row with `tenant_schema='tenant_kaufnest'`
+5. Drops the now-obsolete `handle_new_user()` trigger on `auth.users`
 
-✅ Already applied.
+The tenant is registered in the control plane via the "Register
+tenant_kaufnest" section at the bottom of `supabase/control-plane/001_schema.sql`.
 
-After running it, register the tenant in the control plane — run
-`supabase/control-plane/002_register_tenant_kaufnest.sql` in **Project A**.
+One piece of follow-up work remains in **Project B**:
+- `supabase/migrations/004_performance_indexes.sql` — adds 6 new growth
+  indexes to the already-live `tenant_kaufnest.*` tables (not part of the
+  original provisioning). Safe to run now (`create index if not exists`).
 
-> ⚠️  **Required follow-up**: also run
-> `supabase/migrations/005_grant_tenant_kaufnest_privileges.sql` in **Project
-> B**. `create schema` does not grant `anon`/`authenticated`/`service_role`
-> any access — without this every PostgREST request against `tenant_kaufnest`
-> fails with `permission denied for schema tenant_kaufnest` (42501), checked
-> *before* RLS, so correct RLS policies alone aren't enough. ✅ Already applied.
+`supabase/migrations/005_tenant_provisioning.sql` — ✅ applied. (Re)defines
+`provision_tenant_schema()` and `set_user_tenant()` so Phase 4's dynamic
+provisioning has the up-to-date canonical function. Does not touch
+`tenant_kaufnest`.
 
 > ⚠️  Do NOT drop the public schema tables until Phase 3 is complete and tested.
 
-> ⚠️  After step 9 of `004_phase2_tenant_kaufnest.sql` runs, existing logged-in
-> sessions won't see `app_metadata.tenant_schema` until their JWT refreshes —
-> log out and back in to force it. Until then, RLS denies them via
-> `is_tenant_member()`.
-
 ### Step 2.3 — Link auth.users to tenant schemas
 
-Already handled by `public.set_user_tenant` (defined in
-`supabase/migrations/003_saas_functions.sql`) and called in step 9 of
-`supabase/migrations/004_phase2_tenant_kaufnest.sql` — no separate action
-needed.
+✅ Already applied via `public.set_user_tenant`, called in step 4 of
+`supabase/migrations/006_bootstrap_tenant_kaufnest.sql`. If any user's session
+predates the stamp, they must log out and back in for their JWT to pick up
+`app_metadata.tenant_schema` — until then RLS denies them via
+`is_tenant_member()`.
 
 ---
 
@@ -360,14 +251,21 @@ schemas**, add `tenant_kaufnest` (comma-separated alongside `public`,
 
 For Phase 4 (dynamically provisioned tenants), each newly created
 `tenant_<slug>` schema must also be added here — there's no per-request way
-around the exposed-schemas allowlist. Either:
-- automate it via the Supabase Management API (`PATCH /v1/projects/{ref}/postgrest`,
-  updating `db_schema`) from the provisioning route, or
-- accept a manual dashboard step per new tenant until that automation is built.
+around the exposed-schemas allowlist. This is now automated:
+`/api/admin/provision-tenant` calls `addExposedSchema(schemaName)`
+(`src/lib/supabase/managementApi.ts`), which reads Project B's current
+`db_schema` via the Supabase Management API
+(`GET /v1/projects/{ref}/postgrest`), appends the new schema if missing, and
+`PATCH`es it back — no manual dashboard step required. See
+`src/lib/supabase/SKILL.md` for the env var (`SUPABASE_ACCESS_TOKEN`) and the
+post-PATCH delay gotcha.
 
-`public.set_tenant_search_path` (defined in `003_saas_functions.sql`) is no
-longer used by app code — kept only for ad-hoc direct-Postgres sessions where
-`SET LOCAL search_path` works as expected within a single transaction.
+`public.set_tenant_search_path` was dropped from
+`supabase/migrations/005_tenant_provisioning.sql` — app code never used it
+(every client either passes `db: { schema }` at construction time or calls
+`.schema(tenantSchema)` per request, see `src/lib/supabase/SKILL.md`). For
+ad-hoc direct-Postgres sessions, just run `SET search_path TO tenant_<slug>;`
+manually.
 
 ### Step 3.3b — Verify routing before continuing
 
@@ -441,13 +339,14 @@ const { data: companyProfile } = await supabase
 > ON auth.users` trigger that inserted into `public.profiles` on every
 > signup/invite — if `public.profiles` were dropped first, every new
 > signup/invite would fail (the trigger's exception rolls back the entire
-> `auth.users` insert). `supabase/migrations/006_remove_handle_new_user_trigger.sql`
-> drops the trigger and function. `src/app/api/users/invite/route.ts` no
-> longer relies on it: it now reads the caller's `tenant_schema` from
-> `app_metadata`, inserts the new user's profile directly into
-> `tenant_<schema>.profiles` via `createServiceClientForTenant()`, and stamps
-> the new user's own `app_metadata.tenant_schema` via `set_user_tenant`.
-> Run `006_remove_handle_new_user_trigger.sql` before proceeding below.
+> `auth.users` insert). Step 5 of
+> `supabase/migrations/006_bootstrap_tenant_kaufnest.sql` drops the trigger
+> and function. `src/app/api/users/invite/route.ts` no longer relies on it:
+> it now reads the caller's `tenant_schema` from `app_metadata`, inserts the
+> new user's profile directly into `tenant_<schema>.profiles` via
+> `createServiceClientForTenant()`, and stamps the new user's own
+> `app_metadata.tenant_schema` via `set_user_tenant`.
+> Run `006_bootstrap_tenant_kaufnest.sql` before proceeding below.
 
 > ✅ Resolved: `src/lib/supabase/client.ts` (the browser client used by every
 > Add/Edit/Delete/Import modal in Sales/Purchases/Expenses/Inventory/Users) had
@@ -533,8 +432,8 @@ export async function POST(req: NextRequest) {
     const service = createServiceClientForTenant(schemaName);
     await service.rpc("provision_tenant_schema", { schema_name: schemaName });
 
-    // 2. Seed company_profile
-    await service.rpc("set_tenant_search_path", { schema_name: schemaName });
+    // 2. Seed company_profile (service client is already schema-scoped via
+    // createServiceClientForTenant — no separate search_path RPC needed)
     await service
       .from("company_profile")
       .insert({ name, currency: "EUR", timezone: "UTC" });
@@ -549,7 +448,6 @@ export async function POST(req: NextRequest) {
 
     // 4. Create profile row in tenant schema
     if (inviteData.user) {
-      await service.rpc("set_tenant_search_path", { schema_name: schemaName });
       await service.from("profiles").insert({
         id: inviteData.user.id,
         email: adminEmail,
@@ -588,54 +486,19 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-### Step 4.2 — Create provision_tenant_schema SQL function
+### Step 4.2 — provision_tenant_schema SQL function
 
-In **Project B** SQL editor:
-
-```sql
--- Called by the provisioning API to create a fresh tenant schema.
--- Runs as SECURITY DEFINER with service-role credentials so it can
--- CREATE SCHEMA and CREATE TABLE.
-CREATE OR REPLACE FUNCTION public.provision_tenant_schema(schema_name text)
-RETURNS void AS $$
-DECLARE
-  sql text;
-BEGIN
-  IF schema_name NOT LIKE 'tenant_%' THEN
-    RAISE EXCEPTION 'Invalid schema name: %', schema_name;
-  END IF;
-
-  -- Create schema
-  EXECUTE format('CREATE SCHEMA IF NOT EXISTS %I', schema_name);
-
-  -- Set search path and run table definitions
-  EXECUTE format('SET search_path TO %I', schema_name);
-
-  -- profiles
-  EXECUTE format($sql$
-    CREATE TABLE %I.profiles (
-      id uuid PRIMARY KEY,
-      email text NOT NULL,
-      full_name text NOT NULL DEFAULT '',
-      role text NOT NULL DEFAULT 'accountant'
-        CHECK (role IN (''super_admin'', ''admin'', ''accountant'')),
-      created_at timestamptz NOT NULL DEFAULT now()
-    )
-  $sql$, schema_name);
-
-  -- Repeat for expenses, sales, purchases, products, audit_logs, company_profile
-  -- (copy each CREATE TABLE block from tenant-schema-template.sql)
-  -- ...
-
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-> Tip: Rather than embedding all DDL in a PL/pgSQL string, you can use the
-> Supabase Management API to run raw SQL against Project B from your Node
-> provisioning script. That approach is easier to maintain — keep the template
-> SQL in `supabase/tenant-schema-template.sql` and `exec` it with the schema
-> name substituted.
+✅ Already defined in `supabase/migrations/005_tenant_provisioning.sql` —
+`public.provision_tenant_schema(schema_name text)`, `SECURITY DEFINER`,
+validates `schema_name LIKE 'tenant_%'`, then builds every table (`profiles`,
+`company_profile`, `products`, `expenses`, `sales`, `purchases`,
+`audit_logs`), trigger, RLS policy, index, and grant for the new schema via
+`EXECUTE format(...)`. This is the single source of truth for tenant schema
+shape — `006_bootstrap_tenant_kaufnest.sql` calls it for `tenant_kaufnest`,
+and `src/app/api/admin/provision-tenant/route.ts` calls it via
+`service.rpc("provision_tenant_schema", { schema_name })` for every
+dynamically-provisioned tenant. No separate template file or Node-side DDL
+step is needed.
 
 ### Step 4.3 — Add ADMIN_API_SECRET to environment
 
@@ -912,8 +775,8 @@ complete:
 
 1. **Never query `public.*` tables** — all data lives in tenant schemas.
    Queries must go through `createClient()` (which sets `db.schema` to the
-   tenant's schema) or `createServiceClientForTenant(schemaName)`. Do not use
-   `set_tenant_search_path` for routing — see Step 3.2.
+   tenant's schema) or `createServiceClientForTenant(schemaName)` — see
+   `src/lib/supabase/server.ts` and its `SKILL.md`.
 
 2. **Never hardcode a schema name** — always read it from
    `user.app_metadata.tenant_schema` or the `Tenant` object from the control
@@ -922,7 +785,8 @@ complete:
 3. **Never skip the schema validation guard** — the
    `provision_tenant_schema` SQL function rejects schema names that don't
    start with `tenant_`. Do not bypass this. Any new tenant schema must also
-   be added to Project B's "Exposed schemas" API setting (Step 3.3) or
+   be added to Project B's "Exposed schemas" API setting (Step 3.3) — handled
+   automatically by `addExposedSchema()` in `/api/admin/provision-tenant` — or
    PostgREST will reject all requests to it.
 
 4. **Control plane access is server-only** — `createControlClient()` uses the
@@ -934,9 +798,10 @@ complete:
    and the provisioning route may write those fields.
 
 6. **Schema migrations apply to all tenants** — when you add a column or table,
-   update `supabase/tenant-schema-template.sql` AND write a migration script
-   that runs `ALTER TABLE` in every existing `tenant_*` schema. Add a utility
-   function `src/lib/tenants/runMigrationOnAllTenants.ts` for this purpose.
+   update `provision_tenant_schema()` in
+   `supabase/migrations/005_tenant_provisioning.sql` (so new tenants get it)
+   AND write a migration script that runs `ALTER TABLE` in every existing
+   `tenant_*` schema. See `supabase/SKILL.md` for the full "3 places" rule.
 
 7. **Update AGENTS.md and feature CLAUDE.md files** after every phase — the
    working agreement in `AGENTS.md` (especially the data-flow section) must
@@ -959,16 +824,17 @@ Before marking a phase done, verify:
 - [x] All existing data copied and row counts match
 - [x] `set_user_tenant()` function exists and all existing users are stamped
 - [x] `anon`/`authenticated`/`service_role` granted USAGE + table privileges on
-      `tenant_kaufnest` (`005_grant_tenant_kaufnest_privileges.sql`)
+      `tenant_kaufnest` (grants section of `provision_tenant_schema()`, see
+      `005_tenant_provisioning.sql`)
 
 ### Phase 3
 - [x] `createClient()` in `server.ts` builds a `db: { schema: tenantSchema }` client
 - [x] `tenant_kaufnest` added to Project B's "Exposed schemas" API setting (Step 3.3)
 - [x] Routing verified with the diverging-value test (Step 3.3b) — confirmed
       `/dashboard` reads from `tenant_kaufnest`, not `public`
-- [x] `handle_new_user` trigger reworked/removed
-      (`006_remove_handle_new_user_trigger.sql`) and `users/invite/route.ts`
-      made tenant-aware
+- [x] `handle_new_user` trigger reworked/removed (step 5 of
+      `006_bootstrap_tenant_kaufnest.sql`) and `users/invite/route.ts` made
+      tenant-aware
 - [x] Browser client (`createTenantClient()` in `lib/supabase/client.ts`) is
       schema-aware; all 18 client-component CRUD call sites + `writeAuditLog`
       updated — pending manual browser test of Sales/Purchases/Expenses/
@@ -976,6 +842,10 @@ Before marking a phase done, verify:
 - [ ] Public schema tables dropped (only after the above are confirmed)
 
 ### Phase 4
+Code-complete: `/api/admin/provision-tenant` calls `provision_tenant_schema`,
+`addExposedSchema` (Management API), seeds `company_profile`/`profiles`, and
+invites the tenant admin — see `src/app/admin/SKILL.md`. Boxes below are
+end-to-end browser tests, still pending:
 - [ ] `/api/admin/provision-tenant` creates schema + profile + auth user in one call
 - [ ] New tenant's admin receives invite email and can log in
 - [ ] New tenant's data is fully isolated (cannot see KaufNest data)

@@ -60,10 +60,30 @@ export async function POST(request: Request) {
   });
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+  const tenantService = createServiceClientForTenant(tenantSchema);
+
+  // 3b. Reject duplicate invites up front. inviteUserByEmail silently resends
+  // (no error) for an email that already has a pending invite, so without this
+  // check the profiles insert below would either conflict on the existing PK
+  // (if the email was already invited to THIS tenant) or create a second
+  // profiles row in this tenant for a user that belongs to ANOTHER tenant —
+  // either way the Users table ends up with a duplicate row for that email.
+  const { data: existingProfile } = await tenantService
+    .from("profiles")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (existingProfile) {
+    return NextResponse.json(
+      { error: "A user with this email already exists in this team." },
+      { status: 409 }
+    );
+  }
 
   const { data: inviteData, error: inviteError } =
     await adminClient.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+      redirectTo: `${siteUrl}/auth/confirm?next=/set-password`,
       data: { full_name, tenant_schema: tenantSchema, role },
     });
 
@@ -71,18 +91,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: inviteError.message }, { status: 400 });
   }
 
+  // This email already has a pending/accepted invite in a different tenant —
+  // inviteUserByEmail returned that existing user instead of erroring. Reject
+  // rather than re-stamping app_metadata.tenant_schema to this tenant and
+  // creating a second profiles row for the same auth user.
+  const existingTenantSchema = inviteData.user?.app_metadata?.tenant_schema as string | undefined;
+  if (existingTenantSchema && existingTenantSchema !== tenantSchema) {
+    return NextResponse.json(
+      { error: "This email is already associated with another organization." },
+      { status: 409 }
+    );
+  }
+
   // 4. Create the profile row directly in the caller's tenant schema and
   // stamp app_metadata.tenant_schema — handle_new_user no longer does this,
-  // see supabase/migrations/006_remove_handle_new_user_trigger.sql
-  const tenantService = createServiceClientForTenant(tenantSchema);
-
+  // dropped in step 5 of supabase/migrations/006_bootstrap_tenant_kaufnest.sql
   if (inviteData.user) {
-    await tenantService.from("profiles").insert({
+    const { error: profileError } = await tenantService.from("profiles").insert({
       id: inviteData.user.id,
       email,
       full_name,
       role,
     });
+
+    if (profileError) {
+      return NextResponse.json(
+        { error: "Failed to create user profile.", detail: profileError.message },
+        { status: 500 }
+      );
+    }
 
     await adminClient.rpc("set_user_tenant", {
       user_id: inviteData.user.id,

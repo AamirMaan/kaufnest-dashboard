@@ -61,16 +61,55 @@ Handlers.
   `process.env.SUPABASE_SERVICE_ROLE_KEY` — the same var name `.env.local`
   already had pre-migration. Don't introduce a differently-named
   `SUPABASE_SERVICE_KEY`; keep this one name everywhere.
-- **Do not use `set_tenant_search_path`** (an RPC defined in
-  `supabase/migrations/003_saas_functions.sql`) for routing — `SET LOCAL
-  search_path` only lasts for that RPC's own transaction, and supabase-js
-  makes a separate request/transaction per call, so it has no effect on
-  subsequent queries. `db.schema` is the working alternative.
+- **`set_tenant_search_path` was removed entirely** (it was never used by app
+  code) — `SET LOCAL search_path` only lasts for that RPC's own transaction,
+  and supabase-js makes a separate request/transaction per call, so it would
+  have had no effect on subsequent queries anyway. `db.schema` (or `.schema()`)
+  is the working alternative used everywhere.
 - **Gotcha**: any schema passed via `db.schema` (or `.schema()`, see below)
   must be listed in the Supabase project's "Exposed schemas" API setting
   (Project Settings → API → Data API Settings) or PostgREST rejects the
-  request. `tenant_kaufnest` needs to be added there; new tenant schemas
-  created by the provisioning route need the same treatment (manual for now).
+  request. `tenant_kaufnest` is already listed; new tenant schemas created by
+  `/api/admin/provision-tenant` are added automatically via
+  `addExposedSchema()` (see below).
+
+## managementApi.ts
+
+`export async function addExposedSchema(schemaName: string)` — the only
+caller is `/api/admin/provision-tenant`. Uses the Supabase **Management API**
+(`api.supabase.com`, not the project's own PostgREST endpoint) to add
+`schemaName` to Project B's "Exposed schemas" (`db_schema`) config, so the
+inserts that follow (`company_profile`, `profiles` via
+`createServiceClientForTenant`) don't 404/406.
+
+- Requires `SUPABASE_ACCESS_TOKEN` (a personal access token from
+  https://supabase.com/dashboard/account/tokens) — separate from
+  `SUPABASE_SERVICE_ROLE_KEY` and `CONTROL_SUPABASE_SERVICE_KEY`. This token
+  is account-scoped (Management API has no per-project token scoping), so
+  treat it as sensitive as the service-role keys.
+- Project ref is derived from `NEXT_PUBLIC_SUPABASE_URL`
+  (`https://<ref>.supabase.co`) — no separate ref env var.
+- Idempotent: no-ops if `schemaName` is already in `db_schema`.
+- **Gotcha**: after a successful `PATCH`, PostgREST reloads its schema cache
+  asynchronously. `addExposedSchema` adds a fixed ~2s delay before returning to
+  avoid the very next request racing the reload. If provisioning still 404s on
+  `company_profile`/`profiles` right after this step, the reload may need more
+  time — don't remove the delay without a retry/backoff in its place.
+
+## control.ts
+
+`createControlClient()` — server-only client for Project A (control plane,
+`control` schema): `control.tenants` + `control.admin_users`. Used by
+`src/app/admin/*`, `src/app/api/admin/*`, and `src/app/dashboard/layout.tsx`.
+
+`isPlatformAdmin(email)` — `true` if `email` is in `control.admin_users`.
+Single source of truth for "is this user KaufNest platform staff", called
+from:
+- `src/app/admin/layout.tsx` — redirects to `/dashboard` if `false`.
+- `src/app/api/admin/*/route.ts`'s local `verifyPlatformAdmin()` wrappers.
+- `src/app/dashboard/layout.tsx` — gates the sidebar's "Admin Panel" link
+  (only shown if also `role === "super_admin"`, see
+  `src/app/dashboard/CLAUDE.md`).
 
 ## Gotcha: `src/proxy.ts` doesn't use either of these
 
@@ -93,6 +132,6 @@ instead of at client construction, since the proxy reuses one client for both
 
 Every feature that reads/writes Supabase imports one of these — pages and
 `_components/*Modal.tsx` files use `client.ts` (they're Client Components),
-while `app/auth/callback/route.ts` and `app/api/users/invite/route.ts` use
+while `app/auth/confirm/route.ts` and `app/api/users/invite/route.ts` use
 `server.ts`. `DashboardShell` and `dashboard/layout.tsx` also use the server
 client for the auth-guard/data-hydration pass.

@@ -94,7 +94,7 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {["Tenant", "Plan", "Status", "Trial Ends", "Created", "Actions"].map((h) => (
+                  {["Tenant", "Admin Email", "Plan", "Status", "Trial Ends", "Created", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="text-left text-xs font-semibold uppercase tracking-wider text-(--color-text-faint) pb-3 pr-4"
@@ -110,6 +110,9 @@ export default function AdminPage() {
                     <td className="py-3 pr-4">
                       <p className="font-medium text-(--color-text-strong)">{t.name}</p>
                       <p className="text-xs text-(--color-text-faint) font-mono">{t.schema_name}</p>
+                    </td>
+                    <td className="py-3 pr-4 text-(--color-text-muted)">
+                      {t.admin_email ?? "—"}
                     </td>
                     <td className="py-3 pr-4">
                       <Badge label={t.plan} variant={PLAN_VARIANT[t.plan]} />

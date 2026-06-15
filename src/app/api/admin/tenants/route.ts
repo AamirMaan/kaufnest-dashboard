@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createControlClient } from "@/lib/supabase/control";
+import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 
 // Shared helper: verify caller is a KaufNest platform admin via session
 export async function verifyPlatformAdmin(): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
@@ -11,15 +11,7 @@ export async function verifyPlatformAdmin(): Promise<{ ok: true } | { ok: false;
     return { ok: false, response: NextResponse.json({ error: "Unauthenticated" }, { status: 401 }) };
   }
 
-  const control = createControlClient();
-  const { data: adminUser } = await control
-    .schema("control")
-    .from("admin_users")
-    .select("id")
-    .eq("email", user.email)
-    .single();
-
-  if (!adminUser) {
+  if (!(await isPlatformAdmin(user.email))) {
     return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

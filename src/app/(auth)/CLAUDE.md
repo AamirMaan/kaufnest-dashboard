@@ -16,13 +16,19 @@ each page is a self-contained Supabase Auth form.
 
 ## Related files outside this folder (cannot be colocated)
 
-- `src/app/auth/callback/route.ts` — Supabase redirects here after an invite
-  or password-reset email link is clicked; it exchanges the PKCE `code` for a
-  session and redirects to `/set-password` (or `/dashboard`). Fixed at
-  `/auth/callback` by Supabase's "Redirect URL" config — can't move.
+- `src/app/auth/confirm/route.ts` — Supabase email links (invite,
+  password-reset) point here with `token_hash`+`type` query params; it calls
+  `supabase.auth.verifyOtp({ type, token_hash })` to create a session and
+  redirects to `/set-password` (or `/dashboard`). Fixed at `/auth/confirm` by
+  Supabase's "Redirect URLs" config — can't move. (Replaces the old
+  `/auth/callback` PKCE `exchangeCodeForSession` route — see
+  `(auth)/SKILL.md` for why.)
 - `src/app/api/users/invite/route.ts` — server-side half of the invite flow
   (see `dashboard/users/CLAUDE.md`); the email link it triggers lands on
   `set-password` here.
+- `src/app/api/admin/provision-tenant/route.ts` — invites a new tenant's
+  super_admin (see `src/app/admin/CLAUDE.md`); its `inviteUserByEmail` call
+  also points at `set-password` here via the same `redirectTo` pattern.
 - `src/proxy.ts` — route-level access control using `lib/utils/permissions.ts`;
   redirects unauthenticated users to `/login`.
 

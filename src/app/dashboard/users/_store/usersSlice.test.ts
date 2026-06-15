@@ -34,6 +34,13 @@ describe("usersSlice", () => {
     expect(state.items[1].id).toBe("user-2");
   });
 
+  it("does not duplicate an existing user via addUser", () => {
+    const initial = reducer(undefined, hydrateUsers([makeProfile({ id: "user-1" })]));
+    const duplicate = makeProfile({ id: "user-1", role: "admin" });
+    const state = reducer(initial, addUser(duplicate));
+    expect(state.items).toHaveLength(1);
+  });
+
   it("updates a user's role via updateUserRole", () => {
     const initial = reducer(undefined, hydrateUsers([makeProfile({ id: "u1", role: "accountant" })]));
     const state = reducer(initial, updateUserRole({ id: "u1", role: "admin" }));

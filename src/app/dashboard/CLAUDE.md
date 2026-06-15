@@ -11,7 +11,9 @@ broadly when working on a specific feature.**
   (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**)
   from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
   individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
-  cookie and passes it to `<DashboardShell>` for the impersonation banner.
+  cookie, and calls `isPlatformAdmin(user.email)` (`@/lib/supabase/control`) to
+  compute `isPlatformAdmin` — both are passed to `<DashboardShell>` (the
+  impersonation banner and the sidebar's "Admin Panel" link, respectively).
   Wraps everything in `<ToastProvider>` and `<DashboardShell>`.
   **If you add a new feature with its own collection, hydrate it here.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
@@ -56,9 +58,11 @@ broadly when working on a specific feature.**
 
 ## Shared shell components (live outside, in `src/components/layout/`)
 
-`DashboardShell` (header, user menu, theme toggle), `Sidebar` (nav + role-based
-links + collapse), `PageHeader` (page title/description/actions row used by
-every feature page).
+`DashboardShell` (header, user menu, theme toggle, impersonation banner —
+forwards `isPlatformAdmin` to `Sidebar`), `Sidebar` (nav + role-based links +
+collapse; renders an "Admin Panel" link to `/admin` when
+`role === "super_admin" && isPlatformAdmin`), `PageHeader` (page
+title/description/actions row used by every feature page).
 
 ## Cross-cutting state & infra
 

@@ -83,9 +83,10 @@ editable fields.
   modals show a "Item can be resold (restock inventory)" `Checkbox` only in
   that case, and force `restock = false` for every other status before
   writing.
-- **Stock trigger** (`apply_sale_stock_change()`, migration
-  `007_add_order_status.sql`, mirrored in `public` and `tenant_kaufnest`):
-  the stock delta for a row is `0` when `status = 'returned' AND restock`
+- **Stock trigger** (`apply_sale_stock_change()` — `003_add_order_status.sql`
+  for `public`, baked into `provision_tenant_schema()` in
+  `005_tenant_provisioning.sql` for `tenant_kaufnest` and every other tenant
+  schema): the stock delta for a row is `0` when `status = 'returned' AND restock`
   (net stock effect of the sale cancels out — item goes back to sellable
   stock), otherwise `-quantity` as before (normal sale, or a returned/written-off
   item that can't be resold). **Don't add client-side stock math** — same rule

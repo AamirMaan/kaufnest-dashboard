@@ -27,8 +27,11 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
   `user.app_metadata`, inserts the new user's profile directly into
   `tenant_<schema>.profiles` via `createServiceClientForTenant()`, and stamps
   the invitee's own `app_metadata.tenant_schema` via the `set_user_tenant` RPC
-  (`public.handle_new_user` no longer auto-creates profile rows — see
-  `supabase/migrations/006_remove_handle_new_user_trigger.sql`).
+  (`public.handle_new_user` no longer auto-creates profile rows — dropped in
+  step 5 of `supabase/migrations/006_bootstrap_tenant_kaufnest.sql`).
+  Before inviting, it rejects (409) if `email` already has a `profiles` row in
+  this tenant, or already belongs to a different tenant — see the
+  duplicate-email gotcha in `SKILL.md`.
 
 ## Data flow
 

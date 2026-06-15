@@ -20,7 +20,9 @@ export const usersSlice = createSlice({
       state.loaded = true;
     },
     addUser(state, action: PayloadAction<Profile>) {
-      state.items.push(action.payload);
+      if (!state.items.some((u) => u.id === action.payload.id)) {
+        state.items.push(action.payload);
+      }
     },
     updateUserRole(
       state,

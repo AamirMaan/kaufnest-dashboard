@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
-import { Field, Input, Textarea, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useInvoiceSettings, type InvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { generateSalesInvoice } from "@/lib/utils/generateInvoice";
+import { createTenantClient } from "@/lib/supabase/client";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { FileDown } from "lucide-react";
-import type { Sale } from "@/types";
+import type { CompanyProfile, Currency, Sale } from "@/types";
 
 const DEMO_SALE: Sale = {
   id: "demo",
@@ -29,19 +32,63 @@ const DEMO_SALE: Sale = {
   restock: false,
 };
 
+const COMPANY_PROFILE_ROLES = ["admin", "super_admin"];
+
 export default function SettingsPage() {
   const { settings, save } = useInvoiceSettings();
-  const { success, warning } = useToast();
+  const { success, warning, error: toastError } = useToast();
   const [form, setForm] = useState<InvoiceSettings>(settings);
+
+  const dispatch = useAppDispatch();
+  const companyProfile = useAppSelector((s) => s.companyProfile.profile);
+  const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const canEditCompanyProfile = role ? COMPANY_PROFILE_ROLES.includes(role) : false;
+  const [companyForm, setCompanyForm] = useState<CompanyProfile | null>(companyProfile);
+  const [savingCompanyProfile, setSavingCompanyProfile] = useState(false);
 
   function set<K extends keyof InvoiceSettings>(key: K, value: InvoiceSettings[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setCompany<K extends keyof CompanyProfile>(key: K, value: CompanyProfile[K]) {
+    setCompanyForm((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     save(form);
     success("Settings saved", "Your invoice settings have been updated.");
+  }
+
+  async function handleCompanyProfileSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!companyForm) return;
+    setSavingCompanyProfile(true);
+
+    const supabase = await createTenantClient();
+    const { data, error: dbError } = await supabase
+      .from("company_profile")
+      .update({
+        name: companyForm.name,
+        logo_url: companyForm.logo_url,
+        vat_number: companyForm.vat_number,
+        address: companyForm.address,
+        currency: companyForm.currency,
+        timezone: companyForm.timezone,
+      })
+      .eq("id", companyForm.id)
+      .select()
+      .single<CompanyProfile>();
+
+    setSavingCompanyProfile(false);
+
+    if (dbError) {
+      toastError("Failed to save company profile", dbError.message);
+      return;
+    }
+
+    dispatch(hydrateCompanyProfile(data));
+    success("Company profile saved", "Your company details have been updated.");
   }
 
   async function handleDemoInvoice() {
@@ -58,6 +105,84 @@ export default function SettingsPage() {
         title="Settings"
         description="Configure your company and invoice details"
       />
+
+      {companyForm && (
+        <form onSubmit={handleCompanyProfileSubmit} className="max-w-2xl space-y-8 mb-8">
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Company Profile
+            </h2>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Shared organization details for your KaufNest workspace.
+              {!canEditCompanyProfile && " Only admins can make changes."}
+            </p>
+
+            <Field label="Company Name" required>
+              <Input
+                value={companyForm.name}
+                onChange={(e) => setCompany("name", e.target.value)}
+                disabled={!canEditCompanyProfile}
+                placeholder="Acme GmbH"
+              />
+            </Field>
+
+            <Field label="Logo URL">
+              <Input
+                value={companyForm.logo_url ?? ""}
+                onChange={(e) => setCompany("logo_url", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="https://example.com/logo.png"
+              />
+            </Field>
+
+            <Field label="VAT Number">
+              <Input
+                value={companyForm.vat_number ?? ""}
+                onChange={(e) => setCompany("vat_number", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="DE123456789"
+              />
+            </Field>
+
+            <Field label="Address">
+              <Textarea
+                value={companyForm.address ?? ""}
+                onChange={(e) => setCompany("address", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="Street, ZIP, city, country"
+              />
+            </Field>
+
+            <Row>
+              <Field label="Currency">
+                <Select
+                  value={companyForm.currency}
+                  onChange={(e) => setCompany("currency", e.target.value as Currency)}
+                  disabled={!canEditCompanyProfile}
+                >
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                </Select>
+              </Field>
+              <Field label="Timezone">
+                <Input
+                  value={companyForm.timezone}
+                  onChange={(e) => setCompany("timezone", e.target.value)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="Europe/Berlin"
+                />
+              </Field>
+            </Row>
+
+            {canEditCompanyProfile && (
+              <Button type="submit" disabled={savingCompanyProfile}>
+                {savingCompanyProfile ? "Saving…" : "Save Company Profile"}
+              </Button>
+            )}
+          </section>
+        </form>
+      )}
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
         {/* Company Details */}

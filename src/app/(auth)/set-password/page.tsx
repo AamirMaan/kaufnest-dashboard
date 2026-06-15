@@ -45,6 +45,12 @@ export default function SetPasswordPage() {
       return;
     }
 
+    // Re-mint the access token so app_metadata.tenant_schema (stamped by
+    // set_user_tenant during provisioning/invite) is present on the JWT —
+    // otherwise dashboard/layout.tsx's createClient() falls back to the
+    // public schema and the profiles lookup returns no row.
+    await supabase.auth.refreshSession();
+
     setState("success");
     setTimeout(() => router.push("/dashboard"), 1500);
   }

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdmin } from "@/lib/supabase/control";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -81,6 +82,9 @@ export default async function DashboardLayout({
   const cookieStore = await cookies();
   const impersonatingTenant = cookieStore.get("kaufnest_impersonating")?.value ?? null;
 
+  // KaufNest platform admin? Drives the "Admin Panel" sidebar link.
+  const isAdmin = await isPlatformAdmin(user.email);
+
   return (
     <StoreProvider
       sales={sales ?? []}
@@ -98,6 +102,7 @@ export default async function DashboardLayout({
           fullName={profile.full_name}
           email={profile.email}
           impersonatingTenant={impersonatingTenant}
+          isPlatformAdmin={isAdmin}
         >
           {children}
         </DashboardShell>

@@ -155,6 +155,7 @@ export interface Tenant {
   name: string;
   slug: string;
   schema_name: string;
+  admin_email: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   plan: TenantPlan;

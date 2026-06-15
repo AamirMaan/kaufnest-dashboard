@@ -14,9 +14,10 @@ interface Props {
   email: string;
   children: React.ReactNode;
   impersonatingTenant?: string | null;
+  isPlatformAdmin?: boolean;
 }
 
-export function DashboardShell({ role, fullName, email, children, impersonatingTenant }: Props) {
+export function DashboardShell({ role, fullName, email, children, impersonatingTenant, isPlatformAdmin }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -155,6 +156,7 @@ export function DashboardShell({ role, fullName, email, children, impersonatingT
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           role={role}
+          isPlatformAdmin={isPlatformAdmin}
           collapsed={collapsed}
           onToggle={() => setCollapsed((c) => !c)}
           mobileOpen={mobileOpen}

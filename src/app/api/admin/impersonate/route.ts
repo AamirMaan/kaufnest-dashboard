@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createControlClient } from "@/lib/supabase/control";
+import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
@@ -8,15 +8,7 @@ async function verifyPlatformAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const control = createControlClient();
-  const { data: adminUser } = await control
-    .schema("control")
-    .from("admin_users")
-    .select("id")
-    .eq("email", user.email)
-    .single();
-
-  return adminUser ? user : null;
+  return (await isPlatformAdmin(user.email)) ? user : null;
 }
 
 export async function POST(req: NextRequest) {

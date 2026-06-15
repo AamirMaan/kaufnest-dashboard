@@ -64,7 +64,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   rather than passing `null`. Passing `null` is a TypeScript error.
 - **Returned orders are excluded from revenue/profit everywhere.** The stock
   delta formula in `apply_sale_stock_change()` (migration
-  `007_add_order_status.sql`, both `public` and `tenant_kaufnest` schemas) is
+  `003_add_order_status.sql` for `public`; baked into
+  `provision_tenant_schema()` in `005_tenant_provisioning.sql` for every
+  tenant schema including `tenant_kaufnest`) is
   `(status = 'returned' AND restock) ? 0 : -quantity`. If you add a new
   revenue/profit aggregation (in this page's `summary` or in
   `app/dashboard/page.tsx`'s StatCards/charts), filter out

@@ -43,3 +43,13 @@ create trigger tenants_updated_at
 -- Enable RLS (service-role key bypasses this; blocks anon/authenticated by default)
 alter table control.tenants enable row level security;
 alter table control.admin_users enable row level security;
+
+-- ============================================================
+-- Register tenant_kaufnest (Phase 2)
+-- Run AFTER supabase/migrations/006_bootstrap_tenant_kaufnest.sql has been
+-- applied successfully in PROJECT B. Merged from the former
+-- 002_register_tenant_kaufnest.sql.
+-- ============================================================
+
+insert into control.tenants (name, slug, schema_name, plan, status)
+values ('KaufNest', 'kaufnest', 'tenant_kaufnest', 'business', 'active');

@@ -40,3 +40,20 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   re-login). It writes the new profile via `createServiceClientForTenant()`,
   not a plain `public`-schema client — there is no `handle_new_user` trigger
   to fall back on anymore.
+- If invited users report they can't set a password / can't log in after
+  accepting the invite, the `redirectTo` this route passes to
+  `inviteUserByEmail` (`${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`)
+  is correct, but the Supabase Dashboard's "Redirect URLs" allowlist may not
+  include it — see the gotchas in `src/app/(auth)/SKILL.md` for the full
+  invite→set-password→login chain and what to check.
+- **Duplicate-email guard**: `inviteUserByEmail` does NOT error for an email
+  that already has a pending (unconfirmed) invite — it silently resends and
+  returns the *existing* `auth.users` row. Before calling it, the route now
+  checks `tenant_<schema>.profiles` for that email (`.ilike`) and 409s with "A
+  user with this email already exists in this team." if found. After the
+  invite call, it also checks `inviteData.user.app_metadata?.tenant_schema` —
+  if the returned user already belongs to a *different* tenant, it 409s with
+  "This email is already associated with another organization." instead of
+  inserting a second `profiles` row and re-stamping `tenant_schema` to this
+  tenant (which would silently move that user out of their original tenant).
+  `usersSlice.addUser` also dedupes by `id` as a second line of defense.

@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Users,
   Settings,
+  Shield,
   X,
   ChevronLeft,
   ChevronRight,
@@ -83,6 +84,7 @@ const NAV_ITEMS: NavItem[] = [
 
 interface SidebarProps {
   role: UserRole;
+  isPlatformAdmin?: boolean;
   collapsed: boolean;
   onToggle: () => void;
   mobileOpen: boolean;
@@ -91,6 +93,7 @@ interface SidebarProps {
 
 export function Sidebar({
   role,
+  isPlatformAdmin,
   collapsed,
   onToggle,
   mobileOpen,
@@ -99,6 +102,7 @@ export function Sidebar({
   const pathname = usePathname();
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
+  const showAdminLink = role === "super_admin" && isPlatformAdmin;
 
   return (
     <aside
@@ -166,6 +170,25 @@ export function Sidebar({
             </Link>
           );
         })}
+
+        {showAdminLink && (
+          <Link
+            href="/admin"
+            onClick={onMobileClose}
+            title={collapsed ? "Admin Panel" : undefined}
+            className={[
+              "flex items-center gap-3 rounded-[var(--radius-btn)] text-sm font-medium transition-colors",
+              "mt-2 pt-2 border-t border-[var(--color-sidebar-border)]",
+              collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
+              pathname.startsWith("/admin")
+                ? "bg-[var(--color-sidebar-active)] text-white"
+                : "text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)]",
+            ].join(" ")}
+          >
+            <Shield size={18} strokeWidth={1.75} className="shrink-0" />
+            <span className={collapsed ? "md:hidden" : ""}>Admin Panel</span>
+          </Link>
+        )}
       </nav>
     </aside>
   );

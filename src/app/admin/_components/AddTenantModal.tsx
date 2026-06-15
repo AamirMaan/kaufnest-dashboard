@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/FormFields";
+import { useToast } from "@/components/ui/Toast";
 
 interface Props {
   open: boolean;
@@ -18,6 +19,7 @@ const selectCls =
   "w-full rounded-[var(--radius-btn)] border border-(--color-border) bg-(--color-surface) px-2.5 py-2 text-sm text-(--color-text-strong) focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
 
 export function AddTenantModal({ open, onClose }: Props) {
+  const toast = useToast();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [plan, setPlan] = useState<Plan>("trial");
@@ -43,16 +45,21 @@ export function AddTenantModal({ open, onClose }: Props) {
         body: JSON.stringify({ name, slug, plan, adminEmail, adminName }),
       });
 
-      const data = (await res.json()) as { ok?: boolean; error?: string };
+      const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
 
       if (!res.ok) {
-        setError(data.error ?? "Provisioning failed");
+        const message = data.detail ?? data.error ?? "Provisioning failed";
+        setError(message);
+        toast.error("Failed to create tenant", message);
         return;
       }
 
+      toast.success("Tenant created", `${name} has been provisioned.`);
       handleClose();
     } catch {
-      setError("Network error — please try again");
+      const message = "Network error — please try again";
+      setError(message);
+      toast.error("Failed to create tenant", message);
     } finally {
       setLoading(false);
     }
