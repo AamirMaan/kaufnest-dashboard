@@ -43,9 +43,13 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
 - If invited users report they can't set a password / can't log in after
   accepting the invite, the `redirectTo` this route passes to
   `inviteUserByEmail` (`${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`)
-  is correct, but the Supabase Dashboard's "Redirect URLs" allowlist may not
-  include it — see the gotchas in `src/app/(auth)/SKILL.md` for the full
-  invite→set-password→login chain and what to check.
+  is no longer what builds the email link — check the Supabase Dashboard
+  (Authentication → Email Templates → "Invite user") instead: the link must be
+  `{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite`,
+  not `{{ .ConfirmationURL }}` or `{{ .RedirectTo }}` (the latter is a known
+  Supabase bug that falls back to a bare, broken Site URL — see the gotchas in
+  `src/app/(auth)/SKILL.md` for the full invite→set-password→login chain and
+  what to check).
 - **Duplicate-email guard**: `inviteUserByEmail` does NOT error for an email
   that already has a pending (unconfirmed) invite — it silently resends and
   returns the *existing* `auth.users` row. Before calling it, the route now

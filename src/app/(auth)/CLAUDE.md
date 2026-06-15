@@ -19,16 +19,20 @@ each page is a self-contained Supabase Auth form.
 - `src/app/auth/confirm/route.ts` — Supabase email links (invite,
   password-reset) point here with `token_hash`+`type` query params; it calls
   `supabase.auth.verifyOtp({ type, token_hash })` to create a session and
-  redirects to `/set-password` (or `/dashboard`). Fixed at `/auth/confirm` by
-  Supabase's "Redirect URLs" config — can't move. (Replaces the old
-  `/auth/callback` PKCE `exchangeCodeForSession` route — see
+  redirects to `/set-password` (or `/dashboard`). Fixed at `/auth/confirm`
+  because `email-templates/invite.html`/`reset-password.html` hardcode
+  `{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=...`
+  — can't move without updating both templates in the Supabase Dashboard.
+  (Replaces the old `/auth/callback` PKCE `exchangeCodeForSession` route — see
   `(auth)/SKILL.md` for why.)
 - `src/app/api/users/invite/route.ts` — server-side half of the invite flow
   (see `dashboard/users/CLAUDE.md`); the email link it triggers lands on
   `set-password` here.
 - `src/app/api/admin/provision-tenant/route.ts` — invites a new tenant's
-  super_admin (see `src/app/admin/CLAUDE.md`); its `inviteUserByEmail` call
-  also points at `set-password` here via the same `redirectTo` pattern.
+  super_admin (see `src/app/admin/CLAUDE.md`); the invite email's link to
+  `set-password` here comes from `email-templates/invite.html`'s `{{ .SiteURL }}`
+  path, not the `redirectTo` this route passes (kept harmlessly — see
+  `(auth)/SKILL.md`).
 - `src/proxy.ts` — route-level access control using `lib/utils/permissions.ts`;
   redirects unauthenticated users to `/login`.
 

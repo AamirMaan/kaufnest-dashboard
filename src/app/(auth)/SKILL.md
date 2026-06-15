@@ -34,18 +34,11 @@ No test suite targets these pages — they're thin wrappers over
 - The Supabase redirect URL (`/auth/confirm`) and the invite/reset email
   templates are configured outside this codebase (Supabase Dashboard) — if you
   change a route path here, that config must be updated too.
-- **Every `inviteUserByEmail`/`resetPasswordForEmail` call must pass
-  `redirectTo: ${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`**
-  (both `/api/users/invite` and `/api/admin/provision-tenant` do this). Without
-  it, `{{ .RedirectTo }}` in the email template (see next gotcha) falls back
-  to the project's Site URL, `verifyOtp` redirects there instead of
-  `/auth/confirm`, and the invited user lands with no session and no path to
-  `/set-password`.
-- **Email templates use `{{ .TokenHash }}` + `{{ .RedirectTo }}`, not
-  `{{ .ConfirmationURL }}`**: `email-templates/invite.html` and
-  `reset-password.html` link to
-  `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite` (or
-  `type=recovery`) — a link on **our own domain** — instead of
+- **Email templates use `{{ .TokenHash }}` + `{{ .SiteURL }}`, not
+  `{{ .ConfirmationURL }}` or `{{ .RedirectTo }}`**: `email-templates/invite.html`
+  and `reset-password.html` link to
+  `{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite`
+  (or `type=recovery`) — a link on **our own domain** — instead of
   `{{ .ConfirmationURL }}` (a `*.supabase.co/auth/v1/verify` link).
   `/auth/confirm/route.ts` then calls
   `supabase.auth.verifyOtp({ type, token_hash })`. This is the fix for
@@ -58,14 +51,27 @@ No test suite targets these pages — they're thin wrappers over
   https://supabase.com/docs/guides/troubleshooting/otp-verification-failures-token-has-expired-or-otp_expired-errors-5ee4d0.
   Routing through our own domain first removes the `*.supabase.co` link that
   triggers this.
-- **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**
-  must also include `<NEXT_PUBLIC_SITE_URL>/auth/confirm**` (wildcard) — if
-  `redirectTo` doesn't match an allow-listed pattern, `{{ .RedirectTo }}` in
-  the email template falls back to Site URL with the same broken result. For
-  local testing of invite/reset emails, add
-  `http://localhost:3000/auth/confirm**` too and temporarily set
-  `NEXT_PUBLIC_SITE_URL=http://localhost:3000` in `.env.local` (email links are
-  built from this env var, not the request origin).
+- **Why `{{ .SiteURL }}` instead of `{{ .RedirectTo }}`**: `{{ .RedirectTo }}`
+  only renders the actual `redirectTo`/`emailRedirectTo` value if it matches
+  an entry in Authentication → URL Configuration → Redirect URLs (wildcards
+  supported) — otherwise it silently falls back to the bare Site URL with no
+  path, producing a broken link like `https://dashboard.kaufnest.com&token_hash=...`.
+  This is a [known open Supabase bug](https://github.com/supabase/supabase/issues/29156)
+  even with a correctly wildcarded allow-list entry. `{{ .SiteURL }}` is the
+  project's configured Site URL and is **always** rendered (no allow-list
+  check), so the templates hardcode the rest of the path
+  (`/auth/confirm?next=/set-password`) — safe because both invite and reset
+  always land on `/set-password` in this app. The `redirectTo` passed by
+  `inviteUserByEmail`/`resetPasswordForEmail` in `/api/users/invite`,
+  `/api/admin/provision-tenant`, and `forgot-password/page.tsx` is no longer
+  referenced by the templates, but is left in place (harmless) for any future
+  flow that does use `{{ .RedirectTo }}`.
+- **Local testing caveat**: because the link is built from `{{ .SiteURL }}`,
+  invite/reset emails always point at the project's configured Site URL
+  (production, `https://dashboard.kaufnest.com`) — not `localhost`. To test
+  the full email flow locally, temporarily set Authentication → URL
+  Configuration → Site URL to `http://localhost:3000`, trigger the email, then
+  change it back.
 - `set-password/page.tsx` calls `supabase.auth.refreshSession()` after
   `updateUser` succeeds, before redirecting to `/dashboard` — re-mints the JWT
   so `app_metadata.tenant_schema` (written by `set_user_tenant` during

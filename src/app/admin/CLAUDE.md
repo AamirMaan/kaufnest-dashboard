@@ -48,8 +48,10 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   5. `service.auth.admin.inviteUserByEmail(adminEmail, { redirectTo:
      "${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password", data: {
      full_name, tenant_schema, role: "super_admin" } })` — same `redirectTo`
-     pattern as `/api/users/invite` (see `src/app/(auth)/SKILL.md` for why this
-     is required). If `adminEmail` already belongs to another tenant (detected
+     pattern as `/api/users/invite`, kept for compatibility, but the invite
+     email's actual link is built by `email-templates/invite.html` from
+     `{{ .SiteURL }}`, not `redirectTo` (see `src/app/(auth)/SKILL.md`). If
+     `adminEmail` already belongs to another tenant (detected
      via `inviteData.user.app_metadata.tenant_schema`), provisioning aborts
      with `detail: 'Admin email "..." is already associated with another
      tenant...'` — see the duplicate-email gotcha in `SKILL.md`. Otherwise,

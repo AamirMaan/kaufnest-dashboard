@@ -40,7 +40,7 @@
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 28px;">
                 <tr>
                   <td style="border-radius:8px;background-color:#6366f1;">
-                    <a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite"
+                    <a href="{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite"
                        target="_blank"
                        style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
                       Accept invitation &rarr;
@@ -57,8 +57,8 @@
                 If the button doesn't work, copy and paste this link into your browser:
               </p>
               <p style="margin:0;font-size:12px;word-break:break-all;">
-                <a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite" style="color:#6366f1;text-decoration:none;">
-                  {{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite
+                <a href="{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite" style="color:#6366f1;text-decoration:none;">
+                  {{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite
                 </a>
               </p>
 

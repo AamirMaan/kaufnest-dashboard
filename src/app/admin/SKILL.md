@@ -63,13 +63,15 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   is the raw Supabase/Postgres message via the local `errorMessage()` helper.
   Always surface `detail` (not just `error`, which is a generic
   "Provisioning failed"), or admins can't tell *why* it failed.
-- **`inviteUserByEmail` needs `redirectTo`**: step 5 of `provision-tenant`
-  passes `redirectTo: ${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password`
-  — without it the invite email's link falls back to the Supabase project's
-  Site URL and the new admin never reaches `/set-password`. See
-  `src/app/(auth)/SKILL.md` for the full gotcha incl. the `{{ .TokenHash }}`
-  email template pattern and the Supabase Dashboard "Redirect URLs" allowlist
-  requirement.
+- **Invite email link is built from `{{ .SiteURL }}`, not `redirectTo`**: step
+  5 of `provision-tenant` still passes
+  `redirectTo: ${NEXT_PUBLIC_SITE_URL}/auth/confirm?next=/set-password` to
+  `inviteUserByEmail`, but `email-templates/invite.html` builds the actual link
+  as `{{ .SiteURL }}/auth/confirm?next=/set-password&token_hash={{ .TokenHash }}&type=invite`
+  — `redirectTo` is no longer referenced by the template (left in place
+  harmlessly). See `src/app/(auth)/SKILL.md` for the full `{{ .TokenHash }}` /
+  `{{ .SiteURL }}` email template pattern and why `{{ .RedirectTo }}` was
+  dropped.
 - **`adminEmail` reuse across tenants is rejected**: `inviteUserByEmail` does
   NOT error for an email with an existing pending/accepted invite — it
   silently resends and returns that *existing* `auth.users` row (from whatever
