@@ -109,10 +109,11 @@ bundle — keep that pattern if you touch the imports.
 
 - `generateSalesInvoice(sales, settings)`, `generateExpensesInvoice(expenses, settings)`,
   `generatePurchasesInvoice(purchases, settings)` — each builds a `jsPDF` doc,
-  renders a header (company info from `InvoiceSettings`, see `lib/hooks/SKILL.md`),
-  an `autoTable` of rows, a per-currency totals block, a footer, then
-  `doc.save(...)`. All `async`, all trigger a browser download directly —
-  there's no return value to await for.
+  renders a header/footer (company info from `CompanyProfile`, `src/types` —
+  per-tenant row from `company_profile`, read via `companyProfileSlice`), an
+  `autoTable` of rows, a per-currency totals block, then `doc.save(...)`. All
+  `async`, all trigger a browser download directly — there's no return value
+  to await for.
 - The per-currency totals block sums both `total_amount`/`amount` (→ `byCurrency`)
   and `vat_amount` (→ `vatByCurrency`, only entries with a non-zero sum) and
   renders a "Total (CUR): …" line followed by an optional "VAT (CUR): …" line

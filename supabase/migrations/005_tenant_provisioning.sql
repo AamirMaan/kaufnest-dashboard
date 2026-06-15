@@ -177,14 +177,24 @@ BEGIN
 
   EXECUTE format($sql$
     CREATE TABLE IF NOT EXISTS %1$I.company_profile (
-      id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      name       text NOT NULL,
-      logo_url   text,
-      vat_number text,
-      address    text,
-      currency   text NOT NULL DEFAULT 'EUR',
-      timezone   text NOT NULL DEFAULT 'UTC',
-      updated_at timestamptz NOT NULL DEFAULT now()
+      id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name           text NOT NULL,
+      logo_url       text,
+      vat_number     text,
+      tax_id         text,
+      address        text,
+      phone          text,
+      email          text,
+      currency       text NOT NULL DEFAULT 'EUR',
+      timezone       text NOT NULL DEFAULT 'UTC',
+      vat_rate       numeric NOT NULL DEFAULT 19,
+      bank_name      text,
+      iban           text,
+      bic            text,
+      invoice_prefix text NOT NULL DEFAULT 'INV-',
+      payment_terms  text NOT NULL DEFAULT '30 days',
+      footer_notes   text,
+      updated_at     timestamptz NOT NULL DEFAULT now()
     )
   $sql$, schema_name);
 

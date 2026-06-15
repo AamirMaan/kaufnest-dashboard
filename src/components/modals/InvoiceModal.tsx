@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FileDown, AlertCircle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
+import { useAppSelector } from "@/store/hooks";
 import {
   generateSalesInvoice,
   generateExpensesInvoice,
@@ -61,19 +61,20 @@ export function InvoiceModal(props: Props) {
   const { open, type, items, onClose, onSuccess } = props;
   const [generating, setGenerating] = useState(false);
 
-  const settings = readInvoiceSettings();
-  const noCompany = !settings.companyName.trim();
+  const companyProfile = useAppSelector((s) => s.companyProfile.profile);
+  const noCompany = !companyProfile?.name?.trim();
   const byCurrency = totals(items, type);
 
   const typeLabel =
     type === "sale" ? "Sales Invoice" : type === "expense" ? "Expense Report" : "Purchase Report";
 
   async function handleGenerate() {
+    if (!companyProfile) return;
     setGenerating(true);
     try {
-      if (type === "sale") await generateSalesInvoice(items as Sale[], settings);
-      else if (type === "expense") await generateExpensesInvoice(items as Expense[], settings);
-      else await generatePurchasesInvoice(items as Purchase[], settings);
+      if (type === "sale") await generateSalesInvoice(items as Sale[], companyProfile);
+      else if (type === "expense") await generateExpensesInvoice(items as Expense[], companyProfile);
+      else await generatePurchasesInvoice(items as Purchase[], companyProfile);
       onSuccess?.();
     } finally {
       setGenerating(false);
@@ -91,7 +92,7 @@ export function InvoiceModal(props: Props) {
           <Button variant="secondary" onClick={onClose} disabled={generating}>
             Cancel
           </Button>
-          <Button onClick={handleGenerate} disabled={generating || items.length === 0}>
+          <Button onClick={handleGenerate} disabled={generating || items.length === 0 || !companyProfile}>
             <FileDown size={15} />
             {generating ? "Generating…" : "Download PDF"}
           </Button>

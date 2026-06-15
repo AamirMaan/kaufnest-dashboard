@@ -24,6 +24,7 @@ Two Supabase projects:
 | `migrations/004_performance_indexes.sql` | `tenant_kaufnest.*` | ⏳ **apply now** — 6 new growth indexes on the live tenant schema |
 | `migrations/005_tenant_provisioning.sql` | `public` functions | ✅ applied — defines `provision_tenant_schema()` + `set_user_tenant()`, used by Phase 4 |
 | `migrations/006_bootstrap_tenant_kaufnest.sql` | `tenant_kaufnest` | ✅ applied — **do not re-run**, historical record only |
+| `migrations/007_company_profile_invoice_fields.sql` | `tenant_kaufnest.company_profile` | ⏳ **apply now** — adds `tax_id`/`phone`/`email`/`vat_rate`/`bank_name`/`iban`/`bic`/`invoice_prefix`/`payment_terms`/`footer_notes` columns (folds the old localStorage invoice settings into `company_profile`) |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
@@ -32,7 +33,7 @@ Two Supabase projects:
 grants in place, and Phase 3 client routing verified (see
 `SAAS_MIGRATION.md` Phase 2/3 checklists). With 005 applied, Phase 4 dynamic
 provisioning (`/api/admin/provision-tenant`) is code-complete — see
-`src/app/admin/SKILL.md`. The one outstanding piece is 004, which is
+`src/app/admin/SKILL.md`. The outstanding pieces are 004 and 007, both
 additive/idempotent and safe to run anytime.
 
 ## Apply order (for a fresh Project B, disaster recovery)

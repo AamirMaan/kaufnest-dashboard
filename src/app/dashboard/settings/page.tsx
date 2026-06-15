@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
-import { useInvoiceSettings, type InvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { generateSalesInvoice } from "@/lib/utils/generateInvoice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -35,9 +34,7 @@ const DEMO_SALE: Sale = {
 const COMPANY_PROFILE_ROLES = ["admin", "super_admin"];
 
 export default function SettingsPage() {
-  const { settings, save } = useInvoiceSettings();
   const { success, warning, error: toastError } = useToast();
-  const [form, setForm] = useState<InvoiceSettings>(settings);
 
   const dispatch = useAppDispatch();
   const companyProfile = useAppSelector((s) => s.companyProfile.profile);
@@ -46,18 +43,8 @@ export default function SettingsPage() {
   const [companyForm, setCompanyForm] = useState<CompanyProfile | null>(companyProfile);
   const [savingCompanyProfile, setSavingCompanyProfile] = useState(false);
 
-  function set<K extends keyof InvoiceSettings>(key: K, value: InvoiceSettings[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
   function setCompany<K extends keyof CompanyProfile>(key: K, value: CompanyProfile[K]) {
     setCompanyForm((prev) => (prev ? { ...prev, [key]: value } : prev));
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    save(form);
-    success("Settings saved", "Your invoice settings have been updated.");
   }
 
   async function handleCompanyProfileSubmit(e: React.FormEvent) {
@@ -72,9 +59,19 @@ export default function SettingsPage() {
         name: companyForm.name,
         logo_url: companyForm.logo_url,
         vat_number: companyForm.vat_number,
+        tax_id: companyForm.tax_id,
         address: companyForm.address,
+        phone: companyForm.phone,
+        email: companyForm.email,
         currency: companyForm.currency,
         timezone: companyForm.timezone,
+        vat_rate: companyForm.vat_rate,
+        bank_name: companyForm.bank_name,
+        iban: companyForm.iban,
+        bic: companyForm.bic,
+        invoice_prefix: companyForm.invoice_prefix,
+        payment_terms: companyForm.payment_terms,
+        footer_notes: companyForm.footer_notes,
       })
       .eq("id", companyForm.id)
       .select()
@@ -92,10 +89,11 @@ export default function SettingsPage() {
   }
 
   async function handleDemoInvoice() {
-    if (!form.companyName.trim()) {
+    if (!companyForm) return;
+    if (!companyForm.name.trim()) {
       warning("Company name missing", "Add your company name in settings before generating invoices.");
     }
-    await generateSalesInvoice([DEMO_SALE], form);
+    await generateSalesInvoice([DEMO_SALE], companyForm);
     success("Demo invoice downloaded", "PDF saved to your downloads folder.");
   }
 
@@ -107,7 +105,7 @@ export default function SettingsPage() {
       />
 
       {companyForm && (
-        <form onSubmit={handleCompanyProfileSubmit} className="max-w-2xl space-y-8 mb-8">
+        <form onSubmit={handleCompanyProfileSubmit} className="max-w-2xl space-y-8">
           <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
             <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
               Company Profile
@@ -132,15 +130,6 @@ export default function SettingsPage() {
                 onChange={(e) => setCompany("logo_url", e.target.value || null)}
                 disabled={!canEditCompanyProfile}
                 placeholder="https://example.com/logo.png"
-              />
-            </Field>
-
-            <Field label="VAT Number">
-              <Input
-                value={companyForm.vat_number ?? ""}
-                onChange={(e) => setCompany("vat_number", e.target.value || null)}
-                disabled={!canEditCompanyProfile}
-                placeholder="DE123456789"
               />
             </Field>
 
@@ -174,197 +163,163 @@ export default function SettingsPage() {
                 />
               </Field>
             </Row>
+          </section>
 
+          {/* Contact */}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Contact
+            </h2>
+
+            <Row>
+              <Field label="Phone">
+                <Input
+                  type="tel"
+                  value={companyForm.phone ?? ""}
+                  onChange={(e) => setCompany("phone", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="+49 30 123456"
+                />
+              </Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  value={companyForm.email ?? ""}
+                  onChange={(e) => setCompany("email", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="info@company.com"
+                />
+              </Field>
+            </Row>
+          </section>
+
+          {/* Tax & Registration */}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Tax &amp; Registration
+            </h2>
+
+            <Row>
+              <Field label="VAT Number (USt-IdNr.)">
+                <Input
+                  value={companyForm.vat_number ?? ""}
+                  onChange={(e) => setCompany("vat_number", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="DE123456789"
+                />
+              </Field>
+              <Field label="Tax ID (Steuernummer)">
+                <Input
+                  value={companyForm.tax_id ?? ""}
+                  onChange={(e) => setCompany("tax_id", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="123/456/78901"
+                />
+              </Field>
+            </Row>
+
+            <Field label="Default VAT Rate (%)">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={companyForm.vat_rate}
+                onChange={(e) => setCompany("vat_rate", parseFloat(e.target.value) || 0)}
+                disabled={!canEditCompanyProfile}
+                placeholder="19"
+              />
+            </Field>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Used as the default rate when you mark a purchase, sale, or expense
+              as &ldquo;includes VAT&rdquo; — editable per record.
+            </p>
+          </section>
+
+          {/* Banking Details */}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Banking Details
+            </h2>
+
+            <Field label="Bank Name">
+              <Input
+                value={companyForm.bank_name ?? ""}
+                onChange={(e) => setCompany("bank_name", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="Deutsche Bank"
+              />
+            </Field>
+
+            <Row>
+              <Field label="IBAN">
+                <Input
+                  value={companyForm.iban ?? ""}
+                  onChange={(e) => setCompany("iban", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="DE89 3704 0044 0532 0130 00"
+                />
+              </Field>
+              <Field label="BIC / SWIFT">
+                <Input
+                  value={companyForm.bic ?? ""}
+                  onChange={(e) => setCompany("bic", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="DEUTDEDB"
+                />
+              </Field>
+            </Row>
+          </section>
+
+          {/* Invoice Defaults */}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Invoice Defaults
+            </h2>
+
+            <Row>
+              <Field label="Invoice Number Prefix">
+                <Input
+                  value={companyForm.invoice_prefix}
+                  onChange={(e) => setCompany("invoice_prefix", e.target.value)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="INV-"
+                />
+              </Field>
+              <Field label="Payment Terms">
+                <Input
+                  value={companyForm.payment_terms}
+                  onChange={(e) => setCompany("payment_terms", e.target.value)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="30 days"
+                />
+              </Field>
+            </Row>
+
+            <Field label="Footer / Notes">
+              <Textarea
+                value={companyForm.footer_notes ?? ""}
+                onChange={(e) => setCompany("footer_notes", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="Any notes to appear at the bottom of every invoice…"
+              />
+            </Field>
+          </section>
+
+          {/* Actions */}
+          <div className="flex items-center gap-4">
             {canEditCompanyProfile && (
               <Button type="submit" disabled={savingCompanyProfile}>
-                {savingCompanyProfile ? "Saving…" : "Save Company Profile"}
+                {savingCompanyProfile ? "Saving…" : "Save Settings"}
               </Button>
             )}
-          </section>
+            <Button type="button" variant="secondary" onClick={handleDemoInvoice}>
+              <FileDown size={15} />
+              Generate Demo Invoice
+            </Button>
+          </div>
         </form>
       )}
-
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
-        {/* Company Details */}
-        <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
-            Company Details
-          </h2>
-
-          <Field label="Company Name" required>
-            <Input
-              value={form.companyName}
-              onChange={(e) => set("companyName", e.target.value)}
-              placeholder="e.g. KaufNest GmbH"
-            />
-          </Field>
-
-          <Field label="Address">
-            <Input
-              value={form.companyAddress}
-              onChange={(e) => set("companyAddress", e.target.value)}
-              placeholder="Street and house number"
-            />
-          </Field>
-
-          <Row>
-            <Field label="ZIP Code">
-              <Input
-                value={form.zipCode}
-                onChange={(e) => set("zipCode", e.target.value)}
-                placeholder="10115"
-              />
-            </Field>
-            <Field label="City">
-              <Input
-                value={form.city}
-                onChange={(e) => set("city", e.target.value)}
-                placeholder="Berlin"
-              />
-            </Field>
-          </Row>
-
-          <Field label="Country">
-            <Input
-              value={form.country}
-              onChange={(e) => set("country", e.target.value)}
-              placeholder="Germany"
-            />
-          </Field>
-
-          <Row>
-            <Field label="Phone">
-              <Input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-                placeholder="+49 30 123456"
-              />
-            </Field>
-            <Field label="Email">
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(e) => set("email", e.target.value)}
-                placeholder="info@company.com"
-              />
-            </Field>
-          </Row>
-        </section>
-
-        {/* Tax Details */}
-        <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
-            Tax &amp; Registration
-          </h2>
-
-          <Row>
-            <Field label="VAT ID (USt-IdNr.)">
-              <Input
-                value={form.vatId}
-                onChange={(e) => set("vatId", e.target.value)}
-                placeholder="DE123456789"
-              />
-            </Field>
-            <Field label="Tax ID (Steuernummer)">
-              <Input
-                value={form.taxId}
-                onChange={(e) => set("taxId", e.target.value)}
-                placeholder="123/456/78901"
-              />
-            </Field>
-          </Row>
-
-          <Field label="Default VAT Rate (%)">
-            <Input
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              value={form.vatRate}
-              onChange={(e) => set("vatRate", parseFloat(e.target.value) || 0)}
-              placeholder="19"
-            />
-          </Field>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Used as the default rate when you mark a purchase, sale, or expense
-            as &ldquo;includes VAT&rdquo; — editable per record.
-          </p>
-        </section>
-
-        {/* Banking Details */}
-        <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
-            Banking Details
-          </h2>
-
-          <Field label="Bank Name">
-            <Input
-              value={form.bankName}
-              onChange={(e) => set("bankName", e.target.value)}
-              placeholder="Deutsche Bank"
-            />
-          </Field>
-
-          <Row>
-            <Field label="IBAN">
-              <Input
-                value={form.iban}
-                onChange={(e) => set("iban", e.target.value)}
-                placeholder="DE89 3704 0044 0532 0130 00"
-              />
-            </Field>
-            <Field label="BIC / SWIFT">
-              <Input
-                value={form.bic}
-                onChange={(e) => set("bic", e.target.value)}
-                placeholder="DEUTDEDB"
-              />
-            </Field>
-          </Row>
-        </section>
-
-        {/* Invoice Defaults */}
-        <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
-            Invoice Defaults
-          </h2>
-
-          <Row>
-            <Field label="Invoice Number Prefix">
-              <Input
-                value={form.invoicePrefix}
-                onChange={(e) => set("invoicePrefix", e.target.value)}
-                placeholder="INV-"
-              />
-            </Field>
-            <Field label="Payment Terms">
-              <Input
-                value={form.paymentTerms}
-                onChange={(e) => set("paymentTerms", e.target.value)}
-                placeholder="30 days"
-              />
-            </Field>
-          </Row>
-
-          <Field label="Footer / Notes">
-            <Textarea
-              value={form.footerNotes}
-              onChange={(e) => set("footerNotes", e.target.value)}
-              placeholder="Any notes to appear at the bottom of every invoice…"
-            />
-          </Field>
-        </section>
-
-        {/* Actions */}
-        <div className="flex items-center gap-4">
-          <Button type="submit">Save Settings</Button>
-          <Button type="button" variant="secondary" onClick={handleDemoInvoice}>
-            <FileDown size={15} />
-            Generate Demo Invoice
-          </Button>
-        </div>
-      </form>
     </div>
   );
 }

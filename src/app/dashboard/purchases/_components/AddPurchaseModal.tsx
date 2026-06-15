@@ -10,7 +10,6 @@ import { addProduct, updateProduct } from "@/app/dashboard/inventory/_store/inve
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { Currency, Purchase, Product } from "@/types";
 
@@ -39,7 +38,7 @@ interface FormState {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function makeDefaults(): FormState {
+function makeDefaults(defaultVatRate: number): FormState {
   return {
     product_name: "",
     product_id: "",
@@ -50,7 +49,7 @@ function makeDefaults(): FormState {
     date: today(),
     description: "",
     vat_included: false,
-    vat_rate: String(readInvoiceSettings().vatRate),
+    vat_rate: String(defaultVatRate),
     add_to_inventory: false,
     new_sku: "",
   };
@@ -59,7 +58,8 @@ function makeDefaults(): FormState {
 export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.items);
-  const [form, setForm] = useState<FormState>(makeDefaults);
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -158,14 +158,14 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setSaving(false);
     onSuccess?.(data.product_name);
     onClose();
   }
 
   function handleClose() {
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setError(null);
     onClose();
   }

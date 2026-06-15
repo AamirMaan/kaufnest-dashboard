@@ -141,8 +141,9 @@ owns it. Current shared locations:
 - `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + `src/store/slices/{auditLogsSlice,currentUserSlice}`
   — `auditLogsSlice` is written to by every CRUD feature; `currentUserSlice` is
   read directly by Sales/Expenses/Purchases for role checks
-- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice}`,
-  `hooks/useInvoiceSettings` (the last two are also used by the shared `InvoiceModal`)
+- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice}`
+  (`generateInvoice` is also used by the shared `InvoiceModal`, both read
+  company/invoice settings from `src/store/slices/companyProfileSlice`)
 - `src/types/index.ts` — single source of truth for all domain types
 
 Two routes are conceptually part of a feature but **cannot** be colocated

@@ -42,8 +42,10 @@ editable fields.
   stock math.**
 - `vat_rate`/`vat_amount: number | null` — populated when the user checks
   "Total includes VAT" (a `Checkbox` from `FormFields`). The rate defaults to
-  `readInvoiceSettings().vatRate` but is editable per-record (e.g. reduced 7%
-  rate on some goods); the amount is extracted from the gross total via
+  `companyProfile.profile?.vat_rate` (per-tenant default from
+  `store/slices/companyProfileSlice`, falls back to `19`) but is editable
+  per-record (e.g. reduced 7% rate on some goods); the amount is extracted from
+  the gross total via
   `vatAmountFromGross` (`lib/utils/currency`). Both stay `null` when the toggle
   is off — `total_amount` (generated column) remains the gross/paid figure
   either way.
@@ -58,7 +60,7 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `lib/hooks/useInvoiceSettings`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
 - `types` (`Purchase`, `Product`)
 
 ## CSV import/export

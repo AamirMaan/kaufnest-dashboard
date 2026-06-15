@@ -1,5 +1,4 @@
-import type { InvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
-import type { Sale, Expense, Purchase } from "@/types";
+import type { Sale, Expense, Purchase, CompanyProfile } from "@/types";
 
 // jsPDF + autotable are loaded dynamically to avoid SSR issues
 const getJsPDF = () => import("jspdf").then((m) => m.default);
@@ -29,28 +28,29 @@ function todayFormatted(): string {
 // ─── Header + footer helpers ──────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function addHeader(doc: any, settings: InvoiceSettings, invoiceNumber: string, title: string) {
+function addHeader(doc: any, settings: CompanyProfile, invoiceNumber: string, title: string) {
   const pageW = doc.internal.pageSize.getWidth();
 
   // Company name (top-left)
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 30, 30);
-  doc.text(settings.companyName || "Your Company", 14, 22);
+  doc.text(settings.name || "Your Company", 14, 22);
 
   // Company details (top-left, below name)
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(90, 90, 90);
   const lines: string[] = [];
-  if (settings.companyAddress) lines.push(settings.companyAddress);
-  if (settings.zipCode || settings.city)
-    lines.push([settings.zipCode, settings.city].filter(Boolean).join(" "));
-  if (settings.country) lines.push(settings.country);
+  (settings.address ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .forEach((l) => lines.push(l));
   if (settings.phone) lines.push(`Phone: ${settings.phone}`);
   if (settings.email) lines.push(`Email: ${settings.email}`);
-  if (settings.vatId) lines.push(`VAT ID: ${settings.vatId}`);
-  if (settings.taxId) lines.push(`Tax ID: ${settings.taxId}`);
+  if (settings.vat_number) lines.push(`VAT ID: ${settings.vat_number}`);
+  if (settings.tax_id) lines.push(`Tax ID: ${settings.tax_id}`);
   lines.forEach((line, i) => doc.text(line, 14, 30 + i * 5));
 
   // Invoice title + number (top-right)
@@ -64,8 +64,8 @@ function addHeader(doc: any, settings: InvoiceSettings, invoiceNumber: string, t
   doc.setTextColor(90, 90, 90);
   doc.text(`Invoice #: ${invoiceNumber}`, pageW - 14, 30, { align: "right" });
   doc.text(`Date: ${todayFormatted()}`, pageW - 14, 36, { align: "right" });
-  if (settings.paymentTerms)
-    doc.text(`Payment Terms: ${settings.paymentTerms}`, pageW - 14, 42, { align: "right" });
+  if (settings.payment_terms)
+    doc.text(`Payment Terms: ${settings.payment_terms}`, pageW - 14, 42, { align: "right" });
 
   // Horizontal rule
   const headerBottom = Math.max(30 + lines.length * 5, 46) + 4;
@@ -76,7 +76,7 @@ function addHeader(doc: any, settings: InvoiceSettings, invoiceNumber: string, t
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function addFooter(doc: any, settings: InvoiceSettings) {
+function addFooter(doc: any, settings: CompanyProfile) {
   const pageH = doc.internal.pageSize.getHeight();
   const pageW = doc.internal.pageSize.getWidth();
 
@@ -88,23 +88,23 @@ function addFooter(doc: any, settings: InvoiceSettings) {
   doc.setTextColor(130, 130, 130);
 
   const bankParts: string[] = [];
-  if (settings.bankName) bankParts.push(settings.bankName);
+  if (settings.bank_name) bankParts.push(settings.bank_name);
   if (settings.iban) bankParts.push(`IBAN: ${settings.iban}`);
   if (settings.bic) bankParts.push(`BIC: ${settings.bic}`);
   if (bankParts.length)
     doc.text(bankParts.join("  ·  "), pageW / 2, pageH - 23, { align: "center" });
 
-  if (settings.footerNotes)
-    doc.text(settings.footerNotes, pageW / 2, pageH - 17, { align: "center" });
+  if (settings.footer_notes)
+    doc.text(settings.footer_notes, pageW / 2, pageH - 17, { align: "center" });
 }
 
 // ─── Public generate functions ────────────────────────────────────────────────
 
-export async function generateSalesInvoice(sales: Sale[], settings: InvoiceSettings) {
+export async function generateSalesInvoice(sales: Sale[], settings: CompanyProfile) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
-  const invoiceNumber = generateInvoiceNumber(settings.invoicePrefix);
+  const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
   const startY = addHeader(doc, settings, invoiceNumber, "SALES INVOICE");
 
@@ -157,11 +157,11 @@ export async function generateSalesInvoice(sales: Sale[], settings: InvoiceSetti
   doc.save(`${invoiceNumber}_sales.pdf`);
 }
 
-export async function generateExpensesInvoice(expenses: Expense[], settings: InvoiceSettings) {
+export async function generateExpensesInvoice(expenses: Expense[], settings: CompanyProfile) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
-  const invoiceNumber = generateInvoiceNumber(settings.invoicePrefix);
+  const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
   const startY = addHeader(doc, settings, invoiceNumber, "EXPENSE REPORT");
 
@@ -212,11 +212,11 @@ export async function generateExpensesInvoice(expenses: Expense[], settings: Inv
   doc.save(`${invoiceNumber}_expenses.pdf`);
 }
 
-export async function generatePurchasesInvoice(purchases: Purchase[], settings: InvoiceSettings) {
+export async function generatePurchasesInvoice(purchases: Purchase[], settings: CompanyProfile) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
-  const invoiceNumber = generateInvoiceNumber(settings.invoicePrefix);
+  const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
   const startY = addHeader(doc, settings, invoiceNumber, "PURCHASE REPORT");
 

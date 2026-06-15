@@ -139,9 +139,19 @@ export interface CompanyProfile {
   name: string;
   logo_url: string | null;
   vat_number: string | null;
+  tax_id: string | null;
   address: string | null;
+  phone: string | null;
+  email: string | null;
   currency: Currency;
   timezone: string;
+  vat_rate: number;
+  bank_name: string | null;
+  iban: string | null;
+  bic: string | null;
+  invoice_prefix: string;
+  payment_terms: string;
+  footer_notes: string | null;
   updated_at: string;
 }
 

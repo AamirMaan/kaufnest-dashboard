@@ -30,6 +30,10 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   (`src/app/api/admin/provision-tenant/route.ts`).
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
+- `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
+  contact columns to `tenant_kaufnest.company_profile` (folds the old
+  localStorage-only invoice settings into the per-tenant profile row); also
+  baked into `provision_tenant_schema()` for future tenants.
 
 ## Related code
 

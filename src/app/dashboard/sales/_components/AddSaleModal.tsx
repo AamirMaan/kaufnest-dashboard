@@ -9,7 +9,6 @@ import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
@@ -43,7 +42,7 @@ interface FormState {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function makeDefaults(): FormState {
+function makeDefaults(defaultVatRate: number): FormState {
   return {
     platform: "amazon",
     product_name: "",
@@ -54,7 +53,7 @@ function makeDefaults(): FormState {
     date: today(),
     description: "",
     vat_included: false,
-    vat_rate: String(readInvoiceSettings().vatRate),
+    vat_rate: String(defaultVatRate),
     status: "pending",
     customStatus: "",
     restock: false,
@@ -64,7 +63,8 @@ function makeDefaults(): FormState {
 export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.items);
-  const [form, setForm] = useState<FormState>(makeDefaults);
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,14 +148,14 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setSaving(false);
     onSuccess?.(data.product_name);
     onClose();
   }
 
   function handleClose() {
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setError(null);
     onClose();
   }

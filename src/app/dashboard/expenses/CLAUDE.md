@@ -35,8 +35,10 @@ editable fields.
 
 - `vat_rate`/`vat_amount: number | null` — populated when the user checks
   "Amount includes VAT" (a `Checkbox` from `FormFields`). The rate defaults to
-  `readInvoiceSettings().vatRate` but is editable per-record; the amount is
-  extracted from the gross `amount` via `vatAmountFromGross`
+  `companyProfile.profile?.vat_rate` (per-tenant default from
+  `store/slices/companyProfileSlice`, falls back to `19`) but is editable
+  per-record; the amount is extracted from the gross `amount` via
+  `vatAmountFromGross`
   (`lib/utils/currency`). Both stay `null` when the toggle is off. Unlike
   Sales/Purchases, expenses have **no product link** — they aren't inventory
   items, so there's no `product_id`/`Select`.
@@ -49,7 +51,7 @@ editable fields.
   Purchases (don't fork these; extend them if you need new shared behavior)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `lib/hooks/useInvoiceSettings`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
 - `types` (`Expense`, `ExpenseCategory`)
 
 ## CSV import/export

@@ -10,7 +10,6 @@ import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { Currency, Purchase, Product } from "@/types";
 
@@ -36,7 +35,7 @@ interface FormState {
   reason: string;
 }
 
-function purchaseToForm(p: Purchase): FormState {
+function purchaseToForm(p: Purchase, defaultVatRate: number): FormState {
   return {
     product_name: p.product_name,
     product_id: p.product_id ?? "",
@@ -47,7 +46,7 @@ function purchaseToForm(p: Purchase): FormState {
     date: p.date,
     description: p.description ?? "",
     vat_included: p.vat_rate != null,
-    vat_rate: p.vat_rate != null ? String(p.vat_rate) : String(readInvoiceSettings().vatRate),
+    vat_rate: p.vat_rate != null ? String(p.vat_rate) : String(defaultVatRate),
     reason: "",
   };
 }
@@ -60,7 +59,8 @@ const blankForm: FormState = {
 export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.items);
-  const [form, setForm] = useState<FormState>(() => (purchase ? purchaseToForm(purchase) : blankForm));
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => (purchase ? purchaseToForm(purchase, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

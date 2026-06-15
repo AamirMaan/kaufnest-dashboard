@@ -9,7 +9,6 @@ import { updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
@@ -42,7 +41,7 @@ interface FormState {
   reason: string;
 }
 
-function saleToForm(sale: Sale): FormState {
+function saleToForm(sale: Sale, defaultVatRate: number): FormState {
   const preset = isPresetStatus(sale.status);
   return {
     platform: sale.platform,
@@ -54,7 +53,7 @@ function saleToForm(sale: Sale): FormState {
     date: sale.date,
     description: sale.description ?? "",
     vat_included: sale.vat_rate != null,
-    vat_rate: sale.vat_rate != null ? String(sale.vat_rate) : String(readInvoiceSettings().vatRate),
+    vat_rate: sale.vat_rate != null ? String(sale.vat_rate) : String(defaultVatRate),
     status: preset ? sale.status : "other",
     customStatus: preset ? "" : sale.status,
     restock: sale.restock,
@@ -71,7 +70,8 @@ const blankForm: FormState = {
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.items);
-  const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale) : blankForm));
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

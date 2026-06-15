@@ -4,12 +4,11 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
@@ -38,7 +37,7 @@ interface FormState {
   reason: string;
 }
 
-function expenseToForm(e: Expense): FormState {
+function expenseToForm(e: Expense, defaultVatRate: number): FormState {
   return {
     title: e.title,
     amount: String(e.amount),
@@ -48,7 +47,7 @@ function expenseToForm(e: Expense): FormState {
     date: e.date,
     description: e.description ?? "",
     vat_included: e.vat_rate != null,
-    vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(readInvoiceSettings().vatRate),
+    vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(defaultVatRate),
     reason: "",
   };
 }
@@ -60,7 +59,8 @@ const blankForm: FormState = {
 
 export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(() => (expense ? expenseToForm(expense) : blankForm));
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => (expense ? expenseToForm(expense, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

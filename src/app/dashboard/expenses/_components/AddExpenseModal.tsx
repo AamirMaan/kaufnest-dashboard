@@ -4,12 +4,11 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { readInvoiceSettings } from "@/lib/hooks/useInvoiceSettings";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
@@ -39,7 +38,7 @@ interface FormState {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function makeDefaults(): FormState {
+function makeDefaults(defaultVatRate: number): FormState {
   return {
     title: "",
     amount: "",
@@ -49,13 +48,14 @@ function makeDefaults(): FormState {
     date: today(),
     description: "",
     vat_included: false,
-    vat_rate: String(readInvoiceSettings().vatRate),
+    vat_rate: String(defaultVatRate),
   };
 }
 
 export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const [form, setForm] = useState<FormState>(makeDefaults);
+  const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,14 +112,14 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setSaving(false);
     onSuccess?.(data.title);
     onClose();
   }
 
   function handleClose() {
-    setForm(makeDefaults());
+    setForm(makeDefaults(defaultVatRate));
     setError(null);
     onClose();
   }
