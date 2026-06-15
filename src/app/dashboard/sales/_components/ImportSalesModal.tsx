@@ -72,6 +72,7 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       vat_amount: vatAmount,
       status,
       restock: false,
+      external_order_id: null,
     },
     error: null,
   };

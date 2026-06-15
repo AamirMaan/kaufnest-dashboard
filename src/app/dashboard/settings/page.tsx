@@ -29,6 +29,7 @@ const DEMO_SALE: Sale = {
   vat_amount: 15.97,
   status: "pending",
   restock: false,
+  external_order_id: null,
 };
 
 const COMPANY_PROFILE_ROLES = ["admin", "super_admin"];

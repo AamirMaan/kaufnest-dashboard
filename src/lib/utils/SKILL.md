@@ -88,7 +88,11 @@ Static role-based permission matrix — no Supabase calls, pure lookups against
 - `PERMISSIONS` — `Record<Permission, readonly UserRole[]>`. `Permission` is
   derived as `keyof typeof PERMISSIONS`, so adding a key automatically extends
   the type. Naming convention: `<verb>_<entity>` (`create_expense`,
-  `manage_users`, `view_audit_logs`, ...).
+  `manage_users`, `view_audit_logs`, ...). `manage_integrations` (`["admin",
+  "super_admin"]`) gates connecting/disconnecting/syncing platforms on
+  `/dashboard/integrations` — accountants see the page (if the tenant's plan
+  has it) but get a "contact your admin" message instead of the connection
+  cards.
 - `hasPermission(role, permission)` — the primitive check; most call sites
   should use this directly (e.g. to show/hide an Edit/Delete button).
 - `canAccessRoute(role, pathname)` — route-level gate used by `src/proxy.ts`

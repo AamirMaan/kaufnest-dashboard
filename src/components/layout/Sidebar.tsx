@@ -12,6 +12,7 @@ import {
   Users,
   Settings,
   Shield,
+  Plug,
   X,
   ChevronLeft,
   ChevronRight,
@@ -73,6 +74,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/users",
     Icon: Users,
     roles: ["super_admin"],
+  },
+  {
+    label: "Integrations",
+    href: "/dashboard/integrations",
+    Icon: Plug,
+    roles: ["super_admin", "admin", "accountant"],
   },
   {
     label: "Settings",

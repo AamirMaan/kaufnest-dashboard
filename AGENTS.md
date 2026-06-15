@@ -27,6 +27,10 @@ New shared code from the migration:
 - `src/app/admin/` — KaufNest platform admin panel (`/admin`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — Stripe checkout + webhook routes
+- `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
+  (server-only, never imported client-side — see its `SKILL.md`)
+- `src/app/api/integrations/` + `src/app/api/cron/sync-integrations/` —
+  connect/callback/disconnect/sync routes and the scheduled sync cron
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
@@ -115,6 +119,7 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles + `usersSlice` |
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
 | `src/app/dashboard/settings/` | `/dashboard/settings` | invoice template settings (thin — no private state) |
+| `src/app/dashboard/integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections + `integrationsSlice` (Pro/Business plans only; admin/super_admin only) |
 
 Each feature folder follows the same shape (where it has private code):
 

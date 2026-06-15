@@ -21,6 +21,8 @@ const PERMISSIONS = {
   view_audit_logs: ["super_admin", "admin"],
   // Analytics
   view_analytics: ["super_admin", "admin"],
+  // Platform integrations (OAuth connections hold tokens)
+  manage_integrations: ["super_admin", "admin"],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

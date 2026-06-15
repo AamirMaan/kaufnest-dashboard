@@ -7,6 +7,7 @@ import { auditLogsSlice } from "./slices/auditLogsSlice";
 import { usersSlice } from "@/app/dashboard/users/_store/usersSlice";
 import { currentUserSlice } from "./slices/currentUserSlice";
 import { companyProfileSlice } from "./slices/companyProfileSlice";
+import { integrationsSlice } from "@/app/dashboard/integrations/_store/integrationsSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -19,6 +20,7 @@ export const makeStore = () =>
       users: usersSlice.reducer,
       currentUser: currentUserSlice.reducer,
       companyProfile: companyProfileSlice.reducer,
+      integrations: integrationsSlice.reducer,
     },
   });
 

@@ -2,5 +2,11 @@
   "regions": ["fra1"],
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/sync-integrations",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }

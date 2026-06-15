@@ -8,13 +8,20 @@ broadly when working on a specific feature.**
 
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
-  (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**)
+  (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**/**platform_connections**)
   from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
   individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
   cookie, and calls `isPlatformAdmin(user.email)` (`@/lib/supabase/control`) to
   compute `isPlatformAdmin` — both are passed to `<DashboardShell>` (the
   impersonation banner and the sidebar's "Admin Panel" link, respectively).
-  Wraps everything in `<ToastProvider>` and `<DashboardShell>`.
+  Additionally, when `tenant_schema` is present, fetches the tenant's `plan`
+  from `control.tenants` via `createControlClient()` and passes it to
+  `<StoreProvider>` as `tenantPlan` (hydrated into
+  `currentUserSlice.tenantPlan`, read by the Integrations page for plan
+  gating via `hasPlatformIntegrations`). The `platform_connections` select
+  only includes the non-token columns (RLS restricts the table to
+  admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
+  `<DashboardShell>`.
   **If you add a new feature with its own collection, hydrate it here.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
   `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
@@ -55,6 +62,7 @@ broadly when working on a specific feature.**
 | `users/` | `/dashboard/users` | user invites/roles, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
 | `settings/` | `/dashboard/settings` | invoice template settings |
+| `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |
 
 ## Shared shell components (live outside, in `src/components/layout/`)
 

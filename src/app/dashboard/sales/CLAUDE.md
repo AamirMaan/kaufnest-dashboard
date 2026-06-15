@@ -101,6 +101,21 @@ editable fields.
   `returnedCount > 0`. If you add new revenue aggregations in either page,
   apply the same exclusion.
 
+## Platform-synced orders (additive field on `Sale`)
+
+- `external_order_id: string | null` — set only on rows created by the
+  Integrations feature (`src/lib/integrations/`, see its `SKILL.md`); always
+  `null` for manually-created and CSV-imported rows. A non-partial unique
+  index on `(platform, external_order_id)` (Postgres treats multiple `NULL`s
+  as distinct, so manual rows never collide) is the dedup key
+  `syncPlatformOrders` upserts against — re-syncing the same order updates the
+  existing row instead of duplicating it.
+- Synced rows always have `product_id: null`, `vat_rate: null`,
+  `vat_amount: null`, and `restock: false` — they're never linked to
+  inventory or VAT accounting. Both modals and `page.tsx` should treat a
+  non-null `external_order_id` as informational only; don't add UI that lets
+  a user edit it.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),

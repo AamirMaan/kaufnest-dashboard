@@ -9,9 +9,20 @@ import { hydratePurchases } from "@/app/dashboard/purchases/_store/purchasesSlic
 import { hydrateProducts } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
-import { setCurrentUser } from "@/store/slices/currentUserSlice";
+import { setCurrentUser, setTenantPlan } from "@/store/slices/currentUserSlice";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
-import type { Sale, Expense, Purchase, Product, AuditLog, Profile, CompanyProfile } from "@/types";
+import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
+import type {
+  Sale,
+  Expense,
+  Purchase,
+  Product,
+  AuditLog,
+  Profile,
+  CompanyProfile,
+  TenantPlan,
+  PlatformConnection,
+} from "@/types";
 
 interface StoreProviderProps {
   children: React.ReactNode;
@@ -23,6 +34,8 @@ interface StoreProviderProps {
   users?: Profile[];
   currentUser?: Profile;
   companyProfile?: CompanyProfile;
+  tenantPlan?: TenantPlan | null;
+  platformConnections?: PlatformConnection[];
 }
 
 export function StoreProvider({
@@ -35,17 +48,21 @@ export function StoreProvider({
   users,
   currentUser,
   companyProfile,
+  tenantPlan,
+  platformConnections,
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
-    if (sales)          store.dispatch(hydrateSales(sales));
-    if (expenses)       store.dispatch(hydrateExpenses(expenses));
-    if (purchases)      store.dispatch(hydratePurchases(purchases));
-    if (products)       store.dispatch(hydrateProducts(products));
-    if (auditLogs)      store.dispatch(hydrateAuditLogs(auditLogs));
-    if (users)          store.dispatch(hydrateUsers(users));
-    if (currentUser)    store.dispatch(setCurrentUser(currentUser));
-    if (companyProfile) store.dispatch(hydrateCompanyProfile(companyProfile));
+    if (sales)               store.dispatch(hydrateSales(sales));
+    if (expenses)            store.dispatch(hydrateExpenses(expenses));
+    if (purchases)           store.dispatch(hydratePurchases(purchases));
+    if (products)            store.dispatch(hydrateProducts(products));
+    if (auditLogs)           store.dispatch(hydrateAuditLogs(auditLogs));
+    if (users)               store.dispatch(hydrateUsers(users));
+    if (currentUser)         store.dispatch(setCurrentUser(currentUser));
+    if (companyProfile)      store.dispatch(hydrateCompanyProfile(companyProfile));
+    if (tenantPlan)          store.dispatch(setTenantPlan(tenantPlan));
+    if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     return store;
   });
 

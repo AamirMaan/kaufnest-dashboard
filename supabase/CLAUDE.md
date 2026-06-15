@@ -34,6 +34,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   contact columns to `tenant_kaufnest.company_profile` (folds the old
   localStorage-only invoice settings into the per-tenant profile row); also
   baked into `provision_tenant_schema()` for future tenants.
+- `migrations/008_platform_integrations.sql` — adds `platform_connections`
+  (eBay/Amazon OAuth connection state, RLS admin/super_admin-only including
+  SELECT) and `sales.external_order_id` + unique `(platform,
+  external_order_id)` index to `tenant_kaufnest`; also baked into
+  `provision_tenant_schema()` for future tenants. Backs the Integrations
+  feature (`src/app/dashboard/integrations/`, `src/lib/integrations/`).
 
 ## Related code
 
@@ -41,4 +47,6 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   schema-aware Supabase clients these migrations support.
 - `src/app/api/admin/provision-tenant/route.ts` — calls
   `provision_tenant_schema` via RPC for new tenants.
+- `src/lib/integrations/` + `src/app/dashboard/integrations/` — read/write
+  `platform_connections` and `sales.external_order_id` from migration 008.
 - `SAAS_MIGRATION.md` — the full migration narrative/checklist.

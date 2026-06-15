@@ -51,6 +51,7 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     vat_amount: null,
     status: "pending",
     restock: false,
+    external_order_id: null,
     ...overrides,
   };
 }

@@ -1,11 +1,12 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Profile } from "@/types";
+import type { Profile, TenantPlan } from "@/types";
 
 interface CurrentUserState {
   profile: Profile | null;
+  tenantPlan: TenantPlan | null;
 }
 
-const initialState: CurrentUserState = { profile: null };
+const initialState: CurrentUserState = { profile: null, tenantPlan: null };
 
 export const currentUserSlice = createSlice({
   name: "currentUser",
@@ -14,7 +15,10 @@ export const currentUserSlice = createSlice({
     setCurrentUser(state, action: PayloadAction<Profile>) {
       state.profile = action.payload;
     },
+    setTenantPlan(state, action: PayloadAction<TenantPlan>) {
+      state.tenantPlan = action.payload;
+    },
   },
 });
 
-export const { setCurrentUser } = currentUserSlice.actions;
+export const { setCurrentUser, setTenantPlan } = currentUserSlice.actions;

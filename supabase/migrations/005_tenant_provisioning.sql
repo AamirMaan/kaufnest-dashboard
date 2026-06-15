@@ -136,7 +136,8 @@ BEGIN
       vat_rate     numeric(5,2),
       vat_amount   numeric(12,2),
       status       text NOT NULL DEFAULT 'pending',
-      restock      boolean NOT NULL DEFAULT false
+      restock      boolean NOT NULL DEFAULT false,
+      external_order_id text
     )
   $sql$, schema_name);
 
@@ -198,12 +199,39 @@ BEGIN
     )
   $sql$, schema_name);
 
+  -- platform_connections: one row per platform (ebay/amazon) holding OAuth
+  -- tokens for the tenant's connected seller account. Tokens are sensitive —
+  -- see section 5 below, RLS restricts ALL operations (incl. SELECT) to
+  -- admin/super_admin, unlike company_profile which allows SELECT for any
+  -- tenant member.
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.platform_connections (
+      id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      platform             text NOT NULL CHECK (platform IN ('ebay', 'amazon')),
+      status               text NOT NULL DEFAULT 'disconnected'
+                             CHECK (status IN ('connected', 'disconnected', 'error')),
+      access_token         text,
+      refresh_token        text,
+      token_expires_at     timestamptz,
+      external_account_id  text,
+      marketplace_id       text,
+      last_synced_at       timestamptz,
+      last_sync_status     text,
+      last_sync_error      text,
+      connected_by         uuid REFERENCES %1$I.profiles(id),
+      created_at           timestamptz NOT NULL DEFAULT now(),
+      updated_at           timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (platform)
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_purchases_updated_at BEFORE UPDATE ON %1$I.purchases FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_sales_updated_at BEFORE UPDATE ON %1$I.sales FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_products_updated_at BEFORE UPDATE ON %1$I.products FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
+  EXECUTE format('CREATE OR REPLACE TRIGGER set_platform_connections_updated_at BEFORE UPDATE ON %1$I.platform_connections FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
 
   -- ── 3. Tenant-membership + role helper functions ──────────
   -- is_tenant_member(): caller's JWT app_metadata.tenant_schema must equal
@@ -327,7 +355,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -379,6 +407,10 @@ BEGIN
   EXECUTE format('CREATE POLICY "company_profile_select" ON %1$I.company_profile FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "company_profile_update" ON %1$I.company_profile FOR UPDATE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
+  -- platform_connections — contains OAuth tokens, admin/super_admin only for
+  -- every operation including SELECT.
+  EXECUTE format('CREATE POLICY "platform_connections_all_admin" ON %1$I.platform_connections FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,
   -- 004_performance_indexes.sql) — every tenant gets the growth-oriented
@@ -402,6 +434,12 @@ BEGIN
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_status ON %1$I.sales (status)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_created_by ON %1$I.sales (created_by)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_date_status ON %1$I.sales (date DESC, status)', schema_name);
+
+  -- Non-partial unique index: Postgres treats multiple NULLs as distinct, so
+  -- manually-created/imported sales (external_order_id IS NULL) are
+  -- unaffected, while platform-synced rows can be upserted idempotently via
+  -- .upsert(rows, { onConflict: "platform,external_order_id" }).
+  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_platform_external_order_id ON %1$I.sales (platform, external_order_id)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_products_name ON %1$I.products (name)', schema_name);
 

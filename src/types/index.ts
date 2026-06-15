@@ -75,6 +75,7 @@ export interface Sale {
   vat_amount: number | null;
   status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | custom
   restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
+  external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
@@ -172,5 +173,27 @@ export interface Tenant {
   status: TenantStatus;
   trial_ends_at: string | null;
   created_at: string;
+  updated_at: string;
+}
+
+// ─── Platform Integrations (per-tenant) ───────────────────────────────────────
+
+export type IntegrationPlatform = "ebay" | "amazon";
+export type PlatformConnectionStatus = "connected" | "disconnected" | "error";
+
+/**
+ * Client-facing shape of a `platform_connections` row — deliberately omits
+ * `access_token`/`refresh_token`/`token_expires_at`, which never leave the
+ * server (see `src/lib/integrations/SKILL.md`).
+ */
+export interface PlatformConnection {
+  id: string;
+  platform: IntegrationPlatform;
+  status: PlatformConnectionStatus;
+  external_account_id: string | null;
+  marketplace_id: string | null;
+  last_synced_at: string | null;
+  last_sync_status: string | null;
+  last_sync_error: string | null;
   updated_at: string;
 }
