@@ -21,9 +21,17 @@ not tenant roles.
   `/api/admin/provision-tenant`. On failure shows `data.detail ?? data.error`
   both inline (red banner in the form) and via `useToast().error(...)`; on
   success shows a `useToast().success(...)` toast before closing.
-- `_components/TenantActions.tsx` — per-row "Impersonate" button. Prompts for
-  the tenant's super_admin email, posts to `/api/admin/impersonate`, then
-  redirects the browser to the returned magic link.
+- `_components/EditTenantModal.tsx` — "Edit Tenant" modal: pre-filled form for
+  `plan`, `status`, and `admin_email`. Computes a partial diff against the
+  current tenant and sends only changed fields to `PATCH
+  /api/admin/tenants/[tenant.id]`. Shows inline note when email changes ("A
+  verification email will be sent to the new address."). Calls `onClose()` on
+  success (parent bumps `refreshKey`).
+- `_components/TenantActions.tsx` — per-row action buttons. Accepts
+  `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
+  (opens `EditTenantModal`; calls `onRefresh` on close) and an "Impersonate"
+  button (prompts for super_admin email, posts to `/api/admin/impersonate`,
+  redirects to magic link).
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
 
@@ -69,6 +77,16 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   that aren't `instanceof Error`) — `AddTenantModal` surfaces `detail` to the
   admin via toast + inline banner.
 - **`tenants/route.ts`** (`GET`) — lists `control.tenants`, newest first.
+- **`tenants/[id]/route.ts`** (`PATCH`) — partial update for an existing
+  tenant. Accepts `{ plan?, status?, admin_email? }`. Steps: (1) fetch current
+  row from `control.tenants` — 404 on `PGRST116`, 500 on other DB errors;
+  (2) if `admin_email` changed, scan Project B Auth users with
+  `service.auth.admin.listUsers()`, find the user by old email, call
+  `updateUserById({ email: newEmail })` — returns 500 if this fails, before
+  touching `control.tenants`; (3) `.update(patch).eq("id", id)` on
+  `control.tenants` with only the fields that were sent. Returns
+  `{ tenant: updatedRow }`. This is a **platform-admin override** — writes
+  `plan`/`status` directly, bypassing Stripe webhooks.
 - **`impersonate/route.ts`** (`POST`) — looks up the tenant in
   `control.tenants`, generates a Supabase magic link
   (`service.auth.admin.generateLink`) for the given admin email, and sets the

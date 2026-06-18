@@ -27,6 +27,11 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   `provision-tenant/route.ts` step 6 and, for already-provisioned tenants, a
   migration in `supabase/control-plane/`. `admin_email` is an example of all
   four).
+- **Edit an existing tenant** (plan, status, admin email):
+  `_components/EditTenantModal.tsx` (form) + `api/admin/tenants/[id]/route.ts`
+  (backend). `_components/TenantActions.tsx` and `page.tsx` are already wired
+  — only touch them if you need to change the button layout or refresh
+  behaviour.
 - **Change impersonation**: `_components/TenantActions.tsx` +
   `api/admin/impersonate/route.ts` / `exit-impersonation/route.ts`. The
   `kaufnest_impersonating` cookie is read by `DashboardShell` — check that
@@ -72,6 +77,15 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   harmlessly). See `src/app/(auth)/SKILL.md` for the full `{{ .TokenHash }}` /
   `{{ .SiteURL }}` email template pattern and why `{{ .RedirectTo }}` was
   dropped.
+- **`auth.admin.listUsers()` to find by email**: The Supabase JS admin API has
+  no `getUserByEmail` — `listUsers()` returns all users as an array, filter
+  client-side by `.find(u => u.email === oldEmail)`. Acceptable at this user
+  count; if the tenant base grows large, replace with a direct `auth.users`
+  table query via service role.
+- **Plan/status edit bypasses Stripe**: `PATCH /api/admin/tenants/[id]` writes
+  `plan` and `status` directly to `control.tenants` without touching Stripe.
+  It's a manual admin override. Stripe webhooks continue to be the
+  authoritative writer for production billing events.
 - **`adminEmail` reuse across tenants is rejected**: `inviteUserByEmail` does
   NOT error for an email with an existing pending/accepted invite — it
   silently resends and returns that *existing* `auth.users` row (from whatever
