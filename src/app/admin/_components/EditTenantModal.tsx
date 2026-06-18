@@ -113,9 +113,10 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
             value={adminEmail}
             onChange={(e) => setAdminEmail(e.target.value)}
             placeholder="admin@example.com"
+            required
           />
           {emailChanged && (
-            <p className="text-xs text-(--color-text-faint) mt-1">
+            <p className="text-xs text-(--color-text-muted) mt-1">
               A verification email will be sent to the new address.
             </p>
           )}

@@ -60,8 +60,8 @@ export async function PATCH(
       );
 
       // No getUserByEmail in the Supabase JS admin API — scan all users.
-      // Acceptable: user count is small in this SaaS admin context.
-      const { data: { users }, error: listError } = await service.auth.admin.listUsers();
+      // perPage: 1000 avoids the default 50-row cap silently truncating results.
+      const { data: { users }, error: listError } = await service.auth.admin.listUsers({ perPage: 1000 });
       if (listError) throw listError;
 
       const authUser = users.find((u) => u.email === tenant.admin_email);
@@ -88,7 +88,7 @@ export async function PATCH(
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.plan !== undefined) patch.plan = body.plan;
   if (body.status !== undefined) patch.status = body.status;
-  if (body.admin_email !== undefined) patch.admin_email = body.admin_email;
+  if (body.admin_email !== undefined && body.admin_email !== "") patch.admin_email = body.admin_email;
 
   const { data: updated, error: patchError } = await control
     .schema("control")
