@@ -129,7 +129,7 @@ export default function AdminPage() {
                       {new Date(t.created_at).toLocaleDateString("de-DE")}
                     </td>
                     <td className="py-3">
-                      <TenantActions tenant={t} />
+                      <TenantActions tenant={t} onRefresh={() => setRefreshKey((k) => k + 1)} />
                     </td>
                   </tr>
                 ))}

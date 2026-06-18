@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { EditTenantModal } from "./EditTenantModal";
 import type { Tenant } from "@/types";
 
 interface Props {
   tenant: Tenant;
+  onRefresh: () => void;
 }
 
-export function TenantActions({ tenant }: Props) {
+export function TenantActions({ tenant, onRefresh }: Props) {
+  const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleImpersonate() {
@@ -39,8 +42,24 @@ export function TenantActions({ tenant }: Props) {
   }
 
   return (
-    <Button variant="secondary" onClick={handleImpersonate} disabled={loading}>
-      {loading ? "Loading…" : "Impersonate"}
-    </Button>
+    <>
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" onClick={() => setEditOpen(true)}>
+          Edit
+        </Button>
+        <Button variant="secondary" onClick={handleImpersonate} disabled={loading}>
+          {loading ? "Loading…" : "Impersonate"}
+        </Button>
+      </div>
+
+      <EditTenantModal
+        open={editOpen}
+        tenant={tenant}
+        onClose={() => {
+          setEditOpen(false);
+          onRefresh();
+        }}
+      />
+    </>
   );
 }
