@@ -36,7 +36,16 @@ export async function PATCH(
     .eq("id", id)
     .single();
 
-  if (fetchError || !tenant) {
+  if (fetchError) {
+    if ((fetchError as { code?: string }).code === "PGRST116") {
+      return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { error: "Failed to fetch tenant", detail: errorMessage(fetchError) },
+      { status: 500 }
+    );
+  }
+  if (!tenant) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
