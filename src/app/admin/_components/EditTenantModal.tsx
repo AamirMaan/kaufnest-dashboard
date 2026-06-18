@@ -40,8 +40,8 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
 
     // Nothing changed — close without a network call
     if (Object.keys(patch).length === 0) {
-      onClose();
       setLoading(false);
+      onClose();
       return;
     }
 
