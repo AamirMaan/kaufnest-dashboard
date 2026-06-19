@@ -103,6 +103,15 @@ recorded on the connection row.
 
 ## Gotchas
 
+- **eBay account deletion endpoint** lives at
+  `src/app/api/notifications/ebay-account-deletion/route.ts`. GET handles the
+  eBay challenge verification (SHA256 of `challengeCode + EBAY_VERIFICATION_TOKEN
+  + endpointUrl`). POST acknowledges deletions and best-effort removes the
+  matching tenant's eBay connection + synced sales. Register the URL
+  `${NEXT_PUBLIC_SITE_URL}/api/notifications/ebay-account-deletion` in the
+  eBay developer portal under Application → Notifications, then copy the
+  generated Verification Token into `EBAY_VERIFICATION_TOKEN` (also add to
+  Vercel env vars).
 - **eBay OAuth uses `EBAY_RU_NAME`, not a redirect URL.** `getAuthUrl`/
   `exchangeCode` pass `redirect_uri=process.env.EBAY_RU_NAME` (eBay's "RuName"
   identifier from the developer portal) — don't swap in
