@@ -80,6 +80,19 @@ the next agent re-derives everything from scratch.
 Both files should be committed in the **same commit** as the code change, not as a
 follow-up.
 
+## Branching — always work on a branch
+
+**Never commit directly to `main`.** Before starting any task, create a
+feature branch:
+
+```bash
+git checkout -b <type>/<short-description>
+# e.g. feat/tenant-edit, fix/ebay-callback-redirect
+```
+
+Push the branch and open a Pull Request when the work is ready. The
+repository has branch protection on `main` — direct pushes will be rejected.
+
 ## Commit and push gates
 
 Enforced automatically by Husky git hooks (`.husky/pre-commit` and
