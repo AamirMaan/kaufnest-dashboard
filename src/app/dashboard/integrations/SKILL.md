@@ -33,6 +33,13 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   select list and the type in sync, and remember tokens must never be
   selected for the client.
 
+- **Add/change the import endpoint** (`POST /api/integrations/review/import`):
+  edit `src/app/api/integrations/review/import/route.ts`. It mirrors the same
+  auth+plan guard as `src/app/api/integrations/review/route.ts` (Task 1). Body
+  shape: `{ items: { platform: IntegrationPlatform; order: NormalizedOrder }[] }`.
+  After upsert it calls `upsertConnection` to stamp `last_synced_at = now()` on
+  every involved platform. Returns `{ imported: number }` or `{ error, detail }`.
+
 ## Test command
 
 `npx jest dashboard/integrations`

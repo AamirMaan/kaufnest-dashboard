@@ -49,6 +49,15 @@ API routes in `src/app/api/integrations/[platform]/` (`connect`, `callback`,
 `src/lib/integrations/SKILL.md` for the OAuth + sync pipeline those routes
 call into.
 
+The **order review flow** (manual import of selected orders) uses two additional
+routes that sit outside the `[platform]` path:
+- `GET /api/integrations/review` — fetches the last 90 days of orders from all
+  connected platforms and marks each as `imported: boolean`.
+- `POST /api/integrations/review/import` — receives `{ items: { platform, order
+  }[] }`, upserts them into `sales` (idempotent on `platform,
+  external_order_id`), and updates `last_synced_at`/`last_sync_status` for each
+  involved platform.
+
 ## Plan gating
 
 `tenantPlan` (`TenantPlan | null`) is hydrated into
