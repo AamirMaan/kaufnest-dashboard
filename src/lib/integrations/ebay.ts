@@ -1,8 +1,12 @@
 import type { NormalizedOrder, PlatformAdapter, TokenSet } from "./types";
 
-const EBAY_AUTH_URL = "https://auth.ebay.com/oauth2/authorize";
-const EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token";
-const EBAY_ORDERS_URL = "https://api.ebay.com/sell/fulfillment/v1/order";
+const SANDBOX = process.env.EBAY_SANDBOX === "true";
+const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
+const EBAY_AUTH_URL = SANDBOX
+  ? "https://auth.sandbox.ebay.com/oauth2/authorize"
+  : "https://auth.ebay.com/oauth2/authorize";
+const EBAY_TOKEN_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
+const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
 const EBAY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.fulfillment";
 
 interface EbayTokenResponse {

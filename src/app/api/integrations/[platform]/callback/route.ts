@@ -4,7 +4,10 @@ import { getAdapter, isIntegrationPlatform } from "@/lib/integrations/registry";
 import { upsertConnection } from "@/lib/integrations/tokenStore";
 
 function redirectToIntegrations(req: NextRequest, query: Record<string, string>): NextResponse {
-  const url = new URL("/dashboard/integrations", req.url);
+  // Use NEXT_PUBLIC_SITE_URL so the redirect always resolves to the public
+  // hostname — req.url can be an internal Vercel URL behind a reverse proxy.
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+  const url = new URL("/dashboard/integrations", base);
   for (const [key, value] of Object.entries(query)) {
     url.searchParams.set(key, value);
   }
