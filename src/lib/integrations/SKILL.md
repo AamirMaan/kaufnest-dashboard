@@ -112,6 +112,12 @@ recorded on the connection row.
   eBay developer portal under Application → Notifications, then copy the
   generated Verification Token into `EBAY_VERIFICATION_TOKEN` (also add to
   Vercel env vars).
+- **eBay sandbox vs production URLs**: set `EBAY_SANDBOX=true` in env to route
+  all eBay requests to `auth.sandbox.ebay.com` / `api.sandbox.ebay.com`.
+  Sandbox credentials (`SBX` in the client ID) will 500 against production
+  endpoints. Remove `EBAY_SANDBOX` (or set to `false`) when switching to prod
+  credentials. Also add `EBAY_SANDBOX=true` to Vercel env vars for preview
+  deployments during testing.
 - **eBay OAuth uses `EBAY_RU_NAME`, not a redirect URL.** `getAuthUrl`/
   `exchangeCode` pass `redirect_uri=process.env.EBAY_RU_NAME` (eBay's "RuName"
   identifier from the developer portal) — don't swap in

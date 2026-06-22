@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector } from "@/store/hooks";
@@ -19,6 +19,7 @@ const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
 
 function IntegrationsContent() {
   const { success, error: toastError } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
@@ -30,10 +31,12 @@ function IntegrationsContent() {
 
     if (connected && (connected === "ebay" || connected === "amazon")) {
       success(`${PLATFORM_LABELS[connected]} connected`, "You can now sync orders from this platform.");
+      // Re-fetch server data so the connection card reflects the new status
+      router.refresh();
     } else if (err) {
       toastError("Connection failed", err);
     }
-  }, [searchParams, success, toastError]);
+  }, [searchParams, success, toastError, router]);
 
   if (!role) return null;
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plug, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +30,7 @@ interface ConnectionCardProps {
 
 export function ConnectionCard({ platform, connection, canManage }: ConnectionCardProps) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const { success, error: toastError } = useToast();
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -64,6 +66,10 @@ export function ConnectionCard({ platform, connection, canManage }: ConnectionCa
 
     dispatch(setConnectionStatus({ platform, status: "connected" }));
     success("Sync complete", `${result.synced} order${result.synced === 1 ? "" : "s"} synced.`);
+    if (result.synced > 0) {
+      // Re-fetch server data so the sales/dashboard pages reflect the new orders
+      router.refresh();
+    }
   }
 
   return (
