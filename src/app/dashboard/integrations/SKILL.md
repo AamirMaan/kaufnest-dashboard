@@ -32,13 +32,12 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   `PlatformConnection` type in `src/types/index.ts` together — keep the
   select list and the type in sync, and remember tokens must never be
   selected for the client.
-
-- **Add/change the import endpoint** (`POST /api/integrations/review/import`):
-  edit `src/app/api/integrations/review/import/route.ts`. It mirrors the same
-  auth+plan guard as `src/app/api/integrations/review/route.ts` (Task 1). Body
-  shape: `{ items: { platform: IntegrationPlatform; order: NormalizedOrder }[] }`.
-  After upsert it calls `upsertConnection` to stamp `last_synced_at = now()` on
-  every involved platform. Returns `{ imported: number }` or `{ error, detail }`.
+- **Change the review page** (table columns, selection behaviour, import
+  logic): `review/page.tsx` + optionally `api/integrations/review/route.ts`
+  (if changing what fields are fetched or how `imported` is determined).
+- **Add pagination to the review page**: `api/integrations/review/route.ts`
+  (add `page`/`cursor` query param, thread through to `adapter.fetchOrders`)
+  + `review/page.tsx` (add "Load more" button).
 
 ## Test command
 
@@ -67,3 +66,16 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   `Badge` variant (`connected: "success"`, `disconnected: "default"`,
   `error: "danger"`) — keep in sync if `PlatformConnectionStatus` gains a
   value.
+- **`import type` across server/client boundary for `ReviewOrder`/`ReviewResponse`**:
+  `review/page.tsx` imports these types from the API route file using
+  `import type { ... } from "@/app/api/integrations/review/route"`. TypeScript
+  erases `import type` at runtime — no server modules are bundled into the
+  client. Do NOT change this to a value import.
+- **Review page fetch gated behind `isEligible`** — the `useEffect` that fetches
+  `/api/integrations/review` only fires when `isEligible` is `true` (plan + role
+  check). On first render with `role === undefined` (Redux still hydrating),
+  `isEligible` is `false` and no fetch fires. The loading skeleton shows until
+  either the redirect fires (ineligible) or the fetch resolves (eligible).
+- **Cron is removed** — `vercel.json` no longer has a `crons` key. Both eBay
+  and Amazon are now manual-review only. Do not re-add auto-sync without
+  updating the review flow to handle already-synced orders correctly.
