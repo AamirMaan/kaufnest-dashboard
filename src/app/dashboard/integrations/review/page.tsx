@@ -46,7 +46,14 @@ export default function ReviewPage() {
     }
   }, [role, tenantPlan, router]);
 
+  const isEligible =
+    !!role &&
+    !!tenantPlan &&
+    hasPlatformIntegrations(tenantPlan) &&
+    hasPermission(role, "manage_integrations");
+
   useEffect(() => {
+    if (!isEligible) return;
     fetch("/api/integrations/review")
       .then((r) => r.json())
       .then((d: ReviewResponse) => {
@@ -56,7 +63,7 @@ export default function ReviewPage() {
       })
       .catch(() => setData({}))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isEligible]);
 
   const platforms = data
     ? ALL_PLATFORMS.filter((p) => data[p])
@@ -130,9 +137,10 @@ export default function ReviewPage() {
         return;
       }
 
+      const importedCount = result.imported ?? 0;
       toast.success(
         "Import complete",
-        `${result.imported} order${result.imported === 1 ? "" : "s"} imported.`
+        `${importedCount} order${importedCount === 1 ? "" : "s"} imported.`
       );
 
       // Flip imported rows in local state so they grey out immediately
