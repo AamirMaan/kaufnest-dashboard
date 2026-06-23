@@ -1,8 +1,8 @@
 # Integrations feature
 
 Route: `/dashboard/integrations`. Lets a tenant connect their eBay and/or
-Amazon seller accounts via OAuth; orders from connected platforms are pulled
-in automatically (manual "Sync now" button + a 6-hourly cron) and stored as
+Amazon seller accounts via OAuth; orders from connected platforms are reviewed
+and imported manually via `/dashboard/integrations/review` and stored as
 `sales` ("Orders") rows. Available only on the **Pro**/**Business** plans
 (`hasPlatformIntegrations`) and manageable only by `admin`/`super_admin`
 (`manage_integrations` permission).
@@ -24,13 +24,21 @@ in automatically (manual "Sync now" button + a 6-hourly cron) and stored as
 - `_components/ConnectionCard.tsx` — per-platform card: status `Badge`
   (`connected`/`disconnected`/`error`), `external_account_id` (if set), "Last
   synced" (`formatDateTime` or "Never"), `last_sync_error` (if present). When
-  `canManage`: "Sync now" (`POST /api/integrations/{platform}/sync`, then
-  `dispatch(setConnectionStatus(...))` + toast) and "Disconnect"
-  (`POST /api/integrations/{platform}/disconnect`) buttons if connected,
-  otherwise a "Connect {label}" button that does
-  `window.location.assign(\`/api/integrations/${platform}/connect\`)` (a full
+  `canManage` and connected: a "Review orders" `<Link>` (navigates to
+  `/dashboard/integrations/review`) and a "Disconnect" button
+  (`POST /api/integrations/{platform}/disconnect`). When disconnected: a
+  "Connect {label}" button that does `window.location.assign(\`/api/integrations/${platform}/connect\`)` (a full
   navigation, not `fetch` — the connect route 302s to the platform's OAuth
-  consent screen).
+  consent screen). The "Sync now" button and `handleSync` logic have been
+  removed — syncing is now manual via the review page.
+- `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
+  Fetches `GET /api/integrations/review` on mount (only when eligible), renders
+  platform tabs (eBay / Amazon), an order table with checkbox selection
+  (already-imported rows greyed out with ✓), and an "Import selected (N)" button
+  that posts to `POST /api/integrations/review/import`. On success: toasts, flips
+  imported rows in local state, calls `router.refresh()` to re-hydrate
+  `salesSlice`. Applies the same plan/role guards as `page.tsx` — redirects to
+  `/dashboard/integrations` if not eligible.
 - `_store/integrationsSlice.ts` — `state.integrations.connections:
   PlatformConnection[]`. Actions: `hydrateConnections`, `upsertConnection`
   (replace-or-append by `platform`), `setConnectionStatus` (no-op if no
@@ -42,12 +50,36 @@ in automatically (manual "Sync now" button + a 6-hourly cron) and stored as
 This folder **never talks to Supabase directly** — there's no
 create/update/delete here. State is read-only Redux, hydrated once by
 `dashboard/layout.tsx` from `platform_connections` (safe columns only, no
-tokens — see that folder's `CLAUDE.md`). All mutations go through the four
-API routes in `src/app/api/integrations/[platform]/` (`connect`, `callback`,
-`disconnect`, `sync`) plus `src/app/api/cron/sync-integrations/`, which own
-`platform_connections` and write synced orders into `sales`. See
-`src/lib/integrations/SKILL.md` for the OAuth + sync pipeline those routes
-call into.
+tokens — see that folder's `CLAUDE.md`). All mutations go through API routes
+in `src/app/api/integrations/` which own `platform_connections` and write
+orders into `sales`. See `src/lib/integrations/SKILL.md` for the OAuth + sync
+pipeline those routes call into.
+
+Connection management (`page.tsx`) shows platform cards with "Review orders"
+links (nav to `/dashboard/integrations/review`) when `canManage` and connected.
+There is no automatic or cron-based sync — all order imports are manual through
+the review flow.
+
+The **order review flow** (`review/page.tsx`) fetches the last 90 days of
+orders from all connected platforms via `GET /api/integrations/review`, marks
+each as `imported: boolean` (by querying `sales` for existing
+`external_order_id` matches), renders platform tabs with a selectable order
+table, and posts selected items to `POST /api/integrations/review/import` to
+upsert them into `sales` and update `last_synced_at` per platform.
+
+## API routes
+
+- **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
+  connected platforms (90-day lookback via `adapter.fetchOrders`), queries
+  `sales` for existing `external_order_id` values, attaches `imported: boolean`
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors? }`.
+  Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
+  via `import type`).
+- **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
+  `{ items: { platform, order }[] }`, maps each to a `SaleInsert` via
+  `normalizedOrderToSaleRow`, upserts into `sales` with
+  `onConflict: "platform,external_order_id"`, updates `last_synced_at` per
+  platform. Returns `{ imported: number }`.
 
 ## Plan gating
 
@@ -58,7 +90,7 @@ call into.
 
 ## Shared dependencies
 
-- `src/lib/integrations/` — server-only OAuth adapters + sync pipeline (not
+- `src/lib/integrations/` — server-only OAuth adapters + order-fetch/import pipeline (not
   imported here directly, only via the API routes)
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
 - `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`

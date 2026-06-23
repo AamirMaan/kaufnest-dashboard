@@ -1,13 +1,13 @@
 ---
 name: integrations-library
-description: Reference for the platform-integration library at src/lib/integrations (eBay/Amazon OAuth adapters, token storage, order sync) — use when adding a platform, debugging OAuth/token refresh, or changing how synced orders map to sales rows.
+description: Reference for the platform-integration library at src/lib/integrations (eBay/Amazon OAuth adapters, token storage, order-review/import) — use when adding a platform, debugging OAuth/token refresh, or changing how orders map to sales rows.
 ---
 
 # Platform integrations library (`src/lib/integrations/`)
 
 Server-only shared code (never imported from a Client Component — it handles
 OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
-`src/app/api/cron/sync-integrations/`. The dashboard feature
+`src/app/api/integrations/review/*`. The dashboard feature
 (`src/app/dashboard/integrations/`) never imports this directly; see its
 `SKILL.md`.
 
@@ -24,10 +24,8 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   connectedBy)`. Has a colocated `mapToSale.test.ts`.
 - `tokenStore.ts` — `getConnection`, `upsertConnection`,
   `ensureValidAccessToken` (refresh-on-demand).
-- `sync.ts` — `syncPlatformOrders(client, platform, connectedBy)`, the one
-  function both the manual-sync route and the cron route call.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
-  session+role+tenant-schema check for the connect/callback/disconnect/sync
+  session+role+tenant-schema check for the connect/callback/disconnect/review
   routes.
 
 ## The `PlatformAdapter` interface
@@ -58,8 +56,8 @@ interface PlatformAdapter {
    `_components/ConnectionCard.tsx`.
 5. Document new env vars in `.env.local.example`.
 
-Nothing else changes — `sync.ts`, the API routes, and the dashboard feature
-are all platform-agnostic via `getAdapter`.
+Nothing else changes — the API routes and the dashboard feature are all
+platform-agnostic via `getAdapter`.
 
 ## Token refresh flow
 
@@ -72,18 +70,19 @@ are all platform-agnostic via `getAdapter`.
 - Throws if `connection.refresh_token` is null (connection was never
   completed, or was disconnected).
 
-`syncPlatformOrders` calls this before `fetchOrders` — adapters' `fetchOrders`
-always receive a fresh token and never refresh themselves.
+The review route (`GET /api/integrations/review`) calls `ensureValidAccessToken`
+before `fetchOrders` — adapters' `fetchOrders` always receive a fresh token and
+never refresh themselves.
 
 ## `external_order_id` dedup contract
 
 `mapToSale.ts` carries `NormalizedOrder.external_order_id` straight onto
-`Sale.external_order_id`. `sync.ts` upserts with
-`{ onConflict: "platform,external_order_id" }` against the non-partial unique
-index on `tenant_<slug>.sales(platform, external_order_id)` — re-syncing the
-same order **updates** the existing row (e.g. status changes from `pending` →
-`shipped`) instead of duplicating it. Manually-created/imported `sales` rows
-have `external_order_id = NULL`, and Postgres treats multiple `NULL`s in a
+`Sale.external_order_id`. The import route (`POST /api/integrations/review/import`)
+upserts with `{ onConflict: "platform,external_order_id" }` against the
+non-partial unique index on `tenant_<slug>.sales(platform, external_order_id)` —
+re-importing the same order **updates** the existing row (e.g. status changes
+from `pending` → `shipped`) instead of duplicating it. Manually-created `sales`
+rows have `external_order_id = NULL`, and Postgres treats multiple `NULL`s in a
 unique index as distinct, so they're never affected.
 
 **One `NormalizedOrder` per line item.** A platform order with multiple line
@@ -92,14 +91,13 @@ items must produce multiple `NormalizedOrder`s, each with a distinct
 `${AmazonOrderId}:${OrderItemId}` (Amazon) — keeps the unique index
 one-row-per-line-item and lets `mapToSale` stay a 1:1 mapping.
 
-## Sync window
+## Review window
 
-`syncPlatformOrders` fetches orders created/updated since
-`connection.last_synced_at ?? (now - 30 days)` (`DEFAULT_LOOKBACK_MS` in
-`sync.ts`). On success it sets `last_synced_at = now()`, so subsequent syncs
-are incremental. On error, `last_synced_at` is left unchanged (so the next
-sync retries the same window) and `last_sync_status`/`last_sync_error` are
-recorded on the connection row.
+`GET /api/integrations/review` fetches orders from the last 90 days
+(`REVIEW_LOOKBACK_MS` in that route). `last_synced_at` is updated per platform
+by `POST /api/integrations/review/import` on successful import. The review page
+marks already-imported orders as `imported: true` via an `external_order_id`
+lookup against existing `sales` rows.
 
 ## Gotchas
 
@@ -141,6 +139,3 @@ recorded on the connection row.
   cookie (`maxAge: 600`) containing a random UUID; `callback` verifies the
   `state` query param matches before calling `exchangeCode`, and deletes the
   cookie either way.
-- **Cron route skips connections with `connected_by = null`** (shouldn't
-  happen in practice — `callback` always sets it) rather than crashing the
-  whole tenant's sync loop; that connection's result records an error.
