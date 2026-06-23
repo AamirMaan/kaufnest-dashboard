@@ -87,6 +87,11 @@ Plan gate and connection guard are handled inside `page.tsx`, not at nav level.
 and passes it to `<StoreProvider>` for hydration into `dropshippingSlice` — same
 pattern as `platform_connections`, `sales`, etc.
 
+Required wiring:
+- `dropshippingSlice` registered in `src/store/store.ts`
+- `StoreProvider` accepts a new `dropshipListings?: DropshipListing[]` prop and
+  dispatches `hydrateListings` on mount
+
 ---
 
 ## Data Model
