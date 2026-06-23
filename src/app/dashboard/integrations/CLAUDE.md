@@ -57,6 +57,9 @@ pipeline those routes call into.
 
 Connection management (`page.tsx`) shows platform cards with "Review orders"
 links (nav to `/dashboard/integrations/review`) when `canManage` and connected.
+There is no automatic or cron-based sync — all order imports are manual through
+the review flow.
+
 The **order review flow** (`review/page.tsx`) fetches the last 90 days of
 orders from all connected platforms via `GET /api/integrations/review`, marks
 each as `imported: boolean` (by querying `sales` for existing
@@ -87,7 +90,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 
 ## Shared dependencies
 
-- `src/lib/integrations/` — server-only OAuth adapters + sync pipeline (not
+- `src/lib/integrations/` — server-only OAuth adapters + order-fetch/import pipeline (not
   imported here directly, only via the API routes)
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
 - `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`

@@ -37,27 +37,34 @@ export async function GET(_req: NextRequest) {
   const since = new Date(Date.now() - REVIEW_LOOKBACK_MS).toISOString();
 
   // Load connections for all platforms to find which are active
-  const connections = await Promise.all(
-    PLATFORMS.map(async (p) => ({ platform: p, conn: await getConnection(client, p) }))
-  );
-  const active = connections.filter((c) => c.conn?.status === "connected");
+  let active: { platform: IntegrationPlatform; conn: Awaited<ReturnType<typeof getConnection>> }[];
+  let importedSet: Set<string>;
+  try {
+    const connections = await Promise.all(
+      PLATFORMS.map(async (p) => ({ platform: p, conn: await getConnection(client, p) }))
+    );
+    active = connections.filter((c) => c.conn?.status === "connected");
 
-  if (active.length === 0) return NextResponse.json({});
+    if (active.length === 0) return NextResponse.json({});
 
-  // Fetch existing external_order_ids from sales for dedup
-  const activePlatforms = active.map((c) => c.platform);
-  const { data: existingSales } = await client
-    .from("sales")
-    .select("platform, external_order_id")
-    .in("platform", activePlatforms)
-    .not("external_order_id", "is", null);
+    // Fetch existing external_order_ids from sales for dedup
+    const activePlatforms = active.map((c) => c.platform);
+    const { data: existingSales } = await client
+      .from("sales")
+      .select("platform, external_order_id")
+      .in("platform", activePlatforms)
+      .not("external_order_id", "is", null);
 
-  const importedSet = new Set(
-    (existingSales ?? []).map(
-      (s: { platform: string; external_order_id: string }) =>
-        `${s.platform}:${s.external_order_id}`
-    )
-  );
+    importedSet = new Set(
+      (existingSales ?? []).map(
+        (s: { platform: string; external_order_id: string }) =>
+          `${s.platform}:${s.external_order_id}`
+      )
+    );
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "Failed to load connections", detail }, { status: 500 });
+  }
 
   const result: ReviewResponse = {};
   const errors: Record<string, string> = {};
