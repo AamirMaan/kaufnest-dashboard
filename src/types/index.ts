@@ -197,3 +197,22 @@ export interface PlatformConnection {
   last_sync_error: string | null;
   updated_at: string;
 }
+
+// ─── Dropshipping ─────────────────────────────────────────────────────────────
+
+export type SourcePlatform = "amazon" | "aliexpress";
+
+export interface DropshipListing {
+  id: string;
+  ebay_listing_id: string;
+  title: string;
+  image_url: string | null;
+  ebay_url: string;
+  current_price: number;
+  currency: string;
+  sku: string | null;
+  source_url: string | null;
+  source_platform: SourcePlatform | null;
+  last_synced_at: string;
+  created_at: string;
+}
