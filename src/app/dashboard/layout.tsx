@@ -15,6 +15,7 @@ import type {
   CompanyProfile,
   TenantPlan,
   PlatformConnection,
+  DropshipListing,
 } from "@/types";
 
 export default async function DashboardLayout({
@@ -50,6 +51,7 @@ export default async function DashboardLayout({
     { data: users },
     { data: companyProfile },
     { data: platformConnections },
+    { data: dropshipListings },
   ] = await Promise.all([
     supabase
       .from("sales")
@@ -99,6 +101,11 @@ export default async function DashboardLayout({
         "id, platform, status, external_account_id, marketplace_id, last_synced_at, last_sync_status, last_sync_error, updated_at"
       )
       .returns<PlatformConnection[]>(),
+    supabase
+      .from("dropship_listings")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .returns<DropshipListing[]>(),
   ]);
 
   // Read impersonation cookie — set by /api/admin/impersonate
@@ -133,6 +140,7 @@ export default async function DashboardLayout({
       companyProfile={companyProfile ?? undefined}
       tenantPlan={tenantPlan}
       platformConnections={platformConnections ?? []}
+      dropshipListings={dropshipListings ?? []}
     >
       <ToastProvider>
         <DashboardShell
