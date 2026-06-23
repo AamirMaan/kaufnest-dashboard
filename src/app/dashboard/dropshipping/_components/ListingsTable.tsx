@@ -14,8 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EditSourceModal } from "./EditSourceModal";
-import type { DropshipListing } from "@/types";
-import type { Currency } from "@/types";
+import type { DropshipListing, Currency } from "@/types";
 
 interface ListingsTableProps {
   listings: DropshipListing[];
