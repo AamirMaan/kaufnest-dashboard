@@ -42,14 +42,14 @@ export function EbayPlanner() {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const isCustom = form.categoryLabel === "custom";
-  const category = isCustom
-    ? { fvfRate: parse(form.customFvfRate) / 100, flatFee: 0.30 }
-    : (EBAY_CATEGORIES.find((c) => c.label === form.categoryLabel) ?? EBAY_CATEGORIES[0]);
 
   const result = useMemo(() => {
     const sp = parse(form.sellingPrice);
     const pc = parse(form.purchaseCost);
     if (!sp || !pc) return null;
+    const category = form.categoryLabel === "custom"
+      ? { fvfRate: parse(form.customFvfRate) / 100, flatFee: 0.30 }
+      : (EBAY_CATEGORIES.find((c) => c.label === form.categoryLabel) ?? EBAY_CATEGORIES[0]);
     return calcEbayResult({
       sellingPrice: sp,
       vatMode: form.vatMode,
@@ -60,7 +60,7 @@ export function EbayPlanner() {
       shippingCost: parse(form.shippingCost),
       advertisingRate: parse(form.advertisingRate) / 100,
     });
-  }, [form, category]);
+  }, [form]);
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
