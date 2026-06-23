@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* ─── Brand / palette tokens ───────────────────────────────────────────────── *
  * Change ONLY here to retheme the entire dashboard.                            *
@@ -55,11 +59,87 @@
   --radius-badge:  9999px;  /* rounded-full */
   --radius-btn:    0.5rem;  /* rounded-lg */
   --shadow-card:   0 1px 3px 0 rgb(0 0 0 / .07), 0 1px 2px -1px rgb(0 0 0 / .07);
+
+  /* ─── shadcn token mapping → existing brand tokens ─────────────────────────
+   * shadcn components use these tokens via Tailwind utilities (bg-primary, etc.).
+   * Mapping to var(--color-*) means dark-theme overrides cascade automatically.
+   * ───────────────────────────────────────────────────────────────────────── */
+  --background:             var(--color-surface-subtle);
+  --foreground:             var(--color-text-base);
+  --card:                   var(--color-surface);
+  --card-foreground:        var(--color-text-base);
+  --popover:                var(--color-surface);
+  --popover-foreground:     var(--color-text-base);
+  --primary:                var(--color-primary);
+  --primary-foreground:     #ffffff;
+  --secondary:              var(--color-surface-subtle);
+  --secondary-foreground:   var(--color-text-strong);
+  --muted:                  var(--color-surface-subtle);
+  --muted-foreground:       var(--color-text-muted);
+  --accent:                 var(--color-primary-muted);
+  --accent-foreground:      var(--color-primary-text);
+  --destructive:            var(--color-danger);
+  --border:                 var(--color-border);
+  --input:                  var(--color-border);
+  --ring:                   var(--color-primary);
+  --radius:                 var(--radius-btn);
+  --chart-1:                #4f46e5; /* indigo-600  */
+  --chart-2:                #059669; /* emerald-600 */
+  --chart-3:                #d97706; /* amber-600   */
+  --chart-4:                #0ea5e9; /* sky-500     */
+  --chart-5:                #dc2626; /* red-600     */
+  --sidebar:                var(--color-sidebar-bg);
+  --sidebar-foreground:     var(--color-sidebar-text);
+  --sidebar-primary:        var(--color-primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent:         var(--color-sidebar-hover);
+  --sidebar-accent-foreground: var(--color-sidebar-text-strong);
+  --sidebar-border:         var(--color-sidebar-border);
+  --sidebar-ring:           var(--color-primary);
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans:        var(--font-geist-sans);
+  --font-mono:        var(--font-geist-mono);
+  --font-heading:        var(--font-sans);
+  --color-sidebar-ring:        var(--sidebar-ring);
+  --color-sidebar-border:        var(--sidebar-border);
+  --color-sidebar-accent-foreground:        var(--sidebar-accent-foreground);
+  --color-sidebar-accent:        var(--sidebar-accent);
+  --color-sidebar-primary-foreground:        var(--sidebar-primary-foreground);
+  --color-sidebar-primary:        var(--sidebar-primary);
+  --color-sidebar-foreground:        var(--sidebar-foreground);
+  --color-sidebar:        var(--sidebar);
+  --color-chart-5:        var(--chart-5);
+  --color-chart-4:        var(--chart-4);
+  --color-chart-3:        var(--chart-3);
+  --color-chart-2:        var(--chart-2);
+  --color-chart-1:        var(--chart-1);
+  --color-ring:        var(--ring);
+  --color-input:        var(--input);
+  --color-border:        var(--border);
+  --color-destructive:        var(--destructive);
+  --color-accent-foreground:        var(--accent-foreground);
+  --color-accent:        var(--accent);
+  --color-muted-foreground:        var(--muted-foreground);
+  --color-muted:        var(--muted);
+  --color-secondary-foreground:        var(--secondary-foreground);
+  --color-secondary:        var(--secondary);
+  --color-primary-foreground:        var(--primary-foreground);
+  --color-primary:        var(--primary);
+  --color-popover-foreground:        var(--popover-foreground);
+  --color-popover:        var(--popover);
+  --color-card-foreground:        var(--card-foreground);
+  --color-card:        var(--card);
+  --color-foreground:        var(--foreground);
+  --color-background:        var(--background);
+  --radius-sm:        calc(var(--radius) * 0.6);
+  --radius-md:        calc(var(--radius) * 0.8);
+  --radius-lg:        var(--radius);
+  --radius-xl:        calc(var(--radius) * 1.4);
+  --radius-2xl:        calc(var(--radius) * 1.8);
+  --radius-3xl:        calc(var(--radius) * 2.2);
+  --radius-4xl:        calc(var(--radius) * 2.6);
 }
 
 body {
@@ -112,4 +192,10 @@ body {
   --color-danger-bg:      #1c0606;
   --color-info-bg:        #1e1b4b;
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
 }
