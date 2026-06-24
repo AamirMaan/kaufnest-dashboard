@@ -1,0 +1,137 @@
+{
+  "nodes": [
+    {
+      "id": "integrations_authguard",
+      "label": "authGuard.ts",
+      "file_type": "code",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "integrations_authguard_integrationauthcontext",
+      "label": "IntegrationAuthContext",
+      "file_type": "code",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L6",
+      "_origin": "ast"
+    },
+    {
+      "id": "integrations_authguard_integrationauthresult",
+      "label": "IntegrationAuthResult",
+      "file_type": "code",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "integrations_authguard_requireintegrationadmin",
+      "label": "requireIntegrationAdmin()",
+      "file_type": "code",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L22",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "integrations_authguard",
+      "target": "server",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L1",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "users_muhammadaamirsohail_desktop_personal_kaufnest_dashboard_src_lib_supabase_server_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "supabase_server_createclient",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L2",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "users_muhammadaamirsohail_desktop_personal_kaufnest_dashboard_src_lib_utils_permissions_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "utils_permissions_haspermission",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L3",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "users_muhammadaamirsohail_desktop_personal_kaufnest_dashboard_src_types_index_ts",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "types_index_profile",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L4",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "integrations_authguard_integrationauthcontext",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L6",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "integrations_authguard_integrationauthresult",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L12",
+      "weight": 1.0
+    },
+    {
+      "source": "integrations_authguard",
+      "target": "integrations_authguard_requireintegrationadmin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/authGuard.ts",
+      "source_location": "L22",
+      "weight": 1.0
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

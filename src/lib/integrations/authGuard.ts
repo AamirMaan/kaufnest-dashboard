@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasPermission } from "@/lib/utils/permissions";
 import type { Profile } from "@/types";
 
 export interface IntegrationAuthContext {
@@ -39,7 +40,7 @@ export async function requireIntegrationAdmin(): Promise<IntegrationAuthResult> 
     .eq("id", user.id)
     .single<Pick<Profile, "role">>();
 
-  if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+  if (!profile?.role || !hasPermission(profile.role, "manage_integrations")) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
