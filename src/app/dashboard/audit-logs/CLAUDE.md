@@ -16,6 +16,7 @@ Unlike Sales/Expenses/Purchases/Users, **`auditLogsSlice` is NOT colocated here*
 It lives in `src/store/slices/auditLogsSlice.ts` (+ `auditLogsSlice.test.ts`)
 because every other CRUD feature dispatches `addAuditLog` directly when it
 writes a record — it's shared cross-cutting state, not private to this page.
+(This is the "3+ features" shared-code rule from `AGENTS.md` → "Shared vs. feature-private".)
 If you need to change the log shape or add a new action/entity type, start in
 `src/store/slices/auditLogsSlice.ts` and `src/types/index.ts` (`AuditLog`,
 `AuditAction`, `AuditEntityType`), then check every feature that calls
