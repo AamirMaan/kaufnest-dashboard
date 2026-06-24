@@ -110,7 +110,9 @@ export const ebayAdapter: PlatformAdapter = {
       new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: refreshToken,
-        scope: EBAY_SCOPE,
+        // Omitting scope lets eBay use the original grant's scopes.
+        // Passing EBAY_SCOPE here causes invalid_scope for connections
+        // that pre-date the sell.inventory.readonly scope addition.
       })
     );
   },

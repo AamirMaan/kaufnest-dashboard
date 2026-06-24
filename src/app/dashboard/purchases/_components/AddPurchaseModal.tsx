@@ -122,6 +122,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
         product_id: resolvedProductId,
         quantity: qty,
         unit_price: price,
+        total_amount: total,
         currency: form.currency,
         vendor: form.vendor.trim() || null,
         date: form.date,
