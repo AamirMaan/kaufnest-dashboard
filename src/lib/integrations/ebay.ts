@@ -7,7 +7,9 @@ const EBAY_AUTH_URL = SANDBOX
   : "https://auth.ebay.com/oauth2/authorize";
 const EBAY_TOKEN_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
 const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
-const EBAY_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.fulfillment";
+const EBAY_SCOPE =
+  "https://api.ebay.com/oauth/api_scope/sell.fulfillment" +
+  " https://api.ebay.com/oauth/api_scope/sell.inventory.readonly";
 
 interface EbayTokenResponse {
   access_token: string;
