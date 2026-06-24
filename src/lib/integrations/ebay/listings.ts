@@ -47,7 +47,12 @@ function ebayDomain(marketplaceId?: string): string {
 
 async function inventoryGet<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${INVENTORY_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      // eBay Inventory API rejects multi-value Accept-Language strings (e.g.
+      // "en-GB,en;q=0.9") that Next.js may forward from the browser request.
+      "Accept-Language": "en-US",
+    },
   });
 
   if (res.status === 403) {
