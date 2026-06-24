@@ -102,6 +102,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
         product_id: form.product_id || null,
         quantity: qty,
         unit_price: price,
+        total_amount: total,
         currency: form.currency,
         vendor: form.vendor.trim() || null,
         date: form.date,
