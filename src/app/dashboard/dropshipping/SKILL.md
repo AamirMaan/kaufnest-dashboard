@@ -24,6 +24,17 @@
   connections were created. If `fetchActiveListings` throws "eBay returned 403 Forbidden",
   the user must disconnect and reconnect eBay in `/dashboard/integrations` to get the new scope.
 
+- **eBay errorId 25707 — missing or non-alphanumeric SKUs on `/offer`:** The Inventory API's
+  `/offer?limit=200` endpoint rejects the **entire request** with errorId 25707 when any
+  listing in the seller's account has a missing or non-alphanumeric SKU (Custom Label).
+  This happens with listings created via the older Trading API without a Custom Label — eBay's
+  Inventory API requires all listings to have a valid alphanumeric SKU. This is NOT a SKU we
+  send; eBay validates the stored SKUs of all the seller's offers server-side. The `/offer`
+  call is the primary data source so this error is re-thrown with a message directing the user
+  to eBay Seller Hub → Active Listings → add an alphanumeric Custom Label to every listing.
+  The `/inventory_item` call has the same failure mode but is non-fatal (wrapped in its own
+  `try/catch`), since it only enriches title/image.
+
 - **Button.tsx naming conflict:** macOS case-insensitive filesystem means `Button.tsx` and
   `button.tsx` resolve to the same file. **Never run `npx shadcn add button`** — it will
   overwrite the custom Button with a different variant API. Use `@/components/ui/Button`

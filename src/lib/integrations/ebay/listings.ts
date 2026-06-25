@@ -70,7 +70,24 @@ async function inventoryGet<T>(path: string, token: string): Promise<T> {
 }
 
 export async function fetchActiveListings(accessToken: string): Promise<EbayListing[]> {
-  const offersBody = await inventoryGet<{ offers?: EbayOffer[] }>("/offer?limit=200", accessToken);
+  // The Inventory API rejects /offer when ANY listing in the account has a SKU
+  // with special characters (created via the older Trading API — errorId 25707).
+  // Re-throw with an actionable message so the UI can surface it.
+  let offersBody: { offers?: EbayOffer[] };
+  try {
+    offersBody = await inventoryGet<{ offers?: EbayOffer[] }>("/offer?limit=200", accessToken);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("25707")) {
+      throw new Error(
+        "eBay cannot list your offers because one or more listings is missing a SKU or " +
+        "has a SKU with special characters (hyphens, spaces, etc.). These listings were " +
+        "likely created without a Custom Label via the older Trading API. To fix this, " +
+        "go to eBay Seller Hub → Active Listings, add a unique alphanumeric-only Custom " +
+        "Label (SKU) to each listing, then sync again."
+      );
+    }
+    throw err;
+  }
 
   const publishedOffers = (offersBody.offers ?? []).filter(
     (o) => o.status === "PUBLISHED" && o.listing?.listingId
