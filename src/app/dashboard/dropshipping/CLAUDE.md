@@ -43,8 +43,11 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
   alongside `sell.fulfillment`). Existing connections authorised before this scope was added
   **must be re-authorised** — the refresh route returns a user-readable 403 error if not.
 - `fetchActiveListings` is in `src/lib/integrations/ebay/listings.ts`. It fetches
-  `/sell/inventory/v1/offer?limit=200` (active offers) and `/sell/inventory/v1/inventory_item?limit=200`
-  (title + images) in parallel, joins by SKU.
+  `/sell/inventory/v1/offer?limit=200` (active offers — fatal if fails), then
+  `/sell/inventory/v1/inventory_item?limit=200` (title + images — non-fatal, wrapped in
+  try/catch), and joins by SKU. Both endpoints can return errorId 25707 when the seller
+  has listings with non-alphanumeric SKUs (Trading API legacy); the `/offer` error is
+  re-thrown with a user-readable message; the `/inventory_item` error is silently ignored.
 
 ## Data flow
 

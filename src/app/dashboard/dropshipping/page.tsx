@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, TriangleAlert, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -21,6 +21,7 @@ export default function DropshippingPage() {
   const connections = useAppSelector((s) => s.integrations.connections);
   const listings = useAppSelector((s) => s.dropshipping.listings);
   const [refreshing, setRefreshing] = useState(false);
+  const [skuError, setSkuError] = useState(false);
 
   // 1. Plan gate
   if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
@@ -94,9 +95,15 @@ export default function DropshippingPage() {
         dispatch(upsertListings(updated));
       }
 
+      setSkuError(false);
       success(`Synced ${json.synced ?? 0} listing${json.synced === 1 ? "" : "s"} from eBay.`);
     } catch (err) {
-      toastError(err instanceof Error ? err.message : "Refresh failed");
+      const message = err instanceof Error ? err.message : "Refresh failed";
+      if (message.includes("Custom Label")) {
+        setSkuError(true);
+      } else {
+        toastError(message);
+      }
     } finally {
       setRefreshing(false);
     }
@@ -121,6 +128,50 @@ export default function DropshippingPage() {
           ) : undefined
         }
       />
+
+      {skuError && (
+        <div
+          className="mb-4 rounded-[var(--radius-card)] border p-4"
+          style={{
+            borderColor: "var(--color-warning, #f59e0b)",
+            background: "color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-surface))",
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <TriangleAlert size={16} className="mt-0.5 shrink-0" style={{ color: "var(--color-warning, #f59e0b)" }} />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-[var(--color-text-strong)]">
+                eBay listings are missing Custom Labels (SKUs)
+              </p>
+              <p className="mt-1 text-[var(--color-text-muted)]">
+                The eBay Inventory API requires every listing to have a Custom Label. Listings
+                without one cannot be synced. To fix this:
+              </p>
+              <ol className="mt-2 list-decimal space-y-1 pl-4 text-[var(--color-text-muted)]">
+                <li>Go to <strong className="text-[var(--color-text-strong)]">eBay Seller Hub → Listings → Active</strong></li>
+                <li>Open each listing and fill in the <strong className="text-[var(--color-text-strong)]">Custom Label (SKU)</strong> field</li>
+                <li>Use letters and numbers only — no hyphens, spaces, or special characters</li>
+                <li>Return here and click <strong className="text-[var(--color-text-strong)]">Refresh from eBay</strong></li>
+              </ol>
+              <a
+                href="https://www.ebay.com/sh/lst/active"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block font-medium text-[var(--color-primary)] underline underline-offset-2"
+              >
+                Open eBay Seller Hub →
+              </a>
+            </div>
+            <button
+              onClick={() => setSkuError(false)}
+              className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-strong)]"
+              aria-label="Dismiss"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <ListingsTable listings={listings} />
     </div>
