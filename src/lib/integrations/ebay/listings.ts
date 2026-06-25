@@ -70,11 +70,7 @@ async function inventoryGet<T>(path: string, token: string): Promise<T> {
 }
 
 export async function fetchActiveListings(accessToken: string): Promise<EbayListing[]> {
-  // Fetch published offers and inventory items in parallel — 2 API calls, no N+1.
-  const [offersBody, itemsBody] = await Promise.all([
-    inventoryGet<{ offers?: EbayOffer[] }>("/offer?limit=200", accessToken),
-    inventoryGet<{ inventoryItems?: EbayInventoryItem[] }>("/inventory_item?limit=200", accessToken),
-  ]);
+  const offersBody = await inventoryGet<{ offers?: EbayOffer[] }>("/offer?limit=200", accessToken);
 
   const publishedOffers = (offersBody.offers ?? []).filter(
     (o) => o.status === "PUBLISHED" && o.listing?.listingId
@@ -82,9 +78,20 @@ export async function fetchActiveListings(accessToken: string): Promise<EbayList
 
   if (publishedOffers.length === 0) return [];
 
-  const itemsBySku = new Map<string, EbayInventoryItem>(
-    (itemsBody.inventoryItems ?? []).map((item) => [item.sku, item])
-  );
+  // Inventory items enrich offers with title/image. If eBay rejects this request
+  // (e.g. errorId 25707 — seller has items with non-alphanumeric SKUs created via
+  // the older Trading API), fall back to offer.sku/listingId and no image. The
+  // existing fallbacks in the map below already handle a missing item gracefully.
+  let itemsBySku = new Map<string, EbayInventoryItem>();
+  try {
+    const itemsBody = await inventoryGet<{ inventoryItems?: EbayInventoryItem[] }>(
+      "/inventory_item?limit=200",
+      accessToken
+    );
+    itemsBySku = new Map((itemsBody.inventoryItems ?? []).map((item) => [item.sku, item]));
+  } catch {
+    // Non-fatal — listings will render with sku/listingId as title, no image.
+  }
 
   return publishedOffers.map((offer) => {
     const listingId = offer.listing!.listingId!;
