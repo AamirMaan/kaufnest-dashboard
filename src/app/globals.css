@@ -8,11 +8,11 @@
  * Change ONLY here to retheme the entire dashboard.                            *
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Primary – indigo */
-  --color-primary:        #4f46e5; /* indigo-600 */
-  --color-primary-hover:  #6366f1; /* indigo-500 */
-  --color-primary-muted:  #eef2ff; /* indigo-50  */
-  --color-primary-text:   #4338ca; /* indigo-700 */
+  /* Primary – emerald (was indigo) */
+  --color-primary:        #059669; /* emerald-600 */
+  --color-primary-hover:  #10b981; /* emerald-500 */
+  --color-primary-muted:  #ecfdf5; /* emerald-50  */
+  --color-primary-text:   #047857; /* emerald-700 */
 
   /* Secondary – slate (sidebar, header) */
   --color-sidebar-bg:          #0f172a; /* slate-900  */
@@ -35,9 +35,10 @@
   --color-text-faint:     #94a3b8; /* slate-400  */
 
   /* Semantic – success / warning / danger / info */
-  --color-success:        #059669; /* emerald-600 */
-  --color-success-bg:     #ecfdf5; /* emerald-50  */
-  --color-success-text:   #065f46; /* emerald-700 */
+  /* Success – green (shifted off emerald to avoid clash with new primary) */
+  --color-success:        #16a34a; /* green-600   */
+  --color-success-bg:     #dcfce7; /* green-50    */
+  --color-success-text:   #15803d; /* green-700   */
 
   --color-warning:        #d97706; /* amber-600   */
   --color-warning-bg:     #fffbeb; /* amber-50    */
@@ -83,7 +84,7 @@
   --input:                  var(--color-border);
   --ring:                   var(--color-primary);
   --radius:                 var(--radius-btn);
-  --chart-1:                #4f46e5; /* indigo-600  */
+  --chart-1:                #059669; /* emerald-600 */
   --chart-2:                #059669; /* emerald-600 */
   --chart-3:                #d97706; /* amber-600   */
   --chart-4:                #0ea5e9; /* sky-500     */
@@ -192,6 +193,21 @@ body {
   --color-danger-bg:      #1c0606;
   --color-info-bg:        #1e1b4b;
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+
+  /* Primary – violet */
+  --color-primary:        #8b5cf6; /* violet-500 */
+  --color-primary-hover:  #a78bfa; /* violet-400 */
+  --color-primary-muted:  #1e1b4b; /* deep violet muted */
+  --color-primary-text:   #c4b5fd; /* violet-300 */
+
+  /* Sidebar – violet-tinted dark */
+  --color-sidebar-bg:     #130f1e;
+  --color-sidebar-border: #2d1f47;
+  --color-sidebar-hover:  #2d1f47;
+
+  /* chart-1 — note: --color-info-bg references --color-primary-muted in :root,
+     so it cascades to #1e1b4b automatically; no separate override needed */
+  --chart-1:              #8b5cf6; /* violet-500 */
 }
 
 @layer base {
