@@ -200,11 +200,6 @@ body {
   --color-primary-muted:  #1e1b4b; /* deep violet muted */
   --color-primary-text:   #c4b5fd; /* violet-300 */
 
-  /* Sidebar – violet-tinted dark */
-  --color-sidebar-bg:     #130f1e;
-  --color-sidebar-border: #2d1f47;
-  --color-sidebar-hover:  #2d1f47;
-
   /* chart-1 — note: --color-info-bg references --color-primary-muted in :root,
      so it cascades to #1e1b4b automatically; no separate override needed */
   --chart-1:              #8b5cf6; /* violet-500 */
