@@ -3,23 +3,27 @@ interface StatCardProps {
   value: string;
   subtext?: string;
   trend?: "up" | "down" | "neutral";
+  icon?: React.ReactNode;
 }
 
-export function StatCard({ label, value, subtext, trend }: StatCardProps) {
+export function StatCard({ label, value, subtext, trend, icon }: StatCardProps) {
   const trendColor =
     trend === "up"
-      ? "text-[var(--color-success)]"
+      ? "text-(--color-success)"
       : trend === "down"
-      ? "text-[var(--color-danger)]"
-      : "text-[var(--color-text-muted)]";
+      ? "text-(--color-danger)"
+      : "text-(--color-text-muted)";
 
   return (
     <div
-      className="bg-[var(--color-surface)] rounded-[var(--radius-card)] border border-[var(--color-border)] p-5"
+      className="bg-(--color-surface) rounded-(--radius-card) border border-(--color-border) border-l-4 border-l-(--color-primary) p-5 transition-[box-shadow] duration-150 hover:shadow-lg"
       style={{ boxShadow: "var(--shadow-card)" }}
     >
-      <p className="text-sm font-medium text-[var(--color-text-muted)]">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-[var(--color-text-strong)] tabular-nums">{value}</p>
+      <div className="flex items-start justify-between">
+        <p className="text-sm font-medium text-(--color-text-muted)">{label}</p>
+        {icon && <span className="text-(--color-primary)">{icon}</span>}
+      </div>
+      <p className="mt-1 text-2xl font-bold text-(--color-text-strong) tabular-nums">{value}</p>
       {subtext && (
         <p className={`mt-1 text-xs font-medium ${trendColor}`}>{subtext}</p>
       )}

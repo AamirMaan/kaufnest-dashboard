@@ -1,6 +1,6 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "invoice" | "export" | "import";
 export type ButtonSize = "sm" | "md" | "icon";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -10,18 +10,24 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white",
+    "bg-(--color-primary) hover:bg-(--color-primary-hover) text-white",
   secondary:
-    "bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)] text-[var(--color-text-base)] border border-[var(--color-border)]",
+    "bg-(--color-surface) hover:bg-(--color-surface-subtle) text-(--color-text-base) border border-(--color-border)",
   danger:
-    "bg-[var(--color-danger-bg)] hover:bg-red-100 text-[var(--color-danger-text)]",
+    "bg-(--color-danger-bg) hover:brightness-95 text-(--color-danger-text) border border-(--color-border)",
   ghost:
-    "text-[var(--color-text-muted)] hover:text-[var(--color-text-base)] hover:bg-[var(--color-surface-subtle)]",
+    "text-(--color-text-muted) hover:text-(--color-text-base) hover:bg-(--color-surface-subtle)",
+  invoice:
+    "bg-(--color-info-bg) text-(--color-info-text) border border-(--color-border) hover:brightness-95",
+  export:
+    "bg-(--color-badge-default-bg) text-(--color-badge-default-text) border border-(--color-border) hover:brightness-95",
+  import:
+    "bg-(--color-success-bg) text-(--color-success-text) border border-(--color-border) hover:brightness-95",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
+  sm:   "px-3 py-1.5 text-xs",
+  md:   "px-4 py-2 text-sm",
   icon: "p-1.5 text-xs",
 };
 
@@ -30,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        className={`inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+        className={`inline-flex items-center justify-center gap-1.5 rounded-(--radius-btn) font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
         {...props}
       >
         {children}

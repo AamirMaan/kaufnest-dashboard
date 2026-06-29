@@ -8,19 +8,20 @@
  * Change ONLY here to retheme the entire dashboard.                            *
  * ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Primary – indigo */
-  --color-primary:        #4f46e5; /* indigo-600 */
-  --color-primary-hover:  #6366f1; /* indigo-500 */
-  --color-primary-muted:  #eef2ff; /* indigo-50  */
-  --color-primary-text:   #4338ca; /* indigo-700 */
+  /* Primary – emerald (was indigo) */
+  --color-primary:        #059669; /* emerald-600 */
+  --color-primary-hover:  #10b981; /* emerald-500 */
+  --color-primary-muted:  #ecfdf5; /* emerald-50  */
+  --color-primary-text:   #047857; /* emerald-700 */
 
   /* Secondary – slate (sidebar, header) */
-  --color-sidebar-bg:          #0f172a; /* slate-900  */
+  --color-sidebar-bg:          #0e172a; /* slate-900  */
   --color-sidebar-border:      #1e293b; /* slate-800  */
   --color-sidebar-text:        #94a3b8; /* slate-400  */
   --color-sidebar-text-strong: #ffffff; /* prominent labels, active icons */
   --color-sidebar-hover:       #1e293b; /* slate-800 — nav/button hover bg */
   --color-sidebar-active:      var(--color-primary);
+  --color-sidebar-active-text: var(--color-primary);
 
   /* Surface */
   --color-surface:        #ffffff;
@@ -35,9 +36,10 @@
   --color-text-faint:     #94a3b8; /* slate-400  */
 
   /* Semantic – success / warning / danger / info */
-  --color-success:        #059669; /* emerald-600 */
-  --color-success-bg:     #ecfdf5; /* emerald-50  */
-  --color-success-text:   #065f46; /* emerald-700 */
+  /* Success – green (shifted off emerald to avoid clash with new primary) */
+  --color-success:        #16a34a; /* green-600   */
+  --color-success-bg:     #dcfce7; /* green-50    */
+  --color-success-text:   #15803d; /* green-700   */
 
   --color-warning:        #d97706; /* amber-600   */
   --color-warning-bg:     #fffbeb; /* amber-50    */
@@ -47,8 +49,12 @@
   --color-danger-bg:      #fef2f2; /* red-50      */
   --color-danger-text:    #991b1b; /* red-700     */
 
-  --color-info-bg:        var(--color-primary-muted);
-  --color-info-text:      var(--color-primary-text);
+  --color-info-bg:        #f0f9ff; /* sky-50  */
+  --color-info-text:      #0369a1; /* sky-700 */
+
+  /* Badge default — blue (distinct from primary emerald/violet) */
+  --color-badge-default-bg:   #eff6ff; /* blue-50  */
+  --color-badge-default-text: #1d4ed8; /* blue-700 */
 
   /* Typography */
   --font-sans: var(--font-geist-sans);
@@ -83,7 +89,7 @@
   --input:                  var(--color-border);
   --ring:                   var(--color-primary);
   --radius:                 var(--radius-btn);
-  --chart-1:                #4f46e5; /* indigo-600  */
+  --chart-1:                #059669; /* emerald-600 */
   --chart-2:                #059669; /* emerald-600 */
   --chart-3:                #d97706; /* amber-600   */
   --chart-4:                #0ea5e9; /* sky-500     */
@@ -187,11 +193,29 @@ body {
   --color-text-muted:     #94a3b8; /* slate-400 */
   --color-text-faint:     #64748b; /* slate-500 */
 
-  --color-success-bg:     #052e16;
-  --color-warning-bg:     #1c1007;
-  --color-danger-bg:      #1c0606;
-  --color-info-bg:        #1e1b4b;
+  --color-success-bg:     #052e16; /* green-950 */
+  --color-success-text:   #86efac; /* green-300 */
+  --color-warning-bg:     #1c1007; /* amber-950 */
+  --color-warning-text:   #fcd34d; /* amber-300 */
+  --color-danger-bg:      #1c0606; /* red-950   */
+  --color-danger-text:    #fca5a5; /* red-300   */
+  --color-info-bg:        #082f49; /* sky-950   */
+  --color-info-text:      #7dd3fc; /* sky-300   */
+  --color-badge-default-bg:   #172554; /* blue-950  */
+  --color-badge-default-text: #93c5fd; /* blue-300  */
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+
+  --color-sidebar-active-text: #ffffff;
+
+  /* Primary – violet */
+  --color-primary:        #8b5cf6; /* violet-500 */
+  --color-primary-hover:  #a78bfa; /* violet-400 */
+  --color-primary-muted:  #1e1b4b; /* deep violet muted */
+  --color-primary-text:   #c4b5fd; /* violet-300 */
+
+  /* chart-1 — note: --color-info-bg references --color-primary-muted in :root,
+     so it cascades to #1e1b4b automatically; no separate override needed */
+  --chart-1:              #8b5cf6; /* violet-500 */
 }
 
 @layer base {

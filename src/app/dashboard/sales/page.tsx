@@ -190,7 +190,7 @@ export default function SalesPage() {
       render: (s: Sale) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditTarget(s)} title="Edit">
-            <Pencil size={15} />
+            <Pencil size={15} className="text-blue-500" />
           </Button>
           <Button
             size="icon"
@@ -198,7 +198,7 @@ export default function SalesPage() {
             onClick={() => { setSelectedIds(new Set([s.id])); setInvoiceOpen(true); }}
             title="Generate invoice for this row"
           >
-            <FileDown size={15} />
+            <FileDown size={15} className="text-violet-500" />
           </Button>
           {isSuperAdmin && (
             <Button
@@ -222,15 +222,15 @@ export default function SalesPage() {
         description="Revenue from all platforms"
         action={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setInvoiceOpen(true)}>
+            <Button variant="invoice" onClick={() => setInvoiceOpen(true)}>
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
-            <Button variant="secondary" onClick={handleExport} disabled={filtered.length === 0}>
+            <Button variant="export" onClick={handleExport} disabled={filtered.length === 0}>
               <Download size={15} />
               Export
             </Button>
-            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <Button variant="import" onClick={() => setImportOpen(true)}>
               <Upload size={15} />
               Import
             </Button>

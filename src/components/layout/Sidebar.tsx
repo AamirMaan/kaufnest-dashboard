@@ -128,36 +128,35 @@ export function Sidebar({
   return (
     <aside
       className={[
-        // Mobile: fixed overlay sliding in from left (covers full screen height incl. header)
         "fixed md:relative inset-y-0 left-0 z-30",
         "flex flex-col h-full",
-        "bg-[var(--color-sidebar-bg)] border-r border-[var(--color-sidebar-border)]",
+        "bg-(--color-sidebar-bg) border-r border-(--color-sidebar-border)",
         "transition-[transform,width] duration-300 ease-in-out",
         mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         "w-64",
         collapsed ? "md:w-16" : "md:w-64",
       ].join(" ")}
     >
-      {/* Desktop collapse toggle — floats on the right edge of the sidebar */}
+      {/* Desktop collapse toggle */}
       <button
         onClick={onToggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="hidden md:flex absolute right-0 translate-x-1/2 top-[72px] w-6 h-6 rounded-full items-center justify-center bg-[var(--color-sidebar-bg)] border border-[var(--color-sidebar-border)] text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:border-[var(--color-primary)] transition-colors cursor-pointer z-10 shadow-sm"
+        className="hidden md:flex absolute right-0 translate-x-1/2 top-[72px] w-6 h-6 rounded-full items-center justify-center bg-(--color-sidebar-bg) border border-(--color-sidebar-border) text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:border-(--color-primary) transition-colors duration-150 cursor-pointer z-10 shadow-sm"
       >
         {collapsed ? <ChevronRight size={11} /> : <ChevronLeft size={11} />}
       </button>
 
-      {/* Mobile-only header: brand + close button */}
-      <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-[var(--color-sidebar-border)] shrink-0">
+      {/* Mobile-only header */}
+      <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-(--color-sidebar-border) shrink-0">
         <div>
-          <span className="text-xl font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
-            Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
+          <span className="text-xl font-bold text-(--color-sidebar-text-strong) tracking-tight">
+            Kauf<span className="text-(--color-primary-hover)">Nest</span>
           </span>
-          <p className="text-xs text-[var(--color-sidebar-text)] mt-0.5">Business Dashboard</p>
+          <p className="text-xs text-(--color-sidebar-text) mt-0.5">Business Dashboard</p>
         </div>
         <button
           onClick={onMobileClose}
-          className="p-1.5 rounded-lg text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)] transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover) transition-colors duration-150 cursor-pointer"
           aria-label="Close navigation"
         >
           <X size={16} />
@@ -179,11 +178,11 @@ export function Sidebar({
               onClick={onMobileClose}
               title={collapsed ? item.label : undefined}
               className={[
-                "flex items-center gap-3 rounded-[var(--radius-btn)] text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-(--radius-btn) text-sm font-medium transition-colors duration-150",
                 collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
                 isActive
-                  ? "bg-[var(--color-sidebar-active)] text-white"
-                  : "text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)]",
+                  ? "bg-(--color-primary)/15 text-(--color-sidebar-active-text)"
+                  : "text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover)",
               ].join(" ")}
             >
               <item.Icon size={18} strokeWidth={1.75} className="shrink-0" />
@@ -198,12 +197,12 @@ export function Sidebar({
             onClick={onMobileClose}
             title={collapsed ? "Admin Panel" : undefined}
             className={[
-              "flex items-center gap-3 rounded-[var(--radius-btn)] text-sm font-medium transition-colors",
-              "mt-2 pt-2 border-t border-[var(--color-sidebar-border)]",
+              "flex items-center gap-3 rounded-(--radius-btn) text-sm font-medium transition-colors duration-150",
+              "mt-2 pt-2 border-t border-(--color-sidebar-border)",
               collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
               pathname.startsWith("/admin")
-                ? "bg-[var(--color-sidebar-active)] text-white"
-                : "text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] hover:bg-[var(--color-sidebar-hover)]",
+                ? "bg-(--color-primary)/15 text-(--color-sidebar-active-text)"
+                : "text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover)",
             ].join(" ")}
           >
             <Shield size={18} strokeWidth={1.75} className="shrink-0" />

@@ -174,7 +174,7 @@ export default function PurchasesPage() {
       render: (p: Purchase) => (
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
-            <Pencil size={15} />
+            <Pencil size={15} className="text-blue-500" />
           </Button>
           <Button
             size="icon"
@@ -182,7 +182,7 @@ export default function PurchasesPage() {
             onClick={() => { setSelectedIds(new Set([p.id])); setInvoiceOpen(true); }}
             title="Generate invoice for this row"
           >
-            <FileDown size={15} />
+            <FileDown size={15} className="text-violet-500" />
           </Button>
           {isSuperAdmin && (
             <Button
@@ -206,15 +206,15 @@ export default function PurchasesPage() {
         description="Inventory and stock purchases"
         action={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setInvoiceOpen(true)}>
+            <Button variant="invoice" onClick={() => setInvoiceOpen(true)}>
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
-            <Button variant="secondary" onClick={handleExport} disabled={filtered.length === 0}>
+            <Button variant="export" onClick={handleExport} disabled={filtered.length === 0}>
               <Download size={15} />
               Export
             </Button>
-            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+            <Button variant="import" onClick={() => setImportOpen(true)}>
               <Upload size={15} />
               Import
             </Button>
@@ -315,4 +315,3 @@ export default function PurchasesPage() {
     </div>
   );
 }
-

@@ -3,11 +3,11 @@ import type { ExpenseCategory, Platform, UserRole, AuditAction } from "@/types";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  default: "bg-[var(--color-surface-subtle)] text-[var(--color-text-base)]",
-  success: "bg-[var(--color-success-bg)] text-[var(--color-success-text)]",
-  warning: "bg-[var(--color-warning-bg)] text-[var(--color-warning-text)]",
-  danger:  "bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]",
-  info:    "bg-[var(--color-info-bg)] text-[var(--color-info-text)]",
+  default: "bg-(--color-badge-default-bg) text-(--color-badge-default-text)",
+  success: "bg-(--color-success-bg) text-(--color-success-text)",
+  warning: "bg-(--color-warning-bg) text-(--color-warning-text)",
+  danger:  "bg-(--color-danger-bg) text-(--color-danger-text)",
+  info:    "bg-(--color-info-bg) text-(--color-info-text)",
 };
 
 const ROLE_VARIANTS: Record<UserRole, BadgeVariant> = {
@@ -33,7 +33,7 @@ interface BadgeProps {
 export function Badge({ label, variant = "default" }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-[var(--radius-badge)] px-2.5 py-0.5 text-xs font-medium ${VARIANT_CLASSES[variant]}`}
+      className={`inline-flex items-center rounded-(--radius-badge) px-2.5 py-0.5 text-xs font-semibold ${VARIANT_CLASSES[variant]}`}
     >
       {label}
     </span>
