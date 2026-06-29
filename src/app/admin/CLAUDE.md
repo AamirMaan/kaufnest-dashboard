@@ -69,7 +69,9 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
      `user_metadata`; `set_user_tenant` is the canonical `app_metadata` writer
      used everywhere else).
   6. Register the tenant in `control.tenants` (plan, `admin_email`,
-     `status: "active"`, `trial_ends_at` = now + 14 days).
+     `status: "inactive"`, `trial_ends_at` = now + 14 days). Status stays
+     `inactive` until the admin accepts their invite and logs in (or a platform
+     admin flips it via `EditTenantModal`).
 
   On any thrown error, returns `{ error: "Provisioning failed", detail }`
   (500) where `detail` is the underlying Supabase/Postgres error message
@@ -87,6 +89,13 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `control.tenants` with only the fields that were sent. Returns
   `{ tenant: updatedRow }`. This is a **platform-admin override** — writes
   `plan`/`status` directly, bypassing Stripe webhooks.
+- **`resend-invite/route.ts`** (`POST`) — resends the invite email for an
+  existing tenant's `admin_email`. Verifies platform admin, looks up the tenant
+  by `tenantId` from `control.tenants`, reads the admin's `full_name` from
+  `tenant_<schema>.profiles`, then re-calls
+  `service.auth.admin.inviteUserByEmail` (no profile/schema changes — all already
+  stamped at provision time). `TenantActions` shows this button only when
+  `tenant.status === "inactive"`.
 - **`impersonate/route.ts`** (`POST`) — looks up the tenant in
   `control.tenants`, generates a Supabase magic link
   (`service.auth.admin.generateLink`) for the given admin email, and sets the
