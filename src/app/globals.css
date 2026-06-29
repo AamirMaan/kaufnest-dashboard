@@ -49,8 +49,12 @@
   --color-danger-bg:      #fef2f2; /* red-50      */
   --color-danger-text:    #991b1b; /* red-700     */
 
-  --color-info-bg:        var(--color-primary-muted);
-  --color-info-text:      var(--color-primary-text);
+  --color-info-bg:        #f0f9ff; /* sky-50  */
+  --color-info-text:      #0369a1; /* sky-700 */
+
+  /* Badge default — blue (distinct from primary emerald/violet) */
+  --color-badge-default-bg:   #eff6ff; /* blue-50  */
+  --color-badge-default-text: #1d4ed8; /* blue-700 */
 
   /* Typography */
   --font-sans: var(--font-geist-sans);
@@ -189,10 +193,16 @@ body {
   --color-text-muted:     #94a3b8; /* slate-400 */
   --color-text-faint:     #64748b; /* slate-500 */
 
-  --color-success-bg:     #052e16;
-  --color-warning-bg:     #1c1007;
-  --color-danger-bg:      #1c0606;
-  --color-info-bg:        #1e1b4b;
+  --color-success-bg:     #052e16; /* green-950 */
+  --color-success-text:   #86efac; /* green-300 */
+  --color-warning-bg:     #1c1007; /* amber-950 */
+  --color-warning-text:   #fcd34d; /* amber-300 */
+  --color-danger-bg:      #1c0606; /* red-950   */
+  --color-danger-text:    #fca5a5; /* red-300   */
+  --color-info-bg:        #082f49; /* sky-950   */
+  --color-info-text:      #7dd3fc; /* sky-300   */
+  --color-badge-default-bg:   #172554; /* blue-950  */
+  --color-badge-default-text: #93c5fd; /* blue-300  */
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
 
   --color-sidebar-active-text: #ffffff;

@@ -3,7 +3,7 @@ import type { ExpenseCategory, Platform, UserRole, AuditAction } from "@/types";
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  default: "bg-(--color-primary-muted) text-(--color-primary-text)",
+  default: "bg-(--color-badge-default-bg) text-(--color-badge-default-text)",
   success: "bg-(--color-success-bg) text-(--color-success-text)",
   warning: "bg-(--color-warning-bg) text-(--color-warning-text)",
   danger:  "bg-(--color-danger-bg) text-(--color-danger-text)",

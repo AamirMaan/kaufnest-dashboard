@@ -139,7 +139,7 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={id}
-                    className={`hover:bg-(--color-primary-muted) transition-colors duration-150 ${isSelected ? "bg-(--color-info-bg)" : ""}`}
+                    className={`hover:bg-(--color-surface-subtle) transition-colors duration-150 ${isSelected ? "bg-(--color-info-bg)" : ""}`}
                   >
                     {selectable && (
                       <td className="px-4 py-3 w-10">
