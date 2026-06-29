@@ -13,6 +13,7 @@ import {
   PieChart,
   Pie,
 } from "recharts";
+import { DollarSign, TrendingDown, ShoppingCart, BarChart3, Package } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -250,16 +251,19 @@ export default function DashboardPage() {
           value={formatCurrency(totalRevenue)}
           trend="up"
           subtext={avgOrderValue !== null ? `Avg. order: ${formatCurrency(avgOrderValue)}` : undefined}
+          icon={<DollarSign size={18} />}
         />
         <StatCard
           label="Expenses"
           value={formatCurrency(totalExpenses)}
           trend="down"
+          icon={<TrendingDown size={18} />}
         />
         <StatCard
           label="Purchases"
           value={formatCurrency(totalPurchases)}
           trend="down"
+          icon={<ShoppingCart size={18} />}
         />
         <StatCard
           label="Net Profit"
@@ -272,12 +276,14 @@ export default function DashboardPage() {
               ? "Profitable in this period"
               : "Loss in this period"
           }
+          icon={<BarChart3 size={18} />}
         />
         <StatCard
           label="Orders"
           value={periodSales.length.toLocaleString()}
           subtext={`${unitsSold} unit${unitsSold !== 1 ? "s" : ""} sold`}
           trend="neutral"
+          icon={<Package size={18} />}
         />
       </div>
 

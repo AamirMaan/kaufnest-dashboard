@@ -79,93 +79,93 @@ export function DataTable<T>({
 
   return (
     <div
-      className="rounded-[var(--radius-card)] border border-[var(--color-border)] overflow-hidden"
+      className="rounded-(--radius-card) border border-(--color-border) overflow-hidden"
       style={{ boxShadow: "var(--shadow-card)" }}
     >
       <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-[var(--color-border)]">
-        <thead className="bg-[var(--color-surface-subtle)]">
-          <tr>
-            {selectable && (
-              <th className="px-4 py-3 w-10">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="cursor-pointer accent-[var(--color-primary)]"
-                />
-              </th>
-            )}
-            {columns.map((col) => {
-              const isSorted = sort?.key === col.header;
-              const SortIcon = isSorted ? (sort!.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
-              return (
-                <th
-                  key={col.header}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider ${col.className ?? ""}`}
-                >
-                  {col.sortValue ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(col.header)}
-                      className="inline-flex items-center gap-1 cursor-pointer hover:text-[var(--color-text-strong)] transition-colors"
-                      title={`Sort by ${col.header}`}
-                    >
-                      {col.header}
-                      <SortIcon size={12} className={isSorted ? "text-[var(--color-primary)]" : "text-[var(--color-text-faint)]"} />
-                    </button>
-                  ) : (
-                    col.header
-                  )}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-subtle)] bg-[var(--color-surface)]">
-          {sortedRows.length === 0 ? (
+        <table className="min-w-full divide-y divide-(--color-border)">
+          <thead className="bg-(--color-surface-subtle)">
             <tr>
-              <td
-                colSpan={selectable ? columns.length + 1 : columns.length}
-                className="px-4 py-10 text-center text-sm text-[var(--color-text-faint)]"
-              >
-                {emptyMessage}
-              </td>
+              {selectable && (
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="cursor-pointer accent-(--color-primary)"
+                  />
+                </th>
+              )}
+              {columns.map((col) => {
+                const isSorted = sort?.key === col.header;
+                const SortIcon = isSorted ? (sort!.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                return (
+                  <th
+                    key={col.header}
+                    className={`px-4 py-3 text-left text-xs font-semibold text-(--color-text-muted) uppercase tracking-wider ${col.className ?? ""}`}
+                  >
+                    {col.sortValue ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(col.header)}
+                        className="inline-flex items-center gap-1 cursor-pointer hover:text-(--color-text-strong) transition-colors duration-150"
+                        title={`Sort by ${col.header}`}
+                      >
+                        {col.header}
+                        <SortIcon size={12} className={isSorted ? "text-(--color-primary)" : "text-(--color-text-faint)"} />
+                      </button>
+                    ) : (
+                      col.header
+                    )}
+                  </th>
+                );
+              })}
             </tr>
-          ) : (
-            sortedRows.map((row) => {
-              const id = String(row[keyField]);
-              const isSelected = selectedIds?.has(id) ?? false;
-              return (
-                <tr
-                  key={id}
-                  className={`hover:bg-[var(--color-surface-subtle)] transition-colors ${isSelected ? "bg-[var(--color-info-bg)]" : ""}`}
+          </thead>
+          <tbody className="divide-y divide-(--color-border-subtle) bg-(--color-surface)">
+            {sortedRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={selectable ? columns.length + 1 : columns.length}
+                  className="px-4 py-10 text-center text-sm text-(--color-text-faint)"
                 >
-                  {selectable && (
-                    <td className="px-4 py-3 w-10">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleOne(id)}
-                        className="cursor-pointer accent-[var(--color-primary)]"
-                      />
-                    </td>
-                  )}
-                  {columns.map((col) => (
-                    <td key={col.header} className={`px-4 py-3 ${col.className ?? ""}`}>
-                      {col.render
-                        ? col.render(row)
-                        : col.accessor != null
-                        ? String(row[col.accessor] ?? "—")
-                        : null}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              sortedRows.map((row) => {
+                const id = String(row[keyField]);
+                const isSelected = selectedIds?.has(id) ?? false;
+                return (
+                  <tr
+                    key={id}
+                    className={`hover:bg-(--color-primary-muted) transition-colors duration-150 ${isSelected ? "bg-(--color-info-bg)" : ""}`}
+                  >
+                    {selectable && (
+                      <td className="px-4 py-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleOne(id)}
+                          className="cursor-pointer accent-(--color-primary)"
+                        />
+                      </td>
+                    )}
+                    {columns.map((col) => (
+                      <td key={col.header} className={`px-4 py-3 ${col.className ?? ""}`}>
+                        {col.render
+                          ? col.render(row)
+                          : col.accessor != null
+                          ? String(row[col.accessor] ?? "—")
+                          : null}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
