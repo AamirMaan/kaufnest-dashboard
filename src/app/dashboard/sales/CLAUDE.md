@@ -127,6 +127,7 @@ editable fields.
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+  (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
 
 ## CSV import/export
