@@ -15,12 +15,13 @@
   --color-primary-text:   #047857; /* emerald-700 */
 
   /* Secondary – slate (sidebar, header) */
-  --color-sidebar-bg:          #0f172a; /* slate-900  */
+  --color-sidebar-bg:          #0e172a; /* slate-900  */
   --color-sidebar-border:      #1e293b; /* slate-800  */
   --color-sidebar-text:        #94a3b8; /* slate-400  */
   --color-sidebar-text-strong: #ffffff; /* prominent labels, active icons */
   --color-sidebar-hover:       #1e293b; /* slate-800 — nav/button hover bg */
   --color-sidebar-active:      var(--color-primary);
+  --color-sidebar-active-text: var(--color-primary);
 
   /* Surface */
   --color-surface:        #ffffff;
@@ -193,6 +194,8 @@ body {
   --color-danger-bg:      #1c0606;
   --color-info-bg:        #1e1b4b;
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+
+  --color-sidebar-active-text: #ffffff;
 
   /* Primary – violet */
   --color-primary:        #8b5cf6; /* violet-500 */
