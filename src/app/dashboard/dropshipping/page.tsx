@@ -31,16 +31,16 @@ export default function DropshippingPage() {
           title="Dropshipping Listings"
           description="Manage your active eBay listings and link supplier source products"
         />
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <h2 className="text-sm font-semibold text-[var(--color-text-strong)]">
+        <div className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6">
+          <h2 className="text-sm font-semibold text-(--color-text-strong)">
             Upgrade to unlock Dropshipping
           </h2>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          <p className="mt-2 text-sm text-(--color-text-muted)">
             Dropshipping listing management is available on the Pro and Business plans.
           </p>
           <Link
             href="/dashboard/settings"
-            className="mt-4 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline"
+            className="mt-4 inline-block text-sm font-medium text-(--color-primary) hover:underline"
           >
             View plans &amp; billing →
           </Link>
@@ -58,16 +58,16 @@ export default function DropshippingPage() {
           title="Dropshipping Listings"
           description="Manage your active eBay listings and link supplier source products"
         />
-        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <h2 className="text-sm font-semibold text-[var(--color-text-strong)]">
+        <div className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6">
+          <h2 className="text-sm font-semibold text-(--color-text-strong)">
             eBay connection required
           </h2>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          <p className="mt-2 text-sm text-(--color-text-muted)">
             Connect your eBay seller account in Integrations to import your active listings.
           </p>
           <Link
             href="/dashboard/integrations"
-            className="mt-4 inline-block text-sm font-medium text-[var(--color-primary)] hover:underline"
+            className="mt-4 inline-block text-sm font-medium text-(--color-primary) hover:underline"
           >
             Go to Integrations →
           </Link>
@@ -131,7 +131,7 @@ export default function DropshippingPage() {
 
       {skuError && (
         <div
-          className="mb-4 rounded-[var(--radius-card)] border p-4"
+          className="mb-4 rounded-(--radius-card) border p-4"
           style={{
             borderColor: "var(--color-warning, #f59e0b)",
             background: "color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-surface))",
@@ -140,31 +140,31 @@ export default function DropshippingPage() {
           <div className="flex items-start gap-3">
             <TriangleAlert size={16} className="mt-0.5 shrink-0" style={{ color: "var(--color-warning, #f59e0b)" }} />
             <div className="flex-1 text-sm">
-              <p className="font-semibold text-[var(--color-text-strong)]">
+              <p className="font-semibold text-(--color-text-strong)">
                 eBay listings are missing Custom Labels (SKUs)
               </p>
-              <p className="mt-1 text-[var(--color-text-muted)]">
+              <p className="mt-1 text-(--color-text-muted)">
                 The eBay Inventory API requires every listing to have a Custom Label. Listings
                 without one cannot be synced. To fix this:
               </p>
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-[var(--color-text-muted)]">
-                <li>Go to <strong className="text-[var(--color-text-strong)]">eBay Seller Hub → Listings → Active</strong></li>
-                <li>Open each listing and fill in the <strong className="text-[var(--color-text-strong)]">Custom Label (SKU)</strong> field</li>
+              <ol className="mt-2 list-decimal space-y-1 pl-4 text-(--color-text-muted)">
+                <li>Go to <strong className="text-(--color-text-strong)">eBay Seller Hub → Listings → Active</strong></li>
+                <li>Open each listing and fill in the <strong className="text-(--color-text-strong)">Custom Label (SKU)</strong> field</li>
                 <li>Use letters and numbers only — no hyphens, spaces, or special characters</li>
-                <li>Return here and click <strong className="text-[var(--color-text-strong)]">Refresh from eBay</strong></li>
+                <li>Return here and click <strong className="text-(--color-text-strong)">Refresh from eBay</strong></li>
               </ol>
               <a
                 href="https://www.ebay.com/sh/lst/active"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 inline-block font-medium text-[var(--color-primary)] underline underline-offset-2"
+                className="mt-3 inline-block font-medium text-(--color-primary) underline underline-offset-2"
               >
                 Open eBay Seller Hub →
               </a>
             </div>
             <button
               onClick={() => setSkuError(false)}
-              className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-strong)]"
+              className="shrink-0 text-(--color-text-muted) hover:text-(--color-text-strong)"
               aria-label="Dismiss"
             >
               <X size={14} />

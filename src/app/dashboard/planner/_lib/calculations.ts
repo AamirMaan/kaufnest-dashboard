@@ -10,6 +10,8 @@ export interface EbayCalcInput {
   fvfFlatFee: number;
   shippingCost: number;
   advertisingRate: number;
+  customChargeRate: number;
+  customChargeFixed: number;
 }
 
 export interface AmazonCalcInput {
@@ -21,8 +23,11 @@ export interface AmazonCalcInput {
   fulfillmentMethod: FulfillmentMethod;
   fbaFulfillmentFee: number;
   fbaStorageFee: number;
+  inboundFreight: number;
   shippingCost: number;
   advertisingRate: number;
+  customChargeRate: number;
+  customChargeFixed: number;
 }
 
 export interface CalcBreakdown {
@@ -30,6 +35,7 @@ export interface CalcBreakdown {
   vatCollected: number;
   fixedCosts: number;
   advertisingCost: number;
+  customCharge: number;
 }
 
 export interface CalcResult {
@@ -49,6 +55,8 @@ interface NormalizedInput {
   purchaseCost: number;
   fixedCosts: number;
   advertisingRate: number;
+  customRate: number;
+  customFixed: number;
 }
 
 function round2(n: number): number {
@@ -65,24 +73,27 @@ function compute(input: NormalizedInput): CalcResult {
     purchaseCost,
     fixedCosts,
     advertisingRate,
+    customRate,
+    customFixed,
   } = input;
 
   const grossPrice =
     vatMode === "inclusive" ? sellingPrice : sellingPrice * (1 + vatRate);
 
-  const vatCollected = round2(grossPrice * vatRate / (1 + vatRate));
-  const platformFee  = round2(grossPrice * platformFeeRate + flatFee);
+  const vatCollected    = round2(grossPrice * vatRate / (1 + vatRate));
+  const platformFee     = round2(grossPrice * platformFeeRate + flatFee);
   const advertisingCost = round2(grossPrice * advertisingRate);
+  const customCharge    = round2(grossPrice * customRate + customFixed);
 
   const profit = round2(
-    grossPrice - platformFee - vatCollected - purchaseCost - fixedCosts - advertisingCost
+    grossPrice - platformFee - vatCollected - purchaseCost - fixedCosts - advertisingCost - customCharge
   );
   const profitMargin = grossPrice > 0 ? round2((profit / grossPrice) * 100) : 0;
 
   // Algebraic break-even: solve profit = 0 for grossPrice
-  const divisor = 1 - platformFeeRate - advertisingRate - vatRate / (1 + vatRate);
+  const divisor = 1 - platformFeeRate - advertisingRate - customRate - vatRate / (1 + vatRate);
   const minGrossPrice = divisor > 0
-    ? round2((purchaseCost + flatFee + fixedCosts) / divisor)
+    ? round2((purchaseCost + flatFee + fixedCosts + customFixed) / divisor)
     : Infinity;
 
   const minSellingPrice =
@@ -93,7 +104,7 @@ function compute(input: NormalizedInput): CalcResult {
     profit,
     profitMargin,
     minSellingPrice,
-    breakdown: { platformFee, vatCollected, fixedCosts: round2(fixedCosts), advertisingCost },
+    breakdown: { platformFee, vatCollected, fixedCosts: round2(fixedCosts), advertisingCost, customCharge },
   };
 }
 
@@ -107,13 +118,15 @@ export function calcEbayResult(input: EbayCalcInput): CalcResult {
     purchaseCost: input.purchaseCost,
     fixedCosts: input.shippingCost,
     advertisingRate: input.advertisingRate,
+    customRate: input.customChargeRate,
+    customFixed: input.customChargeFixed,
   });
 }
 
 export function calcAmazonResult(input: AmazonCalcInput): CalcResult {
   const fixedCosts =
     input.fulfillmentMethod === "fba"
-      ? input.fbaFulfillmentFee + input.fbaStorageFee
+      ? input.fbaFulfillmentFee + input.fbaStorageFee + input.inboundFreight
       : input.shippingCost;
 
   return compute({
@@ -125,5 +138,7 @@ export function calcAmazonResult(input: AmazonCalcInput): CalcResult {
     purchaseCost: input.purchaseCost,
     fixedCosts,
     advertisingRate: input.advertisingRate,
+    customRate: input.customChargeRate,
+    customFixed: input.customChargeFixed,
   });
 }

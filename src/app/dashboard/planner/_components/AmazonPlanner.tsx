@@ -6,6 +6,8 @@ import type { VatMode, FulfillmentMethod } from "../_lib/calculations";
 import { AMAZON_CATEGORIES } from "../_lib/fees";
 import { PlannerResults } from "./PlannerResults";
 
+type ChargeType = "pct" | "fixed";
+
 interface FormState {
   sellingPrice: string;
   vatMode: VatMode;
@@ -16,8 +18,12 @@ interface FormState {
   fulfillmentMethod: FulfillmentMethod;
   fbaFulfillmentFee: string;
   fbaStorageFee: string;
+  inboundFreight: string;
   shippingCost: string;
   advertisingRate: string;
+  customChargeLabel: string;
+  customChargeType: ChargeType;
+  customChargeValue: string;
 }
 
 const DEFAULT_FORM: FormState = {
@@ -30,8 +36,12 @@ const DEFAULT_FORM: FormState = {
   fulfillmentMethod: "fba",
   fbaFulfillmentFee: "",
   fbaStorageFee: "",
+  inboundFreight: "",
   shippingCost: "",
   advertisingRate: "",
+  customChargeLabel: "",
+  customChargeType: "pct",
+  customChargeValue: "",
 };
 
 function parse(v: string, fallback = 0): number {
@@ -58,6 +68,8 @@ export function AmazonPlanner() {
       form.categoryLabel === "custom"
         ? parse(form.customReferralRate) / 100
         : (AMAZON_CATEGORIES.find((c) => c.label === form.categoryLabel)?.referralFeeRate ?? 0.15);
+    const customChargeRate  = form.customChargeType === "pct"   ? parse(form.customChargeValue) / 100 : 0;
+    const customChargeFixed = form.customChargeType === "fixed" ? parse(form.customChargeValue) : 0;
     return calcAmazonResult({
       sellingPrice: sp,
       vatMode: form.vatMode,
@@ -67,8 +79,11 @@ export function AmazonPlanner() {
       fulfillmentMethod: form.fulfillmentMethod,
       fbaFulfillmentFee: parse(form.fbaFulfillmentFee),
       fbaStorageFee: parse(form.fbaStorageFee),
+      inboundFreight: parse(form.inboundFreight),
       shippingCost: parse(form.shippingCost),
       advertisingRate: parse(form.advertisingRate) / 100,
+      customChargeRate,
+      customChargeFixed,
     });
   }, [form]);
 
@@ -101,7 +116,7 @@ export function AmazonPlanner() {
                   "flex-1 py-1.5 font-medium transition-colors capitalize cursor-pointer",
                   form.vatMode === mode
                     ? "bg-[var(--color-sidebar-active)] text-white"
-                    : "text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)]",
+                    : "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
                 ].join(" ")}
               >
                 {mode}
@@ -179,7 +194,7 @@ export function AmazonPlanner() {
                   "flex-1 py-1.5 font-medium transition-colors uppercase cursor-pointer",
                   form.fulfillmentMethod === method
                     ? "bg-[var(--color-sidebar-active)] text-white"
-                    : "text-[var(--color-text-muted)] hover:bg-[var(--color-sidebar-hover)]",
+                    : "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
                 ].join(" ")}
               >
                 {method}
@@ -214,6 +229,18 @@ export function AmazonPlanner() {
                 className={inputCls}
               />
             </PlannerField>
+            <PlannerField label="Inbound freight to Amazon (€)" id="amz-freight">
+              <input
+                id="amz-freight"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={form.inboundFreight}
+                onChange={set("inboundFreight")}
+                className={inputCls}
+              />
+            </PlannerField>
           </>
         )}
 
@@ -245,9 +272,56 @@ export function AmazonPlanner() {
             className={inputCls}
           />
         </PlannerField>
+
+        {/* Custom charge */}
+        <div className="space-y-1">
+          <span className="block text-xs font-medium text-[var(--color-text-muted)]">
+            Additional charge (optional)
+          </span>
+          <input
+            type="text"
+            placeholder="Label, e.g. PayPal fee, Import duty…"
+            value={form.customChargeLabel}
+            onChange={set("customChargeLabel")}
+            className={inputCls}
+          />
+          <div className="flex gap-2 pt-1">
+            <div className="flex rounded-[var(--radius-btn)] border border-[var(--color-border)] overflow-hidden text-sm shrink-0">
+              {(["pct", "fixed"] as ChargeType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, customChargeType: type }))}
+                  className={[
+                    "w-9 py-1.5 font-medium transition-colors cursor-pointer",
+                    form.customChargeType === type
+                      ? "bg-[var(--color-sidebar-active)] text-white"
+                      : "text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)]",
+                  ].join(" ")}
+                >
+                  {type === "pct" ? "%" : "€"}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              min="0"
+              step={form.customChargeType === "pct" ? "0.1" : "0.01"}
+              placeholder={form.customChargeType === "pct" ? "0.0" : "0.00"}
+              value={form.customChargeValue}
+              onChange={set("customChargeValue")}
+              className={inputCls}
+            />
+          </div>
+        </div>
       </div>
 
-      <PlannerResults result={result} vatMode={form.vatMode} shippingLabel={shippingLabel} />
+      <PlannerResults
+        result={result}
+        vatMode={form.vatMode}
+        shippingLabel={shippingLabel}
+        customChargeLabel={form.customChargeLabel || undefined}
+      />
     </div>
   );
 }

@@ -7,9 +7,10 @@ interface PlannerResultsProps {
   result: CalcResult | null;
   vatMode: VatMode;
   shippingLabel: string;
+  customChargeLabel?: string;
 }
 
-export function PlannerResults({ result, vatMode, shippingLabel }: PlannerResultsProps) {
+export function PlannerResults({ result, vatMode, shippingLabel, customChargeLabel }: PlannerResultsProps) {
   const minPriceLabel =
     vatMode === "inclusive"
       ? "Min. selling price (incl. VAT)"
@@ -77,6 +78,13 @@ export function PlannerResults({ result, vatMode, shippingLabel }: PlannerResult
             value={result ? formatCurrency(result.breakdown.advertisingCost) : "—"}
             small
           />
+          {customChargeLabel && (
+            <ResultRow
+              label={customChargeLabel}
+              value={result ? formatCurrency(result.breakdown.customCharge) : "—"}
+              small
+            />
+          )}
         </div>
       </div>
 

@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .superpowers/
+
+graphify-out/cost.json        # local only
+# graphify-out/cache/         # optional: commit for speed, skip to keep repo small
