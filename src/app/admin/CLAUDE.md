@@ -95,8 +95,16 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   by `tenantId` from `control.tenants`, reads the admin's `full_name` from
   `tenant_<schema>.profiles`, then re-calls
   `service.auth.admin.inviteUserByEmail` (no profile/schema changes — all already
-  stamped at provision time). `TenantActions` shows this button only when
-  `tenant.status === "invited"`.
+  stamped at provision time). Returns `400` if `tenant.status !== "invited"` —
+  invites cannot be resent once the admin logs in for the first time. `TenantActions`
+  shows this button only when `tenant.status === "invited"`.
+- **`src/app/auth/confirm/route.ts`** (not in admin/, but cross-referenced) —
+  verifies the Supabase OTP token from the invite link. After successful OTP
+  verification (line 27), checks if the user's `tenant_schema` corresponds to a
+  tenant in `control.tenants` with `status === "invited"`. If so, auto-updates
+  the status to `"active"` (lines 39-45) to mark the tenant as having completed
+  first login. This is the transition point: invites become non-resendable once
+  the admin logs in.
 - **`impersonate/route.ts`** (`POST`) — looks up the tenant in
   `control.tenants`, generates a Supabase magic link
   (`service.auth.admin.generateLink`) for the given admin email, and sets the
@@ -111,6 +119,15 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   Project A, server-only. `isPlatformAdmin(email)` is also called from
   `dashboard/layout.tsx` to decide whether to show the sidebar's "Admin Panel"
   link (see `src/app/dashboard/CLAUDE.md`).
+- `src/proxy.ts` — Next.js request middleware. Updated to query `control.tenants`
+  and check each authenticated user's tenant `status` (lines 58–71). If a user
+  whose tenant is `"deactivated"` tries to access `/dashboard/*`, they are
+  redirected to `/account-deactivated` before any RBAC check occurs.
+- `src/app/account-deactivated/page.tsx` — static page shown when `proxy.ts`
+  detects `tenant.status === "deactivated"`. No authentication required (outside
+  the proxy matcher), displays a message that the organisation's account has been
+  deactivated. Not part of the admin feature, but driven by platform admin status
+  changes via `EditTenantModal`.
 - `src/lib/supabase/server.ts` (`createServiceClientForTenant`) — Project B,
   schema-scoped service-role client for tenant-table seeding.
 - `src/lib/supabase/managementApi.ts` (`addExposedSchema`) — Project B's
