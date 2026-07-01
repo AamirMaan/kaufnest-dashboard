@@ -76,6 +76,19 @@ export async function POST(req: NextRequest) {
   );
 
   if (inviteError) {
+    // Supabase rejects inviteUserByEmail for already-confirmed users.
+    // This means the admin logged in before status was auto-updated — correct it now.
+    if (inviteError.message.toLowerCase().includes("already been registered")) {
+      await control
+        .schema("control")
+        .from("tenants")
+        .update({ status: "active" })
+        .eq("id", tenant.id);
+      return NextResponse.json(
+        { error: "This admin has already accepted their invite and logged in. Their tenant status has been updated to Active." },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: inviteError.message }, { status: 400 });
   }
 
