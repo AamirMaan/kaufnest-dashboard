@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         .update({
           stripe_subscription_id: sub.id,
           plan: (sub.metadata?.plan as string) ?? "starter",
-          status: sub.status === "active" ? "active" : "inactive",
+          status: sub.status === "active" ? "active" : "deactivated",
         })
         .eq("stripe_customer_id", sub.customer as string);
       break;
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       await control
         .schema("control")
         .from("tenants")
-        .update({ status: "cancelled" })
+        .update({ status: "deactivated" })
         .eq("stripe_customer_id", sub.customer as string);
       break;
     }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       await control
         .schema("control")
         .from("tenants")
-        .update({ status: "inactive" })
+        .update({ status: "deactivated" })
         .eq("stripe_customer_id", inv.customer as string);
       break;
     }
