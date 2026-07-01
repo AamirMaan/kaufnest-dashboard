@@ -40,6 +40,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tenant has no admin email configured" }, { status: 400 });
   }
 
+  if (tenant.status !== "invited") {
+    return NextResponse.json(
+      { error: "Invite can only be resent for tenants that have not yet logged in" },
+      { status: 400 }
+    );
+  }
+
   const service = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!

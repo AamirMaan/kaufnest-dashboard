@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       schema_name: schemaName,
       admin_email: adminEmail,
       plan,
-      status: "inactive",
+      status: "invited",
       trial_ends_at: trialEnd.toISOString(),
     });
 
