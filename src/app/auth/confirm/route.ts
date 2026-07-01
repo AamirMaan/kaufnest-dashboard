@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createControlClient } from "@/lib/supabase/control";
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
@@ -23,8 +24,26 @@ export async function GET(request: Request) {
 
   if (token_hash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+    const { data: { user }, error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
+      // Auto-activate tenant on first login: flip invited → active
+      const tenantSchema = user?.app_metadata?.tenant_schema as string | undefined;
+      if (tenantSchema) {
+        const control = createControlClient();
+        const { data: tenantRow } = await control
+          .schema("control")
+          .from("tenants")
+          .select("status")
+          .eq("schema_name", tenantSchema)
+          .single<{ status: string }>();
+        if (tenantRow?.status === "invited") {
+          await control
+            .schema("control")
+            .from("tenants")
+            .update({ status: "active" })
+            .eq("schema_name", tenantSchema);
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

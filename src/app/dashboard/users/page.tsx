@@ -10,7 +10,8 @@ import { DataTable } from "@/components/ui/DataTable";
 import { RoleBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
-import { Pencil } from "lucide-react";
+import { Pencil, RefreshCw } from "lucide-react";
+import { useToast } from "@/components/ui/Toast";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDateTime } from "@/lib/utils/date";
@@ -24,10 +25,31 @@ const ROLES: { value: UserRole; label: string }[] = [
 
 export default function UsersPage() {
   const dispatch = useAppDispatch();
+  const { success, error: toastError } = useToast();
   const users = useAppSelector((s) => s.users.items);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
+  const [resendingInvite, setResendingInvite] = useState<string | null>(null);
+
+  async function handleResendInvite(profile: Profile) {
+    setResendingInvite(profile.id);
+    try {
+      const res = await fetch("/api/users/resend-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: profile.email }),
+      });
+      if (res.ok) {
+        success("Invite resent", `A new invite link was sent to ${profile.email}.`);
+      } else {
+        const { error } = await res.json();
+        toastError("Resend failed", error ?? "Could not resend invite.");
+      }
+    } finally {
+      setResendingInvite(null);
+    }
+  }
 
   async function handleRoleChange(profile: Profile, newRole: UserRole) {
     if (newRole === profile.role) return;
@@ -104,9 +126,20 @@ export default function UsersPage() {
     {
       header: "Actions",
       render: (p: Profile) => (
-        <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
-          <Pencil size={15} />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
+            <Pencil size={15} className="text-blue-500" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => handleResendInvite(p)}
+            disabled={resendingInvite === p.id}
+            title="Resend invite"
+          >
+            <RefreshCw size={15} className={resendingInvite === p.id ? "animate-spin text-[var(--color-text-muted)]" : "text-teal-500"} />
+          </Button>
+        </div>
       ),
     },
   ];

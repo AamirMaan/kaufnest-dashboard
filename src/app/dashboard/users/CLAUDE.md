@@ -16,7 +16,7 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
   then dispatches `addUser`.
 - `_components/EditUserModal.tsx` — edits profile fields and/or role, dispatches `updateUser`.
 
-## Related file outside this folder (cannot be colocated)
+## Related files outside this folder (cannot be colocated)
 
 - `src/app/api/users/invite/route.ts` — server route that creates the
   Supabase Auth user and profile row for an invite. Next.js requires API routes
@@ -33,14 +33,26 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
   this tenant, or already belongs to a different tenant — see the
   duplicate-email gotcha in `SKILL.md`.
 
+- `src/app/api/users/resend-invite/route.ts` — server route that resends an
+  invite for an existing user whose link has expired. Calls
+  `adminClient.auth.admin.inviteUserByEmail` again (Supabase resends the invite
+  email for users with a pending invite) using the existing profile's
+  `full_name`/`role` from `tenant_<schema>.profiles`. Does **not** create a
+  profile row (already exists) and does **not** call `set_user_tenant` RPC
+  (already stamped). Returns 404 if the email has no profile in this tenant.
+  `page.tsx` calls it inline via `fetch("/api/users/resend-invite")` — no modal.
+
 ## Data flow
 
 1. Invite: `InviteUserModal` POSTs to `/api/users/invite` (uses the Supabase
    admin client server-side), then dispatches `addUser` with the returned profile.
-2. Edit/role-change: write to Supabase (`profiles` table) via
+2. Resend invite: `page.tsx` POSTs to `/api/users/resend-invite` with `{ email }`;
+   no Redux dispatch needed (profile row unchanged). Shows a toast on success/error.
+3. Edit/role-change: write to Supabase (`profiles` table) via
    `await createTenantClient()` (`@/lib/supabase/client`), dispatch `updateUser`/`updateUserRole`.
-3. Both call `writeAuditLog` (`@/lib/utils/audit`) then dispatch `addAuditLog`
-   (`@/store/slices/auditLogsSlice`) — role changes use the `role_change` audit action.
+4. Both invite and role-change call `writeAuditLog` (`@/lib/utils/audit`) then
+   dispatch `addAuditLog` (`@/store/slices/auditLogsSlice`) — role changes use
+   the `role_change` audit action; resend uses `resend_invite`.
 
 ## Shared dependencies (live outside this folder on purpose)
 

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { canAccessRoute } from "@/lib/utils/permissions";
+import { createControlClient } from "@/lib/supabase/control";
 import type { UserRole } from "@/types";
 
 export async function proxy(request: NextRequest) {
@@ -53,6 +54,24 @@ export async function proxy(request: NextRequest) {
   if (user && isDashboardRoute) {
     const tenantSchema =
       (user.app_metadata?.tenant_schema as string | undefined) ?? "public";
+
+    // Block deactivated tenants before any RBAC check
+    const control = createControlClient();
+    const { data: tenantRow } = await control
+      .schema("control")
+      .from("tenants")
+      .select("status")
+      .eq("schema_name", tenantSchema)
+      .single<{ status: string }>();
+
+    // Fail-open: if control plane is unreachable or tenant row missing,
+    // tenantRow is null and the check passes — user proceeds to RBAC.
+    if (tenantRow?.status === "deactivated") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/account-deactivated";
+      return NextResponse.redirect(url);
+    }
+
     const { data: profile } = await supabase
       .schema(tenantSchema)
       .from("profiles")

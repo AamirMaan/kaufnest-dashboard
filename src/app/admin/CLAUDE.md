@@ -11,8 +11,8 @@ not tenant roles.
   session, then redirects to `/dashboard` if `isPlatformAdmin(user.email)`
   (`@/lib/supabase/control`) is `false`. Renders the admin header/shell, wrapped
   in `<ToastProvider>` so `_components/*` can call `useToast()`.
-- `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Trial/
-  Cancelled) + tenants table (Tenant, **Admin Email**, Plan, Status, Trial
+- `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Invited/
+  Deactivated) + tenants table (Tenant, **Admin Email**, Plan, Status, Trial
   Ends, Created, Actions), fetched client-side from `GET /api/admin/tenants`.
   "Add Tenant" button opens `AddTenantModal`; closing it bumps `refreshKey` to
   refetch the list.
@@ -29,9 +29,10 @@ not tenant roles.
   success (parent bumps `refreshKey`).
 - `_components/TenantActions.tsx` — per-row action buttons. Accepts
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
-  (opens `EditTenantModal`; calls `onRefresh` on close) and an "Impersonate"
-  button (prompts for super_admin email, posts to `/api/admin/impersonate`,
-  redirects to magic link).
+  (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
+  button (only shown when `tenant.status === "invited"`; posts to
+  `/api/admin/resend-invite`), and an "Impersonate" button (prompts for
+  super_admin email, posts to `/api/admin/impersonate`, redirects to magic link).
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
 
@@ -69,7 +70,9 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
      `user_metadata`; `set_user_tenant` is the canonical `app_metadata` writer
      used everywhere else).
   6. Register the tenant in `control.tenants` (plan, `admin_email`,
-     `status: "active"`, `trial_ends_at` = now + 14 days).
+     `status: "invited"`, `trial_ends_at` = now + 14 days). Status stays
+     `invited` until the admin accepts their invite and logs in (or a platform
+     admin flips it via `EditTenantModal`).
 
   On any thrown error, returns `{ error: "Provisioning failed", detail }`
   (500) where `detail` is the underlying Supabase/Postgres error message
@@ -87,6 +90,21 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `control.tenants` with only the fields that were sent. Returns
   `{ tenant: updatedRow }`. This is a **platform-admin override** — writes
   `plan`/`status` directly, bypassing Stripe webhooks.
+- **`resend-invite/route.ts`** (`POST`) — resends the invite email for an
+  existing tenant's `admin_email`. Verifies platform admin, looks up the tenant
+  by `tenantId` from `control.tenants`, reads the admin's `full_name` from
+  `tenant_<schema>.profiles`, then re-calls
+  `service.auth.admin.inviteUserByEmail` (no profile/schema changes — all already
+  stamped at provision time). Returns `400` if `tenant.status !== "invited"` —
+  invites cannot be resent once the admin logs in for the first time. `TenantActions`
+  shows this button only when `tenant.status === "invited"`.
+- **`src/app/auth/confirm/route.ts`** (not in admin/, but cross-referenced) —
+  verifies the Supabase OTP token from the invite link. After successful OTP
+  verification (line 27), checks if the user's `tenant_schema` corresponds to a
+  tenant in `control.tenants` with `status === "invited"`. If so, auto-updates
+  the status to `"active"` (lines 39-45) to mark the tenant as having completed
+  first login. This is the transition point: invites become non-resendable once
+  the admin logs in.
 - **`impersonate/route.ts`** (`POST`) — looks up the tenant in
   `control.tenants`, generates a Supabase magic link
   (`service.auth.admin.generateLink`) for the given admin email, and sets the
@@ -101,6 +119,15 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   Project A, server-only. `isPlatformAdmin(email)` is also called from
   `dashboard/layout.tsx` to decide whether to show the sidebar's "Admin Panel"
   link (see `src/app/dashboard/CLAUDE.md`).
+- `src/proxy.ts` — Next.js request middleware. Updated to query `control.tenants`
+  and check each authenticated user's tenant `status` (lines 58–71). If a user
+  whose tenant is `"deactivated"` tries to access `/dashboard/*`, they are
+  redirected to `/account-deactivated` before any RBAC check occurs.
+- `src/app/account-deactivated/page.tsx` — static page shown when `proxy.ts`
+  detects `tenant.status === "deactivated"`. No authentication required (outside
+  the proxy matcher), displays a message that the organisation's account has been
+  deactivated. Not part of the admin feature, but driven by platform admin status
+  changes via `EditTenantModal`.
 - `src/lib/supabase/server.ts` (`createServiceClientForTenant`) — Project B,
   schema-scoped service-role client for tenant-table seeding.
 - `src/lib/supabase/managementApi.ts` (`addExposedSchema`) — Project B's

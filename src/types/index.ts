@@ -159,7 +159,7 @@ export interface CompanyProfile {
 // ─── SaaS / Multi-Tenant ──────────────────────────────────────────────────────
 
 export type TenantPlan = "trial" | "starter" | "pro" | "business";
-export type TenantStatus = "active" | "inactive" | "cancelled";
+export type TenantStatus = "active" | "invited" | "deactivated";
 
 export interface Tenant {
   id: string;
