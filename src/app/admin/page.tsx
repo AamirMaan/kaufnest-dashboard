@@ -16,9 +16,9 @@ const PLAN_VARIANT: Record<TenantPlan, "info" | "success" | "warning" | "danger"
 };
 
 const STATUS_VARIANT: Record<TenantStatus, "success" | "warning" | "danger" | "default"> = {
-  active:    "success",
-  inactive:  "warning",
-  cancelled: "danger",
+  active:      "success",
+  invited:     "warning",
+  deactivated: "danger",
 };
 
 export default function AdminPage() {
@@ -42,9 +42,9 @@ export default function AdminPage() {
 
   const list      = tenants ?? [];
   const total     = list.length;
-  const active    = list.filter((t) => t.status === "active").length;
-  const trial     = list.filter((t) => t.plan === "trial").length;
-  const cancelled = list.filter((t) => t.status === "cancelled").length;
+  const active      = list.filter((t) => t.status === "active").length;
+  const invited     = list.filter((t) => t.status === "invited").length;
+  const deactivated = list.filter((t) => t.status === "deactivated").length;
 
   const cardCls = "bg-(--color-surface) rounded-[var(--radius-card)] border border-(--color-border) p-5";
 
@@ -66,8 +66,8 @@ export default function AdminPage() {
         {[
           { label: "Total Tenants", value: total },
           { label: "Active",        value: active },
-          { label: "On Trial",      value: trial },
-          { label: "Cancelled",     value: cancelled },
+          { label: "Invited",       value: invited },
+          { label: "Deactivated",   value: deactivated },
         ].map(({ label, value }) => (
           <div key={label} className={cardCls}>
             <p className="text-xs font-medium uppercase tracking-wider text-(--color-text-faint) mb-1">

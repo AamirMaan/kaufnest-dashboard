@@ -69,7 +69,7 @@ export function TenantActions({ tenant, onRefresh }: Props) {
         <Button variant="secondary" onClick={() => setEditOpen(true)}>
           Edit
         </Button>
-        {tenant.status === "inactive" && (
+        {tenant.status === "invited" && (
           <Button variant="secondary" onClick={handleResendInvite} disabled={resending}>
             {resending ? "Sending…" : "Resend Invite"}
           </Button>

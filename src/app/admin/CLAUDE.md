@@ -11,8 +11,8 @@ not tenant roles.
   session, then redirects to `/dashboard` if `isPlatformAdmin(user.email)`
   (`@/lib/supabase/control`) is `false`. Renders the admin header/shell, wrapped
   in `<ToastProvider>` so `_components/*` can call `useToast()`.
-- `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Trial/
-  Cancelled) + tenants table (Tenant, **Admin Email**, Plan, Status, Trial
+- `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Invited/
+  Deactivated) + tenants table (Tenant, **Admin Email**, Plan, Status, Trial
   Ends, Created, Actions), fetched client-side from `GET /api/admin/tenants`.
   "Add Tenant" button opens `AddTenantModal`; closing it bumps `refreshKey` to
   refetch the list.
@@ -29,9 +29,10 @@ not tenant roles.
   success (parent bumps `refreshKey`).
 - `_components/TenantActions.tsx` — per-row action buttons. Accepts
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
-  (opens `EditTenantModal`; calls `onRefresh` on close) and an "Impersonate"
-  button (prompts for super_admin email, posts to `/api/admin/impersonate`,
-  redirects to magic link).
+  (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
+  button (only shown when `tenant.status === "invited"`; posts to
+  `/api/admin/resend-invite`), and an "Impersonate" button (prompts for
+  super_admin email, posts to `/api/admin/impersonate`, redirects to magic link).
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
 
@@ -69,8 +70,8 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
      `user_metadata`; `set_user_tenant` is the canonical `app_metadata` writer
      used everywhere else).
   6. Register the tenant in `control.tenants` (plan, `admin_email`,
-     `status: "inactive"`, `trial_ends_at` = now + 14 days). Status stays
-     `inactive` until the admin accepts their invite and logs in (or a platform
+     `status: "invited"`, `trial_ends_at` = now + 14 days). Status stays
+     `invited` until the admin accepts their invite and logs in (or a platform
      admin flips it via `EditTenantModal`).
 
   On any thrown error, returns `{ error: "Provisioning failed", detail }`
@@ -95,7 +96,7 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `tenant_<schema>.profiles`, then re-calls
   `service.auth.admin.inviteUserByEmail` (no profile/schema changes — all already
   stamped at provision time). `TenantActions` shows this button only when
-  `tenant.status === "inactive"`.
+  `tenant.status === "invited"`.
 - **`impersonate/route.ts`** (`POST`) — looks up the tenant in
   `control.tenants`, generates a Supabase magic link
   (`service.auth.admin.generateLink`) for the given admin email, and sets the

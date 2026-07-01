@@ -144,8 +144,8 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
             className={selectCls}
           >
             <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="invited">Invited</option>
+            <option value="deactivated">Deactivated</option>
           </select>
         </div>
       </form>
