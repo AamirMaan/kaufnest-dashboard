@@ -64,6 +64,8 @@ export async function proxy(request: NextRequest) {
       .eq("schema_name", tenantSchema)
       .single<{ status: string }>();
 
+    // Fail-open: if control plane is unreachable or tenant row missing,
+    // tenantRow is null and the check passes — user proceeds to RBAC.
     if (tenantRow?.status === "deactivated") {
       const url = request.nextUrl.clone();
       url.pathname = "/account-deactivated";
