@@ -40,6 +40,10 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   external_order_id)` index to `tenant_kaufnest`; also baked into
   `provision_tenant_schema()` for future tenants. Backs the Integrations
   feature (`src/app/dashboard/integrations/`, `src/lib/integrations/`).
+- `migrations/010_order_fees.sql` — adds `shipping_cost`, `shipping_charged`,
+  `advertising_fee` nullable `numeric(12,2)` columns (all `>= 0` checked) to
+  `tenant_kaufnest.sales`; also baked into `provision_tenant_schema()` for
+  future tenants. Backs the order fee UI in later tasks.
 
 ## Related code
 
