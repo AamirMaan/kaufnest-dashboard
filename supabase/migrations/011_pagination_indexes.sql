@@ -8,9 +8,9 @@
 -- `.order("name", { ascending: true }).range(...)`. These indexes prepare for
 -- efficient range queries on the paginated sort columns.
 --
--- These indexes are additive and are also baked into provision_tenant_schema()
--- (005_tenant_provisioning.sql), so every NEW tenant gets the same index set
--- from the start — this file only needs to run for tenant_kaufnest.
+-- TODO: these indexes should also be added to provision_tenant_schema() in
+-- 005_tenant_provisioning.sql so new tenants get them from the start.
+-- Tracked as a follow-up — do not edit 005 here.
 --
 -- All `create index if not exists` — safe to run against the live schema.
 --
@@ -23,6 +23,12 @@
 -- ─── audit_logs ─────────────────────────────────────────────
 -- created_at descending: pagination on audit_logs with most-recent-first ordering.
 create index if not exists idx_audit_logs_created_at_desc on tenant_kaufnest.audit_logs (created_at desc);
+
+-- action: eq("action", …) filter in fetchAuditLogsPage
+create index if not exists idx_audit_logs_action on tenant_kaufnest.audit_logs (action);
+
+-- user_id: eq("user_id", …) filter in fetchAuditLogsPage
+create index if not exists idx_audit_logs_user_id on tenant_kaufnest.audit_logs (user_id);
 
 -- ─── products ───────────────────────────────────────────────
 -- name ascending: pagination on products inventory table with alphabetical ordering.

@@ -17,10 +17,6 @@ file. Outstanding: the small follow-up migration
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
 
-## Server-side pagination (Phase 3)
-
-Layout (`src/app/dashboard/layout.tsx`) now fetches page 1 with exact counts: `.select("*", { count: "exact" }).range(0, pageSize - 1)`. Subsequent pages are fetched client-side via Redux thunks with filters translated to server queries (`.gte()`, `.lte()`, `.eq()`, `.ilike()`). Filter changes reset to page 1. Pages now have a `<Pagination>` component rendering "Showing X–Y of Z" with prev/next; summary stats are computed server-side or labeled "(this page)" to avoid silent miscounts. Sorting within a page is acceptable for v1 — noted in each feature's SKILL.md gotchas. Indexes on `(created_at desc)` and `(name asc)` for audit_logs and products (migration 011) support efficient range queries.
-
 New shared code from the migration:
 - `src/lib/supabase/control.ts` — control plane (Project A) client
 - `src/proxy.ts` — existing route-protection proxy (this Next.js version's
@@ -35,6 +31,21 @@ New shared code from the migration:
   (server-only, never imported client-side — see its `SKILL.md`)
 - `src/app/api/integrations/` + `src/app/api/cron/sync-integrations/` —
   connect/callback/disconnect/sync routes and the scheduled sync cron
+- **Pagination architecture (Phase 3):** All main data tables use server-side
+  pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
+  row count via `.select("*", { count: "exact" }).range(0,
+  DEFAULT_PAGE_SIZE - 1)` and passes `{data, count}` through `StoreProvider`
+  → each slice's `hydratePage` reducer. Per-feature fetch thunks
+  (`fetchSalesPage`, `fetchExpensesPage`, `fetchPurchasesPage`,
+  `fetchAuditLogsPage`, `fetchInventoryPage`) handle subsequent pages and
+  filter changes — filters are pushed into the Supabase query (`gte`, `lte`,
+  `eq`, `ilike`), not applied client-side. Shared helpers:
+  `src/lib/utils/pagedQuery.ts` (`rangeFor`, `PageRequest`,
+  `DEFAULT_PAGE_SIZE = 50`) and `src/components/ui/Pagination.tsx`. Inventory
+  has a split fetch: paginated `items` for the table + a lightweight
+  full-fetch `selectorItems` (`id, name, current_stock, sku`) for product
+  dropdowns in modals. Users and dropshipping listings use client-side
+  pagination only (small data sets).
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
