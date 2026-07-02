@@ -1,4 +1,4 @@
-import { computeOrderInvoiceTotals, invoiceNumberFor } from "./invoiceMath";
+import { computeOrderInvoiceTotals, computeBulkTotals, invoiceNumberFor } from "./invoiceMath";
 import { vatAmountFromGross } from "./currency";
 import type { Sale } from "@/types";
 
@@ -126,6 +126,75 @@ describe("invoiceMath", () => {
       expect(result.vatTotal).toBe(0);
       expect(result.grandTotal).toBe(110);
       expect(result.net).toBe(110);
+    });
+  });
+
+  describe("computeBulkTotals", () => {
+    it("empty array → all zeros", () => {
+      const result = computeBulkTotals([]);
+      expect(result.subtotal).toBe(0);
+      expect(result.shipping).toBe(0);
+      expect(result.vat).toBe(0);
+      expect(result.grandTotal).toBe(0);
+    });
+
+    it("single sale without shipping or VAT", () => {
+      const sale: Partial<Sale> = {
+        id: "s1",
+        date: "2024-05-01",
+        total_amount: 100,
+        shipping_charged: null,
+        vat_amount: null,
+        currency: "EUR",
+      };
+      const result = computeBulkTotals([sale as Sale]);
+      expect(result.subtotal).toBe(100);
+      expect(result.shipping).toBe(0);
+      expect(result.vat).toBe(0);
+      expect(result.grandTotal).toBe(100);
+    });
+
+    it("single sale with shipping and VAT", () => {
+      const sale: Partial<Sale> = {
+        id: "s2",
+        date: "2024-05-01",
+        total_amount: 119,
+        shipping_charged: 9.99,
+        vat_amount: 19,
+        currency: "EUR",
+      };
+      const result = computeBulkTotals([sale as Sale]);
+      expect(result.subtotal).toBe(119);
+      expect(result.shipping).toBe(9.99);
+      expect(result.vat).toBe(19);
+      expect(result.grandTotal).toBe(128.99); // subtotal + shipping
+    });
+
+    it("multi-sale array sums each field correctly", () => {
+      const sales: Partial<Sale>[] = [
+        { id: "s3", date: "2024-05-01", total_amount: 50, shipping_charged: 5, vat_amount: 5, currency: "EUR" },
+        { id: "s4", date: "2024-05-02", total_amount: 80, shipping_charged: 10, vat_amount: 8, currency: "EUR" },
+        { id: "s5", date: "2024-05-03", total_amount: 20, shipping_charged: null, vat_amount: null, currency: "EUR" },
+      ];
+      const result = computeBulkTotals(sales as Sale[]);
+      expect(result.subtotal).toBe(150);      // 50 + 80 + 20
+      expect(result.shipping).toBe(15);       // 5 + 10 + 0
+      expect(result.vat).toBe(13);            // 5 + 8 + 0
+      expect(result.grandTotal).toBe(165);    // 150 + 15
+    });
+
+    it("mixed-currency array sums numerically (caller groups by currency)", () => {
+      // computeBulkTotals is currency-agnostic; caller is responsible for grouping.
+      // This test verifies the function sums without filtering.
+      const sales: Partial<Sale>[] = [
+        { id: "s6", date: "2024-05-01", total_amount: 100, shipping_charged: 10, vat_amount: 10, currency: "EUR" },
+        { id: "s7", date: "2024-05-02", total_amount: 200, shipping_charged: 20, vat_amount: 20, currency: "USD" },
+      ];
+      const result = computeBulkTotals(sales as Sale[]);
+      expect(result.subtotal).toBe(300);
+      expect(result.shipping).toBe(30);
+      expect(result.vat).toBe(30);
+      expect(result.grandTotal).toBe(330);
     });
   });
 

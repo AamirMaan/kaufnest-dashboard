@@ -1,6 +1,34 @@
 import type { Sale } from "@/types";
 import { vatAmountFromGross } from "./currency";
 
+// ─── Bulk totals (used by generateSalesInvoice + InvoiceModal) ────────────────
+
+export interface BulkTotals {
+  subtotal: number;   // sum of total_amount
+  shipping: number;   // sum of shipping_charged ?? 0
+  vat: number;        // sum of vat_amount ?? 0
+  grandTotal: number; // subtotal + shipping (VAT-inclusive, Amazon-style)
+}
+
+export function computeBulkTotals(sales: Sale[]): BulkTotals {
+  let subtotal = 0;
+  let shipping = 0;
+  let vat = 0;
+
+  for (const s of sales) {
+    subtotal += s.total_amount;
+    shipping += s.shipping_charged ?? 0;
+    vat += s.vat_amount ?? 0;
+  }
+
+  return {
+    subtotal: Math.round(subtotal * 100) / 100,
+    shipping: Math.round(shipping * 100) / 100,
+    vat: Math.round(vat * 100) / 100,
+    grandTotal: Math.round((subtotal + shipping) * 100) / 100,
+  };
+}
+
 export interface OrderInvoiceTotals {
   itemsGross: number;   // sale.total_amount
   shipping: number;     // sale.shipping_charged ?? 0
