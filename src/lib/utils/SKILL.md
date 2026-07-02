@@ -118,6 +118,15 @@ bundle — keep that pattern if you touch the imports.
   `autoTable` of rows, a per-currency totals block, then `doc.save(...)`. All
   `async`, all trigger a browser download directly — there's no return value
   to await for.
+- `generateOrderInvoice(sale, settings)` — per-order single-sale PDF. Differs
+  from `generateSalesInvoice` in three ways: (1) uses `invoiceNumberFor` from
+  `invoiceMath.ts` (deterministic, id-based) instead of the random number
+  generator; (2) renders a logo if `settings.logo_url` is set (fetched, base64-
+  encoded, placed top-right at 40×20mm) — the entire logo block is wrapped in
+  `try { … } catch {}` so a broken URL never aborts the PDF; (3) prints a
+  structured totals block using `computeOrderInvoiceTotals` with VAT and
+  Shipping lines always present even when zero. Filename:
+  `${invoiceNumberFor(sale, prefix)}.pdf`. Used by `[id]/page.tsx` only.
 - The per-currency totals block sums both `total_amount`/`amount` (→ `byCurrency`)
   and `vat_amount` (→ `vatByCurrency`, only entries with a non-zero sum) and
   renders a "Total (CUR): …" line followed by an optional "VAT (CUR): …" line

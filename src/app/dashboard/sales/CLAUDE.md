@@ -16,9 +16,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
   Financials card (qty/price/totals/fees/net proceeds) and Details card
   (description/linked product/restock flag/audit fields). Actions: Edit Order
-  (opens `EditSaleModal`), Download Invoice (disabled — Phase 5), Delete
-  (super_admin only, same role gate as list page, navigates back to `/dashboard/sales`
-  after delete). Net proceeds computed via `_components/orderMath.ts`.
+  (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
+  companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
+  `state.companyProfile.profile`; button transiently disabled until profile
+  hydrates), Delete (super_admin only, same role gate as list page, navigates
+  back to `/dashboard/sales` after delete). Net proceeds computed via
+  `_components/orderMath.ts`.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),

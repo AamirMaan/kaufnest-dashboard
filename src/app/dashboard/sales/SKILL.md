@@ -13,10 +13,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
   formula changes also touch `_components/orderMath.ts` + its test.
-- **Wire the Download Invoice button** (Phase 5): `[id]/page.tsx` — replace the
-  disabled `<Button>` with a handler that calls `generateSalesInvoice([sale], companyProfile)`.
-  Also import `generateSalesInvoice` from `@/lib/utils/generateInvoice` and
-  `useAppSelector((s) => s.companyProfile.profile)` for the settings arg.
+- **Wire the Download Invoice button** (Phase 5 — DONE): `[id]/page.tsx` — the
+  button now calls `handleDownloadInvoice()` which calls `generateOrderInvoice(sale,
+  companyProfile)` from `@/lib/utils/generateInvoice`. `companyProfile` is read from
+  `useAppSelector((s) => s.companyProfile.profile)` (hydrated by the dashboard
+  layout). Button stays disabled only while `companyProfile` is null.
 
 - **Add/change a field on a sale**: `_components/AddSaleModal.tsx` (create form),
   `_components/EditSaleModal.tsx` (edit form + before/after audit diff),
@@ -109,6 +110,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   the modal transitions back cleanly.
 - Delete navigates to `/dashboard/sales` after removing the item from Redux — same
   audit-log + product-stock-refetch pattern as the list page.
+- **Download Invoice** calls `generateOrderInvoice` (not `generateSalesInvoice`) —
+  the per-order variant uses `invoiceNumberFor` (deterministic, id-based) and
+  `computeOrderInvoiceTotals` from `src/lib/utils/invoiceMath.ts`. The button is
+  transiently disabled on hard-refresh until `companyProfile` hydrates from Redux.
 
 ## Gotchas
 
