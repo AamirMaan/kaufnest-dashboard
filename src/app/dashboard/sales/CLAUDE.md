@@ -129,25 +129,39 @@ editable fields.
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
 
+## Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`)
+
+All three are `number | null` on `Sale`. They surface in:
+- `AddSaleModal` / `EditSaleModal` — collapsible "Fees & shipping (optional)" section
+  (state-controlled `showFees` boolean + chevron toggle). Empty string → `null`, never `0`.
+  `EditSaleModal` auto-opens the section when the existing sale has at least one fee set.
+  Fee changes are included in the before/after audit-log diff alongside all other fields.
+- `ImportSalesModal` — optional CSV columns `shipping_cost`, `shipping_charged`,
+  `advertising_fee`. Blank/missing → `null`. Non-numeric or negative → row error.
+  Validated in `validateRow()` (exported for testing). Tests in `ImportSalesModal.test.ts`.
+- `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
+  (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
+
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
 to rows and calls `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
 Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
-currency, vat_rate, vat_amount, status, description`. Export button is disabled
-when no rows match the filter.
+currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
+advertising_fee`. Export button is disabled when no rows match the filter.
 
 **Import** (`ImportSalesModal`): Required CSV columns: `date` (YYYY-MM-DD),
 `product_name`, `platform` (amazon/ebay/etsy/shopify/other), `quantity`, `unit_price`.
 Optional: `currency` (default EUR), `vat_rate` (0–100), `status` (defaults to
 `"pending"`, no validation against the preset list — custom strings allowed),
-`description`. `product_id` is NOT in the import format — imports create unlinked
-records; user can link via Edit afterward. `total_amount` is computed
-(`qty × unit_price`); `vat_amount` is computed via `vatAmountFromGross`.
-`restock` is always `false` for imported rows (not importable — edit the record
-afterward to mark it returned/restockable). All rows must pass validation before
-import proceeds. Audit log: one entry for the whole batch (omit `entityId` — it's
-`string | undefined`, not nullable).
+`description`, `shipping_cost`, `shipping_charged`, `advertising_fee` (all
+`number | null` — blank → `null`, non-numeric or negative → row error).
+`product_id` is NOT in the import format — imports create unlinked records; user can
+link via Edit afterward. `total_amount` is computed (`qty × unit_price`); `vat_amount`
+is computed via `vatAmountFromGross`. `restock` is always `false` for imported rows
+(not importable — edit the record afterward to mark it returned/restockable).
+All rows must pass validation before import proceeds. Audit log: one entry for the
+whole batch (omit `entityId` — it's `string | undefined`, not nullable).
 
 ## Tests
 

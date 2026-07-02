@@ -33,6 +33,19 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 `npx jest dashboard/sales`
 
+## Gotchas — fee fields
+
+- `shipping_cost`, `shipping_charged`, `advertising_fee` are all `number | null`.
+  Empty string in form state → `null` before the DB write (never `0`). This is the
+  same pattern as `vat_rate`/`vat_amount`.
+- `EditSaleModal` auto-opens the "Fees & shipping" section when the existing sale has
+  at least one fee non-null (checked in the `showFees` initializer).
+- `validateRow()` in `ImportSalesModal` is now exported so it can be unit-tested in
+  `ImportSalesModal.test.ts` alongside `productOptions.test.ts` / `orderStatus.test.ts`.
+- The table "Fees" column sums `shipping_cost + advertising_fee` (seller costs);
+  `shipping_charged` is not in the computed sum — it's the buyer-facing amount and
+  appears only in the CSV export.
+
 ## Gotchas
 
 - `salesSlice` is registered centrally in `src/store/store.ts` and hydrated in

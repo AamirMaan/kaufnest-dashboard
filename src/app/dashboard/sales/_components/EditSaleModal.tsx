@@ -39,6 +39,9 @@ interface FormState {
   customStatus: string;
   restock: boolean;
   reason: string;
+  shipping_cost: string;
+  shipping_charged: string;
+  advertising_fee: string;
 }
 
 function saleToForm(sale: Sale, defaultVatRate: number): FormState {
@@ -58,6 +61,9 @@ function saleToForm(sale: Sale, defaultVatRate: number): FormState {
     customStatus: preset ? "" : sale.status,
     restock: sale.restock,
     reason: "",
+    shipping_cost: sale.shipping_cost != null ? String(sale.shipping_cost) : "",
+    shipping_charged: sale.shipping_charged != null ? String(sale.shipping_charged) : "",
+    advertising_fee: sale.advertising_fee != null ? String(sale.advertising_fee) : "",
   };
 }
 
@@ -65,6 +71,7 @@ const blankForm: FormState = {
   platform: "amazon", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
   date: "", description: "", vat_included: false, vat_rate: "0",
   status: "pending", customStatus: "", restock: false, reason: "",
+  shipping_cost: "", shipping_charged: "", advertising_fee: "",
 };
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
@@ -74,6 +81,10 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFees, setShowFees] = useState(() => {
+    if (!sale) return false;
+    return sale.shipping_cost != null || sale.shipping_charged != null || sale.advertising_fee != null;
+  });
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -109,6 +120,10 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     const status = form.status === "other" ? form.customStatus.trim() : form.status;
     const restock = status === "returned" ? form.restock : false;
 
+    const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
+    const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
+    const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+
     const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -126,6 +141,9 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         description: form.description.trim() || null,
         vat_rate: form.vat_included ? vatRate : null,
         vat_amount: form.vat_included ? vatAmount : null,
+        shipping_cost: shippingCost,
+        shipping_charged: shippingCharged,
+        advertising_fee: advertisingFee,
         status,
         restock,
       })
@@ -157,8 +175,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       entityType: "sale",
       entityId: sale.id,
       metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, status: sale.status, restock: sale.restock },
-        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, status: data.status, restock: data.restock },
+        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, status: sale.status, restock: sale.restock },
+        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, status: data.status, restock: data.restock },
         reason: form.reason.trim(),
       },
     });
@@ -302,6 +320,66 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />
         </Field>
+
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)]">
+          <button
+            type="button"
+            onClick={() => setShowFees((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--color-text-strong)] hover:bg-[var(--color-surface-raised)] transition-colors rounded-[var(--radius-card)]"
+          >
+            <span>Fees &amp; shipping (optional)</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform text-[var(--color-text-muted)] ${showFees ? "rotate-180" : ""}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showFees && (
+            <div className="px-4 pb-4 space-y-3 border-t border-[var(--color-border)] pt-3">
+              <Row>
+                <Field label="Shipping Cost (paid by you)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.shipping_cost}
+                    onChange={(e) => set("shipping_cost", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </Field>
+                <Field label="Shipping Charged (billed to buyer)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.shipping_charged}
+                    onChange={(e) => set("shipping_charged", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </Field>
+              </Row>
+              <Field label="Advertising Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.advertising_fee}
+                  onChange={(e) => set("advertising_fee", e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
 
         <Field label="Reason for Edit" required>
           <Textarea
