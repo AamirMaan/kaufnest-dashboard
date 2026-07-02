@@ -21,7 +21,9 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
 - `mapToSale.ts` — pure `normalizedOrderToSaleRow(order, platform,
-  connectedBy)`. Has a colocated `mapToSale.test.ts`.
+  connectedBy)`. Synced orders always have fee fields (`shipping_cost`,
+  `shipping_charged`, `advertising_fee`) set to `null` — these are editable
+  later via the Edit Sale modal. Has a colocated `mapToSale.test.ts`.
 - `tokenStore.ts` — `getConnection`, `upsertConnection`,
   `ensureValidAccessToken` (refresh-on-demand).
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared

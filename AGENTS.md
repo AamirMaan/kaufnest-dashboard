@@ -125,7 +125,7 @@ you left off instead of re-deriving everything from scratch.
 | --- | --- | --- |
 | `src/app/(auth)/` | `/login`, `/forgot-password`, `/set-password` | auth pages (+ related `app/auth/callback`, `app/api/users/invite` routes) |
 | `src/app/dashboard/` | `/dashboard` (Overview) | shell-level layout/data-hydration + overview stats — see its `CLAUDE.md` for the full feature table |
-| `src/app/dashboard/sales/` | `/dashboard/sales` | sales records ("Orders" in UI) + `salesSlice` |
+| `src/app/dashboard/sales/` | `/dashboard/sales`, `/dashboard/sales/[id]` | sales records ("Orders" in UI) + `salesSlice`; [id] is order-detail page |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
@@ -133,6 +133,8 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
 | `src/app/dashboard/settings/` | `/dashboard/settings` | invoice template settings (thin — no private state) |
 | `src/app/dashboard/integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections + `integrationsSlice` (Pro/Business plans only; admin/super_admin only) |
+| `src/app/dashboard/planner/` | `/dashboard/planner` | order/inventory planning tools |
+| `src/app/dashboard/dropshipping/` | `/dashboard/dropshipping` | dropshipping supplier listings + sync |
 
 Each feature folder follows the same shape (where it has private code):
 
