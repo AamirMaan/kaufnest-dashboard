@@ -11,6 +11,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 ## Minimal file set for common changes
 
+- **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
+  formula changes also touch `_components/orderMath.ts` + its test.
+- **Wire the Download Invoice button** (Phase 5): `[id]/page.tsx` — replace the
+  disabled `<Button>` with a handler that calls `generateSalesInvoice([sale], companyProfile)`.
+  Also import `generateSalesInvoice` from `@/lib/utils/generateInvoice` and
+  `useAppSelector((s) => s.companyProfile.profile)` for the settings arg.
+
 - **Add/change a field on a sale**: `_components/AddSaleModal.tsx` (create form),
   `_components/EditSaleModal.tsx` (edit form + before/after audit diff),
   `_store/salesSlice.ts` only if the shape stored in Redux changes, and
@@ -31,7 +38,8 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 ## Test command
 
-`npx jest dashboard/sales`
+`npx jest dashboard/sales` — runs `_store/salesSlice.test.ts` and
+`_components/orderMath.test.ts` (and any other `*.test.ts` colocated here).
 
 ## Gotchas — fee fields
 
@@ -45,6 +53,20 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - The table "Fees" column sums `shipping_cost + advertising_fee` (seller costs);
   `shipping_charged` is not in the computed sum — it's the buyer-facing amount and
   appears only in the CSV export.
+
+## Gotchas — detail page
+
+- `params` is a **Promise** in this Next.js version. Use React's `use(params)` (not
+  `await`) in Client Components to unwrap it — see
+  `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/dynamic-routes.md`.
+- Direct-URL hits to `/dashboard/sales/[id]` land before the layout hydrates Redux,
+  so `state.sales.items` may be empty. The page falls through to a Supabase fetch via
+  `createTenantClient` and then dispatches `addSale` to populate Redux.
+- The `EditSaleModal` prop `sale` controls open/close: pass `null` to close, a
+  `Sale` object to open. On the detail page, pass `editOpen ? sale : null` so closing
+  the modal transitions back cleanly.
+- Delete navigates to `/dashboard/sales` after removing the item from Redux — same
+  audit-log + product-stock-refetch pattern as the list page.
 
 ## Gotchas
 

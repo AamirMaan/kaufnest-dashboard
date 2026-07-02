@@ -10,11 +10,23 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `page.tsx` — list view: filtering (`FilterBar` + `filterSales`), row selection,
   invoice trigger, Gross/VAT/Net summary, **Export CSV** button (exports `filtered`
   via `lib/utils/csv`), **Import CSV** button, wires up the modals below.
+  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
+- `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
+  Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
+  via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
+  Financials card (qty/price/totals/fees/net proceeds) and Details card
+  (description/linked product/restock flag/audit fields). Actions: Edit Order
+  (opens `EditSaleModal`), Download Invoice (disabled — Phase 5), Delete
+  (super_admin only, same role gate as list page, navigates back to `/dashboard/sales`
+  after delete). Net proceeds computed via `_components/orderMath.ts`.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`).
   Actions: `hydrateSales`, `addSale`, `updateSale`, `removeSale`. Used **only** by
   this feature — registered centrally in `src/store/store.ts` and hydrated in
   `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/salesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/sales`.
+- `_components/orderMath.ts` (+ colocated `.test.ts`) — pure `computeNetProceeds(sale)`
+  helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
+  treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
 - `_components/ImportSalesModal.tsx` — bulk CSV import: parses + validates a
   user-uploaded CSV, shows per-row errors, batch-inserts valid rows via Supabase,

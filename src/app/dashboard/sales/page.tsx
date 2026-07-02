@@ -11,6 +11,7 @@ import { FilterBar } from "@/components/ui/FilterBar";
 import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
+import Link from "next/link";
 import { AddSaleModal } from "./_components/AddSaleModal";
 import { EditSaleModal } from "./_components/EditSaleModal";
 import { ImportSalesModal } from "./_components/ImportSalesModal";
@@ -139,7 +140,12 @@ export default function SalesPage() {
       header: "Product",
       sortValue: (s: Sale) => s.product_name.toLowerCase(),
       render: (s: Sale) => (
-        <span className="text-sm font-medium text-[var(--color-text-strong)]">{s.product_name}</span>
+        <Link
+          href={`/dashboard/sales/${s.id}`}
+          className="text-sm font-medium text-(--color-text-strong) hover:text-(--color-primary) hover:underline"
+        >
+          {s.product_name}
+        </Link>
       ),
     },
     {
