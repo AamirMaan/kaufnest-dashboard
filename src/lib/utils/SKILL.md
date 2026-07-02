@@ -105,43 +105,68 @@ Static role-based permission matrix — no Supabase calls, pure lookups against
 - Adding a new role to `UserRole` means updating `ROLE_HIERARCHY` *and* every
   relevant `PERMISSIONS` array — neither is enforced by the type system.
 
+## invoiceMath.ts
+
+Pure computation helpers for invoice totals — no Supabase, no Redux, fully
+testable. Covered by `invoiceMath.test.ts`.
+
+- `computeOrderInvoiceTotals(sale: Sale) → OrderInvoiceTotals` — single-sale
+  breakdown: `itemsGross`, `shipping`, `vatItems`, `vatShipping`, `vatTotal`,
+  `net` (excl. VAT), `grandTotal` (= itemsGross + shipping, VAT-inclusive
+  Amazon-style). Used by `generateOrderInvoice` only.
+- `computeBulkTotals(sales: Sale[]) → BulkTotals` — sums `total_amount`
+  (→ `subtotal`), `shipping_charged ?? 0` (→ `shipping`), `vat_amount ?? 0`
+  (→ `vat`) across a Sale array. `grandTotal = subtotal + shipping`. All
+  fields rounded to 2 decimals. **Currency-agnostic** — caller must group by
+  currency before calling if per-currency breakdowns are needed. Used by
+  `generateSalesInvoice` and `InvoiceModal`.
+- `invoiceNumberFor(sale, prefix)` — deterministic, id-based invoice number
+  (`${prefix}${YYYYMM}-${sale.id.slice(0,8)}`). Used by `generateOrderInvoice`
+  only; bulk invoices use the random `generateInvoiceNumber` inside
+  `generateInvoice.ts`.
+
 ## generateInvoice.ts
 
 Client-side PDF generation via `jspdf`/`jspdf-autotable`, **dynamically
 imported** (`getJsPDF`/`getAutoTable`) to avoid pulling them into the SSR
 bundle — keep that pattern if you touch the imports.
 
-- `generateSalesInvoice(sales, settings)`, `generateExpensesInvoice(expenses, settings)`,
-  `generatePurchasesInvoice(purchases, settings)` — each builds a `jsPDF` doc,
-  renders a header/footer (company info from `CompanyProfile`, `src/types` —
-  per-tenant row from `company_profile`, read via `companyProfileSlice`), an
-  `autoTable` of rows, a per-currency totals block, then `doc.save(...)`. All
-  `async`, all trigger a browser download directly — there's no return value
-  to await for.
-- `generateOrderInvoice(sale, settings)` — per-order single-sale PDF. Differs
-  from `generateSalesInvoice` in three ways: (1) uses `invoiceNumberFor` from
-  `invoiceMath.ts` (deterministic, id-based) instead of the random number
-  generator; (2) renders a logo if `settings.logo_url` is set (fetched, base64-
-  encoded, placed top-right at 40×20mm) — the entire logo block is wrapped in
-  `try { … } catch {}` so a broken URL never aborts the PDF; (3) prints a
-  structured totals block using `computeOrderInvoiceTotals` with VAT and
-  Shipping lines always present even when zero. Filename:
-  `${invoiceNumberFor(sale, prefix)}.pdf`. Used by `[id]/page.tsx` only.
-- The per-currency totals block sums both `total_amount`/`amount` (→ `byCurrency`)
-  and `vat_amount` (→ `vatByCurrency`, only entries with a non-zero sum) and
-  renders a "Total (CUR): …" line followed by an optional "VAT (CUR): …" line
-  right under it. Mirror this `byCurrency`/`vatByCurrency` pair if you add
-  another summed line.
-- The three functions are near-identical (different columns, header color,
-  filename suffix) — when changing shared layout/header/footer behavior, edit
-  `addHeader`/`addFooter`/`formatDate`/`formatMoney`/`generateInvoiceNumber`
-  once rather than each function; when changing one entity's columns, only
-  touch that function's `rows`/`autoTable` config.
+- `generateSalesInvoice(sales, settings)` — builds a Sales Invoice PDF. Table
+  columns: #, Date, Product, Platform, Qty, Unit Price, Total, **Shipping**,
+  VAT. Per-currency totals block always prints all four lines even when zero:
+  Subtotal / Shipping / VAT / Grand Total (computed via `computeBulkTotals`).
+- `generateExpensesInvoice(expenses, settings)` — Expense Report PDF. VAT line
+  now **always printed** per currency (was skipped when `vat_amount` was falsy).
+- `generatePurchasesInvoice(purchases, settings)` — Purchase Report PDF. Same
+  always-print VAT fix as expenses.
+- `generateOrderInvoice(sale, settings)` — per-order single-sale PDF. Uses
+  `invoiceNumberFor` (deterministic) + `computeOrderInvoiceTotals`. Logo is
+  fetched async before calling `addHeader`, then passed as `logoDataUrl`.
+  Filename: `${invoiceNumberFor(sale, prefix)}.pdf`. Used by `[id]/page.tsx`.
+- `addHeader(doc, settings, invoiceNumber, title, logoDataUrl?)` — **sync**.
+  Accepts an optional pre-resolved `logoDataUrl` string; renders the logo
+  top-right (40×20mm) when provided. Callers that need a logo must fetch +
+  base64-encode it *before* calling `addHeader` and pass the result in.
+  `generateOrderInvoice` does this; `generateSalesInvoice` etc. currently do
+  not (logo optional for bulk reports).
 - `generateInvoiceNumber(prefix)` — `${prefix}${YYYYMM}-${4-digit random}`.
-  Not guaranteed unique; this is a display/filing convenience, not a DB key.
+  Not guaranteed unique; display/filing convenience, not a DB key.
 - `doc`/`autoTable` callback params are typed `any` (with eslint-disable
   comments) — `jsPDF`'s plugin types don't expose `lastAutoTable`; keep the
   disables if you add similar `(doc as any)` accesses.
+
+### Gotchas
+
+- **Logo in `addHeader` is sync** — pass a pre-resolved base64 dataUrl, never
+  a URL string. The fetch must happen before calling `addHeader`. See
+  `generateOrderInvoice` for the fetch → FileReader → dataUrl pattern.
+- **`computeBulkTotals` is currency-agnostic** — it sums all Sales in the
+  array regardless of currency. Group by `sale.currency` first if you need
+  per-currency breakdowns (see `generateSalesInvoice` for the grouping
+  pattern).
+- **Grand Total = subtotal + shipping** (VAT is included in subtotal,
+  Amazon-style). Never add VAT on top — stored `total_amount` is already
+  the gross/paid figure.
 
 ## Where these are used
 

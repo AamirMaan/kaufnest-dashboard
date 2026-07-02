@@ -18,6 +18,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   companyProfile)` from `@/lib/utils/generateInvoice`. `companyProfile` is read from
   `useAppSelector((s) => s.companyProfile.profile)` (hydrated by the dashboard
   layout). Button stays disabled only while `companyProfile` is null.
+  - Per-order invoice recipe lives in `generateInvoice.ts → generateOrderInvoice`.
+    Uses `invoiceNumberFor` (deterministic, id-based) and `computeOrderInvoiceTotals`
+    from `invoiceMath.ts`. Logo is fetched async before `addHeader` is called and
+    passed as a pre-resolved `logoDataUrl` string parameter.
 
 - **Add/change a field on a sale**: `_components/AddSaleModal.tsx` (create form),
   `_components/EditSaleModal.tsx` (edit form + before/after audit diff),
