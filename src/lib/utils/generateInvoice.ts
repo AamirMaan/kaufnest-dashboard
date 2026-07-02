@@ -1,4 +1,5 @@
 import type { Sale, Expense, Purchase, CompanyProfile } from "@/types";
+import { computeOrderInvoiceTotals, invoiceNumberFor } from "./invoiceMath";
 
 // jsPDF + autotable are loaded dynamically to avoid SSR issues
 const getJsPDF = () => import("jspdf").then((m) => m.default);
@@ -266,4 +267,211 @@ export async function generatePurchasesInvoice(purchases: Purchase[], settings: 
 
   addFooter(doc, settings);
   doc.save(`${invoiceNumber}_purchases.pdf`);
+}
+
+export async function generateOrderInvoice(
+  sale: Sale,
+  settings: CompanyProfile
+): Promise<void> {
+  const jsPDF = await getJsPDF();
+  const autoTable = await getAutoTable();
+  const doc = new jsPDF();
+  const invoiceNumber = invoiceNumberFor(sale, settings.invoice_prefix ?? "");
+  const pageW = doc.internal.pageSize.getWidth();
+
+  // ── 1. Header (company name, address, contact info) ──────────────────────
+  // Build header manually so we can also place the logo top-right
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
+  doc.text(settings.name || "Your Company", 14, 22);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(90, 90, 90);
+  const addrLines: string[] = [];
+  (settings.address ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .forEach((l) => addrLines.push(l));
+  if (settings.phone) addrLines.push(`Phone: ${settings.phone}`);
+  if (settings.email) addrLines.push(`Email: ${settings.email}`);
+  if (settings.vat_number) addrLines.push(`VAT ID: ${settings.vat_number}`);
+  if (settings.tax_id) addrLines.push(`Tax ID: ${settings.tax_id}`);
+  addrLines.forEach((line, i) => doc.text(line, 14, 30 + i * 5));
+
+  // ── 2. Logo (top-right, wrapped in try/catch so a broken URL never aborts) ─
+  if (settings.logo_url) {
+    try {
+      const resp = await fetch(settings.logo_url);
+      if (!resp.ok) throw new Error("logo fetch failed");
+      const blob = await resp.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      // Detect format: prefer Content-Type, fall back to URL extension
+      const contentType = resp.headers.get("content-type") ?? "";
+      let fmt: string;
+      if (contentType.includes("png") || settings.logo_url.toLowerCase().includes(".png")) {
+        fmt = "PNG";
+      } else if (contentType.includes("webp") || settings.logo_url.toLowerCase().includes(".webp")) {
+        fmt = "WEBP";
+      } else {
+        fmt = "JPEG";
+      }
+      // Top-right: x = pageW - 14 - 40mm width; y = 10; w = 40mm; h = 20mm
+      doc.addImage(dataUrl, fmt, pageW - 54, 10, 40, 20);
+    } catch {
+      /* skip logo — a broken URL must never break PDF generation */
+    }
+  }
+
+  // Invoice title + number (top-right, below potential logo)
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
+  doc.text("INVOICE", pageW - 14, 40, { align: "right" });
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(90, 90, 90);
+  doc.text(`Invoice #: ${invoiceNumber}`, pageW - 14, 48, { align: "right" });
+  if (settings.payment_terms)
+    doc.text(`Payment Terms: ${settings.payment_terms}`, pageW - 14, 54, { align: "right" });
+
+  // Horizontal rule
+  const headerBottom = Math.max(30 + addrLines.length * 5, 58) + 4;
+  doc.setDrawColor(220, 220, 220);
+  doc.line(14, headerBottom, pageW - 14, headerBottom);
+
+  let curY = headerBottom + 6;
+
+  // ── 3. Invoice metadata block ────────────────────────────────────────────
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
+  doc.text("Invoice Details", 14, curY);
+  curY += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(60, 60, 60);
+  const invoiceDate = formatDate(sale.date);
+  const generatedDate = todayFormatted();
+  [
+    [`Invoice number:`, invoiceNumber],
+    [`Invoice date:`, invoiceDate],
+    [`Generated:`, generatedDate],
+  ].forEach(([label, val]) => {
+    doc.setFont("helvetica", "bold");
+    doc.text(label, 14, curY);
+    doc.setFont("helvetica", "normal");
+    doc.text(val, 65, curY);
+    curY += 5;
+  });
+
+  curY += 4;
+
+  // ── 4. Order info block ──────────────────────────────────────────────────
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 30, 30);
+  doc.text("Order Details", 14, curY);
+  curY += 6;
+
+  // Build status label — append qualifier for returned/cancelled
+  let statusLabel = sale.status;
+  if (sale.status === "returned") statusLabel += " (RETURNED)";
+  else if (sale.status === "cancelled") statusLabel += " (CANCELLED)";
+
+  doc.setTextColor(60, 60, 60);
+  [
+    [`Order number:`, sale.external_order_id ?? sale.id],
+    [`Platform:`, sale.platform ?? "—"],
+    [`Order date:`, formatDate(sale.date)],
+    [`Status:`, statusLabel],
+  ].forEach(([label, val]) => {
+    doc.setFont("helvetica", "bold");
+    doc.text(label, 14, curY);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(val), 65, curY);
+    curY += 5;
+  });
+
+  curY += 6;
+
+  // ── 5. Line-items table ──────────────────────────────────────────────────
+  const itemRow = [
+    "1",
+    sale.product_name ?? "Order",
+    String(sale.quantity ?? 1),
+    formatMoney(sale.unit_price ?? sale.total_amount, sale.currency),
+    sale.vat_rate != null ? `${sale.vat_rate}%` : "—",
+    formatMoney(sale.total_amount, sale.currency),
+  ];
+  const shippingRow = [
+    "—",
+    "Shipping",
+    "—",
+    "—",
+    "—",
+    formatMoney(sale.shipping_charged ?? 0, sale.currency),
+  ];
+
+  autoTable(doc, {
+    startY: curY,
+    head: [["#", "Description", "Qty", "Unit Price", "VAT Rate", "Line Total"]],
+    body: [itemRow, shippingRow],
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [45, 90, 200], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 249, 255] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      2: { halign: "center" },
+      3: { halign: "right" },
+      4: { halign: "center" },
+      5: { halign: "right" },
+    },
+  });
+
+  // ── 6. Totals block (right-aligned) ─────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalY = (doc as any).lastAutoTable.finalY + 8;
+  const totals = computeOrderInvoiceTotals(sale);
+  const vatRate = sale.vat_rate ?? 0;
+
+  const totalsRows: [string, string][] = [
+    ["Subtotal (excl. VAT):", formatMoney(totals.net, sale.currency)],
+    [`VAT (${vatRate}%):`, formatMoney(totals.vatTotal, sale.currency)],
+    ["Shipping (incl.):", formatMoney(totals.shipping, sale.currency)],
+  ];
+
+  doc.setFontSize(9);
+  let ty = finalY;
+  totalsRows.forEach(([label, val]) => {
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+    doc.text(label, pageW - 80, ty);
+    doc.text(val, pageW - 14, ty, { align: "right" });
+    ty += 6;
+  });
+
+  // Divider line above Grand Total
+  doc.setDrawColor(180, 180, 180);
+  doc.line(pageW - 80, ty - 2, pageW - 14, ty - 2);
+  ty += 2;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 30, 30);
+  doc.text("Grand Total:", pageW - 80, ty);
+  doc.text(formatMoney(totals.grandTotal, sale.currency), pageW - 14, ty, { align: "right" });
+
+  // ── 7. Footer ────────────────────────────────────────────────────────────
+  addFooter(doc, settings);
+
+  // ── 8. Save ──────────────────────────────────────────────────────────────
+  doc.save(`${invoiceNumber}.pdf`);
 }
