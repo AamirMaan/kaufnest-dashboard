@@ -1,15 +1,10 @@
 import { test, expect } from "@playwright/test";
 import { e2eName } from "./helpers";
 
-// Shared state across tests in this file
-let createdProductName: string;
-let createdRowLocator: ReturnType<typeof test.info> extends never ? never : unknown;
-
 test.describe("Orders (sales)", () => {
   const productName = e2eName("order");
 
   test("add order → row visible, Fees cell shows shipping_cost + advertising_fee", async ({ page }) => {
-    createdProductName = productName;
     await page.goto("/dashboard/sales");
 
     // Open Add Order modal
@@ -25,8 +20,6 @@ test.describe("Orders (sales)", () => {
     // Expand Fees & shipping section
     await page.getByRole("dialog").getByRole("button", { name: /fees.*shipping/i }).click();
 
-    // Fill shipping_cost, shipping_charged, advertising_fee
-    const feeInputs = page.getByRole("dialog").locator('input[type="number"][placeholder="0.00"]');
     // After expanding fees section, fill the fee fields by label proximity
     await page.getByRole("dialog").getByText("Shipping Cost (paid by you)").locator("..").locator("input").fill("4.99");
     await page.getByRole("dialog").getByText("Shipping Charged (billed to buyer)").locator("..").locator("input").fill("5.99");
@@ -58,7 +51,6 @@ test.describe("Orders (sales)", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
 
     // Expand Fees & shipping section if not already open
-    const feesSection = page.getByRole("dialog").locator('[class*="border"]').filter({ hasText: /fees.*shipping/i });
     const feeInput = page.getByRole("dialog").getByText("Advertising Fee").locator("..").locator("input");
     // If the fees section is collapsed, expand it
     const isVisible = await feeInput.isVisible().catch(() => false);

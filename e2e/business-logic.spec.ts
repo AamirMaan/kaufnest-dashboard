@@ -18,7 +18,6 @@ import { e2eName } from "./helpers";
 test.describe("Business logic", () => {
   const productName = e2eName("prod");
   const saleName = e2eName("sale");
-  let productRowLocator: string; // product name used as identifier
 
   test("create product → create linked sale → stock decrements by qty", async ({ page }) => {
     // Step 1: create product with stock=0 (stock is driven by purchases, not set directly)
