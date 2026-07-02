@@ -43,3 +43,6 @@ next-env.d.ts
 
 graphify-out/cost.json        # local only
 # graphify-out/cache/         # optional: commit for speed, skip to keep repo small
+
+# Playwright E2E — saved auth state (contains real session tokens)
+e2e/.auth/
