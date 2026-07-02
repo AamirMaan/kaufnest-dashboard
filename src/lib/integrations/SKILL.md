@@ -76,6 +76,26 @@ The review route (`GET /api/integrations/review`) calls `ensureValidAccessToken`
 before `fetchOrders` — adapters' `fetchOrders` always receive a fresh token and
 never refresh themselves.
 
+## Merge rule (re-import field ownership)
+
+`mergeImportedSale(existing, incoming)` in `mergeImportedSale.ts` is the single
+source of truth for which fields a re-import is allowed to overwrite:
+
+- **Platform-owned** (overwritten on every re-import): `status`, `total_amount`,
+  `unit_price`, `quantity`, `product_name`, `date`, `description`.
+- **User-owned** (preserved from the existing DB row): `vat_rate`, `vat_amount`,
+  `product_id`, `shipping_cost`, `shipping_charged`, `advertising_fee`, `restock`.
+
+When `existing` is `undefined` (first import of a new order) the function returns
+`incoming` unchanged — no merge needed.
+
+The import route (`POST /api/integrations/review/import`) fetches all existing rows
+matching the incoming `external_order_id`s in a single `.in()` query, builds a
+`Map<string, Sale>`, then calls `mergeImportedSale` on each row before upserting.
+The upsert conflict key stays `(platform, external_order_id)` — unchanged.
+
+Test: `npx jest mergeImportedSale`
+
 ## `external_order_id` dedup contract
 
 `mapToSale.ts` carries `NormalizedOrder.external_order_id` straight onto
