@@ -43,11 +43,16 @@ export default async function DashboardLayout({
   const tenantSchema = user.app_metadata?.tenant_schema as string | undefined;
 
   // Fetch all collections once — hydrated into Redux so pages never refetch.
+  // Products are fetched twice:
+  //   1. Paginated (first page only) — for the inventory table.
+  //   2. Lightweight selector list (all, id/name/current_stock/sku) — for
+  //      product-link dropdowns in Sales/Purchases modals.
   const [
     { data: salesData, count: salesCount },
     { data: expensesData, count: expensesCount },
     { data: purchasesData, count: purchasesCount },
-    { data: products },
+    { data: productsPage, count: productsCount },
+    { data: productSelectors },
     { data: auditLogs, count: auditLogsCount },
     { data: users },
     { data: companyProfile },
@@ -72,11 +77,18 @@ export default async function DashboardLayout({
       .order("date", { ascending: false })
       .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<Purchase[]>(),
+    // Paginated product table — first page only.
     supabase
       .from("products")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("name", { ascending: true })
+      .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<Product[]>(),
+    // Lightweight selector list — all products, minimal columns for dropdowns.
+    supabase
+      .from("products")
+      .select("id, name, current_stock, sku")
+      .order("name", { ascending: true }),
     supabase
       .from("audit_logs")
       .select("*", { count: "exact" })
@@ -134,7 +146,8 @@ export default async function DashboardLayout({
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
       expenses={{ data: expensesData ?? [], count: expensesCount ?? 0 }}
       purchases={{ data: purchasesData ?? [], count: purchasesCount ?? 0 }}
-      products={products ?? []}
+      products={{ data: productsPage ?? [], count: productsCount ?? 0 }}
+      productSelectors={productSelectors ?? []}
       auditLogs={{ data: auditLogs ?? [], count: auditLogsCount ?? 0 }}
       users={users ?? []}
       currentUser={profile}

@@ -76,7 +76,7 @@ const blankForm: FormState = {
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const products = useAppSelector((s) => s.inventory.items);
+  const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);

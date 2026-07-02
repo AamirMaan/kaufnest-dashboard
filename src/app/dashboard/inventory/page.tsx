@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeProduct } from "./_store/inventorySlice";
+import { removeProduct, fetchInventoryPage } from "./_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Badge } from "@/components/ui/Badge";
+import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2 } from "lucide-react";
 import { AddProductModal } from "./_components/AddProductModal";
@@ -25,11 +26,38 @@ export default function InventoryPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const products = useAppSelector((s) => s.inventory.items);
+  const page = useAppSelector((s) => s.inventory.page);
+  const pageSize = useAppSelector((s) => s.inventory.pageSize);
+  const total = useAppSelector((s) => s.inventory.total);
+  const isFetching = useAppSelector((s) => s.inventory.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
 
+  const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  const applySearch = useCallback(
+    (nextSearch: string) => {
+      dispatch(fetchInventoryPage({ page: 1, pageSize, search: nextSearch }));
+    },
+    [dispatch, pageSize]
+  );
+
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setSearch(val);
+    applySearch(val);
+  }
+
+  function clearSearch() {
+    setSearch("");
+    applySearch("");
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
@@ -119,16 +147,50 @@ export default function InventoryPage() {
         action={<Button onClick={() => setAddOpen(true)}>+ Add Product</Button>}
       />
 
-      <div className="flex items-center justify-between mb-3 text-sm text-[var(--color-text-muted)]">
-        <span>{products.length} product{products.length !== 1 ? "s" : ""}</span>
+      {/* Search + count row */}
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={handleSearchChange}
+            placeholder="Search by name…"
+            className="rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-sm text-(--color-text-strong) focus:outline-none focus:ring-2 focus:ring-(--color-primary) w-56"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="text-xs text-(--color-text-muted) hover:text-(--color-text-base) underline"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <span className="text-sm text-(--color-text-muted)">
+          {total} product{total !== 1 ? "s" : ""} (this page)
+        </span>
+
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={products}
-        keyField="id"
-        emptyMessage="No products yet — add one, then link it from a purchase or sale to start tracking stock."
-      />
+      {/* Loading overlay */}
+      <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
+        <DataTable
+          columns={columns}
+          rows={products}
+          keyField="id"
+          emptyMessage="No products yet — add one, then link it from a purchase or sale to start tracking stock."
+        />
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => dispatch(fetchInventoryPage({ page: p, pageSize, search }))}
+          onPageSizeChange={(s) => dispatch(fetchInventoryPage({ page: 1, pageSize: s, search }))}
+        />
+      </div>
+
       <AddProductModal
         open={addOpen}
         onClose={() => setAddOpen(false)}

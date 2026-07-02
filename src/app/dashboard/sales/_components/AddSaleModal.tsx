@@ -68,7 +68,7 @@ function makeDefaults(defaultVatRate: number): FormState {
 
 export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const products = useAppSelector((s) => s.inventory.items);
+  const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);

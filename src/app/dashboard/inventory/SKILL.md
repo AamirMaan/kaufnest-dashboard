@@ -6,9 +6,8 @@ description: Work on the Inventory dashboard feature (product catalog, stock lev
 # Working on the Inventory feature
 
 This feature is fully colocated under `src/app/dashboard/inventory/`. Read
-`CLAUDE.md` in this folder first — especially the section on how
-`current_stock` is maintained, since it's the one thing in this feature that
-does **not** follow the usual client-writes-then-dispatches pattern.
+`CLAUDE.md` in this folder first — especially the split-selector section,
+since modal dropdowns use a different state key than the table.
 
 ## Minimal file set for common changes
 
@@ -17,15 +16,25 @@ does **not** follow the usual client-writes-then-dispatches pattern.
   `_components/EditProductModal.tsx` (edit form + before/after audit diff),
   `_store/inventorySlice.ts` only if the shape stored in Redux changes, and
   `src/types/index.ts` for the `Product` type. Also check `page.tsx` if the
-  field needs to render in the table.
+  field needs to render in the table. If the new field is needed in Sales/
+  Purchases dropdowns, also add it to `ProductSelector` in `inventorySlice.ts`
+  and update the selector query in `layout.tsx`.
 - **Change how stock is calculated**: don't touch this folder — edit the
   trigger functions (`apply_purchase_stock_change`/`apply_sale_stock_change`)
   in `supabase/migrations/002_inventory_and_vat.sql`. Stock math lives in the
   database so the client never has to reconcile it.
 - **Change which records can link to a product**: that UI lives in the
   Purchases/Sales `Add`/`Edit` modals (`product_id` `Select`), not here.
-- **Change list/table behavior**: `page.tsx` only.
+  Those modals now read from `s.inventory.selectorItems` (not `.items`).
+- **Change list/table behavior or search**: `page.tsx` only.
 - **Change reducer logic**: `_store/inventorySlice.ts` + its test.
+- **Change pagination**: `_store/inventorySlice.ts` (`fetchInventoryPage` thunk),
+  `page.tsx` (`<Pagination>` wiring), `src/app/dashboard/layout.tsx` (initial
+  paginated fetch), `src/store/StoreProvider.tsx` (`hydrateProducts` call).
+- **Change selector list fields**: `_store/inventorySlice.ts` (`ProductSelector`
+  type + `fetchInventorySelectors` select clause), `layout.tsx` (selector
+  query columns), `src/app/dashboard/sales/_components/productOptions.ts`
+  (`SelectorProduct` interface).
 
 ## Test command
 
@@ -33,10 +42,21 @@ does **not** follow the usual client-writes-then-dispatches pattern.
 
 ## Gotchas
 
+- **Two separate Redux keys**: `state.inventory.items` = paginated table data;
+  `state.inventory.selectorItems` = full list for modal dropdowns. Never use
+  `items` in Sales/Purchases modals — it is page-limited and will show only
+  the first N products.
 - `inventorySlice` is registered centrally in `src/store/store.ts` and hydrated
   in `src/store/StoreProvider.tsx` (and fetched in `dashboard/layout.tsx`) —
   those import it via the `@/app/dashboard/inventory/_store/inventorySlice`
   alias. If you rename the slice file, update those imports too.
+- `hydrateProducts` is a legacy alias for `hydratePage` — `StoreProvider` calls
+  it with `{ data, count, page, pageSize }` (not a bare array). If you see
+  `hydrateProducts(array)`, that is the old signature and will break.
+- `layout.tsx` issues **two** products queries in the `Promise.all`:
+  1. Paginated (`select("*", { count: "exact" })` + `.range(...)`) → `productsPage` / `productsCount`
+  2. Selector (`select("id, name, current_stock, sku")`, no `.range()`) → `productSelectors`
+  Both are passed to `<StoreProvider products={...} productSelectors={...} />`.
 - `current_stock` is **derived**, not directly editable from the UI — the
   Add/Edit modals deliberately don't expose it. Resist the urge to add a
   manual override field; if the user wants manual stock adjustments, that's a
@@ -49,3 +69,9 @@ does **not** follow the usual client-writes-then-dispatches pattern.
 - Every create/update/delete must call `writeAuditLog` with
   `entityType: "product"` + `dispatch(addAuditLog(...))` — same compliance
   trail every other CRUD feature follows.
+- `productOptions.ts` defines `SelectorProduct` (minimal interface). Both
+  `Product` and `ProductSelector` satisfy it structurally, so helpers remain
+  pure and testable without coupling to either full type.
+- The inventory page search is name-only (`ilike`). There is no category
+  filter — the `Product` type has no `category` field. Do not add a category
+  filter without first adding the column to the DB and the type.
