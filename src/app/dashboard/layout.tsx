@@ -45,7 +45,7 @@ export default async function DashboardLayout({
   // Fetch all collections once — hydrated into Redux so pages never refetch.
   const [
     { data: salesData, count: salesCount },
-    { data: expenses },
+    { data: expensesData, count: expensesCount },
     { data: purchases },
     { data: products },
     { data: auditLogs },
@@ -62,9 +62,9 @@ export default async function DashboardLayout({
       .returns<Sale[]>(),
     supabase
       .from("expenses")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("date", { ascending: false })
-      .limit(100)
+      .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<Expense[]>(),
     supabase
       .from("purchases")
@@ -132,7 +132,7 @@ export default async function DashboardLayout({
   return (
     <StoreProvider
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
-      expenses={expenses ?? []}
+      expenses={{ data: expensesData ?? [], count: expensesCount ?? 0 }}
       purchases={purchases ?? []}
       products={products ?? []}
       auditLogs={auditLogs ?? []}
