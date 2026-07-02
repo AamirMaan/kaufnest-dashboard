@@ -48,7 +48,7 @@ export default async function DashboardLayout({
     { data: expensesData, count: expensesCount },
     { data: purchasesData, count: purchasesCount },
     { data: products },
-    { data: auditLogs },
+    { data: auditLogs, count: auditLogsCount },
     { data: users },
     { data: companyProfile },
     { data: platformConnections },
@@ -79,9 +79,9 @@ export default async function DashboardLayout({
       .returns<Product[]>(),
     supabase
       .from("audit_logs")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
-      .limit(200)
+      .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<AuditLog[]>(),
     supabase
       .from("profiles")
@@ -135,7 +135,7 @@ export default async function DashboardLayout({
       expenses={{ data: expensesData ?? [], count: expensesCount ?? 0 }}
       purchases={{ data: purchasesData ?? [], count: purchasesCount ?? 0 }}
       products={products ?? []}
-      auditLogs={auditLogs ?? []}
+      auditLogs={{ data: auditLogs ?? [], count: auditLogsCount ?? 0 }}
       users={users ?? []}
       currentUser={profile}
       companyProfile={companyProfile ?? undefined}

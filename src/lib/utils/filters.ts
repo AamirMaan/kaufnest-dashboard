@@ -1,4 +1,5 @@
 import type { Sale, Expense, Purchase } from "@/types";
+import type { AuditAction } from "@/types";
 
 export type DatePreset =
   | "all"
@@ -108,6 +109,22 @@ export const DEFAULT_PURCHASE_FILTERS: PurchaseFilters = {
   currency: "all",
 };
 
+export interface AuditLogFilters {
+  preset: DatePreset;
+  dateFrom: string;
+  dateTo: string;
+  action: AuditAction | "all";
+  user_id: string;
+}
+
+export const DEFAULT_AUDIT_LOG_FILTERS: AuditLogFilters = {
+  preset: "all",
+  dateFrom: "",
+  dateTo: "",
+  action: "all",
+  user_id: "all",
+};
+
 export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   let result = sales;
   const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
@@ -149,5 +166,15 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     ("status" in f ? f.status === "all" : true) &&
     ("category" in f ? f.category === "all" : true) &&
     ("vendor" in f ? f.vendor === "" : true)
+  );
+}
+
+export function isDefaultAuditLogFilters(f: AuditLogFilters): boolean {
+  return (
+    f.preset === "all" &&
+    f.dateFrom === "" &&
+    f.dateTo === "" &&
+    f.action === "all" &&
+    f.user_id === "all"
   );
 }

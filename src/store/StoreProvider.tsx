@@ -33,7 +33,7 @@ interface StoreProviderProps {
   expenses?: { data: Expense[]; count: number };
   purchases?: { data: Purchase[]; count: number };
   products?: Product[];
-  auditLogs?: AuditLog[];
+  auditLogs?: { data: AuditLog[]; count: number };
   users?: Profile[];
   currentUser?: Profile;
   companyProfile?: CompanyProfile;
@@ -62,7 +62,7 @@ export function StoreProvider({
     if (expenses)            store.dispatch(hydrateExpenses({ data: expenses.data, count: expenses.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (purchases)           store.dispatch(hydratePurchases({ data: purchases.data, count: purchases.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (products)            store.dispatch(hydrateProducts(products));
-    if (auditLogs)           store.dispatch(hydrateAuditLogs(auditLogs));
+    if (auditLogs)           store.dispatch(hydrateAuditLogs({ data: auditLogs.data, count: auditLogs.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (users)               store.dispatch(hydrateUsers(users));
     if (currentUser)         store.dispatch(setCurrentUser(currentUser));
     if (companyProfile)      store.dispatch(hydrateCompanyProfile(companyProfile));

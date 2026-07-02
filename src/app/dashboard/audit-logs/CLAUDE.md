@@ -5,8 +5,11 @@ every create/update/delete/login/logout/role-change across the app.
 
 ## Files in this folder
 
-- `page.tsx` — table of log entries (`ActionBadge`, `formatDateTime`), opens the
-  detail modal on row click.
+- `page.tsx` — table of log entries with server-side pagination and filters
+  (`FilterBar` for date preset/range, action type dropdown). Dispatches
+  `fetchAuditLogsPage` on filter changes and page navigation. Shows a
+  `<Pagination>` component and a loading opacity overlay while fetching.
+  Opens the detail modal on row "View" click.
 - `_components/AuditLogDetailModal.tsx` — renders a single log entry's metadata
   (e.g. before/after diffs for edits) in a readable layout.
 
@@ -24,12 +27,14 @@ If you need to change the log shape or add a new action/entity type, start in
 
 ## Shared dependencies
 
-- `components/ui/{DataTable,Badge(ActionBadge),Button}`
-- `store/slices/auditLogsSlice` (shared — see above)
+- `components/ui/{DataTable,Badge(ActionBadge),Button,FilterBar,Pagination}`
+- `store/slices/auditLogsSlice` (shared — see above; exports `fetchAuditLogsPage`)
 - `lib/utils/date` (`formatDateTime`)
-- `types` (`AuditLog`)
+- `lib/utils/filters` (`AuditLogFilters`, `DEFAULT_AUDIT_LOG_FILTERS`, `isDefaultAuditLogFilters`)
+- `types` (`AuditLog`, `AuditAction`)
 
 ## Tests
 
 Slice tests live at `src/store/slices/auditLogsSlice.test.ts` — run with
-`npx jest auditLogsSlice`. There's no UI-only test for this page currently.
+`npx jest auditLogsSlice`. Tests cover pagination state (`hydratePage`,
+`setFetching`, `addAuditLog` total arithmetic) and the `hydrateAuditLogs` alias.
