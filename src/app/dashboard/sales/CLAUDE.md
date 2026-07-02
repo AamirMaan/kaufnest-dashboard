@@ -19,11 +19,17 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   (opens `EditSaleModal`), Download Invoice (disabled — Phase 5), Delete
   (super_admin only, same role gate as list page, navigates back to `/dashboard/sales`
   after delete). Net proceeds computed via `_components/orderMath.ts`.
-- `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`).
-  Actions: `hydrateSales`, `addSale`, `updateSale`, `removeSale`. Used **only** by
-  this feature — registered centrally in `src/store/store.ts` and hydrated in
-  `src/store/StoreProvider.tsx`, but otherwise self-contained here.
-- `_store/salesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/sales`.
+- `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
+  `page`, `pageSize`, `total`, `isFetching`).
+  Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
+  `addSale`, `updateSale`, `removeSale`, `setFetching`.
+  Thunk: `fetchSalesPage({ page, pageSize, filters })` — builds a Supabase query
+  with filter pushdown, `.select("*", { count: "exact" })`, `.order("date")`,
+  and `.range(from, to)` from `rangeFor()`. Dispatches `hydratePage` on success.
+  Used **only** by this feature — registered centrally in `src/store/store.ts`
+  and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
+- `_store/salesSlice.test.ts` — reducer tests (covers `hydratePage`, `setFetching`,
+  `addSale`/`removeSale` total arithmetic). Run with `npx jest dashboard/sales`.
 - `_components/orderMath.ts` (+ colocated `.test.ts`) — pure `computeNetProceeds(sale)`
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
   treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
@@ -38,6 +44,33 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+
+## Pagination data flow
+
+Server-side pagination is active. `page.tsx` **does not apply `filterSales`
+in memory** — all filtering happens in `fetchSalesPage` (the thunk in
+`_store/salesSlice.ts`). The flow for a filter change or page navigation is:
+
+1. User changes a filter or clicks Prev/Next in `<Pagination>`.
+2. `page.tsx` dispatches `fetchSalesPage({ page, pageSize, filters })`.
+3. The thunk calls `setFetching(true)`, builds a Supabase query with filter
+   predicates + `.select("*", { count: "exact" })` + `.range(from, to)`, then
+   dispatches `hydratePage({ data, count, page, pageSize })` on success.
+4. `state.sales.items` is replaced with the new page; `total` holds the full
+   count across all pages; `isFetching` goes back to `false`.
+5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
+   `hydrateSales`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
+
+**Summary cards** show "(this page)" totals only — they are computed from
+`state.sales.items` (current page), not all matching rows. This is clearly
+labelled in the UI.
+
+**CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
+with the same filter predicates but **no `.range()`**, capped at 5 000 rows, so
+the export always covers all matching records regardless of which page is shown.
+
+**DataTable sorting** sorts within the current page only (v1 behaviour) — noted
+in SKILL.md gotchas.
 
 ## Data flow (the pattern every mutation follows)
 

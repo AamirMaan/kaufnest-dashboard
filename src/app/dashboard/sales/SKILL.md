@@ -30,6 +30,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   check `StatusBadge` in `src/components/ui/Badge.tsx` for a variant mapping if
   you add a new preset that should render with a non-default color.
 - **Change list/filter/table behavior**: `page.tsx` only.
+- **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
+  `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
+  `gte/lte("date", ...)`, `platform` → `eq("platform", ...)`,
+  `currency` → `eq("currency", ...)`, `status` → `eq("status", ...)`.
+- **Change pagination defaults** (page size, etc.): `src/lib/utils/pagedQuery.ts`
+  (`DEFAULT_PAGE_SIZE`) — affects all features once they adopt this pattern.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx` — edit the `headers`
   array and the row-mapping lambda.
@@ -53,6 +59,33 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - The table "Fees" column sums `shipping_cost + advertising_fee` (seller costs);
   `shipping_charged` is not in the computed sum — it's the buyer-facing amount and
   appears only in the CSV export.
+
+## Gotchas — server-side pagination
+
+- **Do not call `filterSales()` in `page.tsx`** — filters are pushed to Supabase
+  in `fetchSalesPage`. Calling the in-memory helper would silently double-filter
+  and produce wrong counts.
+- **`state.sales.items` is always one page** (up to `pageSize` rows). Any code
+  that assumes `items` contains all records (e.g. the Overview page's
+  `effectiveSales`) reads from its own copy of the data, not from here —
+  but be careful when adding new aggregations.
+- **DataTable column sorting is page-local** (v1 deliberate limitation). Users
+  who want a globally sorted view should use the date ordering already applied
+  server-side. If full sort pushdown is added later, extend `fetchSalesPage`
+  with an `order` param.
+- **`statusOptions` in `page.tsx`** is derived from the current page only.
+  Custom statuses not on the current page won't appear in the filter dropdown
+  until a matching page is loaded. This is an acceptable v1 trade-off.
+- **`addSale` increments `total`** so the Pagination count stays accurate after
+  a manual add without re-fetching. `removeSale` decrements it only when the
+  item was actually found in `items` (prevents double-decrement on a no-op).
+- **`StoreProvider` prop shape changed**: `sales` is now
+  `{ data: Sale[], count: number }` (not `Sale[]`). Layout passes
+  `{ data: salesData ?? [], count: salesCount ?? 0 }`. If you add a new
+  feature prop with the same shape, follow this pattern.
+- **CSV export** runs a separate Supabase query without `.range()` — it does
+  NOT use the Redux items. This ensures the export always covers all matching
+  records (up to the 5 000-row safety cap), even when the user is on page 3.
 
 ## Gotchas — detail page
 

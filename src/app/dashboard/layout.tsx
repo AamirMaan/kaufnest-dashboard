@@ -5,6 +5,7 @@ import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type {
   Profile,
   Sale,
@@ -43,7 +44,7 @@ export default async function DashboardLayout({
 
   // Fetch all collections once — hydrated into Redux so pages never refetch.
   const [
-    { data: sales },
+    { data: salesData, count: salesCount },
     { data: expenses },
     { data: purchases },
     { data: products },
@@ -55,9 +56,9 @@ export default async function DashboardLayout({
   ] = await Promise.all([
     supabase
       .from("sales")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("date", { ascending: false })
-      .limit(100)
+      .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<Sale[]>(),
     supabase
       .from("expenses")
@@ -130,7 +131,7 @@ export default async function DashboardLayout({
 
   return (
     <StoreProvider
-      sales={sales ?? []}
+      sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
       expenses={expenses ?? []}
       purchases={purchases ?? []}
       products={products ?? []}

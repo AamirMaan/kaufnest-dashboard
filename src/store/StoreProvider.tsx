@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Provider } from "react-redux";
 import { makeStore } from "@/store/store";
 import { hydrateSales } from "@/app/dashboard/sales/_store/salesSlice";
+import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import { hydrateExpenses } from "@/app/dashboard/expenses/_store/expensesSlice";
 import { hydratePurchases } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hydrateProducts } from "@/app/dashboard/inventory/_store/inventorySlice";
@@ -28,7 +29,7 @@ import type {
 
 interface StoreProviderProps {
   children: React.ReactNode;
-  sales?: Sale[];
+  sales?: { data: Sale[]; count: number };
   expenses?: Expense[];
   purchases?: Purchase[];
   products?: Product[];
@@ -57,7 +58,7 @@ export function StoreProvider({
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
-    if (sales)               store.dispatch(hydrateSales(sales));
+    if (sales)               store.dispatch(hydrateSales({ data: sales.data, count: sales.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (expenses)            store.dispatch(hydrateExpenses(expenses));
     if (purchases)           store.dispatch(hydratePurchases(purchases));
     if (products)            store.dispatch(hydrateProducts(products));

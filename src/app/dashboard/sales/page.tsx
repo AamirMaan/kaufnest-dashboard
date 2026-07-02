@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeSale } from "./_store/salesSlice";
+import { removeSale, fetchSalesPage } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { Pagination } from "@/components/ui/Pagination";
 import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
@@ -23,9 +24,9 @@ import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
-  filterSales,
   isDefaultFilters,
   DEFAULT_SALES_FILTERS,
+  getPresetRange,
   type SalesFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -42,24 +43,29 @@ export default function SalesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const sales = useAppSelector((s) => s.sales.items);
+  const page = useAppSelector((s) => s.sales.page);
+  const pageSize = useAppSelector((s) => s.sales.pageSize);
+  const total = useAppSelector((s) => s.sales.total);
+  const isFetching = useAppSelector((s) => s.sales.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
 
   const [filters, setFilters] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
-  const filtered = useMemo(() => filterSales(sales, filters), [sales, filters]);
   const hasActive = !isDefaultFilters(filters);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
-    () => filtered.filter((s) => selectedIds.has(s.id)),
-    [filtered, selectedIds]
+    () => sales.filter((s) => selectedIds.has(s.id)),
+    [sales, selectedIds]
   );
-  const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
+  const invoiceItems = selectedItems.length > 0 ? selectedItems : sales;
 
-  const returnedCount = useMemo(() => filtered.filter((s) => s.status === "returned").length, [filtered]);
+  const returnedCount = useMemo(() => sales.filter((s) => s.status === "returned").length, [sales]);
 
+  // Summary computed from current page items only — labelled "(this page)" to
+  // make clear these are page-scoped totals, not all-time aggregates.
   const summary = useMemo(() => {
     const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
-    for (const s of filtered) {
+    for (const s of sales) {
       if (s.status === "returned") continue;
       const entry = byCurrency.get(s.currency) ?? { gross: [], vat: [] };
       entry.gross.push(s.total_amount);
@@ -71,9 +77,12 @@ export default function SalesPage() {
       gross: sumAmounts(gross),
       vat: sumAmounts(vat),
     }));
-  }, [filtered]);
+  }, [sales]);
   const hasVat = summary.some((s) => s.vat > 0);
 
+  // Status options built from current page + known preset statuses.
+  // The "all" statuses dropdown is approximate — it only shows what's on the
+  // current page plus presets — but this is acceptable for v1.
   const statusOptions = useMemo(() => {
     const set = new Set<string>(ORDER_STATUSES);
     for (const s of sales) set.add(s.status);
@@ -86,9 +95,53 @@ export default function SalesPage() {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  function handleExport() {
+  // ── Filter helpers ────────────────────────────────────────────────────────
+
+  /** Fire a server-side fetch and reset to page 1 when filters change. */
+  const applyFilters = useCallback(
+    (nextFilters: SalesFilters) => {
+      dispatch(fetchSalesPage({ page: 1, pageSize, filters: nextFilters }));
+    },
+    [dispatch, pageSize]
+  );
+
+  function setFilter<K extends keyof SalesFilters>(key: K, value: SalesFilters[K]) {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_SALES_FILTERS);
+    applyFilters(DEFAULT_SALES_FILTERS);
+  }
+
+  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+
+  async function handleExport() {
+    const supabase = await createTenantClient();
+    let query = supabase
+      .from("sales")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(5000);
+
+    const range =
+      filters.preset === "custom"
+        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
+        : getPresetRange(filters.preset);
+    if (range && filters.preset !== "all") {
+      query = query.gte("date", range.from).lte("date", range.to);
+    }
+    if (filters.platform !== "all") query = query.eq("platform", filters.platform);
+    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+    if (filters.status !== "all") query = query.eq("status", filters.status);
+
+    const { data: allRows } = await query;
+    if (!allRows || allRows.length === 0) return;
+
     const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee"];
-    const rows = filtered.map((s) => [
+    const rows = (allRows as Sale[]).map((s) => [
       s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
       s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "",
@@ -96,9 +149,7 @@ export default function SalesPage() {
     exportToCsv(`sales-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
 
-  function setFilter<K extends keyof SalesFilters>(key: K, value: SalesFilters[K]) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  }
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
@@ -245,7 +296,7 @@ export default function SalesPage() {
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
-            <Button variant="export" onClick={handleExport} disabled={filtered.length === 0}>
+            <Button variant="export" onClick={handleExport} disabled={total === 0}>
               <Download size={15} />
               Export
             </Button>
@@ -268,7 +319,7 @@ export default function SalesPage() {
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         hasActive={hasActive}
-        onClear={() => setFilters(DEFAULT_SALES_FILTERS)}
+        onClear={clearFilters}
       >
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Platform</span>
@@ -298,48 +349,60 @@ export default function SalesPage() {
         </div>
       </FilterBar>
 
-      <div className="flex items-start justify-between mb-3 text-sm">
-        <span className="text-[var(--color-text-muted)] pt-0.5">
-          {filtered.length} order{filtered.length !== 1 ? "s" : ""} shown
-        </span>
-        {(summary.length > 0 || returnedCount > 0) && (
-          <div className="text-right space-y-0.5">
-            {summary.length > 0 && (
-              hasVat ? (
-                <>
-                  <p className="font-medium text-[var(--color-text-strong)]">
-                    Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+      {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
+      <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
+        <div className="flex items-start justify-between mb-3 text-sm">
+          <span className="text-(--color-text-muted) pt-0.5">
+            {total} order{total !== 1 ? "s" : ""} total
+          </span>
+          {(summary.length > 0 || returnedCount > 0) && (
+            <div className="text-right space-y-0.5">
+              {summary.length > 0 && (
+                hasVat ? (
+                  <>
+                    <p className="font-medium text-(--color-text-strong)">
+                      Gross (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                    </p>
+                    <p className="text-(--color-text-muted)">
+                      VAT (this page): {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
+                    </p>
+                    <p className="font-medium text-(--color-text-strong)">
+                      Net (this page): {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-medium text-(--color-text-strong)">
+                    Total (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
                   </p>
-                  <p className="text-[var(--color-text-muted)]">
-                    VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                  </p>
-                  <p className="font-medium text-[var(--color-text-strong)]">
-                    Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                  </p>
-                </>
-              ) : (
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                )
+              )}
+              {returnedCount > 0 && (
+                <p className="text-xs text-(--color-text-muted)">
+                  {returnedCount} returned order{returnedCount !== 1 ? "s" : ""} excluded from totals
                 </p>
-              )
-            )}
-            {returnedCount > 0 && (
-              <p className="text-xs text-[var(--color-text-muted)]">
-                {returnedCount} returned order{returnedCount !== 1 ? "s" : ""} excluded from totals
-              </p>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
+
+        <DataTable
+          columns={columns}
+          rows={sales}
+          keyField="id"
+          emptyMessage="No orders match the current filters."
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => dispatch(fetchSalesPage({ page: p, pageSize, filters }))}
+          onPageSizeChange={(s) => dispatch(fetchSalesPage({ page: 1, pageSize: s, filters }))}
+        />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        keyField="id"
-        emptyMessage="No orders match the current filters."
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
-      />
       <AddSaleModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
