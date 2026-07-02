@@ -280,26 +280,7 @@ export async function generateOrderInvoice(
   const pageW = doc.internal.pageSize.getWidth();
 
   // ── 1. Header (company name, address, contact info) ──────────────────────
-  // Build header manually so we can also place the logo top-right
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 30, 30);
-  doc.text(settings.name || "Your Company", 14, 22);
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 90, 90);
-  const addrLines: string[] = [];
-  (settings.address ?? "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .forEach((l) => addrLines.push(l));
-  if (settings.phone) addrLines.push(`Phone: ${settings.phone}`);
-  if (settings.email) addrLines.push(`Email: ${settings.email}`);
-  if (settings.vat_number) addrLines.push(`VAT ID: ${settings.vat_number}`);
-  if (settings.tax_id) addrLines.push(`Tax ID: ${settings.tax_id}`);
-  addrLines.forEach((line, i) => doc.text(line, 14, 30 + i * 5));
+  let curY = addHeader(doc, settings, invoiceNumber, "INVOICE");
 
   // ── 2. Logo (top-right, wrapped in try/catch so a broken URL never aborts) ─
   if (settings.logo_url) {
@@ -329,26 +310,6 @@ export async function generateOrderInvoice(
       /* skip logo — a broken URL must never break PDF generation */
     }
   }
-
-  // Invoice title + number (top-right, below potential logo)
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 30, 30);
-  doc.text("INVOICE", pageW - 14, 40, { align: "right" });
-
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(90, 90, 90);
-  doc.text(`Invoice #: ${invoiceNumber}`, pageW - 14, 48, { align: "right" });
-  if (settings.payment_terms)
-    doc.text(`Payment Terms: ${settings.payment_terms}`, pageW - 14, 54, { align: "right" });
-
-  // Horizontal rule
-  const headerBottom = Math.max(30 + addrLines.length * 5, 58) + 4;
-  doc.setDrawColor(220, 220, 220);
-  doc.line(14, headerBottom, pageW - 14, headerBottom);
-
-  let curY = headerBottom + 6;
 
   // ── 3. Invoice metadata block ────────────────────────────────────────────
   doc.setFontSize(9);
