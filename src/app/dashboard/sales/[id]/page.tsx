@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate, formatDateTime } from "@/lib/utils/date";
 import { computeNetProceeds } from "../_components/orderMath";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { generateOrderInvoice } from "@/lib/utils/generateInvoice";
 import { ArrowLeft, Pencil, Download, Trash2 } from "lucide-react";
 import type { Sale, Product } from "@/types";
 
@@ -38,6 +39,9 @@ export default function SaleDetailPage({ params }: PageProps) {
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
+
+  // Company profile — initialised by the dashboard layout, used for invoice generation
+  const companyProfile = useAppSelector((s) => s.companyProfile.profile);
 
   // Inventory items for product name lookup
   const inventoryItems = useAppSelector((s) => s.inventory.items);
@@ -104,6 +108,11 @@ export default function SaleDetailPage({ params }: PageProps) {
   // Modal state
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  async function handleDownloadInvoice() {
+    if (!sale || !companyProfile) return;
+    await generateOrderInvoice(sale, companyProfile);
+  }
 
   async function handleDelete(reason: string) {
     if (!sale) return;
@@ -360,7 +369,12 @@ export default function SaleDetailPage({ params }: PageProps) {
           Edit Order
         </Button>
 
-        <Button variant="secondary" disabled title="Coming soon">
+        <Button
+          variant="secondary"
+          onClick={handleDownloadInvoice}
+          disabled={!companyProfile}
+          title={!companyProfile ? "Company profile not loaded" : undefined}
+        >
           <Download size={15} />
           Download Invoice
         </Button>
