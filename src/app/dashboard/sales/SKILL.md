@@ -86,6 +86,15 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - **CSV export** runs a separate Supabase query without `.range()` — it does
   NOT use the Redux items. This ensures the export always covers all matching
   records (up to the 5 000-row safety cap), even when the user is on page 3.
+- **`returnedCount` is page-scoped** — it counts returned orders within
+  `state.sales.items` (the current page), not across all matching rows. The UI
+  note "N returned order(s) excluded from totals" is therefore page-local; it
+  is not labelled "(this page)" in the UI, but that is what it reflects.
+- **Invoice modal falls back to current page only when nothing is selected** —
+  `InvoiceModal` receives the `selected` rows array. When `selected` is empty,
+  it has no records to render; the Generate Invoice button is disabled until at
+  least one row is checked. Selection is page-local (cleared on page navigation),
+  so a user cannot span an invoice across multiple pages in v1.
 
 ## Gotchas — detail page
 

@@ -27,12 +27,8 @@ const initialState: SalesState = {
 
 export const fetchSalesPage = createAsyncThunk(
   "sales/fetchPage",
-  async (
-    params: { page: number; pageSize: number; filters: SalesFilters },
-    { dispatch }
-  ) => {
+  async (params: { page: number; pageSize: number; filters: SalesFilters }) => {
     const { page, pageSize, filters } = params;
-    dispatch(setFetching(true));
 
     const supabase = await createTenantClient();
     let query = supabase
@@ -68,6 +64,20 @@ export const fetchSalesPage = createAsyncThunk(
   }
 );
 
+// ─── Shared page-hydration helper ─────────────────────────────────────────────
+
+function applyHydratePage(
+  state: SalesState,
+  payload: { data: Sale[]; count: number; page: number; pageSize: number }
+) {
+  state.items = payload.data;
+  state.page = payload.page;
+  state.pageSize = payload.pageSize;
+  state.total = payload.count;
+  state.isFetching = false;
+  state.loaded = true;
+}
+
 // ─── Slice ────────────────────────────────────────────────────────────────────
 
 export const salesSlice = createSlice({
@@ -81,12 +91,7 @@ export const salesSlice = createSlice({
       state,
       action: PayloadAction<{ data: Sale[]; count: number; page: number; pageSize: number }>
     ) {
-      state.items = action.payload.data;
-      state.page = action.payload.page;
-      state.pageSize = action.payload.pageSize;
-      state.total = action.payload.count;
-      state.isFetching = false;
-      state.loaded = true;
+      applyHydratePage(state, action.payload);
     },
     addSale(state, action: PayloadAction<Sale>) {
       state.items.unshift(action.payload);
@@ -104,13 +109,11 @@ export const salesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchSalesPage.pending, (state) => {
+        state.isFetching = true;
+      })
       .addCase(fetchSalesPage.fulfilled, (state, action) => {
-        state.items = action.payload.data;
-        state.page = action.payload.page;
-        state.pageSize = action.payload.pageSize;
-        state.total = action.payload.count;
-        state.isFetching = false;
-        state.loaded = true;
+        applyHydratePage(state, action.payload);
       })
       .addCase(fetchSalesPage.rejected, (state) => {
         state.isFetching = false;
