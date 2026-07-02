@@ -42,6 +42,9 @@ describe("normalizedOrderToSaleRow", () => {
       created_by: "user-123",
       vat_rate: null,
       vat_amount: null,
+      shipping_cost: null,
+      shipping_charged: null,
+      advertising_fee: null,
       status: "delivered",
       restock: false,
       external_order_id: "12-34567-89012:001",
@@ -64,10 +67,21 @@ describe("normalizedOrderToSaleRow", () => {
       created_by: "user-456",
       vat_rate: null,
       vat_amount: null,
+      shipping_cost: null,
+      shipping_charged: null,
+      advertising_fee: null,
       status: "shipped",
       restock: false,
       external_order_id: "112-1234567-1234567:00000001",
     });
+  });
+
+  it("sets shipping_cost, shipping_charged, and advertising_fee to null (entered manually later)", () => {
+    const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123");
+
+    expect(row.shipping_cost).toBeNull();
+    expect(row.shipping_charged).toBeNull();
+    expect(row.advertising_fee).toBeNull();
   });
 
   it("falls back to EUR for an unrecognized currency code", () => {
