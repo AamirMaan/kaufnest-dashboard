@@ -10,10 +10,9 @@ import {
   generateExpensesInvoice,
   generatePurchasesInvoice,
 } from "@/lib/utils/generateInvoice";
+import { computeBulkTotals } from "@/lib/utils/invoiceMath";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { Sale, Expense, Purchase } from "@/types";
-
-type InvoiceType = "sale" | "expense" | "purchase";
 
 interface SalesInvoiceProps {
   type: "sale";
@@ -45,13 +44,20 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function totals(items: Sale[] | Expense[] | Purchase[], type: InvoiceType) {
+// For sales: returns per-currency BulkTotals (subtotal, shipping, vat, grandTotal).
+// For expenses/purchases: returns a simple per-currency amount map (no shipping).
+function salesTotalsByCurrency(sales: Sale[]): Record<string, ReturnType<typeof computeBulkTotals>> {
+  const byCurrency: Record<string, Sale[]> = {};
+  sales.forEach((s) => { (byCurrency[s.currency] ??= []).push(s); });
+  return Object.fromEntries(
+    Object.entries(byCurrency).map(([cur, group]) => [cur, computeBulkTotals(group)])
+  );
+}
+
+function simpleTotalsByCurrency(items: Expense[] | Purchase[], type: "expense" | "purchase"): Record<string, number> {
   const byCurrency: Record<string, number> = {};
   items.forEach((item) => {
-    const amount =
-      type === "expense"
-        ? (item as Expense).amount
-        : (item as Sale | Purchase).total_amount;
+    const amount = type === "expense" ? (item as Expense).amount : (item as Purchase).total_amount;
     byCurrency[item.currency] = (byCurrency[item.currency] ?? 0) + amount;
   });
   return byCurrency;
@@ -63,7 +69,11 @@ export function InvoiceModal(props: Props) {
 
   const companyProfile = useAppSelector((s) => s.companyProfile.profile);
   const noCompany = !companyProfile?.name?.trim();
-  const byCurrency = totals(items, type);
+
+  // Compute preview totals — sales get full Subtotal/Shipping/VAT/GrandTotal breakdown;
+  // expenses/purchases keep their existing simple currency→amount map.
+  const salesTotals = type === "sale" ? salesTotalsByCurrency(items as Sale[]) : null;
+  const simpleTotals = type !== "sale" ? simpleTotalsByCurrency(items as Expense[] | Purchase[], type) : null;
 
   const typeLabel =
     type === "sale" ? "Sales Invoice" : type === "expense" ? "Expense Report" : "Purchase Report";
@@ -115,13 +125,26 @@ export function InvoiceModal(props: Props) {
 
         <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3 space-y-1">
           <SummaryRow label="Records included" value={String(items.length)} />
-          {Object.entries(byCurrency).map(([cur, total]) => (
+
+          {/* Sales: show Subtotal / Shipping / VAT / Grand Total per currency */}
+          {salesTotals && Object.entries(salesTotals).map(([cur, t]) => (
+            <div key={cur} className="space-y-0.5">
+              <SummaryRow label={`Subtotal (${cur})`} value={formatCurrency(t.subtotal, cur as "EUR" | "USD" | "GBP")} />
+              <SummaryRow label={`Shipping (${cur})`} value={formatCurrency(t.shipping, cur as "EUR" | "USD" | "GBP")} />
+              <SummaryRow label={`VAT (${cur})`} value={formatCurrency(t.vat, cur as "EUR" | "USD" | "GBP")} />
+              <SummaryRow label={`Grand Total (${cur})`} value={formatCurrency(t.grandTotal, cur as "EUR" | "USD" | "GBP")} />
+            </div>
+          ))}
+
+          {/* Expenses / Purchases: simple per-currency total */}
+          {simpleTotals && Object.entries(simpleTotals).map(([cur, total]) => (
             <SummaryRow
               key={cur}
               label={`Total (${cur})`}
               value={formatCurrency(total, cur as "EUR" | "USD" | "GBP")}
             />
           ))}
+
           {items.length === 0 && (
             <p className="text-sm text-[var(--color-text-faint)] italic py-1">
               No records match the current filters.
