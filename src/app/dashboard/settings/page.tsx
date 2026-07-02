@@ -7,6 +7,12 @@ import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields"
 import { useToast } from "@/components/ui/Toast";
 import { generateSalesInvoice } from "@/lib/utils/generateInvoice";
 import { createTenantClient } from "@/lib/supabase/client";
+import {
+  validateIBAN,
+  validateVATId,
+  validateEmail,
+  validateVATRate,
+} from "@/lib/utils/validation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { FileDown } from "lucide-react";
@@ -59,7 +65,8 @@ export default function SettingsPage() {
     const supabase = await createTenantClient();
     const { data, error: dbError } = await supabase
       .from("company_profile")
-      .update({
+      .upsert({
+        id: companyForm.id,
         name: companyForm.name,
         logo_url: companyForm.logo_url,
         vat_number: companyForm.vat_number,
@@ -77,7 +84,6 @@ export default function SettingsPage() {
         payment_terms: companyForm.payment_terms,
         footer_notes: companyForm.footer_notes,
       })
-      .eq("id", companyForm.id)
       .select()
       .single<CompanyProfile>();
 
@@ -193,6 +199,11 @@ export default function SettingsPage() {
                   disabled={!canEditCompanyProfile}
                   placeholder="info@company.com"
                 />
+                {validateEmail(companyForm.email ?? "") && (
+                  <p className="mt-1 text-xs text-(--color-warning,#f59e0b)">
+                    {validateEmail(companyForm.email ?? "")}
+                  </p>
+                )}
               </Field>
             </Row>
           </section>
@@ -211,6 +222,11 @@ export default function SettingsPage() {
                   disabled={!canEditCompanyProfile}
                   placeholder="DE123456789"
                 />
+                {validateVATId(companyForm.vat_number ?? "") && (
+                  <p className="mt-1 text-xs text-(--color-warning,#f59e0b)">
+                    {validateVATId(companyForm.vat_number ?? "")}
+                  </p>
+                )}
               </Field>
               <Field label="Tax ID (Steuernummer)">
                 <Input
@@ -233,6 +249,11 @@ export default function SettingsPage() {
                 disabled={!canEditCompanyProfile}
                 placeholder="19"
               />
+              {validateVATRate(companyForm.vat_rate) && (
+                <p className="mt-1 text-xs text-(--color-warning,#f59e0b)">
+                  {validateVATRate(companyForm.vat_rate)}
+                </p>
+              )}
             </Field>
             <p className="text-xs text-[var(--color-text-muted)]">
               Used as the default rate when you mark a purchase, sale, or expense
@@ -263,6 +284,11 @@ export default function SettingsPage() {
                   disabled={!canEditCompanyProfile}
                   placeholder="DE89 3704 0044 0532 0130 00"
                 />
+                {validateIBAN(companyForm.iban ?? "") && (
+                  <p className="mt-1 text-xs text-(--color-warning,#f59e0b)">
+                    {validateIBAN(companyForm.iban ?? "")}
+                  </p>
+                )}
               </Field>
               <Field label="BIC / SWIFT">
                 <Input

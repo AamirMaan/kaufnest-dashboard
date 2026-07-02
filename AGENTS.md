@@ -8,8 +8,10 @@ client routing) are **already provisioned live**, and
 `005_tenant_provisioning.sql` (the `provision_tenant_schema()`/
 `set_user_tenant()` functions Phase 4 dynamic provisioning depends on) is
 **applied** — see `supabase/SKILL.md` for exact apply-status per migration
-file. Outstanding: the small follow-up migration
-`004_performance_indexes.sql`, and Stripe.
+file. Outstanding migrations: see `supabase/SKILL.md` for the authoritative
+apply-status of each migration file. Apply pending migrations (004, 007, 008,
+control-plane 002/003) in the Supabase dashboards before running Phase 4–5
+features. Stripe is also outstanding.
 
 **Key rules that apply once Phase 3 DB migration is live:**
 1. Never query `public.*` — all tenant data lives in `tenant_<slug>` schemas.

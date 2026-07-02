@@ -103,7 +103,7 @@ export default async function DashboardLayout({
     supabase
       .from("company_profile")
       .select("*")
-      .single<CompanyProfile>(),
+      .maybeSingle<CompanyProfile>(),
     // Columns are listed explicitly to exclude access_token/refresh_token/
     // token_expires_at — those never leave the server (see
     // src/lib/integrations/SKILL.md). RLS restricts this to admin/super_admin,
