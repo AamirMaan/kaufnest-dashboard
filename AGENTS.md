@@ -17,6 +17,10 @@ file. Outstanding: the small follow-up migration
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
 
+## Server-side pagination (Phase 3)
+
+Layout (`src/app/dashboard/layout.tsx`) now fetches page 1 with exact counts: `.select("*", { count: "exact" }).range(0, pageSize - 1)`. Subsequent pages are fetched client-side via Redux thunks with filters translated to server queries (`.gte()`, `.lte()`, `.eq()`, `.ilike()`). Filter changes reset to page 1. Pages now have a `<Pagination>` component rendering "Showing X–Y of Z" with prev/next; summary stats are computed server-side or labeled "(this page)" to avoid silent miscounts. Sorting within a page is acceptable for v1 — noted in each feature's SKILL.md gotchas. Indexes on `(created_at desc)` and `(name asc)` for audit_logs and products (migration 011) support efficient range queries.
+
 New shared code from the migration:
 - `src/lib/supabase/control.ts` — control plane (Project A) client
 - `src/proxy.ts` — existing route-protection proxy (this Next.js version's
