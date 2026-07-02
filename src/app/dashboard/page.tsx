@@ -23,6 +23,7 @@ import { useTheme } from "@/components/ui/ThemeProvider";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
+import { aggregateSaleRevenue } from "./_lib/aggregateSales";
 import type { ExpenseCategory } from "@/types";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
@@ -125,13 +126,9 @@ export default function DashboardPage() {
     [periodSales]
   );
 
-  const totalRevenue = effectiveSales.reduce(
-    (s, r) => s + r.total_amount + (r.shipping_charged ?? 0),
-    0
-  );
-  const totalSaleFees = effectiveSales.reduce(
-    (s, r) => s + (r.shipping_cost ?? 0) + (r.advertising_fee ?? 0),
-    0
+  const { revenue: totalRevenue, fees: totalSaleFees } = useMemo(
+    () => aggregateSaleRevenue(effectiveSales),
+    [effectiveSales]
   );
   const totalExpenses = periodExpenses.reduce((s, r) => s + r.amount, 0);
   const totalPurchases = periodPurchases.reduce((s, r) => s + r.total_amount, 0);
@@ -152,11 +149,20 @@ export default function DashboardPage() {
   const monthlyTrend = useMemo(() => {
     const map = new Map<string, { revenue: number; expenses: number; purchases: number }>();
     const get = (k: string) => map.get(k) ?? { revenue: 0, expenses: 0, purchases: 0 };
+
+    // Group sales by month and use aggregateSaleRevenue per month
+    const salesByMonth = new Map<string, typeof effectiveSales>();
     for (const s of effectiveSales) {
       const k = s.date.slice(0, 7);
-      const e = get(k);
-      map.set(k, { ...e, revenue: e.revenue + s.total_amount + (s.shipping_charged ?? 0) });
+      if (!salesByMonth.has(k)) salesByMonth.set(k, []);
+      salesByMonth.get(k)!.push(s);
     }
+    for (const [k, monthlySales] of salesByMonth) {
+      const { revenue } = aggregateSaleRevenue(monthlySales);
+      const e = get(k);
+      map.set(k, { ...e, revenue });
+    }
+
     for (const e of periodExpenses) {
       const k = e.date.slice(0, 7);
       const entry = get(k);
