@@ -31,7 +31,7 @@ interface StoreProviderProps {
   children: React.ReactNode;
   sales?: { data: Sale[]; count: number };
   expenses?: { data: Expense[]; count: number };
-  purchases?: Purchase[];
+  purchases?: { data: Purchase[]; count: number };
   products?: Product[];
   auditLogs?: AuditLog[];
   users?: Profile[];
@@ -60,7 +60,7 @@ export function StoreProvider({
     const store = makeStore();
     if (sales)               store.dispatch(hydrateSales({ data: sales.data, count: sales.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (expenses)            store.dispatch(hydrateExpenses({ data: expenses.data, count: expenses.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
-    if (purchases)           store.dispatch(hydratePurchases(purchases));
+    if (purchases)           store.dispatch(hydratePurchases({ data: purchases.data, count: purchases.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (products)            store.dispatch(hydrateProducts(products));
     if (auditLogs)           store.dispatch(hydrateAuditLogs(auditLogs));
     if (users)               store.dispatch(hydrateUsers(users));

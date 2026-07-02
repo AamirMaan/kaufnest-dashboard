@@ -46,7 +46,7 @@ export default async function DashboardLayout({
   const [
     { data: salesData, count: salesCount },
     { data: expensesData, count: expensesCount },
-    { data: purchases },
+    { data: purchasesData, count: purchasesCount },
     { data: products },
     { data: auditLogs },
     { data: users },
@@ -68,9 +68,9 @@ export default async function DashboardLayout({
       .returns<Expense[]>(),
     supabase
       .from("purchases")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("date", { ascending: false })
-      .limit(100)
+      .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<Purchase[]>(),
     supabase
       .from("products")
@@ -133,7 +133,7 @@ export default async function DashboardLayout({
     <StoreProvider
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
       expenses={{ data: expensesData ?? [], count: expensesCount ?? 0 }}
-      purchases={purchases ?? []}
+      purchases={{ data: purchasesData ?? [], count: purchasesCount ?? 0 }}
       products={products ?? []}
       auditLogs={auditLogs ?? []}
       users={users ?? []}

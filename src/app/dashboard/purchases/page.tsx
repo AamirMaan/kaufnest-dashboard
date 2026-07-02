@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removePurchase } from "./_store/purchasesSlice";
+import { removePurchase, fetchPurchasesPage } from "./_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import { AddPurchaseModal } from "./_components/AddPurchaseModal";
@@ -21,9 +22,9 @@ import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
-  filterPurchases,
   isDefaultFilters,
   DEFAULT_PURCHASE_FILTERS,
+  getPresetRange,
   type PurchaseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -37,22 +38,27 @@ export default function PurchasesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const purchases = useAppSelector((s) => s.purchases.items);
+  const page = useAppSelector((s) => s.purchases.page);
+  const pageSize = useAppSelector((s) => s.purchases.pageSize);
+  const total = useAppSelector((s) => s.purchases.total);
+  const isFetching = useAppSelector((s) => s.purchases.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
 
   const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_PURCHASE_FILTERS);
-  const filtered = useMemo(() => filterPurchases(purchases, filters), [purchases, filters]);
   const hasActive = !isDefaultFilters(filters);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
-    () => filtered.filter((p) => selectedIds.has(p.id)),
-    [filtered, selectedIds]
+    () => purchases.filter((p) => selectedIds.has(p.id)),
+    [purchases, selectedIds]
   );
-  const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
+  const invoiceItems = selectedItems.length > 0 ? selectedItems : purchases;
 
+  // Summary computed from current page items only — labelled "(this page)" to
+  // make clear these are page-scoped totals, not all-time aggregates.
   const summary = useMemo(() => {
     const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
-    for (const p of filtered) {
+    for (const p of purchases) {
       const entry = byCurrency.get(p.currency) ?? { gross: [], vat: [] };
       entry.gross.push(p.total_amount);
       if (p.vat_amount != null) entry.vat.push(p.vat_amount);
@@ -63,7 +69,7 @@ export default function PurchasesPage() {
       gross: sumAmounts(gross),
       vat: sumAmounts(vat),
     }));
-  }, [filtered]);
+  }, [purchases]);
   const hasVat = summary.some((s) => s.vat > 0);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -72,18 +78,61 @@ export default function PurchasesPage() {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  function handleExport() {
+  // ── Filter helpers ────────────────────────────────────────────────────────
+
+  /** Fire a server-side fetch and reset to page 1 when filters change. */
+  const applyFilters = useCallback(
+    (nextFilters: PurchaseFilters) => {
+      dispatch(fetchPurchasesPage({ page: 1, pageSize, filters: nextFilters }));
+    },
+    [dispatch, pageSize]
+  );
+
+  function setFilter<K extends keyof PurchaseFilters>(key: K, value: PurchaseFilters[K]) {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_PURCHASE_FILTERS);
+    applyFilters(DEFAULT_PURCHASE_FILTERS);
+  }
+
+  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+
+  async function handleExport() {
+    const supabase = await createTenantClient();
+    let query = supabase
+      .from("purchases")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(5000);
+
+    const range =
+      filters.preset === "custom"
+        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
+        : getPresetRange(filters.preset);
+    if (range && filters.preset !== "all") {
+      query = query.gte("date", range.from).lte("date", range.to);
+    }
+    if (filters.vendor.trim() !== "") {
+      query = query.ilike("vendor", `%${filters.vendor.trim()}%`);
+    }
+    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+
+    const { data: allRows } = await query;
+    if (!allRows || allRows.length === 0) return;
+
     const headers = ["date", "product_name", "vendor", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "description"];
-    const rows = filtered.map((p) => [
+    const rows = (allRows as Purchase[]).map((p) => [
       p.date, p.product_name, p.vendor ?? "", p.quantity, p.unit_price, p.total_amount,
       p.currency, p.vat_rate ?? "", p.vat_amount ?? "", p.description ?? "",
     ]);
     exportToCsv(`purchases-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
 
-  function setFilter<K extends keyof PurchaseFilters>(key: K, value: PurchaseFilters[K]) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  }
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
@@ -210,7 +259,7 @@ export default function PurchasesPage() {
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
-            <Button variant="export" onClick={handleExport} disabled={filtered.length === 0}>
+            <Button variant="export" onClick={handleExport} disabled={total === 0}>
               <Download size={15} />
               Export
             </Button>
@@ -233,7 +282,7 @@ export default function PurchasesPage() {
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         hasActive={hasActive}
-        onClear={() => setFilters(DEFAULT_PURCHASE_FILTERS)}
+        onClear={clearFilters}
       >
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Vendor</span>
@@ -247,41 +296,53 @@ export default function PurchasesPage() {
         </div>
       </FilterBar>
 
-      <div className="flex items-start justify-between mb-3 text-sm">
-        <span className="text-[var(--color-text-muted)] pt-0.5">
-          {filtered.length} purchase{filtered.length !== 1 ? "s" : ""} shown
-        </span>
-        {summary.length > 0 && (
-          <div className="text-right space-y-0.5">
-            {hasVat ? (
-              <>
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+      {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
+      <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
+        <div className="flex items-start justify-between mb-3 text-sm">
+          <span className="text-(--color-text-muted) pt-0.5">
+            {total} purchase{total !== 1 ? "s" : ""} total
+          </span>
+          {summary.length > 0 && (
+            <div className="text-right space-y-0.5">
+              {hasVat ? (
+                <>
+                  <p className="font-medium text-(--color-text-strong)">
+                    Gross (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                  </p>
+                  <p className="text-(--color-text-muted)">
+                    VAT (this page): {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
+                  </p>
+                  <p className="font-medium text-(--color-text-strong)">
+                    Net (this page): {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
+                  </p>
+                </>
+              ) : (
+                <p className="font-medium text-(--color-text-strong)">
+                  Total (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
                 </p>
-                <p className="text-[var(--color-text-muted)]">
-                  VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                </p>
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                </p>
-              </>
-            ) : (
-              <p className="font-medium text-[var(--color-text-strong)]">
-                Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-              </p>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
+
+        <DataTable
+          columns={columns}
+          rows={purchases}
+          keyField="id"
+          emptyMessage="No purchases match the current filters."
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => dispatch(fetchPurchasesPage({ page: p, pageSize, filters }))}
+          onPageSizeChange={(s) => dispatch(fetchPurchasesPage({ page: 1, pageSize: s, filters }))}
+        />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        keyField="id"
-        emptyMessage="No purchases match the current filters."
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
-      />
       <AddPurchaseModal
         open={addOpen}
         onClose={() => setAddOpen(false)}

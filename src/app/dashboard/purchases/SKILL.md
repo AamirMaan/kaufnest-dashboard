@@ -6,8 +6,9 @@ description: Work on the Purchases dashboard feature (list, add/edit/delete inve
 # Working on the Purchases feature
 
 This feature is fully colocated under `src/app/dashboard/purchases/`. Read
-`CLAUDE.md` in this folder first — it explains the file map and the
-Supabase-write → slice-update → audit-log data flow every mutation follows.
+`CLAUDE.md` in this folder first — it explains the file map, the server-side
+pagination data flow, and the Supabase-write → slice-update → audit-log pattern
+every mutation follows.
 
 ## Minimal file set for common changes
 
@@ -19,6 +20,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (`lib/utils/filters.ts`). **Also update `ImportPurchasesModal.tsx`** if the
   field needs import support.
 - **Change list/filter/table behavior**: `page.tsx` only.
+- **Change server-side filter pushdown**: `_store/purchasesSlice.ts`
+  (`fetchPurchasesPage` thunk) + `page.tsx` (`handleExport` must mirror the same
+  predicates).
 - **Change reducer logic**: `_store/purchasesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx`.
 - **Change import validation / accepted columns**: `validateRow()` in
@@ -34,6 +38,18 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   in `src/store/StoreProvider.tsx` — those two files import it via the
   `@/app/dashboard/purchases/_store/purchasesSlice` alias. If you rename the
   slice file, update those imports too.
+- `hydratePurchases` is a re-export alias for `hydratePage` — `StoreProvider`
+  calls `hydratePurchases({ data, count, page: 1, pageSize: DEFAULT_PAGE_SIZE })`.
+  The old `hydrate(Purchase[])` signature is gone; always pass the full
+  `{ data, count, page, pageSize }` shape.
+- The `vendor` filter is a **text search** (`.ilike("vendor", "%value%")`), not
+  an enum dropdown. Both `fetchPurchasesPage` and `handleExport` must mirror
+  the same predicate — if you change one, change the other.
+- Summary cards in `page.tsx` are computed from `state.purchases.items` (current
+  page only) and labelled "(this page)" — they are NOT all-time aggregates.
+- The Export button queries Supabase directly with **no `.range()`** (capped at
+  5 000 rows) so it always covers all matching records regardless of which page
+  is shown. Mirror filter predicates from `fetchPurchasesPage` exactly.
 - `DeleteConfirmModal` and `InvoiceModal` are shared with Sales and Expenses
   (`src/components/modals/`) — modify them carefully, changes ripple to those
   features.
