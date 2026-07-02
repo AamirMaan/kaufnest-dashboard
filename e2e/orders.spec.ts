@@ -78,10 +78,18 @@ test.describe("Orders (sales)", () => {
 
   test("audit log shows advertising_fee change", async ({ page }) => {
     await page.goto("/dashboard/audit-logs");
-    // Look for an audit log entry related to the product we edited
-    await expect(
-      page.getByText(productName, { exact: false })
-    ).toBeVisible({ timeout: 10_000 });
+
+    // Find the most recent "update" action row in the audit log table and open its detail modal.
+    // The diff for the edit is stored in metadata.before/after and rendered as a KVTable
+    // by AuditLogDetailModal — we need to open it to see field-level keys like advertising_fee.
+    const updateRow = page.locator("tr").filter({ hasText: /update/i }).first();
+    await expect(updateRow).toBeVisible({ timeout: 10_000 });
+    await updateRow.getByRole("button", { name: "View details" }).click();
+
+    // AuditLogDetailModal renders before/after KVTables; each field key appears as a <span>
+    // with font-mono styling. Assert advertising_fee is present in the diff.
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("dialog").getByText(/advertising_fee/i)).toBeVisible({ timeout: 5_000 });
   });
 
   test.afterAll(async ({ browser }) => {

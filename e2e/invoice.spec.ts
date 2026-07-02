@@ -35,8 +35,15 @@ test.describe("Invoice", () => {
   test("InvoiceModal (bulk) on sales list → totals contain Shipping text → download succeeds", async ({ page }) => {
     await page.goto("/dashboard/sales");
 
-    // Open InvoiceModal via the "Invoice" header button
-    await page.getByRole("button", { name: /^invoice$/i }).click();
+    // Select the first row explicitly so invoiceItems is always non-empty
+    // (when no rows are selected the modal uses all page items, which may be empty
+    // if the DB has no data yet — selecting a specific row guarantees at least one sale).
+    const firstRowCheckbox = page.locator("table tbody tr:first-child input[type='checkbox']");
+    await expect(firstRowCheckbox).toBeVisible({ timeout: 10_000 });
+    await firstRowCheckbox.click();
+
+    // Open InvoiceModal via the "Invoice" header button (label changes to "Invoice (1)" when a row is selected)
+    await page.getByRole("button", { name: /invoice/i }).click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 10_000 });
 
     // Assert the modal body contains "Shipping" text

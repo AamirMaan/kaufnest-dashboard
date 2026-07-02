@@ -2,13 +2,18 @@ import { test, expect } from "@playwright/test";
 
 // Auth tests — no storageState for unauthenticated scenarios
 test.describe("Auth", () => {
-  test("valid login navigates to /dashboard", async ({ page }) => {
-    // The global-setup already saved auth state, so this test just verifies
-    // the saved session lands on dashboard correctly.
-    await page.goto("/dashboard");
+  test("valid credentials → /dashboard", async ({ browser }) => {
+    // Use a fresh context with no storageState so this test exercises the login form,
+    // not just a pre-saved cookie.
+    const context = await browser.newContext(); // no storageState
+    const page = await context.newPage();
+    await page.goto("/login");
+    await page.locator('[id="email"]').fill(process.env.E2E_EMAIL!);
+    await page.locator('[id="password"]').fill(process.env.E2E_PASSWORD!);
+    await page.locator('[type="submit"]').click();
+    await page.waitForURL("**/dashboard**");
     await expect(page).toHaveURL(/\/dashboard/);
-    // The dashboard shell should be visible (KaufNest brand in header)
-    await expect(page.getByText("KaufNest").first()).toBeVisible();
+    await context.close();
   });
 
   test("logout navigates to /login", async ({ page }) => {

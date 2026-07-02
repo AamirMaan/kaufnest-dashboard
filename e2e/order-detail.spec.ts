@@ -26,6 +26,9 @@ test.describe("Order detail page", () => {
     await expect(page.getByRole("heading", { name: "Financials" })).toBeVisible();
     // Net Proceeds row should be visible
     await expect(page.getByText("Net Proceeds")).toBeVisible();
+    // Fee lines in the Financials card should also be rendered
+    await expect(page.getByText(/shipping cost/i)).toBeVisible();
+    await expect(page.getByText(/advertising fee/i)).toBeVisible();
   });
 
   test("direct page.goto to order URL renders without store hydration (DB fallback)", async ({ page }) => {
