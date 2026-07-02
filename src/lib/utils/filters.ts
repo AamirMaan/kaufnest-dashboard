@@ -125,6 +125,12 @@ export const DEFAULT_AUDIT_LOG_FILTERS: AuditLogFilters = {
   user_id: "all",
 };
 
+// Canonical revenue-eligibility rule — update here to change everywhere.
+/** Returns true for sales that count toward revenue (not returned, not cancelled). */
+export function isRevenueSale(sale: { status: string | null }): boolean {
+  return sale.status !== "returned" && sale.status !== "cancelled";
+}
+
 export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   let result = sales;
   const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);

@@ -15,13 +15,14 @@ import {
 } from "recharts";
 import { DollarSign, TrendingDown, ShoppingCart, BarChart3, Package } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
+import { type Currency } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
-import { resolveDateRange, type DatePreset } from "@/lib/utils/filters";
+import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
 import type { ExpenseCategory } from "@/types";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
@@ -73,6 +74,8 @@ export default function DashboardPage() {
   const sales = useAppSelector((s) => s.sales.items);
   const expenses = useAppSelector((s) => s.expenses.items);
   const purchases = useAppSelector((s) => s.purchases.items);
+  const profileCurrency: Currency =
+    useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const { theme } = useTheme();
 
   const [preset, setPreset] = useState<DatePreset>("this_month");
@@ -84,31 +87,55 @@ export default function DashboardPage() {
     [preset, dateFrom, dateTo]
   );
 
+  // Guard against multi-currency totals: only include records in the profile
+  // currency so EUR + USD + GBP are never summed into a single meaningless number.
   const periodSales = useMemo(
-    () => (range ? sales.filter((s) => s.date >= range.from && s.date <= range.to) : sales),
-    [sales, range]
+    () =>
+      sales.filter(
+        (s) =>
+          s.currency === profileCurrency &&
+          (range ? s.date >= range.from && s.date <= range.to : true)
+      ),
+    [sales, range, profileCurrency]
   );
   const periodExpenses = useMemo(
-    () => (range ? expenses.filter((e) => e.date >= range.from && e.date <= range.to) : expenses),
-    [expenses, range]
+    () =>
+      expenses.filter(
+        (e) =>
+          e.currency === profileCurrency &&
+          (range ? e.date >= range.from && e.date <= range.to : true)
+      ),
+    [expenses, range, profileCurrency]
   );
   const periodPurchases = useMemo(
-    () => (range ? purchases.filter((p) => p.date >= range.from && p.date <= range.to) : purchases),
-    [purchases, range]
+    () =>
+      purchases.filter(
+        (p) =>
+          p.currency === profileCurrency &&
+          (range ? p.date >= range.from && p.date <= range.to : true)
+      ),
+    [purchases, range, profileCurrency]
   );
 
-  // Returned orders don't contribute to revenue/profit — exclude them from
-  // every revenue-derived figure below, but keep periodSales.length (total
-  // orders placed, including returns) for the "Orders" StatCard.
+  // Returned/cancelled orders don't contribute to revenue/profit — exclude them
+  // from every revenue-derived figure below, but keep periodSales.length (total
+  // orders placed, including returns/cancellations) for the "Orders" StatCard.
   const effectiveSales = useMemo(
-    () => periodSales.filter((s) => s.status !== "returned"),
+    () => periodSales.filter(isRevenueSale),
     [periodSales]
   );
 
-  const totalRevenue = effectiveSales.reduce((s, r) => s + r.total_amount, 0);
+  const totalRevenue = effectiveSales.reduce(
+    (s, r) => s + r.total_amount + (r.shipping_charged ?? 0),
+    0
+  );
+  const totalSaleFees = effectiveSales.reduce(
+    (s, r) => s + (r.shipping_cost ?? 0) + (r.advertising_fee ?? 0),
+    0
+  );
   const totalExpenses = periodExpenses.reduce((s, r) => s + r.amount, 0);
   const totalPurchases = periodPurchases.reduce((s, r) => s + r.total_amount, 0);
-  const netProfit = calculateNetProfit(totalRevenue, totalExpenses, totalPurchases);
+  const netProfit = calculateNetProfit(totalRevenue, totalExpenses + totalSaleFees, totalPurchases);
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
   const avgOrderValue = effectiveSales.length > 0 ? totalRevenue / effectiveSales.length : null;
   const unitsSold = effectiveSales.reduce((s, r) => s + r.quantity, 0);
@@ -128,7 +155,7 @@ export default function DashboardPage() {
     for (const s of effectiveSales) {
       const k = s.date.slice(0, 7);
       const e = get(k);
-      map.set(k, { ...e, revenue: e.revenue + s.total_amount });
+      map.set(k, { ...e, revenue: e.revenue + s.total_amount + (s.shipping_charged ?? 0) });
     }
     for (const e of periodExpenses) {
       const k = e.date.slice(0, 7);
@@ -248,26 +275,26 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
           label="Revenue"
-          value={formatCurrency(totalRevenue)}
+          value={formatCurrency(totalRevenue, profileCurrency)}
           trend="up"
-          subtext={avgOrderValue !== null ? `Avg. order: ${formatCurrency(avgOrderValue)}` : undefined}
+          subtext={avgOrderValue !== null ? `Avg. order: ${formatCurrency(avgOrderValue, profileCurrency)}` : undefined}
           icon={<DollarSign size={18} />}
         />
         <StatCard
           label="Expenses"
-          value={formatCurrency(totalExpenses)}
+          value={formatCurrency(totalExpenses, profileCurrency)}
           trend="down"
           icon={<TrendingDown size={18} />}
         />
         <StatCard
           label="Purchases"
-          value={formatCurrency(totalPurchases)}
+          value={formatCurrency(totalPurchases, profileCurrency)}
           trend="down"
           icon={<ShoppingCart size={18} />}
         />
         <StatCard
           label="Net Profit"
-          value={formatCurrency(netProfit)}
+          value={formatCurrency(netProfit, profileCurrency)}
           trend={netProfit >= 0 ? "up" : "down"}
           subtext={
             profitMargin !== null
@@ -331,7 +358,7 @@ export default function DashboardPage() {
                   }}
                   labelStyle={{ color: tooltipLabel, marginBottom: 4, fontWeight: 600 }}
                   formatter={(value, name) => [
-                    formatCurrency(Number(value ?? 0)),
+                    formatCurrency(Number(value ?? 0), profileCurrency),
                     String(name ?? "").charAt(0).toUpperCase() + String(name ?? "").slice(1),
                   ]}
                 />
@@ -398,7 +425,7 @@ export default function DashboardPage() {
                       fontSize: "12px",
                     }}
                     labelStyle={{ display: "none" }}
-                    formatter={(value, name) => [formatCurrency(Number(value ?? 0)), String(name ?? "")]}
+                    formatter={(value, name) => [formatCurrency(Number(value ?? 0), profileCurrency), String(name ?? "")]}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -411,7 +438,7 @@ export default function DashboardPage() {
                       <span className="text-(--color-text-muted) truncate">{entry.name}</span>
                     </div>
                     <span className="font-medium tabular-nums text-(--color-text-base) ml-2">
-                      {formatCurrency(entry.value)}
+                      {formatCurrency(entry.value, profileCurrency)}
                     </span>
                   </div>
                 ))}
@@ -428,19 +455,19 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <StatCard
               label="VAT Collected"
-              value={formatCurrency(vatCollected)}
+              value={formatCurrency(vatCollected, profileCurrency)}
               subtext="Output VAT — charged to customers"
               trend="neutral"
             />
             <StatCard
               label="VAT Paid"
-              value={formatCurrency(vatPaid)}
+              value={formatCurrency(vatPaid, profileCurrency)}
               subtext="Input VAT — purchases & expenses"
               trend="neutral"
             />
             <StatCard
               label={vatPosition >= 0 ? "Due to Government" : "Government Refund"}
-              value={formatCurrency(Math.abs(vatPosition))}
+              value={formatCurrency(Math.abs(vatPosition), profileCurrency)}
               subtext={vatPosition >= 0 ? "Net VAT payable" : "Net VAT reclaimable"}
               trend={vatPosition >= 0 ? "down" : "up"}
             />

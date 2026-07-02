@@ -76,6 +76,12 @@ The date-preset + entity-filter logic backing `FilterBar` (see
   an array; each composes `resolveDateRange` + the entity-specific field
   checks. Add new filterable fields here, mirroring the existing per-field
   `if` blocks.
+- `isRevenueSale(sale: { status: string | null })` — **canonical revenue-eligibility
+  predicate**. Returns `true` when the sale counts toward revenue (i.e. status is
+  neither `"returned"` nor `"cancelled"`; `null` counts as revenue-eligible).
+  Used by `page.tsx` (overview) to derive `effectiveSales`. **Update this one
+  function to change the rule everywhere** — never write inline `status !== "returned"`
+  checks.
 - `isDefaultFilters(f)` — drives the `FilterBar`'s "Clear" button visibility
   (`hasActive = !isDefaultFilters(filters)`); uses `"x" in f` narrowing so one
   function works across all three filter shapes.

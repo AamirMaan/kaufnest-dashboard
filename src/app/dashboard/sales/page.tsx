@@ -25,6 +25,7 @@ import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
   isDefaultFilters,
+  isRevenueSale,
   DEFAULT_SALES_FILTERS,
   getPresetRange,
   type SalesFilters,
@@ -59,14 +60,14 @@ export default function SalesPage() {
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : sales;
 
-  const returnedCount = useMemo(() => sales.filter((s) => s.status === "returned").length, [sales]);
+  const excludedCount = useMemo(() => sales.filter((s) => !isRevenueSale(s)).length, [sales]);
 
   // Summary computed from current page items only — labelled "(this page)" to
   // make clear these are page-scoped totals, not all-time aggregates.
   const summary = useMemo(() => {
     const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
     for (const s of sales) {
-      if (s.status === "returned") continue;
+      if (!isRevenueSale(s)) continue;
       const entry = byCurrency.get(s.currency) ?? { gross: [], vat: [] };
       entry.gross.push(s.total_amount);
       if (s.vat_amount != null) entry.vat.push(s.vat_amount);
@@ -355,7 +356,7 @@ export default function SalesPage() {
           <span className="text-(--color-text-muted) pt-0.5">
             {total} order{total !== 1 ? "s" : ""} total
           </span>
-          {(summary.length > 0 || returnedCount > 0) && (
+          {(summary.length > 0 || excludedCount > 0) && (
             <div className="text-right space-y-0.5">
               {summary.length > 0 && (
                 hasVat ? (
@@ -376,9 +377,9 @@ export default function SalesPage() {
                   </p>
                 )
               )}
-              {returnedCount > 0 && (
+              {excludedCount > 0 && (
                 <p className="text-xs text-(--color-text-muted)">
-                  {returnedCount} returned order{returnedCount !== 1 ? "s" : ""} excluded from totals
+                  {excludedCount} returned/cancelled order{excludedCount !== 1 ? "s" : ""} excluded from totals
                 </p>
               )}
             </div>

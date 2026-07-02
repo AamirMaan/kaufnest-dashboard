@@ -26,14 +26,21 @@ broadly when working on a specific feature.**
 - `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
   `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
   filter (`resolveDateRange` from `lib/utils/filters`, preset + custom from/to),
-  derives `effectiveSales = periodSales.filter(s => s.status !== "returned")`
-  and renders:
+  derives `effectiveSales = periodSales.filter(isRevenueSale)` (canonical
+  predicate from `lib/utils/filters` — excludes `status === "returned"` AND
+  `status === "cancelled"`) and renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
     units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
     Collected, monthly trend revenue, Revenue by Platform, and Top Products all
-    use `effectiveSales` (excludes `status === "returned"` orders) — only the
+    use `effectiveSales` (returned and cancelled orders excluded) — only the
     "Orders" StatCard's count uses the unfiltered `periodSales.length` (total
-    orders placed, including returns).
+    orders placed, including returns/cancellations).
+  - Revenue sums `total_amount + (shipping_charged ?? 0)` per effective sale;
+    costs deduct `(shipping_cost ?? 0) + (advertising_fee ?? 0)` before
+    calling `calculateNetProfit`.
+  - Multi-currency guard: `periodSales`/`periodExpenses`/`periodPurchases` are
+    pre-filtered to `s.currency === profileCurrency` so EUR + USD are never
+    summed into a single meaningless number.
   - **VAT Position** section (hidden when no VAT data in period): VAT Collected
     (output, from sales), VAT Paid (input, purchases + expenses), net Due to
     Government / Government Refund

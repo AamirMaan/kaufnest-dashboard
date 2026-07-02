@@ -1,4 +1,4 @@
-import { resolveDateRange, getPresetRange, filterSales, DEFAULT_SALES_FILTERS } from "./filters";
+import { resolveDateRange, getPresetRange, filterSales, isRevenueSale, DEFAULT_SALES_FILTERS } from "./filters";
 import type { Sale } from "@/types";
 
 describe("resolveDateRange", () => {
@@ -30,6 +30,24 @@ describe("resolveDateRange", () => {
       from: "2026-01-01",
       to: "9999-99-99",
     });
+  });
+});
+
+describe("isRevenueSale", () => {
+  it("returns true for a completed sale", () => {
+    expect(isRevenueSale({ status: "completed" })).toBe(true);
+  });
+
+  it("returns false for a returned sale", () => {
+    expect(isRevenueSale({ status: "returned" })).toBe(false);
+  });
+
+  it("returns false for a cancelled sale", () => {
+    expect(isRevenueSale({ status: "cancelled" })).toBe(false);
+  });
+
+  it("returns true when status is null (unknown — count it)", () => {
+    expect(isRevenueSale({ status: null })).toBe(true);
   });
 });
 
