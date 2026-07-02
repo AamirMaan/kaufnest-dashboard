@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateUserRole } from "./_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
+import { Pagination } from "@/components/ui/Pagination";
 import { RoleBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
@@ -16,6 +17,8 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDateTime } from "@/lib/utils/date";
 import type { Profile, UserRole } from "@/types";
+
+const DEFAULT_PAGE_SIZE = 25;
 
 const ROLES: { value: UserRole; label: string }[] = [
   { value: "accountant", label: "Accountant" },
@@ -27,10 +30,17 @@ export default function UsersPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const users = useAppSelector((s) => s.users.items);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
+
+  const pagedUsers = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return users.slice(start, start + pageSize);
+  }, [users, page, pageSize]);
 
   async function handleResendInvite(profile: Profile) {
     setResendingInvite(profile.id);
@@ -155,9 +165,16 @@ export default function UsersPage() {
       />
       <DataTable
         columns={columns}
-        rows={users}
+        rows={pagedUsers}
         keyField="id"
         emptyMessage="No users found."
+      />
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={users.length}
+        onPageChange={(p) => setPage(p)}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
       />
       <InviteUserModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <EditUserModal key={editTarget?.id ?? "edit-user"} user={editTarget} onClose={() => setEditTarget(null)} />

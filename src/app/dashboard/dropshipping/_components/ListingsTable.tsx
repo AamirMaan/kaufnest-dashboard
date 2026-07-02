@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
 import { formatCurrency } from "@/lib/utils/currency";
 import {
   Table,
@@ -15,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { EditSourceModal } from "./EditSourceModal";
 import type { DropshipListing, Currency } from "@/types";
+
+const DEFAULT_PAGE_SIZE = 25;
 
 interface ListingsTableProps {
   listings: DropshipListing[];
@@ -60,6 +63,13 @@ function SourceBadge({ listing }: { listing: DropshipListing }) {
 
 export function ListingsTable({ listings }: ListingsTableProps) {
   const [editTarget, setEditTarget] = useState<DropshipListing | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  const pagedListings = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return listings.slice(start, start + pageSize);
+  }, [listings, page, pageSize]);
 
   if (listings.length === 0) {
     return (
@@ -86,7 +96,7 @@ export function ListingsTable({ listings }: ListingsTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {listings.map((listing) => (
+            {pagedListings.map((listing) => (
               <TableRow key={listing.id}>
                 <TableCell>
                   {listing.image_url ? (
@@ -140,6 +150,14 @@ export function ListingsTable({ listings }: ListingsTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={listings.length}
+        onPageChange={(p) => setPage(p)}
+        onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+      />
 
       <EditSourceModal key={editTarget?.id ?? "none"} listing={editTarget} onClose={() => setEditTarget(null)} />
     </>

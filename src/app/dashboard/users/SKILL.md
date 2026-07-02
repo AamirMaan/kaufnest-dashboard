@@ -20,6 +20,8 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   `page.tsx` if it should render in the table.
 - **Role/permission rules**: `src/lib/utils/permissions.ts` (shared — also
   drives route access in `src/proxy.ts`), not this folder.
+- **Pagination (client-side)**: `page.tsx` only — `page`/`pageSize` local state,
+  `pagedUsers` useMemo slice, `<Pagination>` component. No slice changes needed.
 
 ## Test command
 
