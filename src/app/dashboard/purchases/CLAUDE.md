@@ -5,19 +5,46 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 
 ## Files in this folder
 
-- `page.tsx` — list view: filtering (`FilterBar` + `filterPurchases`), row
-  selection, invoice trigger, Gross/VAT/Net summary, **Export CSV** button
-  (exports `filtered` via `lib/utils/csv`), **Import CSV** button, wires up the
-  modals below.
+- `page.tsx` — list view: server-side pagination (`fetchPurchasesPage` thunk),
+  `FilterBar` (date preset, currency, vendor text search), `<Pagination>`,
+  loading overlay, Gross/VAT/Net summary **(this page)**, **Export CSV** button
+  (server-side query, no `.range()`, capped at 5 000 rows), **Import CSV** button,
+  wires up the modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
-  `loaded`). Actions: `hydratePurchases`, `addPurchase`, `updatePurchase`,
-  `removePurchase`. Used **only** by this feature — registered centrally in
-  `src/store/store.ts` and hydrated in `src/store/StoreProvider.tsx`, but
-  otherwise self-contained here.
-- `_store/purchasesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/purchases`.
+  `loaded`, `page`, `pageSize`, `total`, `isFetching`).
+  Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),
+  `addPurchase`, `updatePurchase`, `removePurchase`, `setFetching`.
+  Thunk: `fetchPurchasesPage({ page, pageSize, filters })` — builds a Supabase query
+  with filter pushdown (date range, vendor ilike, currency), `.select("*", { count: "exact" })`,
+  `.order("date")`, and `.range(from, to)` from `rangeFor()`.
+  Used **only** by this feature — registered centrally in `src/store/store.ts`
+  and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
+- `_store/purchasesSlice.test.ts` — reducer tests (covers `hydratePurchases`,
+  `addPurchase`/`removePurchase` total arithmetic, `fetchPurchasesPage`
+  pending/fulfilled/rejected cases). Run with `npx jest dashboard/purchases`.
 - `_components/AddPurchaseModal.tsx` / `EditPurchaseModal.tsx` — create/edit forms.
 - `_components/ImportPurchasesModal.tsx` — bulk CSV import: same pattern as
   `ImportSalesModal` but for purchases. See "CSV import/export" below.
+
+## Pagination data flow
+
+Server-side pagination is active. `page.tsx` **does not apply `filterPurchases`
+in memory** — all filtering happens in `fetchPurchasesPage` (the thunk in
+`_store/purchasesSlice.ts`). The flow for a filter change or page navigation is:
+
+1. User changes a filter or clicks Prev/Next in `<Pagination>`.
+2. `page.tsx` dispatches `fetchPurchasesPage({ page, pageSize, filters })`.
+3. The thunk builds a Supabase query with filter predicates + `.select("*", { count: "exact" })` + `.range(from, to)`, then dispatches `hydratePage({ data, count, page, pageSize })` on success.
+4. `state.purchases.items` is replaced with the new page; `total` holds the full
+   count across all pages; `isFetching` goes back to `false`.
+5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
+   `hydratePurchases`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
+
+**Summary cards** show "(this page)" totals only — computed from
+`state.purchases.items` (current page). Clearly labelled in the UI.
+
+**CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
+with the same filter predicates but **no `.range()`**, capped at 5 000 rows.
 
 ## Data flow (the pattern every mutation follows)
 
@@ -53,19 +80,20 @@ editable fields.
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
-  `DataTable`, `FilterBar`, `Toast`
+  `DataTable`, `FilterBar`, `Pagination`, `Toast`
 - `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
   Expenses (don't fork these; extend them if you need new shared behavior)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,pagedQuery}`, `store/slices/companyProfileSlice`
 - `types` (`Purchase`, `Product`)
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` maps `filtered` to rows and calls
+**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
+same filter predicates (no `.range()`, capped at 5 000 rows) and calls
 `exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
 total_amount, currency, vat_rate, vat_amount, description`.
 

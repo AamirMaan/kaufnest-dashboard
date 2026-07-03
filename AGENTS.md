@@ -8,14 +8,26 @@ client routing) are **already provisioned live**, and
 `005_tenant_provisioning.sql` (the `provision_tenant_schema()`/
 `set_user_tenant()` functions Phase 4 dynamic provisioning depends on) is
 **applied** — see `supabase/SKILL.md` for exact apply-status per migration
-file. Outstanding: the small follow-up migration
-`004_performance_indexes.sql`, and Stripe.
+file. Outstanding migrations: see `supabase/SKILL.md` for the authoritative
+apply-status of each migration file. Apply pending migrations (004, 007, 008,
+control-plane 002/003) in the Supabase dashboards before running Phase 4–5
+features. Stripe is also outstanding.
 
 **Key rules that apply once Phase 3 DB migration is live:**
 1. Never query `public.*` — all tenant data lives in `tenant_<slug>` schemas.
 2. Never hardcode a schema name — read it from `user.app_metadata.tenant_schema`.
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
+5. **Tenant schema DDL must use `run_on_all_tenant_schemas`** — never write
+   `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are 5+
+   live tenants; hardcoding one schema name leaves the rest stale. Use:
+   ```sql
+   SELECT public.run_on_all_tenant_schemas($$
+     ALTER TABLE {{schema}}.sales ADD COLUMN IF NOT EXISTS …;
+   $$);
+   ```
+   Also update `provision_tenant_schema()` in `005_tenant_provisioning.sql`
+   for new tenants. See `supabase/SKILL.md` for the full 2-places rule.
 
 New shared code from the migration:
 - `src/lib/supabase/control.ts` — control plane (Project A) client
@@ -31,6 +43,21 @@ New shared code from the migration:
   (server-only, never imported client-side — see its `SKILL.md`)
 - `src/app/api/integrations/` + `src/app/api/cron/sync-integrations/` —
   connect/callback/disconnect/sync routes and the scheduled sync cron
+- **Pagination architecture (Phase 3):** All main data tables use server-side
+  pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
+  row count via `.select("*", { count: "exact" }).range(0,
+  DEFAULT_PAGE_SIZE - 1)` and passes `{data, count}` through `StoreProvider`
+  → each slice's `hydratePage` reducer. Per-feature fetch thunks
+  (`fetchSalesPage`, `fetchExpensesPage`, `fetchPurchasesPage`,
+  `fetchAuditLogsPage`, `fetchInventoryPage`) handle subsequent pages and
+  filter changes — filters are pushed into the Supabase query (`gte`, `lte`,
+  `eq`, `ilike`), not applied client-side. Shared helpers:
+  `src/lib/utils/pagedQuery.ts` (`rangeFor`, `PageRequest`,
+  `DEFAULT_PAGE_SIZE = 50`) and `src/components/ui/Pagination.tsx`. Inventory
+  has a split fetch: paginated `items` for the table + a lightweight
+  full-fetch `selectorItems` (`id, name, current_stock, sku`) for product
+  dropdowns in modals. Users and dropshipping listings use client-side
+  pagination only (small data sets).
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
@@ -125,7 +152,7 @@ you left off instead of re-deriving everything from scratch.
 | --- | --- | --- |
 | `src/app/(auth)/` | `/login`, `/forgot-password`, `/set-password` | auth pages (+ related `app/auth/callback`, `app/api/users/invite` routes) |
 | `src/app/dashboard/` | `/dashboard` (Overview) | shell-level layout/data-hydration + overview stats — see its `CLAUDE.md` for the full feature table |
-| `src/app/dashboard/sales/` | `/dashboard/sales` | sales records ("Orders" in UI) + `salesSlice` |
+| `src/app/dashboard/sales/` | `/dashboard/sales`, `/dashboard/sales/[id]` | sales records ("Orders" in UI) + `salesSlice`; [id] is order-detail page |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
@@ -133,6 +160,8 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
 | `src/app/dashboard/settings/` | `/dashboard/settings` | invoice template settings (thin — no private state) |
 | `src/app/dashboard/integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections + `integrationsSlice` (Pro/Business plans only; admin/super_admin only) |
+| `src/app/dashboard/planner/` | `/dashboard/planner` | order/inventory planning tools |
+| `src/app/dashboard/dropshipping/` | `/dashboard/dropshipping` | dropshipping supplier listings + sync |
 
 Each feature folder follows the same shape (where it has private code):
 

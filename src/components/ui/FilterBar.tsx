@@ -33,8 +33,8 @@ export interface FilterBarProps {
   onDateFromChange: (v: string) => void;
   dateTo: string;
   onDateToChange: (v: string) => void;
-  currency: string;
-  onCurrencyChange: (v: string) => void;
+  currency?: string;
+  onCurrencyChange?: (v: string) => void;
   hasActive: boolean;
   onClear: () => void;
   /** Entity-specific filter slots */
@@ -96,21 +96,23 @@ export function FilterBar({
         </>
       )}
 
-      {/* Currency */}
-      <div>
-        <FilterLabel>Currency</FilterLabel>
-        <select
-          value={currency}
-          onChange={(e) => onCurrencyChange(e.target.value)}
-          className={inputCls}
-        >
-          {CURRENCIES.map((c) => (
-            <option key={c} value={c}>
-              {c === "all" ? "All Currencies" : c}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Currency — hidden when the feature has no currency filter */}
+      {currency !== undefined && onCurrencyChange !== undefined && (
+        <div>
+          <FilterLabel>Currency</FilterLabel>
+          <select
+            value={currency}
+            onChange={(e) => onCurrencyChange(e.target.value)}
+            className={inputCls}
+          >
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {c === "all" ? "All Currencies" : c}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Entity-specific slot */}
       {children}

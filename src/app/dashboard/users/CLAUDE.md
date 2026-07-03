@@ -6,7 +6,9 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
 ## Files in this folder
 
 - `page.tsx` — list view, role badges, wires up the modals below. Gated to
-  `super_admin` (see `lib/utils/permissions.ts`).
+  `super_admin` (see `lib/utils/permissions.ts`). Client-side pagination via
+  local `page`/`pageSize` state (default 25 rows/page) slicing `state.users.items`;
+  renders `<Pagination>` (`@/components/ui/Pagination`) below the `DataTable`.
 - `_store/usersSlice.ts` — Redux slice for `state.users` (`items`, `loaded`).
   Actions: `hydrateUsers`, `addUser`, `updateUser`, `updateUserRole`. Used
   **only** by this feature — registered centrally in `src/store/store.ts` and
@@ -56,7 +58,7 @@ edit profile/role, change roles (`super_admin`, `admin`, `accountant`).
 
 ## Shared dependencies (live outside this folder on purpose)
 
-- `components/ui/*` — `Button`, `DataTable`, `Badge` (`RoleBadge`)
+- `components/ui/*` — `Button`, `DataTable`, `Badge` (`RoleBadge`), `Pagination`
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state
 - `lib/utils/{audit,date,permissions}`
 - `types` (`Profile`, `UserRole`)

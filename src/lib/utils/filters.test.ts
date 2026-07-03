@@ -1,4 +1,4 @@
-import { resolveDateRange, getPresetRange, filterSales, DEFAULT_SALES_FILTERS } from "./filters";
+import { resolveDateRange, getPresetRange, filterSales, isRevenueSale, DEFAULT_SALES_FILTERS } from "./filters";
 import type { Sale } from "@/types";
 
 describe("resolveDateRange", () => {
@@ -33,6 +33,24 @@ describe("resolveDateRange", () => {
   });
 });
 
+describe("isRevenueSale", () => {
+  it("returns true for a completed sale", () => {
+    expect(isRevenueSale({ status: "completed" })).toBe(true);
+  });
+
+  it("returns false for a returned sale", () => {
+    expect(isRevenueSale({ status: "returned" })).toBe(false);
+  });
+
+  it("returns false for a cancelled sale", () => {
+    expect(isRevenueSale({ status: "cancelled" })).toBe(false);
+  });
+
+  it("returns true when status is null (unknown — count it)", () => {
+    expect(isRevenueSale({ status: null })).toBe(true);
+  });
+});
+
 function makeSale(overrides: Partial<Sale> = {}): Sale {
   return {
     id: "s1",
@@ -49,6 +67,9 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     created_at: "2026-01-15T00:00:00Z",
     vat_rate: null,
     vat_amount: null,
+    shipping_cost: null,
+    shipping_charged: null,
+    advertising_fee: null,
     status: "pending",
     restock: false,
     external_order_id: null,

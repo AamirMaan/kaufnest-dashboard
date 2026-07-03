@@ -12,6 +12,7 @@
 | Change refresh logic | `src/app/api/dropshipping/listings/refresh/route.ts` |
 | Change source URL editing | `_components/EditSourceModal.tsx` + PATCH route |
 | Update docs | `CLAUDE.md` (file map / data flow), `SKILL.md` (this file) |
+| Pagination (client-side) | `_components/ListingsTable.tsx` only — `page`/`pageSize` local state, `pagedListings` useMemo slice, `<Pagination>` component |
 
 ## Gotchas
 
@@ -45,9 +46,10 @@
   `POST /api/dropshipping/listings/refresh` route uses `requireIntegrationAdmin()` which
   enforces the same check at the API level.
 
-- **No pagination in Phase 1:** `fetchActiveListings` fetches up to 200 offers and 200
-  inventory items. Sellers with > 200 active listings will not see all of them. Pagination
-  is a Phase 2 concern.
+- **Client-side pagination (Phase 2):** `ListingsTable` now paginates the passed `listings`
+  array locally (default 25/page). The fetch cap is still 200 listings per refresh. If the
+  cap needs lifting (server-side cursor pagination on the eBay API side), that belongs in
+  `fetchActiveListings` + the refresh route, not in `ListingsTable`.
 
 - **`formatCurrency` currency arg:** `formatCurrency(price, currency)` — always pass the
   `currency` field from the listing row (not hardcoded EUR), since sellers may list in GBP,

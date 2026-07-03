@@ -15,8 +15,8 @@ import type { Sale, Platform, Currency } from "@/types";
 const VALID_PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
-const TEMPLATE_HEADERS = ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale"];
+const TEMPLATE_HEADERS = ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee"];
+const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", ""];
 
 interface ParsedRow {
   rowNum: number;
@@ -24,7 +24,7 @@ interface ParsedRow {
   error: string | null;
 }
 
-function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
+export function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
   const date = raw.date?.trim();
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { rowNum, data: null, error: `Row ${rowNum}: invalid or missing "date" (expected YYYY-MM-DD)` };
@@ -56,6 +56,25 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
   }
   const totalAmount = quantity * unitPrice;
   const vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
+
+  const shippingCostRaw = raw.shipping_cost?.trim();
+  const shippingCost = shippingCostRaw ? parseFloat(shippingCostRaw) : null;
+  if (shippingCost !== null && (isNaN(shippingCost) || shippingCost < 0)) {
+    return { rowNum, data: null, error: `Row ${rowNum}: "shipping_cost" must be a non-negative number` };
+  }
+
+  const shippingChargedRaw = raw.shipping_charged?.trim();
+  const shippingCharged = shippingChargedRaw ? parseFloat(shippingChargedRaw) : null;
+  if (shippingCharged !== null && (isNaN(shippingCharged) || shippingCharged < 0)) {
+    return { rowNum, data: null, error: `Row ${rowNum}: "shipping_charged" must be a non-negative number` };
+  }
+
+  const advertisingFeeRaw = raw.advertising_fee?.trim();
+  const advertisingFee = advertisingFeeRaw ? parseFloat(advertisingFeeRaw) : null;
+  if (advertisingFee !== null && (isNaN(advertisingFee) || advertisingFee < 0)) {
+    return { rowNum, data: null, error: `Row ${rowNum}: "advertising_fee" must be a non-negative number` };
+  }
+
   const status = raw.status?.trim() || "pending";
   return {
     rowNum,
@@ -70,6 +89,9 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       description: raw.description?.trim() || null,
       vat_rate: vatRate,
       vat_amount: vatAmount,
+      shipping_cost: shippingCost,
+      shipping_charged: shippingCharged,
+      advertising_fee: advertisingFee,
       status,
       restock: false,
       external_order_id: null,

@@ -9,14 +9,39 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   selection, invoice trigger, Gross/VAT/Net summary, **Export CSV** button
   (exports `filtered` via `lib/utils/csv`), **Import CSV** button, wires up the
   modals below.
-- `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`).
-  Actions: `hydrateExpenses`, `addExpense`, `updateExpense`, `removeExpense`. Used
-  **only** by this feature — registered centrally in `src/store/store.ts` and
+- `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
+  `page`, `pageSize`, `total`, `isFetching`).
+  Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
+  `addExpense`, `updateExpense`, `removeExpense`, `setFetching`.
+  Thunk: `fetchExpensesPage({ page, pageSize, filters })` — builds a Supabase query
+  with filter pushdown, `.select("*", { count: "exact" })`, `.order("date")`,
+  and `.range(from, to)` from `rangeFor()`. Dispatches `hydratePage` on success.
+  Used **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
 - `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
 - `_components/ImportExpensesModal.tsx` — bulk CSV import: same pattern as the
   Sales/Purchases import modals but for expenses. See "CSV import/export" below.
+
+## Pagination data flow
+
+Server-side pagination is active. `page.tsx` **does not apply `filterExpenses`
+in memory** — all filtering happens in `fetchExpensesPage` (the thunk in
+`_store/expensesSlice.ts`). The flow for a filter change or page navigation is:
+
+1. User changes a filter or clicks Prev/Next in `<Pagination>`.
+2. `page.tsx` dispatches `fetchExpensesPage({ page, pageSize, filters })`.
+3. The thunk builds a Supabase query with filter predicates + `.select("*", { count: "exact" })` + `.range(from, to)`, then dispatches `hydratePage({ data, count, page, pageSize })` on success.
+4. `state.expenses.items` is replaced with the new page; `total` holds the full
+   count across all pages; `isFetching` goes back to `false`.
+5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
+   `hydrateExpenses`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
+
+**Summary cards** show "(this page)" totals only — computed from `state.expenses.items`
+(current page). Clearly labelled in the UI.
+
+**CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
+with the same filter predicates but **no `.range()`**, capped at 5 000 rows.
 
 ## Data flow (the pattern every mutation follows)
 
@@ -56,7 +81,8 @@ editable fields.
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` maps `filtered` to rows and calls
+**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
+same filter predicates (no `.range()`, capped at 5 000 rows) and calls
 `exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
 vat_rate, vat_amount, description`.
 

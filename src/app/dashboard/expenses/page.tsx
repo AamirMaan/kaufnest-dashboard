@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeExpense } from "./_store/expensesSlice";
+import { removeExpense, fetchExpensesPage } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
+import { Pagination } from "@/components/ui/Pagination";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
@@ -22,9 +23,9 @@ import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import {
-  filterExpenses,
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
+  getPresetRange,
   type ExpenseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -36,28 +37,33 @@ const CATEGORIES: ExpenseCategory[] = [
 ];
 
 const filterInputCls =
-  "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
+  "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-(--color-text-strong) focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
 
 export default function ExpensesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const expenses = useAppSelector((s) => s.expenses.items);
+  const page = useAppSelector((s) => s.expenses.page);
+  const pageSize = useAppSelector((s) => s.expenses.pageSize);
+  const total = useAppSelector((s) => s.expenses.total);
+  const isFetching = useAppSelector((s) => s.expenses.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
-  const filtered = useMemo(() => filterExpenses(expenses, filters), [expenses, filters]);
   const hasActive = !isDefaultFilters(filters);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
-    () => filtered.filter((e) => selectedIds.has(e.id)),
-    [filtered, selectedIds]
+    () => expenses.filter((e) => selectedIds.has(e.id)),
+    [expenses, selectedIds]
   );
-  const invoiceItems = selectedItems.length > 0 ? selectedItems : filtered;
+  const invoiceItems = selectedItems.length > 0 ? selectedItems : expenses;
 
+  // Summary computed from current page items only — labelled "(this page)" to
+  // make clear these are page-scoped totals, not all-time aggregates.
   const summary = useMemo(() => {
     const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
-    for (const e of filtered) {
+    for (const e of expenses) {
       const entry = byCurrency.get(e.currency) ?? { gross: [], vat: [] };
       entry.gross.push(e.amount);
       if (e.vat_amount != null) entry.vat.push(e.vat_amount);
@@ -68,7 +74,7 @@ export default function ExpensesPage() {
       gross: sumAmounts(gross),
       vat: sumAmounts(vat),
     }));
-  }, [filtered]);
+  }, [expenses]);
   const hasVat = summary.some((s) => s.vat > 0);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -77,18 +83,59 @@ export default function ExpensesPage() {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  function handleExport() {
+  // ── Filter helpers ────────────────────────────────────────────────────────
+
+  /** Fire a server-side fetch and reset to page 1 when filters change. */
+  const applyFilters = useCallback(
+    (nextFilters: ExpenseFilters) => {
+      dispatch(fetchExpensesPage({ page: 1, pageSize, filters: nextFilters }));
+    },
+    [dispatch, pageSize]
+  );
+
+  function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  function clearFilters() {
+    setFilters(DEFAULT_EXPENSE_FILTERS);
+    applyFilters(DEFAULT_EXPENSE_FILTERS);
+  }
+
+  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+
+  async function handleExport() {
+    const supabase = await createTenantClient();
+    let query = supabase
+      .from("expenses")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(5000);
+
+    const range =
+      filters.preset === "custom"
+        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
+        : getPresetRange(filters.preset);
+    if (range && filters.preset !== "all") {
+      query = query.gte("date", range.from).lte("date", range.to);
+    }
+    if (filters.category !== "all") query = query.eq("category", filters.category);
+    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+
+    const { data: allRows } = await query;
+    if (!allRows || allRows.length === 0) return;
+
     const headers = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "vat_amount", "description"];
-    const rows = filtered.map((e) => [
+    const rows = (allRows as Expense[]).map((e) => [
       e.date, e.title, e.category, e.vendor ?? "", e.amount,
       e.currency, e.vat_rate ?? "", e.vat_amount ?? "", e.description ?? "",
     ]);
     exportToCsv(`expenses-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
 
-  function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  }
+  // ── Delete ────────────────────────────────────────────────────────────────
 
   async function handleDelete(reason: string) {
     if (!deleteTarget) return;
@@ -115,14 +162,14 @@ export default function ExpensesPage() {
       header: "Date",
       sortValue: (e: Expense) => e.date,
       render: (e: Expense) => (
-        <span className="text-sm text-[var(--color-text-muted)] whitespace-nowrap">{formatDate(e.date)}</span>
+        <span className="text-sm text-(--color-text-muted) whitespace-nowrap">{formatDate(e.date)}</span>
       ),
     },
     {
       header: "Title",
       sortValue: (e: Expense) => e.title.toLowerCase(),
       render: (e: Expense) => (
-        <span className="text-sm font-medium text-[var(--color-text-strong)]">{e.title}</span>
+        <span className="text-sm font-medium text-(--color-text-strong)">{e.title}</span>
       ),
     },
     {
@@ -134,14 +181,14 @@ export default function ExpensesPage() {
       header: "Vendor",
       sortValue: (e: Expense) => e.vendor?.toLowerCase() ?? "",
       render: (e: Expense) => (
-        <span className="text-sm text-[var(--color-text-muted)]">{e.vendor ?? "—"}</span>
+        <span className="text-sm text-(--color-text-muted)">{e.vendor ?? "—"}</span>
       ),
     },
     {
       header: "Amount",
       sortValue: (e: Expense) => e.amount,
       render: (e: Expense) => (
-        <span className="text-sm font-semibold text-[var(--color-danger)] tabular-nums">{formatCurrency(e.amount, e.currency)}</span>
+        <span className="text-sm font-semibold text-(--color-danger) tabular-nums">{formatCurrency(e.amount, e.currency)}</span>
       ),
     },
     {
@@ -150,11 +197,11 @@ export default function ExpensesPage() {
       render: (e: Expense) =>
         e.vat_rate != null ? (
           <div className="tabular-nums">
-            <span className="text-sm text-[var(--color-text-base)]">{e.vat_rate}%</span>
-            <span className="block text-xs text-[var(--color-text-muted)]">{formatCurrency(e.vat_amount ?? 0, e.currency)}</span>
+            <span className="text-sm text-(--color-text-base)">{e.vat_rate}%</span>
+            <span className="block text-xs text-(--color-text-muted)">{formatCurrency(e.vat_amount ?? 0, e.currency)}</span>
           </div>
         ) : (
-          <span className="text-sm text-[var(--color-text-muted)]">—</span>
+          <span className="text-sm text-(--color-text-muted)">—</span>
         ),
     },
     {
@@ -198,7 +245,7 @@ export default function ExpensesPage() {
               <FileDown size={15} />
               {selectedIds.size > 0 ? `Invoice (${selectedIds.size})` : "Invoice"}
             </Button>
-            <Button variant="export" onClick={handleExport} disabled={filtered.length === 0}>
+            <Button variant="export" onClick={handleExport} disabled={total === 0}>
               <Download size={15} />
               Export
             </Button>
@@ -221,10 +268,10 @@ export default function ExpensesPage() {
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         hasActive={hasActive}
-        onClear={() => setFilters(DEFAULT_EXPENSE_FILTERS)}
+        onClear={clearFilters}
       >
         <div>
-          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Category</span>
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-(--color-text-faint) mb-1">Category</span>
           <select
             value={filters.category}
             onChange={(e) => setFilter("category", e.target.value)}
@@ -238,41 +285,53 @@ export default function ExpensesPage() {
         </div>
       </FilterBar>
 
-      <div className="flex items-start justify-between mb-3 text-sm">
-        <span className="text-[var(--color-text-muted)] pt-0.5">
-          {filtered.length} expense{filtered.length !== 1 ? "s" : ""} shown
-        </span>
-        {summary.length > 0 && (
-          <div className="text-right space-y-0.5">
-            {hasVat ? (
-              <>
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Gross: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+      {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
+      <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
+        <div className="flex items-start justify-between mb-3 text-sm">
+          <span className="text-(--color-text-muted) pt-0.5">
+            {total} expense{total !== 1 ? "s" : ""} total
+          </span>
+          {summary.length > 0 && (
+            <div className="text-right space-y-0.5">
+              {hasVat ? (
+                <>
+                  <p className="font-medium text-(--color-text-strong)">
+                    Gross (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
+                  </p>
+                  <p className="text-(--color-text-muted)">
+                    VAT (this page): {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
+                  </p>
+                  <p className="font-medium text-(--color-text-strong)">
+                    Net (this page): {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
+                  </p>
+                </>
+              ) : (
+                <p className="font-medium text-(--color-text-strong)">
+                  Total (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
                 </p>
-                <p className="text-[var(--color-text-muted)]">
-                  VAT: {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                </p>
-                <p className="font-medium text-[var(--color-text-strong)]">
-                  Net: {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                </p>
-              </>
-            ) : (
-              <p className="font-medium text-[var(--color-text-strong)]">
-                Total: {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-              </p>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
+
+        <DataTable
+          columns={columns}
+          rows={expenses}
+          keyField="id"
+          emptyMessage="No expenses match the current filters."
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(p) => dispatch(fetchExpensesPage({ page: p, pageSize, filters }))}
+          onPageSizeChange={(s) => dispatch(fetchExpensesPage({ page: 1, pageSize: s, filters }))}
+        />
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        keyField="id"
-        emptyMessage="No expenses match the current filters."
-        selectedIds={selectedIds}
-        onSelectionChange={setSelectedIds}
-      />
       <AddExpenseModal
         open={addOpen}
         onClose={() => setAddOpen(false)}

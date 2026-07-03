@@ -16,6 +16,8 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
   title (linked to eBay listing, new tab), price (`formatCurrency` with currency arg from listing),
   SKU (dash if null), source (platform badge + truncated URL), Edit button (opens `EditSourceModal`).
   Empty state card when `listings.length === 0`.
+  Client-side pagination via local `page`/`pageSize` state (default 25 rows/page) slicing the
+  passed `listings` prop; renders `<Pagination>` (`@/components/ui/Pagination`) below the table.
   Renders `<EditSourceModal key={editTarget?.id ?? "none"} ... />` to remount the modal when edit target changes (state-reset pattern).
 - `_components/EditSourceModal.tsx` — shadcn `Dialog`. URL input with live `PlatformBadge`
   (Amazon/AliExpress/Unknown based on `detectPlatform`). On save: `PATCH /api/dropshipping/listings/[id]`,

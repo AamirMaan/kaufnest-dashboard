@@ -5,8 +5,13 @@ import { Provider } from "react-redux";
 import { makeStore } from "@/store/store";
 import { hydrateSales } from "@/app/dashboard/sales/_store/salesSlice";
 import { hydrateExpenses } from "@/app/dashboard/expenses/_store/expensesSlice";
+import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import { hydratePurchases } from "@/app/dashboard/purchases/_store/purchasesSlice";
-import { hydrateProducts } from "@/app/dashboard/inventory/_store/inventorySlice";
+import {
+  hydrateProducts,
+  hydrateSelectors,
+  type ProductSelector,
+} from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
 import { setCurrentUser, setTenantPlan } from "@/store/slices/currentUserSlice";
@@ -28,11 +33,14 @@ import type {
 
 interface StoreProviderProps {
   children: React.ReactNode;
-  sales?: Sale[];
-  expenses?: Expense[];
-  purchases?: Purchase[];
-  products?: Product[];
-  auditLogs?: AuditLog[];
+  sales?: { data: Sale[]; count: number };
+  expenses?: { data: Expense[]; count: number };
+  purchases?: { data: Purchase[]; count: number };
+  /** First page of the paginated inventory table. */
+  products?: { data: Product[]; count: number };
+  /** Full lightweight selector list for dropdowns (id, name, current_stock, sku). */
+  productSelectors?: ProductSelector[];
+  auditLogs?: { data: AuditLog[]; count: number };
   users?: Profile[];
   currentUser?: Profile;
   companyProfile?: CompanyProfile;
@@ -47,6 +55,7 @@ export function StoreProvider({
   expenses,
   purchases,
   products,
+  productSelectors,
   auditLogs,
   users,
   currentUser,
@@ -57,17 +66,18 @@ export function StoreProvider({
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
-    if (sales)               store.dispatch(hydrateSales(sales));
-    if (expenses)            store.dispatch(hydrateExpenses(expenses));
-    if (purchases)           store.dispatch(hydratePurchases(purchases));
-    if (products)            store.dispatch(hydrateProducts(products));
-    if (auditLogs)           store.dispatch(hydrateAuditLogs(auditLogs));
-    if (users)               store.dispatch(hydrateUsers(users));
-    if (currentUser)         store.dispatch(setCurrentUser(currentUser));
-    if (companyProfile)      store.dispatch(hydrateCompanyProfile(companyProfile));
-    if (tenantPlan)          store.dispatch(setTenantPlan(tenantPlan));
+    if (sales)             store.dispatch(hydrateSales({ data: sales.data, count: sales.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (expenses)          store.dispatch(hydrateExpenses({ data: expenses.data, count: expenses.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (purchases)         store.dispatch(hydratePurchases({ data: purchases.data, count: purchases.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (products)          store.dispatch(hydrateProducts({ data: products.data, count: products.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (productSelectors)  store.dispatch(hydrateSelectors(productSelectors));
+    if (auditLogs)         store.dispatch(hydrateAuditLogs({ data: auditLogs.data, count: auditLogs.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (users)             store.dispatch(hydrateUsers(users));
+    if (currentUser)       store.dispatch(setCurrentUser(currentUser));
+    if (companyProfile)    store.dispatch(hydrateCompanyProfile(companyProfile));
+    if (tenantPlan)        store.dispatch(setTenantPlan(tenantPlan));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
-    if (dropshipListings)    store.dispatch(hydrateListings(dropshipListings));
+    if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     return store;
   });
 

@@ -27,6 +27,9 @@ from `CompanyProfile`.
   `COMPANY_PROFILE_ROLES` constant — keep in sync with the
   `company_profile_update` RLS policy in `005_tenant_provisioning.sql`.
 - **Change only this page's form/layout**: `page.tsx` only.
+- **Add/change field validation**: `src/lib/utils/validation.ts` (pure helpers)
+  AND `src/lib/utils/validation.test.ts` (colocated tests) AND `page.tsx`
+  (import + inline `{validator(field) && <p>…</p>}` warning).
 
 ## Test command
 
@@ -35,6 +38,17 @@ from `CompanyProfile`.
 
 ## Gotchas
 
+- IBAN/VAT validation is non-blocking (warning only, save still proceeds) —
+  validators in `src/lib/utils/validation.ts` return `null` for valid/empty
+  and an error string for invalid, but `handleCompanyProfileSubmit` never
+  reads them; the form submits regardless.
+- The dashboard layout fetches `company_profile` with `.maybeSingle()` — a
+  missing row returns `null` (not an error). The form renders nothing when
+  `companyProfile.profile === null`; profiles are created by provisioning, not
+  by this page.
+- The save handler uses `.upsert()` (not `.update()`) so a missing row is
+  created rather than silently failing. The `id` field must be included in the
+  upsert payload for conflict resolution to work.
 - Don't fork `generateInvoice` into this folder — it's shared with the
   `InvoiceModal` used across three other features. Changing the
   `CompanyProfile` shape requires updating `src/types/index.ts`,

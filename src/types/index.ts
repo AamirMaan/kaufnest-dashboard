@@ -73,6 +73,9 @@ export interface Sale {
   created_at: string;
   vat_rate: number | null;
   vat_amount: number | null;
+  shipping_cost: number | null;
+  shipping_charged: number | null;
+  advertising_fee: number | null;
   status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | custom
   restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`

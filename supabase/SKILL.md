@@ -12,7 +12,8 @@ Two Supabase projects:
   (`control.tenants`) and platform admins (`control.admin_users`).
 - **Project B** ("data plane") — `supabase/migrations/`. Hosts the original
   `public` schema (one company) plus one `tenant_<slug>` schema per tenant.
-  `tenant_kaufnest` is the first (and currently only) tenant.
+  Live tenants: `tenant_kaufnest`, `tenant_waqasmumtaz`, `tenant_hochkauf`,
+  `tenant_k2_textil`, `tenant_token`.
 
 ## File map + apply status
 
@@ -26,6 +27,11 @@ Two Supabase projects:
 | `migrations/006_bootstrap_tenant_kaufnest.sql` | `tenant_kaufnest` | ✅ applied — **do not re-run**, historical record only |
 | `migrations/007_company_profile_invoice_fields.sql` | `tenant_kaufnest.company_profile` | ⏳ **apply now** — adds `tax_id`/`phone`/`email`/`vat_rate`/`bank_name`/`iban`/`bic`/`invoice_prefix`/`payment_terms`/`footer_notes` columns (folds the old localStorage invoice settings into `company_profile`) |
 | `migrations/008_platform_integrations.sql` | `tenant_kaufnest` | ⏳ **apply now** — adds `platform_connections` table (+ RLS, admin/super_admin-only including SELECT) and `sales.external_order_id` + unique `(platform, external_order_id)` index, for the Integrations feature (`src/lib/integrations/`) |
+| `migrations/010_order_fees.sql` | `tenant_kaufnest.sales` | ⏳ **pending** (apply in Supabase SQL editor — Project B) — adds `shipping_cost`, `shipping_charged`, `advertising_fee` nullable `numeric(12,2)` columns with `>= 0` CHECKs; also baked into `provision_tenant_schema()` for future tenants |
+| `migrations/011_pagination_indexes.sql` | `tenant_kaufnest.*` | ⏳ **pending** — 4 new indexes: `audit_logs (created_at desc, action, user_id)` and `products (name asc)` for efficient pagination range queries and filter queries |
+| `migrations/012_tenant_migration_helper.sql` | `public` | ⏳ **apply first** — installs `public.run_on_all_tenant_schemas(sql text)` helper; **must be applied before any migration that uses it** |
+| `migrations/013_backfill_all_tenants.sql` | all `tenant_%` schemas | ⏳ **apply second** — backfills migrations 004/007/008/010/011 to all 5 live tenants using the helper; replaces the per-tenant ALTERs those files previously required |
+| `migrations/014_company_profile_insert_policy.sql` | all `tenant_%` schemas | ⏳ **apply now** — adds missing INSERT RLS policy on `company_profile`; fixes "new row violates row-level security" error from Settings page `.upsert()` |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
@@ -53,20 +59,56 @@ For new tenants created via Phase 4 (`/api/admin/provision-tenant` →
 `provision_tenant_schema(schema_name)`), steps 4/5/6 above are all baked into
 one function call — no separate migration needed.
 
-## The "3 places" rule for schema changes
+## The "2 places" rule for schema changes
 
 Any change to `sales`/`purchases`/`expenses`/`products`/etc. that should apply
-to **every** tenant (existing and future) touches up to three places:
+to **every** tenant (existing and future) touches **exactly two places**:
 
-1. **`public.*`** (if still relied on by anything — currently only kept until
-   Phase 3.6 drops it; usually skip this).
-2. **`provision_tenant_schema()`** in `005_tenant_provisioning.sql` — so every
+1. **`provision_tenant_schema()`** in `005_tenant_provisioning.sql` — so every
    *future* tenant gets the change from schema creation.
-3. **A one-off `ALTER TABLE tenant_kaufnest.*` migration** — `tenant_kaufnest`
-   (and any other already-provisioned tenant) won't pick up changes to #2
-   retroactively; write and run a small additive migration against the live
-   schema(s), the same way `004_performance_indexes.sql` does for the new
-   growth indexes.
+2. **A new migration that calls `run_on_all_tenant_schemas`** — applies the
+   same DDL to every already-provisioned `tenant_%` schema automatically:
+
+```sql
+SELECT public.run_on_all_tenant_schemas($$
+  ALTER TABLE {{schema}}.sales
+    ADD COLUMN IF NOT EXISTS my_col numeric(12,2) CHECK (my_col >= 0);
+$$);
+```
+
+**Never write `ALTER TABLE tenant_kaufnest.*` directly in a new migration.**
+With 5+ live tenants, hardcoding one schema name leaves all others stale.
+`run_on_all_tenant_schemas` discovers every `tenant_%` schema at runtime, so
+adding a new tenant (via `/api/admin/provision-tenant`) is automatically
+included in all future migrations.
+
+## Using `run_on_all_tenant_schemas`
+
+Install once by applying `012_tenant_migration_helper.sql`. Then every
+subsequent migration that touches tenant tables uses the helper:
+
+```sql
+-- Good — applies to all live tenants
+SELECT public.run_on_all_tenant_schemas($$
+  ALTER TABLE {{schema}}.company_profile
+    ADD COLUMN IF NOT EXISTS new_field text;
+  CREATE INDEX IF NOT EXISTS idx_{{schema}}_sales_new
+    ON {{schema}}.sales (new_field);
+$$);
+
+-- Bad — only updates one tenant
+ALTER TABLE tenant_kaufnest.company_profile ADD COLUMN IF NOT EXISTS new_field text;
+```
+
+**Rules for the SQL string you pass:**
+- Use `{{schema}}` as the placeholder — substituted with the raw schema name
+  (e.g. `tenant_kaufnest`), unquoted, so it works in both table references
+  and object names (index names, trigger names).
+- Every statement must be idempotent (`IF NOT EXISTS`, `CREATE OR REPLACE`,
+  `DROP … IF EXISTS`) — migrations can be re-run safely.
+- For `CREATE TABLE` with FK references, use `{{schema}}.profiles(id)`.
+- For RLS policy names: use `DROP POLICY IF EXISTS "…" ON {{schema}}.table`
+  before `CREATE POLICY`, since `CREATE POLICY` has no `IF NOT EXISTS`.
 
 ## Index rationale (004_performance_indexes.sql)
 
@@ -87,6 +129,25 @@ once `select("*")` over the full table stops being viable:
 
 ## Gotchas
 
+- **`company_profile` needs an INSERT policy for upsert**: the settings page
+  uses `.upsert()` which fires INSERT when no row exists. `company_profile`
+  originally only had SELECT + UPDATE policies — the INSERT policy was missing,
+  causing "new row violates row-level security". Fixed in
+  `014_company_profile_insert_policy.sql` and baked into
+  `provision_tenant_schema()`. Any table that accepts `.upsert()` from the
+  client needs both UPDATE and INSERT policies.
+- **`run_on_all_tenant_schemas` must exist before you call it**: apply
+  `012_tenant_migration_helper.sql` first, then run any migration that uses
+  it. If you paste both in one SQL editor session, put the function definition
+  before the `SELECT … run_on_all_tenant_schemas(…)` call.
+- **`run_on_all_tenant_schemas` only covers existing schemas**: it reads
+  `information_schema.schemata` at call time. New tenants provisioned
+  *after* the migration runs already get the change because it's baked into
+  `provision_tenant_schema()` (place #1 of the 2-places rule). No manual
+  follow-up is needed for new tenants.
+- **`run_on_all_tenant_schemas` is `SECURITY DEFINER`**: it runs as the
+  function owner (`postgres` / `supabase_admin`), which can ALTER tables in
+  all tenant schemas. Do not use it for DML (INSERT/UPDATE/DELETE) — DDL only.
 - **PostgREST 42501 "permission denied for schema"**: `CREATE SCHEMA` grants
   nothing by default. Every new schema needs `GRANT USAGE ON SCHEMA ...` +
   table/sequence grants + `ALTER DEFAULT PRIVILEGES` for

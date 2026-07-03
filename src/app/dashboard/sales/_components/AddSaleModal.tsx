@@ -38,6 +38,9 @@ interface FormState {
   status: string; // one of ORDER_STATUSES, or "other"
   customStatus: string;
   restock: boolean;
+  shipping_cost: string;
+  shipping_charged: string;
+  advertising_fee: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -57,16 +60,20 @@ function makeDefaults(defaultVatRate: number): FormState {
     status: "pending",
     customStatus: "",
     restock: false,
+    shipping_cost: "",
+    shipping_charged: "",
+    advertising_fee: "",
   };
 }
 
 export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const products = useAppSelector((s) => s.inventory.items);
+  const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFees, setShowFees] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -103,6 +110,10 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
+    const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
+    const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
+    const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+
     const { data, error: dbError } = await supabase
       .from("sales")
       .insert({
@@ -118,6 +129,9 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         created_by: user!.id,
         vat_rate: form.vat_included ? vatRate : null,
         vat_amount: form.vat_included ? vatAmount : null,
+        shipping_cost: shippingCost,
+        shipping_charged: shippingCharged,
+        advertising_fee: advertisingFee,
         status,
         restock,
       })
@@ -150,6 +164,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setForm(makeDefaults(defaultVatRate));
+    setShowFees(false);
     setSaving(false);
     onSuccess?.(data.product_name);
     onClose();
@@ -158,6 +173,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   function handleClose() {
     setForm(makeDefaults(defaultVatRate));
     setError(null);
+    setShowFees(false);
     onClose();
   }
 
@@ -345,6 +361,66 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             placeholder="Optional notes…"
           />
         </Field>
+
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)]">
+          <button
+            type="button"
+            onClick={() => setShowFees((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--color-text-strong)] hover:bg-[var(--color-surface-raised)] transition-colors rounded-[var(--radius-card)]"
+          >
+            <span>Fees &amp; shipping (optional)</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform text-[var(--color-text-muted)] ${showFees ? "rotate-180" : ""}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showFees && (
+            <div className="px-4 pb-4 space-y-3 border-t border-[var(--color-border)] pt-3">
+              <Row>
+                <Field label="Shipping Cost (paid by you)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.shipping_cost}
+                    onChange={(e) => set("shipping_cost", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </Field>
+                <Field label="Shipping Charged (billed to buyer)">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.shipping_charged}
+                    onChange={(e) => set("shipping_charged", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </Field>
+              </Row>
+              <Field label="Advertising Fee">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.advertising_fee}
+                  onChange={(e) => set("advertising_fee", e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
       </form>
     </Modal>
   );

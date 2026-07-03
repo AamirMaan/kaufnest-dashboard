@@ -24,9 +24,17 @@ values.
   s.currentUser.profile?.role)`, matching the `company_profile_update` RLS
   policy in `005_tenant_provisioning.sql`); `accountant` sees a read-only
   form (no Save button). Saves via
-  `createTenantClient().from("company_profile").update(...)`, then dispatches
-  `hydrateCompanyProfile(data)` to sync Redux. The whole form is hidden if
-  `companyProfile.profile` is `null`.
+  `createTenantClient().from("company_profile").upsert(...)` (includes `id` so
+  it creates the row on first save if provisioning somehow missed it), then
+  dispatches `hydrateCompanyProfile(data)` to sync Redux. The layout fetches
+  the profile with `.maybeSingle()` (not `.single()`) — if no row exists yet,
+  `companyProfile.profile` is `null` and the whole form is hidden until the
+  row is created.
+
+  **Inline validation warnings** are shown beneath the `iban`, `vat_number`,
+  `email`, and `vat_rate` fields using pure helpers from
+  `src/lib/utils/validation.ts`. Warnings are non-blocking — the Save button
+  remains enabled regardless.
 
   "Generate Demo Invoice" calls `generateSalesInvoice([DEMO_SALE],
   companyForm)` — available to every role (read-only users can still preview

@@ -10,11 +10,32 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `page.tsx` — list view: filtering (`FilterBar` + `filterSales`), row selection,
   invoice trigger, Gross/VAT/Net summary, **Export CSV** button (exports `filtered`
   via `lib/utils/csv`), **Import CSV** button, wires up the modals below.
-- `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`).
-  Actions: `hydrateSales`, `addSale`, `updateSale`, `removeSale`. Used **only** by
-  this feature — registered centrally in `src/store/store.ts` and hydrated in
-  `src/store/StoreProvider.tsx`, but otherwise self-contained here.
-- `_store/salesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/sales`.
+  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
+- `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
+  Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
+  via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
+  Financials card (qty/price/totals/fees/net proceeds) and Details card
+  (description/linked product/restock flag/audit fields). Actions: Edit Order
+  (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
+  companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
+  `state.companyProfile.profile`; button transiently disabled until profile
+  hydrates), Delete (super_admin only, same role gate as list page, navigates
+  back to `/dashboard/sales` after delete). Net proceeds computed via
+  `_components/orderMath.ts`.
+- `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
+  `page`, `pageSize`, `total`, `isFetching`).
+  Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
+  `addSale`, `updateSale`, `removeSale`, `setFetching`.
+  Thunk: `fetchSalesPage({ page, pageSize, filters })` — builds a Supabase query
+  with filter pushdown, `.select("*", { count: "exact" })`, `.order("date")`,
+  and `.range(from, to)` from `rangeFor()`. Dispatches `hydratePage` on success.
+  Used **only** by this feature — registered centrally in `src/store/store.ts`
+  and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
+- `_store/salesSlice.test.ts` — reducer tests (covers `hydratePage`, `setFetching`,
+  `addSale`/`removeSale` total arithmetic). Run with `npx jest dashboard/sales`.
+- `_components/orderMath.ts` (+ colocated `.test.ts`) — pure `computeNetProceeds(sale)`
+  helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
+  treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
 - `_components/ImportSalesModal.tsx` — bulk CSV import: parses + validates a
   user-uploaded CSV, shows per-row errors, batch-inserts valid rows via Supabase,
@@ -26,6 +47,33 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+
+## Pagination data flow
+
+Server-side pagination is active. `page.tsx` **does not apply `filterSales`
+in memory** — all filtering happens in `fetchSalesPage` (the thunk in
+`_store/salesSlice.ts`). The flow for a filter change or page navigation is:
+
+1. User changes a filter or clicks Prev/Next in `<Pagination>`.
+2. `page.tsx` dispatches `fetchSalesPage({ page, pageSize, filters })`.
+3. The thunk calls `setFetching(true)`, builds a Supabase query with filter
+   predicates + `.select("*", { count: "exact" })` + `.range(from, to)`, then
+   dispatches `hydratePage({ data, count, page, pageSize })` on success.
+4. `state.sales.items` is replaced with the new page; `total` holds the full
+   count across all pages; `isFetching` goes back to `false`.
+5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
+   `hydrateSales`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
+
+**Summary cards** show "(this page)" totals only — they are computed from
+`state.sales.items` (current page), not all matching rows. This is clearly
+labelled in the UI.
+
+**CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
+with the same filter predicates but **no `.range()`**, capped at 5 000 rows, so
+the export always covers all matching records regardless of which page is shown.
+
+**DataTable sorting** sorts within the current page only (v1 behaviour) — noted
+in SKILL.md gotchas.
 
 ## Data flow (the pattern every mutation follows)
 
@@ -130,25 +178,39 @@ editable fields.
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
 
+## Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`)
+
+All three are `number | null` on `Sale`. They surface in:
+- `AddSaleModal` / `EditSaleModal` — collapsible "Fees & shipping (optional)" section
+  (state-controlled `showFees` boolean + chevron toggle). Empty string → `null`, never `0`.
+  `EditSaleModal` auto-opens the section when the existing sale has at least one fee set.
+  Fee changes are included in the before/after audit-log diff alongside all other fields.
+- `ImportSalesModal` — optional CSV columns `shipping_cost`, `shipping_charged`,
+  `advertising_fee`. Blank/missing → `null`. Non-numeric or negative → row error.
+  Validated in `validateRow()` (exported for testing). Tests in `ImportSalesModal.test.ts`.
+- `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
+  (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
+
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
 to rows and calls `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
 Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
-currency, vat_rate, vat_amount, status, description`. Export button is disabled
-when no rows match the filter.
+currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
+advertising_fee`. Export button is disabled when no rows match the filter.
 
 **Import** (`ImportSalesModal`): Required CSV columns: `date` (YYYY-MM-DD),
 `product_name`, `platform` (amazon/ebay/etsy/shopify/other), `quantity`, `unit_price`.
 Optional: `currency` (default EUR), `vat_rate` (0–100), `status` (defaults to
 `"pending"`, no validation against the preset list — custom strings allowed),
-`description`. `product_id` is NOT in the import format — imports create unlinked
-records; user can link via Edit afterward. `total_amount` is computed
-(`qty × unit_price`); `vat_amount` is computed via `vatAmountFromGross`.
-`restock` is always `false` for imported rows (not importable — edit the record
-afterward to mark it returned/restockable). All rows must pass validation before
-import proceeds. Audit log: one entry for the whole batch (omit `entityId` — it's
-`string | undefined`, not nullable).
+`description`, `shipping_cost`, `shipping_charged`, `advertising_fee` (all
+`number | null` — blank → `null`, non-numeric or negative → row error).
+`product_id` is NOT in the import format — imports create unlinked records; user can
+link via Edit afterward. `total_amount` is computed (`qty × unit_price`); `vat_amount`
+is computed via `vatAmountFromGross`. `restock` is always `false` for imported rows
+(not importable — edit the record afterward to mark it returned/restockable).
+All rows must pass validation before import proceeds. Audit log: one entry for the
+whole batch (omit `entityId` — it's `string | undefined`, not nullable).
 
 ## Tests
 

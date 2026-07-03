@@ -21,7 +21,9 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
 - `mapToSale.ts` — pure `normalizedOrderToSaleRow(order, platform,
-  connectedBy)`. Has a colocated `mapToSale.test.ts`.
+  connectedBy)`. Synced orders always have fee fields (`shipping_cost`,
+  `shipping_charged`, `advertising_fee`) set to `null` — these are editable
+  later via the Edit Sale modal. Has a colocated `mapToSale.test.ts`.
 - `tokenStore.ts` — `getConnection`, `upsertConnection`,
   `ensureValidAccessToken` (refresh-on-demand).
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
@@ -73,6 +75,26 @@ platform-agnostic via `getAdapter`.
 The review route (`GET /api/integrations/review`) calls `ensureValidAccessToken`
 before `fetchOrders` — adapters' `fetchOrders` always receive a fresh token and
 never refresh themselves.
+
+## Merge rule (re-import field ownership)
+
+`mergeImportedSale(existing, incoming)` in `mergeImportedSale.ts` is the single
+source of truth for which fields a re-import is allowed to overwrite:
+
+- **Platform-owned** (overwritten on every re-import): `status`, `total_amount`,
+  `unit_price`, `quantity`, `product_name`, `date`, `description`.
+- **User-owned** (preserved from the existing DB row): `vat_rate`, `vat_amount`,
+  `product_id`, `shipping_cost`, `shipping_charged`, `advertising_fee`, `restock`.
+
+When `existing` is `undefined` (first import of a new order) the function returns
+`incoming` unchanged — no merge needed.
+
+The import route (`POST /api/integrations/review/import`) fetches all existing rows
+matching the incoming `external_order_id`s in a single `.in()` query, builds a
+`Map<string, Sale>`, then calls `mergeImportedSale` on each row before upserting.
+The upsert conflict key stays `(platform, external_order_id)` — unchanged.
+
+Test: `npx jest mergeImportedSale`
 
 ## `external_order_id` dedup contract
 
