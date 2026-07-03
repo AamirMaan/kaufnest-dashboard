@@ -44,6 +44,11 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `advertising_fee` nullable `numeric(12,2)` columns (all `>= 0` checked) to
   `tenant_kaufnest.sales`; also baked into `provision_tenant_schema()` for
   future tenants. Backs the order fee UI in later tasks.
+- `migrations/012_tenant_migration_helper.sql` — installs
+  `public.run_on_all_tenant_schemas(sql text)`. **Apply this before any
+  migration that uses it.** All future tenant-schema migrations must call
+  this instead of writing `ALTER TABLE tenant_kaufnest.*` directly — see
+  `SKILL.md` for the 2-places rule and usage examples.
 
 ## Related code
 

@@ -18,6 +18,16 @@ features. Stripe is also outstanding.
 2. Never hardcode a schema name — read it from `user.app_metadata.tenant_schema`.
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
+5. **Tenant schema DDL must use `run_on_all_tenant_schemas`** — never write
+   `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are 5+
+   live tenants; hardcoding one schema name leaves the rest stale. Use:
+   ```sql
+   SELECT public.run_on_all_tenant_schemas($$
+     ALTER TABLE {{schema}}.sales ADD COLUMN IF NOT EXISTS …;
+   $$);
+   ```
+   Also update `provision_tenant_schema()` in `005_tenant_provisioning.sql`
+   for new tenants. See `supabase/SKILL.md` for the full 2-places rule.
 
 New shared code from the migration:
 - `src/lib/supabase/control.ts` — control plane (Project A) client
