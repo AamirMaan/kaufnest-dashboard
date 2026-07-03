@@ -1,6 +1,12 @@
 import type { Sale, Expense, Purchase, CompanyProfile } from "@/types";
 import { computeOrderInvoiceTotals, computeBulkTotals, invoiceNumberFor } from "./invoiceMath";
 
+export interface InvoiceOptions {
+  customerName: string;
+  customerAddress: string;
+  extraFields: { label: string; value: string }[];
+}
+
 // jsPDF + autotable are loaded dynamically to avoid SSR issues
 const getJsPDF = () => import("jspdf").then((m) => m.default);
 const getAutoTable = () => import("jspdf-autotable").then((m) => m.default);
@@ -24,6 +30,47 @@ function formatMoney(amount: number, currency: string): string {
 
 function todayFormatted(): string {
   return formatDate(new Date().toISOString().slice(0, 10));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addBillTo(doc: any, options: InvoiceOptions, startY: number): number {
+  const { customerName, customerAddress, extraFields } = options;
+  const hasCustomer = customerName.trim() || customerAddress.trim();
+  const hasExtra = extraFields.some((f) => f.label.trim() || f.value.trim());
+  if (!hasCustomer && !hasExtra) return startY;
+
+  let y = startY;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(90, 90, 90);
+  doc.text("Bill To:", 14, y);
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
+  if (customerName.trim()) {
+    doc.text(customerName.trim(), 14, y);
+    y += 5;
+  }
+  if (customerAddress.trim()) {
+    customerAddress
+      .trim()
+      .split("\n")
+      .forEach((line) => {
+        doc.text(line.trim(), 14, y);
+        y += 5;
+      });
+  }
+
+  if (hasExtra) {
+    y += 2;
+    extraFields.forEach(({ label, value }) => {
+      if (!label.trim() && !value.trim()) return;
+      doc.text(`${label.trim()}: ${value.trim()}`, 14, y);
+      y += 5;
+    });
+  }
+
+  return y + 4;
 }
 
 // ─── Header + footer helpers ──────────────────────────────────────────────────
@@ -118,13 +165,18 @@ function addFooter(doc: any, settings: CompanyProfile) {
 
 // ─── Public generate functions ────────────────────────────────────────────────
 
-export async function generateSalesInvoice(sales: Sale[], settings: CompanyProfile) {
+export async function generateSalesInvoice(
+  sales: Sale[],
+  settings: CompanyProfile,
+  options: InvoiceOptions = { customerName: "", customerAddress: "", extraFields: [] }
+) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
   const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
-  const startY = addHeader(doc, settings, invoiceNumber, "SALES INVOICE");
+  const headerY = addHeader(doc, settings, invoiceNumber, "SALES INVOICE");
+  const startY = addBillTo(doc, options, headerY);
 
   const rows = sales.map((s, i) => [
     i + 1,
@@ -191,13 +243,18 @@ export async function generateSalesInvoice(sales: Sale[], settings: CompanyProfi
   doc.save(`${invoiceNumber}_sales.pdf`);
 }
 
-export async function generateExpensesInvoice(expenses: Expense[], settings: CompanyProfile) {
+export async function generateExpensesInvoice(
+  expenses: Expense[],
+  settings: CompanyProfile,
+  options: InvoiceOptions = { customerName: "", customerAddress: "", extraFields: [] }
+) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
   const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
-  const startY = addHeader(doc, settings, invoiceNumber, "EXPENSE REPORT");
+  const headerY = addHeader(doc, settings, invoiceNumber, "EXPENSE REPORT");
+  const startY = addBillTo(doc, options, headerY);
 
   const rows = expenses.map((e, i) => [
     i + 1,
@@ -247,13 +304,18 @@ export async function generateExpensesInvoice(expenses: Expense[], settings: Com
   doc.save(`${invoiceNumber}_expenses.pdf`);
 }
 
-export async function generatePurchasesInvoice(purchases: Purchase[], settings: CompanyProfile) {
+export async function generatePurchasesInvoice(
+  purchases: Purchase[],
+  settings: CompanyProfile,
+  options: InvoiceOptions = { customerName: "", customerAddress: "", extraFields: [] }
+) {
   const jsPDF = await getJsPDF();
   const autoTable = await getAutoTable();
   const doc = new jsPDF();
   const invoiceNumber = generateInvoiceNumber(settings.invoice_prefix);
 
-  const startY = addHeader(doc, settings, invoiceNumber, "PURCHASE REPORT");
+  const headerY = addHeader(doc, settings, invoiceNumber, "PURCHASE REPORT");
+  const startY = addBillTo(doc, options, headerY);
 
   const rows = purchases.map((p, i) => [
     i + 1,
