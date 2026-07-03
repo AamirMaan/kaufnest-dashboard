@@ -49,6 +49,9 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   migration that uses it.** All future tenant-schema migrations must call
   this instead of writing `ALTER TABLE tenant_kaufnest.*` directly — see
   `SKILL.md` for the 2-places rule and usage examples.
+- `migrations/013_backfill_all_tenants.sql` — applies migrations 004, 007,
+  008, 010, and 011 to all live tenant schemas at once via the helper.
+  Requires 012 to be applied first. All statements are idempotent.
 
 ## Related code
 
