@@ -31,6 +31,7 @@ Two Supabase projects:
 | `migrations/011_pagination_indexes.sql` | `tenant_kaufnest.*` | ⏳ **pending** — 4 new indexes: `audit_logs (created_at desc, action, user_id)` and `products (name asc)` for efficient pagination range queries and filter queries |
 | `migrations/012_tenant_migration_helper.sql` | `public` | ⏳ **apply first** — installs `public.run_on_all_tenant_schemas(sql text)` helper; **must be applied before any migration that uses it** |
 | `migrations/013_backfill_all_tenants.sql` | all `tenant_%` schemas | ⏳ **apply second** — backfills migrations 004/007/008/010/011 to all 5 live tenants using the helper; replaces the per-tenant ALTERs those files previously required |
+| `migrations/014_company_profile_insert_policy.sql` | all `tenant_%` schemas | ⏳ **apply now** — adds missing INSERT RLS policy on `company_profile`; fixes "new row violates row-level security" error from Settings page `.upsert()` |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
@@ -128,6 +129,13 @@ once `select("*")` over the full table stops being viable:
 
 ## Gotchas
 
+- **`company_profile` needs an INSERT policy for upsert**: the settings page
+  uses `.upsert()` which fires INSERT when no row exists. `company_profile`
+  originally only had SELECT + UPDATE policies — the INSERT policy was missing,
+  causing "new row violates row-level security". Fixed in
+  `014_company_profile_insert_policy.sql` and baked into
+  `provision_tenant_schema()`. Any table that accepts `.upsert()` from the
+  client needs both UPDATE and INSERT policies.
 - **`run_on_all_tenant_schemas` must exist before you call it**: apply
   `012_tenant_migration_helper.sql` first, then run any migration that uses
   it. If you paste both in one SQL editor session, put the function definition

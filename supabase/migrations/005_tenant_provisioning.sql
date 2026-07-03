@@ -406,6 +406,7 @@ BEGIN
   -- company_profile
   EXECUTE format('CREATE POLICY "company_profile_select" ON %1$I.company_profile FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "company_profile_update" ON %1$I.company_profile FOR UPDATE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "company_profile_insert" ON %1$I.company_profile FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
   -- platform_connections — contains OAuth tokens, admin/super_admin only for
   -- every operation including SELECT.
