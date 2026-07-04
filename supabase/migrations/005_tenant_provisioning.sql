@@ -169,6 +169,10 @@ BEGIN
     'CREATE INDEX IF NOT EXISTS idx_purchases_sale_id ON %1$I.purchases (sale_id)',
     schema_name
   );
+  EXECUTE format(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_purchases_sale_id_unique ON %1$I.purchases (sale_id) WHERE sale_id IS NOT NULL',
+    schema_name
+  );
 
   -- NOTE: user_id is nullable here to match audit_logs' `on delete set null`
   -- pattern used elsewhere (a deleted user shouldn't break their audit trail).

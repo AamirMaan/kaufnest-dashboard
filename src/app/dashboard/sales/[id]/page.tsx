@@ -122,6 +122,8 @@ export default function SaleDetailPage({ params }: PageProps) {
     // Skip if Redux already has the linked purchase
     if (purchases.some((p) => p.sale_id === sale.id)) return;
 
+    let cancelled = false;
+
     (async () => {
       const supabase = await createTenantClient();
       const { data } = await supabase
@@ -129,11 +131,13 @@ export default function SaleDetailPage({ params }: PageProps) {
         .select("*")
         .eq("sale_id", sale.id)
         .maybeSingle();
-      if (data) {
+      if (!cancelled && data) {
         setFetchedLinkedPurchase(data as Purchase);
         dispatch(addPurchase(data as Purchase)); // hydrate Redux for future navigation
       }
     })();
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sale?.id]);
   // ^ omit purchases/dispatch — we only want this to fire once per sale id;
@@ -227,6 +231,11 @@ export default function SaleDetailPage({ params }: PageProps) {
 
   const netProceeds = computeNetProceeds(sale);
   const grossProfit = computeGrossProfit(netProceeds, linkedPurchase);
+
+  // Guard: only show Cost of Goods / Gross Profit when the purchase currency
+  // matches the sale currency — mismatched currencies produce a meaningless number.
+  const hasCurrencyMatch =
+    !linkedPurchase || linkedPurchase.currency === sale.currency;
 
   const linkedProduct = sale.product_id
     ? (inventoryItems.find((p) => p.id === sale.product_id) ?? null)
@@ -346,7 +355,7 @@ export default function SaleDetailPage({ params }: PageProps) {
               }
             />
 
-            {linkedPurchase && (
+            {linkedPurchase && hasCurrencyMatch && (
               <>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-(--color-text-muted)">Cost of Goods</span>
