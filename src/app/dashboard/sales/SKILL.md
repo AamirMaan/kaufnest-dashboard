@@ -12,7 +12,7 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 ## Minimal file set for common changes
 
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
-  formula changes also touch `_components/orderMath.ts` + its test.
+  or gross-profit formula changes also touch `_components/orderMath.ts` + its test.
 - **Wire the Download Invoice button** (Phase 5 — DONE): `[id]/page.tsx` — the
   button now calls `handleDownloadInvoice()` which calls `generateOrderInvoice(sale,
   companyProfile)` from `@/lib/utils/generateInvoice`. `companyProfile` is read from
@@ -109,6 +109,15 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - Direct-URL hits to `/dashboard/sales/[id]` land before the layout hydrates Redux,
   so `state.sales.items` may be empty. The page falls through to a Supabase fetch via
   `createTenantClient` and then dispatches `addSale` to populate Redux.
+- **Linked purchase on the detail page**: the Financials card shows Cost of Goods and
+  Gross Profit rows when a `Purchase` with `sale_id === sale.id` exists. The page
+  first checks `state.purchases.items` (fast path — already populated by the layout on
+  normal navigation); if not found it fires a second `useEffect` that queries the
+  `purchases` table with `.maybeSingle()` (won't throw on no-row), then dispatches
+  `addPurchase` to hydrate Redux AND sets local `fetchedLinkedPurchase` state.
+  Use `.maybeSingle()`, not `.single()` — the purchase may genuinely not exist.
+  The guard `purchases.some((p) => p.sale_id === sale.id)` skips the Supabase fetch
+  when Redux already has the row (avoids a redundant round-trip on list → detail nav).
 - The `EditSaleModal` prop `sale` controls open/close: pass `null` to close, a
   `Sale` object to open. On the detail page, pass `editOpen ? sale : null` so closing
   the modal transitions back cleanly.

@@ -14,8 +14,14 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
-  Financials card (qty/price/totals/fees/net proceeds) and Details card
-  (description/linked product/restock flag/audit fields). Actions: Edit Order
+  Financials card (qty/price/totals/fees/net proceeds + Cost of Goods and Gross
+  Profit rows when a linked purchase exists) and Details card (description/linked
+  product/restock flag/audit fields). Linked purchase is resolved from
+  `state.purchases.items` (fast path) or a second Supabase effect that queries
+  `purchases` with `.maybeSingle()` and dispatches `addPurchase` on hit. Gross
+  profit computed via `computeGrossProfit(netProceeds, linkedPurchase)` from
+  `_components/orderMath.ts`; Gross Profit row renders red/green by sign, Cost of
+  Goods row always red; both hidden when no purchase is linked. Actions: Edit Order
   (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
   companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
   `state.companyProfile.profile`; button transiently disabled until profile
@@ -174,6 +180,9 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
+- `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
+  by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
+  direct-URL load; `state.purchases.items` is also read for the fast path
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
