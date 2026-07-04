@@ -77,6 +77,10 @@ editable fields.
   is off — `total_amount` (generated column) remains the gross/paid figure
   either way.
 
+## Sale link (`sale_id`)
+
+`sale_id: string | null` — when non-null, this purchase was created as the cost-of-goods record for a specific sale. The purchases list renders a "Linked to order →" link below the product name for these rows (navigates to `/dashboard/sales/{sale_id}`). The FK is `ON DELETE SET NULL` — if the linked sale is deleted, the purchase survives with `sale_id` reset to `null`.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),

@@ -200,6 +200,17 @@ All three are `number | null` on `Sale`. They surface in:
 - `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
   (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
 
+## Linked Purchase (cost of goods)
+
+A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The link is created in three places:
+- **AddSaleModal** — collapsible "Purchase cost (optional)" section: creates a purchase alongside the sale in a single submit action.
+- **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
+- **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
+
+**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux). When found, the Financials card renders Cost of Goods and Gross Profit rows; both are hidden when no purchase is linked.
+
+**Math:** `computeGrossProfit(netProceeds, linkedPurchase)` in `_components/orderMath.ts` returns `null` when `linkedPurchase` is `null`; the Gross Profit row is only rendered when the return value is non-null.
+
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
