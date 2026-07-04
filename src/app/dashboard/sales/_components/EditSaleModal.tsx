@@ -1,19 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
+import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
+import { formatCurrency, vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
-import type { Platform, Currency, Sale, Product } from "@/types";
+import type { Platform, Currency, Sale, Product, Purchase } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -76,8 +80,11 @@ const blankForm: FormState = {
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const { error: toastError } = useToast();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const purchases = useAppSelector((s) => s.purchases.items);
+  const linkedPurchase = purchases.find((p) => p.sale_id === sale?.id) ?? null;
   const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +92,12 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     if (!sale) return false;
     return sale.shipping_cost != null || sale.shipping_charged != null || sale.advertising_fee != null;
   });
+  const [showAddPurchase, setShowAddPurchase] = useState(false);
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [purchaseVendor, setPurchaseVendor] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(
+    sale?.date ?? new Date().toISOString().split("T")[0]
+  );
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -181,6 +194,47 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       },
     });
     if (log) dispatch(addAuditLog(log));
+
+    // Create linked purchase if user filled one in and no purchase is linked yet
+    const rawPrice = parseFloat(purchasePrice);
+    if (!linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+      const qtyNum = parseInt(form.quantity, 10) || 1;
+      const { data: newPurchase, error: purchaseError } = await supabase
+        .from("purchases")
+        .insert({
+          product_name: form.product_name.trim(),
+          product_id: form.product_id || null,
+          quantity: qtyNum,
+          unit_price: rawPrice / qtyNum,
+          total_amount: rawPrice,
+          currency: form.currency,
+          vendor: purchaseVendor.trim() || null,
+          date: purchaseDate,
+          description: null,
+          vat_rate: null,
+          vat_amount: null,
+          sale_id: sale.id,
+        })
+        .select()
+        .single();
+
+      if (!purchaseError && newPurchase) {
+        dispatch(addPurchase(newPurchase as Purchase));
+        const purchaseLog = await writeAuditLog(supabase, {
+          userId: user!.id,
+          userEmail: user!.email ?? "",
+          action: "create",
+          entityType: "purchase",
+          entityId: newPurchase.id,
+          metadata: { linked_to_sale: sale.id },
+        });
+        if (purchaseLog) dispatch(addAuditLog(purchaseLog));
+      } else if (purchaseError) {
+        toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+        setSaving(false);
+        return;
+      }
+    }
 
     setSaving(false);
     onSuccess?.();
@@ -389,6 +443,88 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             required
           />
         </Field>
+
+        {/* ── Linked Purchase ── */}
+        <div className="border-t border-(--color-border) pt-3">
+          {linkedPurchase ? (
+            /* Read-only chip */
+            <div className="flex items-center justify-between rounded-(--radius-card) bg-(--color-surface-raised) px-3 py-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-faint) mb-0.5">
+                  Linked Purchase
+                </p>
+                <p className="text-sm text-(--color-text-base)">
+                  {formatCurrency(linkedPurchase.total_amount, linkedPurchase.currency)}
+                  {linkedPurchase.vendor ? ` · ${linkedPurchase.vendor}` : ""}
+                </p>
+              </div>
+              <Link
+                href="/dashboard/purchases"
+                className="text-xs text-(--color-primary) hover:underline shrink-0 ml-3"
+              >
+                View →
+              </Link>
+            </div>
+          ) : (
+            /* No linked purchase — offer to add */
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAddPurchase((v) => !v)}
+                className="flex w-full items-center justify-between text-sm font-medium text-(--color-text-muted) hover:text-(--color-text-base) transition-colors"
+              >
+                <span>Add purchase cost (optional)</span>
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${showAddPurchase ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {showAddPurchase && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                      Purchase Price (total paid)
+                      <span className="text-(--color-danger-text) ml-0.5">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={purchasePrice}
+                      onChange={(e) => setPurchasePrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                      Vendor
+                    </label>
+                    <input
+                      type="text"
+                      value={purchaseVendor}
+                      onChange={(e) => setPurchaseVendor(e.target.value)}
+                      placeholder="e.g. Alibaba, wholesaler name"
+                      className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                      Purchase Date
+                    </label>
+                    <input
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                      className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </form>
     </Modal>
   );

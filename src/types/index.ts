@@ -56,6 +56,7 @@ export interface Purchase {
   created_at: string;
   vat_rate: number | null;
   vat_amount: number | null;
+  sale_id: string | null; // FK to sales.id — set when purchase is a cost-of-goods for a specific order
 }
 
 export interface Sale {

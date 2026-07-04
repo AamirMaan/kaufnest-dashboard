@@ -1,19 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
+import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
-import type { Platform, Currency, Sale, Product } from "@/types";
+import type { Platform, Currency, Sale, Purchase, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -70,10 +73,17 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const { error: toastError } = useToast();
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFees, setShowFees] = useState(false);
+  const [showLinkedPurchase, setShowLinkedPurchase] = useState(false);
+  const [purchasePrice, setPurchasePrice] = useState("");
+  const [purchaseVendor, setPurchaseVendor] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -146,6 +156,45 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
 
     dispatch(addSale(data));
 
+    // Create linked purchase if price was provided
+    const rawPrice = parseFloat(purchasePrice);
+    if (showLinkedPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+      const purchaseQty = parseInt(form.quantity, 10) || 1;
+      const { data: newPurchase, error: purchaseError } = await supabase
+        .from("purchases")
+        .insert({
+          product_name: form.product_name,
+          product_id: form.product_id || null,
+          quantity: purchaseQty,
+          unit_price: rawPrice / purchaseQty,
+          total_amount: rawPrice,
+          currency: form.currency,
+          vendor: purchaseVendor.trim() || null,
+          date: purchaseDate,
+          description: null,
+          vat_rate: null,
+          vat_amount: null,
+          sale_id: data.id,
+        })
+        .select()
+        .single();
+
+      if (!purchaseError && newPurchase) {
+        dispatch(addPurchase(newPurchase as Purchase));
+        const purchaseLog = await writeAuditLog(supabase, {
+          userId: user!.id,
+          userEmail: user!.email ?? "",
+          action: "create",
+          entityType: "purchase",
+          entityId: newPurchase.id,
+          metadata: { linked_to_sale: data.id },
+        });
+        if (purchaseLog) dispatch(addAuditLog(purchaseLog));
+      } else if (purchaseError) {
+        toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+      }
+    }
+
     // Re-fetch only the linked product to reflect the stock-sync trigger result.
     if (data.product_id) {
       const { data: freshProduct } = await supabase
@@ -165,6 +214,10 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
 
     setForm(makeDefaults(defaultVatRate));
     setShowFees(false);
+    setShowLinkedPurchase(false);
+    setPurchasePrice("");
+    setPurchaseVendor("");
+    setPurchaseDate(new Date().toISOString().split("T")[0]);
     setSaving(false);
     onSuccess?.(data.product_name);
     onClose();
@@ -174,6 +227,10 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     setForm(makeDefaults(defaultVatRate));
     setError(null);
     setShowFees(false);
+    setShowLinkedPurchase(false);
+    setPurchasePrice("");
+    setPurchaseVendor("");
+    setPurchaseDate(new Date().toISOString().split("T")[0]);
     onClose();
   }
 
@@ -246,7 +303,10 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             <Input
               type="date"
               value={form.date}
-              onChange={(e) => set("date", e.target.value)}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, date: e.target.value }));
+                setPurchaseDate(e.target.value); // keep purchase date in sync with sale date
+              }}
               required
             />
           </Field>
@@ -418,6 +478,64 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
                   placeholder="0.00"
                 />
               </Field>
+            </div>
+          )}
+        </div>
+
+        {/* ── Purchase cost (optional) ── */}
+        <div className="border-t border-(--color-border) pt-3">
+          <button
+            type="button"
+            onClick={() => setShowLinkedPurchase((v) => !v)}
+            className="flex w-full items-center justify-between text-sm font-medium text-(--color-text-muted) hover:text-(--color-text-base) transition-colors"
+          >
+            <span>Purchase cost (optional)</span>
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${showLinkedPurchase ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {showLinkedPurchase && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                  Purchase Price (total paid)
+                  <span className="text-(--color-danger-text) ml-0.5">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={purchasePrice}
+                  onChange={(e) => setPurchasePrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                  Vendor
+                </label>
+                <input
+                  type="text"
+                  value={purchaseVendor}
+                  onChange={(e) => setPurchaseVendor(e.target.value)}
+                  placeholder="e.g. Alibaba, wholesaler name"
+                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                  Purchase Date
+                </label>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                />
+              </div>
             </div>
           )}
         </div>

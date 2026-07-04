@@ -5,7 +5,7 @@ import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
 import { mergeImportedSale } from "@/lib/integrations/mergeImportedSale";
 import { createControlClient } from "@/lib/supabase/control";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { IntegrationPlatform, Sale, TenantPlan } from "@/types";
+import type { Currency, IntegrationPlatform, Purchase, Sale, TenantPlan } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
 export async function POST(req: NextRequest) {
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json()) as {
     items: { platform: IntegrationPlatform; order: NormalizedOrder }[];
+    purchaseCosts?: Record<string, { price: string; vendor: string }>;
   };
 
   if (!body.items?.length) {
@@ -66,15 +67,66 @@ export async function POST(req: NextRequest) {
     )
   );
 
-  const { error } = await client
+  const { data: upsertedSales, error } = await client
     .from("sales")
-    .upsert(rows, { onConflict: "platform,external_order_id" });
+    .upsert(rows, { onConflict: "platform,external_order_id" })
+    .select("id, external_order_id");
 
   if (error) {
     return NextResponse.json(
       { error: "Import failed", detail: error.message },
       { status: 500 }
     );
+  }
+
+  // Create linked purchases for orders where the user filled in a cost
+  const purchaseCosts = body.purchaseCosts ?? {};
+  const saleIdByExtId = new Map<string, string>();
+  for (const sale of upsertedSales ?? []) {
+    if (sale.external_order_id) {
+      saleIdByExtId.set(sale.external_order_id, sale.id);
+    }
+  }
+
+  const purchaseInserts: Array<Omit<Purchase, "id" | "created_by" | "created_at">> = [];
+  for (const { order } of body.items) {
+    const costEntry = purchaseCosts[order.external_order_id];
+    const rawPrice = parseFloat(costEntry?.price ?? "");
+    if (!isNaN(rawPrice) && rawPrice > 0) {
+      const saleId = saleIdByExtId.get(order.external_order_id);
+      if (saleId) {
+        const qty = order.quantity ?? 1;
+        purchaseInserts.push({
+          product_name: order.product_name,
+          product_id: null,
+          quantity: qty,
+          unit_price: rawPrice / qty,
+          total_amount: rawPrice,
+          currency: (order.currency ?? "EUR") as Currency,
+          vendor: costEntry?.vendor?.trim() || null,
+          date: order.date,
+          description: null,
+          vat_rate: null,
+          vat_amount: null,
+          sale_id: saleId,
+        });
+      }
+    }
+  }
+
+  let createdPurchases: Purchase[] = [];
+  if (purchaseInserts.length > 0) {
+    const { data: newPurchases, error: purchaseError } = await client
+      .from("purchases")
+      .insert(purchaseInserts)
+      .select();
+
+    if (purchaseError) {
+      console.error("[import] purchase insert failed:", purchaseError.message);
+      createdPurchases = [];
+    } else {
+      createdPurchases = (newPurchases ?? []) as Purchase[];
+    }
   }
 
   // Update last_synced_at for each platform that had items imported
@@ -89,5 +141,11 @@ export async function POST(req: NextRequest) {
     )
   );
 
-  return NextResponse.json({ imported: rows.length });
+  return NextResponse.json({
+    imported: rows.length,
+    createdPurchases,
+    ...(purchaseInserts.length > 0 && createdPurchases.length < purchaseInserts.length
+      ? { purchaseWarning: "Some purchase costs could not be saved — add them manually from the Purchases page." }
+      : {}),
+  });
 }

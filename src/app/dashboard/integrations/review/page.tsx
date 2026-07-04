@@ -7,11 +7,12 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hasPermission } from "@/lib/utils/permissions";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { formatCurrency } from "@/lib/utils/currency";
-import type { Currency, IntegrationPlatform } from "@/types";
+import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
@@ -24,6 +25,7 @@ const ALL_PLATFORMS: IntegrationPlatform[] = ["ebay", "amazon"];
 export default function ReviewPage() {
   const router = useRouter();
   const toast = useToast();
+  const dispatch = useAppDispatch();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
 
@@ -33,6 +35,24 @@ export default function ReviewPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [purchaseCosts, setPurchaseCosts] = useState<
+    Record<string, { price: string; vendor: string }>
+  >({});
+
+  function updatePurchaseCost(
+    key: string,
+    field: "price" | "vendor",
+    value: string
+  ) {
+    setPurchaseCosts((prev) => ({
+      ...prev,
+      [key]: {
+        price: prev[key]?.price ?? "",
+        vendor: prev[key]?.vendor ?? "",
+        [field]: value,
+      },
+    }));
+  }
 
   useEffect(() => {
     if (role === undefined) return;
@@ -122,10 +142,12 @@ export default function ReviewPage() {
       const res = await fetch("/api/integrations/review/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, purchaseCosts }),
       });
       const result = (await res.json()) as {
         imported?: number;
+        createdPurchases?: Purchase[];
+        purchaseWarning?: string;
         error?: string;
         detail?: string;
       };
@@ -137,11 +159,20 @@ export default function ReviewPage() {
         return;
       }
 
+      // Sync linked purchases into Redux store so the Purchases page is current
+      for (const purchase of result.createdPurchases ?? []) {
+        dispatch(addPurchase(purchase));
+      }
+
       const importedCount = result.imported ?? 0;
       toast.success(
         "Import complete",
         `${importedCount} order${importedCount === 1 ? "" : "s"} imported.`
       );
+
+      if (result.purchaseWarning) {
+        toast.error("Purchase costs not saved", result.purchaseWarning);
+      }
 
       // Flip imported rows in local state so they grey out immediately
       setData((prev) => {
@@ -282,13 +313,19 @@ export default function ReviewPage() {
                       </th>
                     )
                   )}
+                  <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
+                    Purchase Cost
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
+                    Vendor
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {activeOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="py-8 text-center text-sm text-[var(--color-text-muted)]"
                     >
                       No orders found in the last 90 days.
@@ -343,6 +380,32 @@ export default function ReviewPage() {
                         </td>
                         <td className="py-3 pr-4">
                           <Badge label={order.status} variant="default" />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={purchaseCosts[order.external_order_id]?.price ?? ""}
+                            onChange={(e) =>
+                              updatePurchaseCost(order.external_order_id, "price", e.target.value)
+                            }
+                            placeholder="Cost"
+                            className="w-24 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            value={purchaseCosts[order.external_order_id]?.vendor ?? ""}
+                            onChange={(e) =>
+                              updatePurchaseCost(order.external_order_id, "vendor", e.target.value)
+                            }
+                            placeholder="Vendor"
+                            className="w-32 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </td>
                       </tr>
                     );

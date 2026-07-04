@@ -1,4 +1,4 @@
-import type { Sale } from "@/types";
+import type { Sale, Purchase } from "@/types";
 
 /**
  * Compute the net proceeds of a sale:
@@ -14,4 +14,16 @@ export function computeNetProceeds(sale: Sale): number {
     (sale.shipping_cost ?? 0) -
     (sale.advertising_fee ?? 0)
   );
+}
+
+/**
+ * Net proceeds minus cost of goods. Returns null when no purchase is linked —
+ * the order detail page should hide the Gross Profit row when null.
+ */
+export function computeGrossProfit(
+  netProceeds: number,
+  linkedPurchase: Pick<Purchase, "total_amount"> | null
+): number | null {
+  if (!linkedPurchase) return null;
+  return netProceeds - linkedPurchase.total_amount;
 }

@@ -14,8 +14,14 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
-  Financials card (qty/price/totals/fees/net proceeds) and Details card
-  (description/linked product/restock flag/audit fields). Actions: Edit Order
+  Financials card (qty/price/totals/fees/net proceeds + Cost of Goods and Gross
+  Profit rows when a linked purchase exists) and Details card (description/linked
+  product/restock flag/audit fields). Linked purchase is resolved from
+  `state.purchases.items` (fast path) or a second Supabase effect that queries
+  `purchases` with `.maybeSingle()` and dispatches `addPurchase` on hit. Gross
+  profit computed via `computeGrossProfit(netProceeds, linkedPurchase)` from
+  `_components/orderMath.ts`; Gross Profit row renders red/green by sign, Cost of
+  Goods row always red; both hidden when no purchase is linked. Actions: Edit Order
   (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
   companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
   `state.companyProfile.profile`; button transiently disabled until profile
@@ -174,6 +180,9 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
+- `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
+  by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
+  direct-URL load; `state.purchases.items` is also read for the fast path
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
@@ -190,6 +199,17 @@ All three are `number | null` on `Sale`. They surface in:
   Validated in `validateRow()` (exported for testing). Tests in `ImportSalesModal.test.ts`.
 - `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
   (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
+
+## Linked Purchase (cost of goods)
+
+A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The link is created in three places:
+- **AddSaleModal** — collapsible "Purchase cost (optional)" section: creates a purchase alongside the sale in a single submit action.
+- **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
+- **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
+
+**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux). When found, the Financials card renders Cost of Goods and Gross Profit rows; both are hidden when no purchase is linked.
+
+**Math:** `computeGrossProfit(netProceeds, linkedPurchase)` in `_components/orderMath.ts` returns `null` when `linkedPurchase` is `null`; the Gross Profit row is only rendered when the return value is non-null.
 
 ## CSV import/export
 

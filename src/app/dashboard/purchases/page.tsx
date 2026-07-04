@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removePurchase, fetchPurchasesPage } from "./_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -174,7 +175,18 @@ export default function PurchasesPage() {
       header: "Product",
       sortValue: (p: Purchase) => p.product_name.toLowerCase(),
       render: (p: Purchase) => (
-        <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.product_name}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.product_name}</span>
+          {p.sale_id && (
+            <Link
+              href={`/dashboard/sales/${p.sale_id}`}
+              className="inline-flex items-center gap-1 text-xs text-(--color-primary) hover:underline w-fit"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Linked to order →
+            </Link>
+          )}
+        </div>
       ),
     },
     {

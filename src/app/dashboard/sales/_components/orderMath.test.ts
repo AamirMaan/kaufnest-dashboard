@@ -1,5 +1,5 @@
-import { computeNetProceeds } from "./orderMath";
-import type { Sale } from "@/types";
+import { computeNetProceeds, computeGrossProfit } from "./orderMath";
+import type { Sale, Purchase } from "@/types";
 
 /** Minimal Sale factory — only fields needed for orderMath */
 function makeSale(overrides: Partial<Sale> = {}): Sale {
@@ -60,5 +60,23 @@ describe("computeNetProceeds", () => {
     // 30 + 8 - 0 - 0 = 38
     const sale = makeSale({ total_amount: 30, shipping_charged: 8 });
     expect(computeNetProceeds(sale)).toBe(38);
+  });
+});
+
+describe("computeGrossProfit", () => {
+  it("returns null when linkedPurchase is null", () => {
+    expect(computeGrossProfit(100, null)).toBeNull();
+  });
+
+  it("subtracts purchase total_amount from netProceeds", () => {
+    expect(computeGrossProfit(120.99, { total_amount: 68 })).toBeCloseTo(52.99);
+  });
+
+  it("returns netProceeds unchanged when purchase cost is zero", () => {
+    expect(computeGrossProfit(50, { total_amount: 0 })).toBe(50);
+  });
+
+  it("returns negative when purchase exceeds net proceeds (loss scenario)", () => {
+    expect(computeGrossProfit(30, { total_amount: 80 })).toBe(-50);
   });
 });

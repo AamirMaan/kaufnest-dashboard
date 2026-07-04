@@ -16,11 +16,12 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate, formatDateTime } from "@/lib/utils/date";
-import { computeNetProceeds } from "../_components/orderMath";
+import { computeNetProceeds, computeGrossProfit } from "../_components/orderMath";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { generateOrderInvoice } from "@/lib/utils/generateInvoice";
 import { ArrowLeft, Pencil, Download, Trash2 } from "lucide-react";
-import type { Sale, Product } from "@/types";
+import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
+import type { Sale, Purchase, Product } from "@/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -59,6 +60,15 @@ export default function SaleDetailPage({ params }: PageProps) {
 
   // Prefer the Redux store; fall back to the locally-fetched copy
   const sale = storeVersion ?? fetchedSale;
+
+  const purchases = useAppSelector((s) => s.purchases.items);
+  const [fetchedLinkedPurchase, setFetchedLinkedPurchase] =
+    useState<Purchase | null>(null);
+
+  // Fast path: linked purchase already in Redux state
+  // Fallback: fetched directly from Supabase on direct-URL load
+  const linkedPurchase: Purchase | null =
+    purchases.find((p) => p.sale_id === sale?.id) ?? fetchedLinkedPurchase;
 
   // Direct URL hit — fetch from Supabase if not already in Redux.
   // loading is initialised as !storeVersion so when storeVersion is truthy
@@ -104,6 +114,34 @@ export default function SaleDetailPage({ params }: PageProps) {
   }, [id]);
   // ^ intentionally omit storeVersion/dispatch — we only want this to run once
   //   per id; Redux updates flow through storeVersion without re-triggering the fetch
+
+  // Fetch the linked purchase from Supabase on direct-URL load.
+  // Skipped when Redux already has it (fast path from list-page navigation).
+  useEffect(() => {
+    if (!sale?.id) return;
+    // Skip if Redux already has the linked purchase
+    if (purchases.some((p) => p.sale_id === sale.id)) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const supabase = await createTenantClient();
+      const { data } = await supabase
+        .from("purchases")
+        .select("*")
+        .eq("sale_id", sale.id)
+        .maybeSingle();
+      if (!cancelled && data) {
+        setFetchedLinkedPurchase(data as Purchase);
+        dispatch(addPurchase(data as Purchase)); // hydrate Redux for future navigation
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sale?.id]);
+  // ^ omit purchases/dispatch — we only want this to fire once per sale id;
+  //   Redux updates flow through linkedPurchase without re-triggering the fetch
 
   // Modal state
   const [editOpen, setEditOpen] = useState(false);
@@ -192,6 +230,12 @@ export default function SaleDetailPage({ params }: PageProps) {
   // ── Derived values ────────────────────────────────────────────────────────
 
   const netProceeds = computeNetProceeds(sale);
+  const grossProfit = computeGrossProfit(netProceeds, linkedPurchase);
+
+  // Guard: only show Cost of Goods / Gross Profit when the purchase currency
+  // matches the sale currency — mismatched currencies produce a meaningless number.
+  const hasCurrencyMatch =
+    !linkedPurchase || linkedPurchase.currency === sale.currency;
 
   const linkedProduct = sale.product_id
     ? (inventoryItems.find((p) => p.id === sale.product_id) ?? null)
@@ -310,6 +354,37 @@ export default function SaleDetailPage({ params }: PageProps) {
                 </span>
               }
             />
+
+            {linkedPurchase && hasCurrencyMatch && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-(--color-text-muted)">Cost of Goods</span>
+                  <span className="text-(--color-danger-text)">
+                    −{formatCurrency(linkedPurchase.total_amount, linkedPurchase.currency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm font-semibold border-t border-(--color-border) pt-2 mt-1">
+                  <span className="text-(--color-text-base)">Gross Profit</span>
+                  <span
+                    className={
+                      grossProfit !== null && grossProfit < 0
+                        ? "text-(--color-danger-text)"
+                        : "text-(--color-success-text)"
+                    }
+                  >
+                    {formatCurrency(grossProfit ?? 0, sale.currency)}
+                  </span>
+                </div>
+                <div className="text-right mt-1">
+                  <Link
+                    href="/dashboard/purchases"
+                    className="text-xs text-(--color-primary) hover:underline"
+                  >
+                    View purchase record →
+                  </Link>
+                </div>
+              </>
+            )}
           </dl>
         </section>
 

@@ -23,6 +23,7 @@ const makePurchase = (overrides: Partial<Purchase> = {}): Purchase => ({
   product_id: null,
   vat_rate: null,
   vat_amount: null,
+  sale_id: null,
   ...overrides,
 });
 
