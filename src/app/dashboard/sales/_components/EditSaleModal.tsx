@@ -231,6 +231,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         if (purchaseLog) dispatch(addAuditLog(purchaseLog));
       } else if (purchaseError) {
         toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+        setSaving(false);
         return;
       }
     }
