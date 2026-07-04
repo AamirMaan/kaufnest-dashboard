@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -201,7 +202,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       const { data: newPurchase, error: purchaseError } = await supabase
         .from("purchases")
         .insert({
-          product_name: form.product_name,
+          product_name: form.product_name.trim(),
           product_id: form.product_id || null,
           quantity: qtyNum,
           unit_price: rawPrice / qtyNum,
@@ -230,6 +231,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         if (purchaseLog) dispatch(addAuditLog(purchaseLog));
       } else if (purchaseError) {
         toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+        return;
       }
     }
 
@@ -455,12 +457,12 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
                   {linkedPurchase.vendor ? ` · ${linkedPurchase.vendor}` : ""}
                 </p>
               </div>
-              <a
+              <Link
                 href="/dashboard/purchases"
                 className="text-xs text-(--color-primary) hover:underline shrink-0 ml-3"
               >
                 View →
-              </a>
+              </Link>
             </div>
           ) : (
             /* No linked purchase — offer to add */
