@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
+import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -72,6 +73,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const { error: toastError } = useToast();
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,6 +190,8 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
           metadata: { linked_to_sale: data.id },
         });
         if (purchaseLog) dispatch(addAuditLog(purchaseLog));
+      } else if (purchaseError) {
+        toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
       }
     }
 
