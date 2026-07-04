@@ -64,6 +64,7 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       description: raw.description?.trim() || null,
       vat_rate: vatRate,
       vat_amount: vatAmount,
+      sale_id: null,
     },
     error: null,
   };

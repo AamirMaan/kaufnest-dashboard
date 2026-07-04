@@ -161,6 +161,15 @@ BEGIN
     )
   $sql$, schema_name);
 
+  EXECUTE format(
+    'ALTER TABLE %1$I.purchases ADD COLUMN IF NOT EXISTS sale_id uuid REFERENCES %1$I.sales(id) ON DELETE SET NULL',
+    schema_name
+  );
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS idx_purchases_sale_id ON %1$I.purchases (sale_id)',
+    schema_name
+  );
+
   -- NOTE: user_id is nullable here to match audit_logs' `on delete set null`
   -- pattern used elsewhere (a deleted user shouldn't break their audit trail).
   EXECUTE format($sql$
