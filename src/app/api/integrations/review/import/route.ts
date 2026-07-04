@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const purchaseInserts: Array<Omit<Purchase, "id" | "created_by" | "created_at">> = [];
+  const purchaseInserts: Array<Omit<Purchase, "id" | "created_at">> = [];
   for (const { order } of body.items) {
     const costEntry = purchaseCosts[order.external_order_id];
     const rawPrice = parseFloat(costEntry?.price ?? "");
@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
           vat_rate: null,
           vat_amount: null,
           sale_id: saleId,
+          created_by: userId,
         });
       }
     }

@@ -214,6 +214,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           vat_rate: null,
           vat_amount: null,
           sale_id: sale.id,
+          created_by: user!.id,
         })
         .select()
         .single();
