@@ -147,6 +147,7 @@ export default function ReviewPage() {
       const result = (await res.json()) as {
         imported?: number;
         createdPurchases?: Purchase[];
+        purchaseWarning?: string;
         error?: string;
         detail?: string;
       };
@@ -168,6 +169,10 @@ export default function ReviewPage() {
         "Import complete",
         `${importedCount} order${importedCount === 1 ? "" : "s"} imported.`
       );
+
+      if (result.purchaseWarning) {
+        toast.error("Purchase costs not saved", result.purchaseWarning);
+      }
 
       // Flip imported rows in local state so they grey out immediately
       setData((prev) => {

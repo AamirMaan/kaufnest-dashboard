@@ -116,11 +116,17 @@ export async function POST(req: NextRequest) {
 
   let createdPurchases: Purchase[] = [];
   if (purchaseInserts.length > 0) {
-    const { data: newPurchases } = await client
+    const { data: newPurchases, error: purchaseError } = await client
       .from("purchases")
       .insert(purchaseInserts)
       .select();
-    createdPurchases = (newPurchases ?? []) as Purchase[];
+
+    if (purchaseError) {
+      console.error("[import] purchase insert failed:", purchaseError.message);
+      createdPurchases = [];
+    } else {
+      createdPurchases = (newPurchases ?? []) as Purchase[];
+    }
   }
 
   // Update last_synced_at for each platform that had items imported
@@ -135,5 +141,11 @@ export async function POST(req: NextRequest) {
     )
   );
 
-  return NextResponse.json({ imported: rows.length, createdPurchases });
+  return NextResponse.json({
+    imported: rows.length,
+    createdPurchases,
+    ...(purchaseInserts.length > 0 && createdPurchases.length < purchaseInserts.length
+      ? { purchaseWarning: "Some purchase costs could not be saved — add them manually from the Purchases page." }
+      : {}),
+  });
 }
