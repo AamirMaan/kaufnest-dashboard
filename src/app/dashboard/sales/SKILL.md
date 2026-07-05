@@ -28,8 +28,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `_store/salesSlice.ts` only if the shape stored in Redux changes, and
   `src/types/index.ts` for the `Sale` type. Also check `page.tsx` if the field
   needs to render in the table or be filterable (`lib/utils/filters.ts`).
-  **Also update `ImportSalesModal.tsx`** if the new field is required or needs
-  validation — add it to the `validateRow` function and `TEMPLATE_HEADERS`.
+  **Also update `_components/importFormats.ts`** if the new field should be
+  importable — add an `ALIASES` entry (EN + German header names), a `col(...)`
+  to each format's `columns`, template headers/example, and validation in
+  `validateRowForFormat()`. The modal itself rarely needs to change.
 - **Add/change an order status**: `_components/orderStatus.ts` (`ORDER_STATUSES`
   preset list + `statusLabel`/`isPresetStatus`) and its colocated test. Also
   check `StatusBadge` in `src/components/ui/Badge.tsx` for a variant mapping if
@@ -44,8 +46,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx` — edit the `headers`
   array and the row-mapping lambda.
-- **Change import validation / accepted columns**: `validateRow()` in
-  `_components/ImportSalesModal.tsx` only.
+- **Change import validation / accepted columns / header aliases / add a new
+  import format**: `_components/importFormats.ts` only (pure registry —
+  `IMPORT_FORMATS`, `ALIASES`, `validateRowForFormat`). Extend
+  `importFormats.test.ts` in the same commit. Locale parsing primitives
+  (decimal commas, German dates, delimiter detection) live in
+  `src/lib/utils/localeParse.ts` and `src/lib/utils/csv.ts`.
 
 ## Test command
 
@@ -59,11 +65,34 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   same pattern as `vat_rate`/`vat_amount`.
 - `EditSaleModal` auto-opens the "Fees & shipping" section when the existing sale has
   at least one fee non-null (checked in the `showFees` initializer).
-- `validateRow()` in `ImportSalesModal` is now exported so it can be unit-tested in
-  `ImportSalesModal.test.ts` alongside `productOptions.test.ts` / `orderStatus.test.ts`.
+- Import validation lives in `validateRowForFormat()` in the pure
+  `_components/importFormats.ts` (unit-tested in `importFormats.test.ts` and
+  `ImportSalesModal.test.ts`); the modal only orchestrates file reading, the
+  dedup query, and inserts.
 - The table "Fees" column sums `shipping_cost + advertising_fee` (seller costs);
   `shipping_charged` is not in the computed sum — it's the buyer-facing amount and
   appears only in the CSV export.
+
+## Gotchas — CSV import formats (German support)
+
+- **`Versandkosten` maps to `shipping_charged`** (what the buyer paid — I6), NOT
+  `shipping_cost`. Seller-side shipping needs an explicit `shipping_cost` /
+  `versandkosten_bezahlt` header. Don't "fix" this mapping without reading
+  IMPORT_PLAN.md decision I6.
+- **Encoding fallback**: `readFileText()` in `ImportSalesModal` reads UTF-8 first
+  and re-reads as `windows-1252` when the decode contains `�`. German Excel CSVs
+  are usually windows-1252; don't remove the fallback.
+- **Duplicate pre-check chunks `.in()` at 200 ids** (`IN_CHUNK`) — Supabase/
+  PostgREST URLs break on very long `in()` lists. Keep chunking if you touch it.
+- **Skipped ≠ error**: rows marked `skipped` (order already exists / duplicate in
+  file) don't block the import; rows with `error` do. `canImport` requires zero
+  errors AND ≥1 importable row.
+- **Never derive numbers with `parseFloat` in import code** — always
+  `parseLocaleNumber` (`"9,99"` would silently become `9`). Same for dates:
+  `parseFlexibleDate`, never a bare regex.
+- The delimiter is auto-detected per file (`detectDelimiter` in
+  `lib/utils/csv.ts`) — affects the purchases/expenses imports too, since they
+  share `parseCsvText`.
 
 ## Gotchas — server-side pagination
 

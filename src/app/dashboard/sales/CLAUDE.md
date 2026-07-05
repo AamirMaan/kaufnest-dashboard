@@ -43,10 +43,17 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
   treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
-- `_components/ImportSalesModal.tsx` — bulk CSV import: parses + validates a
-  user-uploaded CSV, shows per-row errors, batch-inserts valid rows via Supabase,
-  dispatches `addSale` for each, writes one audit log entry for the batch. See
-  "CSV import/export" section below.
+- `_components/ImportSalesModal.tsx` — bulk CSV import with a **format dropdown**
+  (Generic / Amazon sheet / eBay sheet): parses + validates a user-uploaded CSV
+  (German-tolerant — see "CSV import/export" below), runs a duplicate pre-check
+  on `external_order_id`, shows per-row errors/skips, batch-inserts importable
+  rows via Supabase, dispatches `addSale` for each, writes one audit log entry
+  for the batch.
+- `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
+  registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
+  (`resolveHeaders`/`canonicalizeRow`), German status synonyms
+  (`normalizeStatus`), and per-row validation (`validateRowForFormat`). **All
+  import-format/validation changes go here**, not in the modal.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -195,8 +202,10 @@ All three are `number | null` on `Sale`. They surface in:
   `EditSaleModal` auto-opens the section when the existing sale has at least one fee set.
   Fee changes are included in the before/after audit-log diff alongside all other fields.
 - `ImportSalesModal` — optional CSV columns `shipping_cost`, `shipping_charged`,
-  `advertising_fee`. Blank/missing → `null`. Non-numeric or negative → row error.
-  Validated in `validateRow()` (exported for testing). Tests in `ImportSalesModal.test.ts`.
+  `advertising_fee` in every import format. Blank/missing → `null`. Non-numeric or
+  negative → row error. Validated in `validateRowForFormat()`
+  (`_components/importFormats.ts`). Tests in `ImportSalesModal.test.ts` +
+  `importFormats.test.ts`.
 - `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
   (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
 
@@ -219,18 +228,51 @@ Exported columns: `date, product_name, platform, quantity, unit_price, total_amo
 currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
 advertising_fee`. Export button is disabled when no rows match the filter.
 
-**Import** (`ImportSalesModal`): Required CSV columns: `date` (YYYY-MM-DD),
-`product_name`, `platform` (amazon/ebay/etsy/shopify/other), `quantity`, `unit_price`.
-Optional: `currency` (default EUR), `vat_rate` (0–100), `status` (defaults to
-`"pending"`, no validation against the preset list — custom strings allowed),
-`description`, `shipping_cost`, `shipping_charged`, `advertising_fee` (all
-`number | null` — blank → `null`, non-numeric or negative → row error).
-`product_id` is NOT in the import format — imports create unlinked records; user can
-link via Edit afterward. `total_amount` is computed (`qty × unit_price`); `vat_amount`
-is computed via `vatAmountFromGross`. `restock` is always `false` for imported rows
-(not importable — edit the record afterward to mark it returned/restockable).
-All rows must pass validation before import proceeds. Audit log: one entry for the
-whole batch (omit `entityId` — it's `string | undefined`, not nullable).
+**Import** (`ImportSalesModal` + `importFormats.ts`): the modal has a
+**format dropdown** with three formats defined in the pure registry
+`_components/importFormats.ts`:
+
+| Format | Required columns | Platform | Notes |
+|---|---|---|---|
+| `generic` | `date, product_name, quantity, unit_price` | per-row `platform` column (default `other`) | the original template; now also accepts optional `total` and `order_id` |
+| `amazon` | `order_id, date, product_name, quantity, total` | forced `amazon` | `order_id` → `external_order_id` |
+| `ebay` | same as amazon | forced `ebay` | `advertising_fee` = Promoted Listings fee |
+
+Optional in all formats: `unit_price`/`total` (see rule below), `currency`
+(default EUR), `vat_rate` (0–100), `status` (German synonyms normalized via
+`normalizeStatus` — `versandt`→`shipped`, `storniert`→`cancelled`, etc.; other
+custom strings pass through; default `"pending"`), `description`,
+`shipping_cost`, `shipping_charged`, `advertising_fee` (blank → `null`,
+non-numeric or negative → row error).
+
+**German tolerance (all formats):** delimiter auto-detect (`,`/`;`/tab —
+`lib/utils/csv.ts → detectDelimiter`), BOM strip, decimal commas and thousands
+dots (`"1.234,56"` — `lib/utils/localeParse.ts → parseLocaleNumber`), dates in
+`YYYY-MM-DD` or `DD.MM.YYYY` (`parseFlexibleDate`; two-digit years rejected),
+German **header aliases** (`Datum`, `Artikelname`, `Menge`, `Preis`, `MwSt`,
+`Bestellnummer`, … — the `ALIASES` map in `importFormats.ts`). Files that fail
+UTF-8 decoding are re-read as `windows-1252` (German Excel default). Unknown
+columns are ignored; missing required columns are a file-level error.
+
+**`total` vs `unit_price` rule (I4):** if `total` is present it wins —
+`total_amount = total`, and `unit_price` is derived (`round(total/qty, 2)`)
+when blank. If both are present and `qty × unit_price` differs from `total` by
+more than 0.02 → row error. If only `unit_price` is given, `total_amount =
+qty × unit_price` as before.
+
+**Duplicate pre-check (I3):** rows carrying an `external_order_id` are checked
+against existing `sales` rows per `(platform, external_order_id)` (chunked
+`.in()` queries, 200 ids per chunk) and against duplicates within the file.
+Matches are marked **skipped** — shown as "N skipped (order already exists)" —
+and are never overwritten (same protection as the integrations re-sync merge
+rule). Skips don't block importing the remaining rows; validation errors still do.
+
+`product_id` is NOT in any import format — imports create unlinked records; user
+can link via Edit afterward. `vat_amount` is computed via `vatAmountFromGross`
+over `total_amount`. `restock` is always `false` for imported rows (not
+importable — edit the record afterward to mark it returned/restockable).
+Audit log: one entry for the whole batch with `{ bulk_import, count, format,
+skipped }` (omit `entityId` — it's `string | undefined`, not nullable).
 
 ## Tests
 

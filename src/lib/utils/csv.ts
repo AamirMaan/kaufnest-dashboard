@@ -28,7 +28,33 @@ export function exportToCsv(
   URL.revokeObjectURL(url);
 }
 
-function parseLine(line: string): string[] {
+type Delimiter = "," | ";" | "\t";
+
+/**
+ * Detect the field delimiter from the header line by counting candidate
+ * characters outside quoted sections. Highest count wins; comma on a tie
+ * (German Excel exports typically use ";" because "," is the decimal
+ * separator in the de locale).
+ */
+export function detectDelimiter(headerLine: string): Delimiter {
+  const counts: Record<Delimiter, number> = { ",": 0, ";": 0, "\t": 0 };
+  let inQuotes = false;
+  for (let i = 0; i < headerLine.length; i++) {
+    const ch = headerLine[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && (ch === "," || ch === ";" || ch === "\t")) {
+      counts[ch]++;
+    }
+  }
+  let best: Delimiter = ",";
+  for (const d of [";", "\t"] as Delimiter[]) {
+    if (counts[d] > counts[best]) best = d;
+  }
+  return best;
+}
+
+function parseLine(line: string, delimiter: Delimiter): string[] {
   const fields: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -43,7 +69,7 @@ function parseLine(line: string): string[] {
       }
     } else {
       if (ch === '"') { inQuotes = true; }
-      else if (ch === ",") { fields.push(current.trim()); current = ""; }
+      else if (ch === delimiter) { fields.push(current.trim()); current = ""; }
       else { current += ch; }
     }
   }
@@ -53,14 +79,16 @@ function parseLine(line: string): string[] {
 
 export function parseCsvText(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const lines = text
+    .replace(new RegExp("^\\uFEFF"), "") // strip UTF-8 BOM (Excel prepends it)
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n")
     .filter((l) => l.trim() !== "");
   if (lines.length < 2) return { headers: [], rows: [] };
-  const headers = parseLine(lines[0]).map((h) => h.toLowerCase().trim());
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = parseLine(lines[0], delimiter).map((h) => h.toLowerCase().trim());
   const rows = lines.slice(1).map((line) => {
-    const values = parseLine(line);
+    const values = parseLine(line, delimiter);
     return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
   });
   return { headers, rows };
