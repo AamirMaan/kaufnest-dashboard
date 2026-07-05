@@ -446,10 +446,10 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         </Field>
 
         {/* ── Linked Purchase ── */}
-        <div className="border-t border-(--color-border) pt-3">
+        <div className="rounded-(--radius-card) border border-(--color-border)">
           {linkedPurchase ? (
             /* Read-only chip */
-            <div className="flex items-center justify-between rounded-(--radius-card) bg-(--color-surface-raised) px-3 py-2">
+            <div className="flex items-center justify-between px-4 py-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-faint) mb-0.5">
                   Linked Purchase
@@ -468,21 +468,21 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             </div>
           ) : (
             /* No linked purchase — offer to add */
-            <div>
+            <>
               <button
                 type="button"
                 onClick={() => setShowAddPurchase((v) => !v)}
-                className="flex w-full items-center justify-between text-sm font-medium text-(--color-text-muted) hover:text-(--color-text-base) transition-colors"
+                className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-(--color-text-strong) hover:bg-(--color-surface-raised) transition-colors rounded-(--radius-card)"
               >
                 <span>Add purchase cost (optional)</span>
                 <ChevronDown
                   size={16}
-                  className={`transition-transform ${showAddPurchase ? "rotate-180" : ""}`}
+                  className={`transition-transform text-(--color-text-muted) ${showAddPurchase ? "rotate-180" : ""}`}
                 />
               </button>
 
               {showAddPurchase && (
-                <div className="mt-3 space-y-3">
+                <div className="px-4 pb-4 space-y-3 border-t border-(--color-border) pt-3">
                   <div>
                     <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
                       Purchase Price (total paid)
@@ -523,7 +523,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
                   </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </form>
