@@ -175,6 +175,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
           vat_rate: null,
           vat_amount: null,
           sale_id: data.id,
+          created_by: user!.id,
         })
         .select()
         .single();

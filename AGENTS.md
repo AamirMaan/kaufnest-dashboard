@@ -109,13 +109,18 @@ follow-up.
 
 ## Branching — always work on a branch
 
-**Never commit directly to `main`.** Before starting any task, create a
-feature branch:
+**Never commit directly to `main`.** Before starting any task — feature, fix,
+or any other change — always sync from main first, then create a new branch:
 
 ```bash
+git checkout main
+git pull
 git checkout -b <type>/<short-description>
 # e.g. feat/tenant-edit, fix/ebay-callback-redirect
 ```
+
+This ensures every branch starts from the latest state of `main`, preventing
+stale-base conflicts and keeping the diff clean for review.
 
 Push the branch and open a Pull Request when the work is ready. The
 repository has branch protection on `main` — direct pushes will be rejected.
