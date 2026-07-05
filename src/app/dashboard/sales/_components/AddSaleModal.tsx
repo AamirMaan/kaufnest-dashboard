@@ -484,21 +484,21 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         </div>
 
         {/* ── Purchase cost (optional) ── */}
-        <div className="border-t border-(--color-border) pt-3">
+        <div className="rounded-(--radius-card) border border-(--color-border)">
           <button
             type="button"
             onClick={() => setShowLinkedPurchase((v) => !v)}
-            className="flex w-full items-center justify-between text-sm font-medium text-(--color-text-muted) hover:text-(--color-text-base) transition-colors"
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-(--color-text-strong) hover:bg-(--color-surface-raised) transition-colors rounded-(--radius-card)"
           >
             <span>Purchase cost (optional)</span>
             <ChevronDown
               size={16}
-              className={`transition-transform ${showLinkedPurchase ? "rotate-180" : ""}`}
+              className={`transition-transform text-(--color-text-muted) ${showLinkedPurchase ? "rotate-180" : ""}`}
             />
           </button>
 
           {showLinkedPurchase && (
-            <div className="mt-3 space-y-3">
+            <div className="px-4 pb-4 space-y-3 border-t border-(--color-border) pt-3">
               <div>
                 <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
                   Purchase Price (total paid)
