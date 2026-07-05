@@ -1,13 +1,18 @@
-# Graph Report - ./docs  (2026-06-29)
+# Graph Report - KaufNest Dashboard  (2026-07-05)
 
 ## Corpus Check
-- 11 files · ~23,707 words
+- 282 files · ~154,920 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 34 nodes · 39 edges · 7 communities
-- Extraction: 79% EXTRACTED · 21% INFERRED · 0% AMBIGUOUS · INFERRED: 8 edges (avg confidence: 0.94)
+- 1477 nodes · 3021 edges · 118 communities (110 shown, 8 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `72823f60`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Dropshipping Listing Pipeline|Dropshipping Listing Pipeline]]
@@ -17,40 +22,144 @@
 - [[_COMMUNITY_Integration Order Review|Integration Order Review]]
 - [[_COMMUNITY_Planner Fee Calculation Engine|Planner Fee Calculation Engine]]
 - [[_COMMUNITY_Planner Custom Charges & Freight|Planner Custom Charges & Freight]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
+- [[_COMMUNITY_Community 11|Community 11]]
+- [[_COMMUNITY_Community 12|Community 12]]
+- [[_COMMUNITY_Community 13|Community 13]]
+- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Community 15|Community 15]]
+- [[_COMMUNITY_Community 16|Community 16]]
+- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
+- [[_COMMUNITY_Community 19|Community 19]]
+- [[_COMMUNITY_Community 20|Community 20]]
+- [[_COMMUNITY_Community 21|Community 21]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 23|Community 23]]
+- [[_COMMUNITY_Community 24|Community 24]]
+- [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 27|Community 27]]
+- [[_COMMUNITY_Community 28|Community 28]]
+- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
+- [[_COMMUNITY_Community 34|Community 34]]
+- [[_COMMUNITY_Community 35|Community 35]]
+- [[_COMMUNITY_Community 36|Community 36]]
+- [[_COMMUNITY_Community 37|Community 37]]
+- [[_COMMUNITY_Community 38|Community 38]]
+- [[_COMMUNITY_Community 39|Community 39]]
+- [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 41|Community 41]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 43|Community 43]]
+- [[_COMMUNITY_Community 44|Community 44]]
+- [[_COMMUNITY_Community 45|Community 45]]
+- [[_COMMUNITY_Community 46|Community 46]]
+- [[_COMMUNITY_Community 47|Community 47]]
+- [[_COMMUNITY_Community 48|Community 48]]
+- [[_COMMUNITY_Community 49|Community 49]]
+- [[_COMMUNITY_Community 50|Community 50]]
+- [[_COMMUNITY_Community 51|Community 51]]
+- [[_COMMUNITY_Community 52|Community 52]]
+- [[_COMMUNITY_Community 53|Community 53]]
+- [[_COMMUNITY_Community 54|Community 54]]
+- [[_COMMUNITY_Community 55|Community 55]]
+- [[_COMMUNITY_Community 56|Community 56]]
+- [[_COMMUNITY_Community 57|Community 57]]
+- [[_COMMUNITY_Community 58|Community 58]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 61|Community 61]]
+- [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 63|Community 63]]
+- [[_COMMUNITY_Community 64|Community 64]]
+- [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
+- [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
+- [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 84|Community 84]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 86|Community 86]]
+- [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 92|Community 92]]
+- [[_COMMUNITY_Community 93|Community 93]]
+- [[_COMMUNITY_Community 94|Community 94]]
+- [[_COMMUNITY_Community 95|Community 95]]
+- [[_COMMUNITY_Community 96|Community 96]]
+- [[_COMMUNITY_Community 97|Community 97]]
+- [[_COMMUNITY_Community 98|Community 98]]
+- [[_COMMUNITY_Community 99|Community 99]]
+- [[_COMMUNITY_Community 100|Community 100]]
+- [[_COMMUNITY_Community 101|Community 101]]
+- [[_COMMUNITY_Community 102|Community 102]]
+- [[_COMMUNITY_Community 103|Community 103]]
+- [[_COMMUNITY_Community 104|Community 104]]
+- [[_COMMUNITY_Community 106|Community 106]]
+- [[_COMMUNITY_Community 107|Community 107]]
+- [[_COMMUNITY_Community 108|Community 108]]
+- [[_COMMUNITY_Community 109|Community 109]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `Dropshipping Listing Management Implementation Plan` - 6 edges
-2. `Profit Planner Implementation Plan` - 6 edges
-3. `Design Refresh Emerald Light Violet Dark Implementation Plan` - 6 edges
-4. `Pure Profit Calculation Engine calcEbayResult calcAmazonResult` - 5 edges
-5. `Tenant Edit Implementation Plan` - 4 edges
-6. `Planner Custom Charge and Amazon Inbound Freight Design Spec` - 4 edges
-7. `Algebraic Break-even Minimum Selling Price Formula` - 4 edges
-8. `Integration Order Review Implementation Plan` - 3 edges
-9. `Emerald Primary CSS Token Light Theme` - 3 edges
-10. `Profit Planner Design Spec` - 2 edges
+1. `useAppDispatch` - 50 edges
+2. `useAppSelector` - 40 edges
+3. `Button` - 36 edges
+4. `useToast()` - 35 edges
+5. `createControlClient()` - 30 edges
+6. `Sale` - 30 edges
+7. `createClient()` - 28 edges
+8. `createTenantClient()` - 27 edges
+9. `Currency` - 26 edges
+10. `Purchase` - 24 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Tenant Edit Implementation Plan` --references--> `Tenant Edit Design Spec`  [INFERRED]
+  docs/superpowers/plans/2026-06-18-tenant-edit.md → superpowers/specs/2026-06-18-tenant-edit-design.md
+- `Integration Order Review Implementation Plan` --references--> `Integration Order Review Design Spec`  [INFERRED]
+  docs/superpowers/plans/2026-06-19-integration-order-review.md → superpowers/specs/2026-06-19-integration-order-review-design.md
 - `Profit Planner Implementation Plan` --references--> `Profit Planner Design Spec`  [INFERRED]
-  superpowers/plans/2026-06-23-planner.md → superpowers/specs/2026-06-23-planner-design.md
-- `Custom Charge Field Percent or Flat Fixed Per Unit` --conceptually_related_to--> `Pure Profit Calculation Engine calcEbayResult calcAmazonResult`  [INFERRED]
-  superpowers/specs/2026-06-29-planner-custom-charge-freight-design.md → superpowers/plans/2026-06-23-planner.md
-- `Dropshipping Listing Management Implementation Plan` --references--> `Dropshipping Listing Management Design Spec`  [INFERRED]
-  superpowers/plans/2026-06-23-dropshipping-listing-management.md → superpowers/specs/2026-06-23-dropshipping-listing-management-design.md
-- `Design Refresh Emerald Light Violet Dark Implementation Plan` --references--> `Design Refresh Design Spec`  [INFERRED]
-  superpowers/plans/2026-06-25-design-refresh.md → superpowers/specs/2026-06-25-design-refresh-design.md
-- `Amazon FBA Inbound Freight to Warehouse Field` --conceptually_related_to--> `Pure Profit Calculation Engine calcEbayResult calcAmazonResult`  [INFERRED]
-  superpowers/specs/2026-06-29-planner-custom-charge-freight-design.md → superpowers/plans/2026-06-23-planner.md
+  docs/superpowers/plans/2026-06-23-planner.md → superpowers/specs/2026-06-23-planner-design.md
+- `Tenant Edit Implementation Plan` --references--> `Auth Email Update Before Control Plane Update Ordering Rationale`  [EXTRACTED]
+  docs/superpowers/plans/2026-06-18-tenant-edit.md → superpowers/plans/2026-06-18-tenant-edit.md
+- `Tenant Edit Implementation Plan` --references--> `Platform Admin Override Bypasses Stripe Webhooks`  [EXTRACTED]
+  docs/superpowers/plans/2026-06-18-tenant-edit.md → superpowers/plans/2026-06-18-tenant-edit.md
 
 ## Import Cycles
-- None detected.
+- 1-file cycle: `src/lib/stripe.ts -> src/lib/stripe.ts`
+- 1-file cycle: `src/components/ui/dialog.tsx -> src/components/ui/dialog.tsx`
+- 1-file cycle: `src/components/ui/input.tsx -> src/components/ui/input.tsx`
 
 ## Hyperedges (group relationships)
 - **Dropshipping Data Pipeline: DB Table, Redux Slice, eBay Fetcher** — plans_2026_06_23_dropshipping_dropship_listings_table, plans_2026_06_23_dropshipping_slice, plans_2026_06_23_dropshipping_fetch_active_listings [EXTRACTED 0.95]
 - **Planner Calculation Core: Engine, Fee Constants, Break-even Formula** — superpowers_plans_2026_06_23_planner_calculation_engine, superpowers_plans_2026_06_23_planner_fee_constants, superpowers_plans_2026_06_23_planner_min_selling_price_formula [EXTRACTED 0.95]
 - **Design Token Theming System: Emerald Light, Violet Dark, Vivid Badges** — superpowers_plans_2026_06_25_design_refresh_emerald_primary, superpowers_plans_2026_06_25_design_refresh_violet_dark_primary, superpowers_plans_2026_06_25_design_refresh_badge_semantic_vivid [INFERRED 0.85]
 
-## Communities (7 total, 0 thin omitted)
+## Communities (118 total, 8 thin omitted)
 
 ### Community 0 - "Dropshipping Listing Pipeline"
 Cohesion: 0.38
@@ -61,35 +170,420 @@ Cohesion: 0.38
 Nodes (7): Design Refresh Emerald Light Violet Dark Implementation Plan, Badge Vivid Semantic Fill Colors and font-semibold, Tailwind v4 CSS Variable bg dash dash var Canonical Form Rationale, Emerald Primary CSS Token Light Theme, Success Color Shift Emerald to Green to Avoid Primary Clash Rationale, Violet Primary CSS Token Dark Theme, Design Refresh Design Spec
 
 ### Community 2 - "Tenant Edit & Admin Auth"
-Cohesion: 0.40
-Nodes (5): Tenant Edit Implementation Plan, Auth Email Update Before Control Plane Update Ordering Rationale, Platform Admin Override Bypasses Stripe Webhooks, verifyPlatformAdmin Auth Guard, Tenant Edit Design Spec
+Cohesion: 0.15
+Nodes (12): Browser Verification Checklist, File Map, Global Constraints, Task 1: PATCH API route, Task 2: EditTenantModal component, Task 3: Wire up TenantActions and page.tsx, Task 4: Update docs, Tenant Edit Implementation Plan (+4 more)
 
 ### Community 3 - "Planner VAT & Break-even Logic"
-Cohesion: 0.50
-Nodes (5): Profit Planner Implementation Plan, Algebraic Break-even Minimum Selling Price Formula, Planner No Persistence Pure Client-Side Design Rationale, VAT Inclusive Exclusive Mode Logic Gross Price Derivation, compute Break-even Divisor and Numerator Update for Custom Charge
+Cohesion: 0.11
+Nodes (22): File Map, Global Constraints, Profit Planner Implementation Plan, Self-Review, Task 1: Fee constants, Task 2: Calculation library + unit tests, Task 3: Sidebar nav entry, Task 4: `PlannerResults` component (+14 more)
 
 ### Community 4 - "Integration Order Review"
-Cohesion: 0.50
-Nodes (4): Integration Order Review Implementation Plan, Cron Job Removal Replaced by Manual Review Rationale, ReviewOrder imported Boolean Deduplication Flag, Integration Order Review Design Spec
+Cohesion: 0.15
+Nodes (12): Browser Verification Checklist, File Map, Global Constraints, Integration Order Review Implementation Plan, Task 1: GET /api/integrations/review, Task 2: POST /api/integrations/review/import, Task 3: Review page UI, Task 4: ConnectionCard + vercel.json (+4 more)
 
 ### Community 5 - "Planner Fee Calculation Engine"
-Cohesion: 0.67
-Nodes (3): Pure Profit Calculation Engine calcEbayResult calcAmazonResult, eBay FVF and Amazon Referral Fee Rate Constants, Amazon FBA Inbound Freight to Warehouse Field
+Cohesion: 0.07
+Nodes (48): AddTenantModal(), Plan, Props, EditTenantModal(), CATEGORIES, CURRENCIES, makeDefaults(), Props (+40 more)
 
 ### Community 6 - "Planner Custom Charges & Freight"
-Cohesion: 0.67
-Nodes (3): Profit Planner Design Spec, Planner Custom Charge and Amazon Inbound Freight Design Spec, Custom Charge Field Percent or Flat Fixed Per Unit
+Cohesion: 0.09
+Nodes (36): stripe, AdminLayout(), POST(), verifyPlatformAdmin(), errorMessage(), POST(), verifyPlatformAdmin(), POST() (+28 more)
+
+### Community 7 - "Community 7"
+Cohesion: 0.05
+Nodes (42): Architecture summary, Checklist — phase completion gates, KaufNest — Multi-Tenant SaaS Migration, Key rules for all future Claude Code sessions, Phase 1, Phase 1 — Control Plane (new Supabase project), Phase 2, Phase 2 — Schema-per-tenant isolation (Data Plane) (+34 more)
+
+### Community 8 - "Community 8"
+Cohesion: 0.11
+Nodes (28): CATEGORIES, ImportSalesModal(), Props, PLATFORMS, EditUserModal(), ROLES, PageHeader(), PageHeaderProps (+20 more)
+
+### Community 9 - "Community 9"
+Cohesion: 0.08
+Nodes (29): AmazonPlanner(), ChargeType, DEFAULT_FORM, FormState, ChargeType, DEFAULT_FORM, EbayPlanner(), FormState (+21 more)
+
+### Community 10 - "Community 10"
+Cohesion: 0.13
+Nodes (23): PATCH(), PlatformBadge(), ListingsTable(), SourceBadge(), Dialog(), DialogContent(), DialogDescription(), DialogFooter() (+15 more)
+
+### Community 11 - "Community 11"
+Cohesion: 0.11
+Nodes (22): aggregateSaleRevenue(), Props, fetchSalesPage, initialState, salesSlice, SalesState, SalesInvoiceProps, DEFAULT_AUDIT_LOG_FILTERS (+14 more)
+
+### Community 12 - "Community 12"
+Cohesion: 0.16
+Nodes (26): COMPANY_PROFILE_ROLES, DEMO_SALE, SettingsPage(), addBillTo(), addFooter(), addHeader(), formatDate(), formatMoney() (+18 more)
+
+### Community 13 - "Community 13"
+Cohesion: 0.10
+Nodes (24): ALIASES, canonicalizeRow(), ColumnSpec, HeaderResolution, IMPORT_FORMAT_IDS, IMPORT_FORMATS, ImportFormat, ImportFormatId (+16 more)
+
+### Community 14 - "Community 14"
+Cohesion: 0.07
+Nodes (27): 0. Ground rules (from AGENTS.md — non-negotiable), 2a. Types, 2b. Integrations mapping, 2c. Add/Edit modals + CSV import/export, 2d. Order-detail page — `/dashboard/sales/[id]`, 2e. Docs, 3a. Shared infrastructure, 3b. Per-feature rollout (order matters — do sales first, it's the template) (+19 more)
+
+### Community 15 - "Community 15"
+Cohesion: 0.19
+Nodes (24): AuditLogsPage(), EditSourceModal(), DropshippingPage(), AddExpenseModal(), EditExpenseModal(), ExpensesPage(), ConnectionCard(), ReviewPage() (+16 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.12
+Nodes (21): CURRENCIES, FormState, makeDefaults(), PLATFORMS, Props, today(), blankForm, CURRENCIES (+13 more)
+
+### Community 17 - "Community 17"
+Cohesion: 0.08
+Nodes (24): API Routes, Architecture, Constraints & Non-Goals, Dashboard layout hydration, Data Model, `dropship_listings` table (tenant schema), Dropshipping — Listing Management Design Spec, `EditSourceModal.tsx` — shadcn Dialog (+16 more)
+
+### Community 18 - "Community 18"
+Cohesion: 0.12
+Nodes (14): State, State, ImportPurchasesModal(), Props, TEMPLATE_EXAMPLE, TEMPLATE_HEADERS, VALID_CURRENCIES, validateRow() (+6 more)
+
+### Community 19 - "Community 19"
+Cohesion: 0.14
+Nodes (13): AuditLogDetailModal(), AUDIT_ACTIONS, PLATFORM_LABELS, STATUS_VARIANTS, PageProps, PlatformBadge(), StatusBadge(), formatDate() (+5 more)
+
+### Community 20 - "Community 20"
+Cohesion: 0.09
+Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent (+13 more)
+
+### Community 21 - "Community 21"
+Cohesion: 0.10
+Nodes (20): Amazon-only inputs, Amazon Referral Fee rates (UK), Architecture, Calculation Engine, Constraints & Non-Goals, Core formulas, Each platform form (two-column layout on desktop, stacked on mobile), eBay Final Value Fee rates (UK) (+12 more)
+
+### Community 22 - "Community 22"
+Cohesion: 0.14
+Nodes (13): Props, ParsedRow, fetchPurchasesPage, hydratePurchases, initialState, purchasesSlice, PurchasesState, computeGrossProfit() (+5 more)
+
+### Community 23 - "Community 23"
+Cohesion: 0.10
+Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
+
+### Community 24 - "Community 24"
+Cohesion: 0.13
+Nodes (16): FormState, blankForm, CATEGORIES, CURRENCIES, FormState, ImportExpensesModal(), Props, TEMPLATE_EXAMPLE (+8 more)
+
+### Community 25 - "Community 25"
+Cohesion: 0.18
+Nodes (11): Props, initialState, usersSlice, UsersState, currentUserSlice, CurrentUserState, initialState, DashboardStats (+3 more)
+
+### Community 26 - "Community 26"
+Cohesion: 0.11
+Nodes (18): dependencies, @base-ui/react, class-variance-authority, clsx, jspdf, jspdf-autotable, lucide-react, next (+10 more)
+
+### Community 27 - "Community 27"
+Cohesion: 0.23
+Nodes (13): CURRENCIES, normalizeCurrency(), normalizedOrderToSaleRow(), SaleInsert, ConnectionRow, ExchangeCodeResult, IntegrationsClient, NormalizedOrder (+5 more)
+
+### Community 28 - "Community 28"
+Cohesion: 0.15
+Nodes (10): Props, fetchInventoryPage, fetchInventorySelectors, hydrateProducts, initialState, inventorySlice, InventoryState, productNameFor() (+2 more)
+
+### Community 29 - "Community 29"
+Cohesion: 0.12
+Nodes (16): Checklist (check off as completed; re-grep before checking "imports fixed"), CLAUDE.md per feature should cover, Config & root docs — REMAINING, Expenses, Purchases, Users, Audit logs, Shared-lib tests, jest config — ALL DONE, Feature-folder reorg — working plan & progress tracker, Feature-private vs shared (decided — do not re-litigate), Feature roadmap — future work (separate from this reorg, tracked here for continuity), Final verification (+8 more)
+
+### Community 30 - "Community 30"
+Cohesion: 0.16
+Nodes (11): Props, ParsedRow, expensesSlice, ExpensesState, fetchExpensesPage, initialState, ExpenseInvoiceProps, ExpenseFilters (+3 more)
+
+### Community 31 - "Community 31"
+Cohesion: 0.12
+Nodes (15): Added, API, Architecture, ConnectionCard change, Data flow, `GET /api/integrations/review`, Integration Order Review — Design Spec, Modified (+7 more)
+
+### Community 32 - "Community 32"
+Cohesion: 0.12
+Nodes (15): 1. Status Vocabulary, 2. Lifecycle Transitions, 3. Database Migration, 4. First-Login Auto-Activation (`auth/confirm`), 5. Proxy Enforcement (`proxy.ts`), 6. New Page: `/account-deactivated`, 7. Admin UI Changes, 8. Files Touched (+7 more)
+
+### Community 33 - "Community 33"
+Cohesion: 0.12
+Nodes (16): devDependencies, eslint, eslint-config-next, jest, jest-environment-jsdom, @playwright/test, tailwindcss, @tailwindcss/postcss (+8 more)
+
+### Community 34 - "Community 34"
+Cohesion: 0.17
+Nodes (10): POST(), GET(), PLATFORMS, ReviewOrder, ReviewResponse, ALL_PLATFORMS, PLATFORM_LABELS, hasPlatformIntegrations() (+2 more)
+
+### Community 35 - "Community 35"
+Cohesion: 0.13
+Nodes (14): Global Constraints, Linked Purchase on Sale — Implementation Plan, Placeholder scan, Self-Review, Spec coverage, Task 1: DB migration + `Purchase` type, Task 2: `computeGrossProfit` pure helper + tests, Task 3: AddSaleModal — collapsible "Purchase cost" section (+6 more)
+
+### Community 36 - "Community 36"
+Cohesion: 0.13
+Nodes (14): Call site (inside each generate function), Files Changed, Invoice Custom Fields — Design Spec, Layout (below existing records summary card), New helper, Out of Scope, Passing to generate functions, PDF — generateInvoice (`src/lib/utils/generateInvoice.ts`) (+6 more)
+
+### Community 37 - "Community 37"
+Cohesion: 0.32
+Nodes (11): GET(), redirectToIntegrations(), redirectToIntegrationsWithError(), GET(), POST(), IntegrationAuthContext, IntegrationAuthResult, requireIntegrationAdmin() (+3 more)
+
+### Community 38 - "Community 38"
+Cohesion: 0.16
+Nodes (10): DashboardPage(), describeRange(), FALLBACK_COLORS, PLATFORM_COLORS, RANGE_PRESETS, CategoryBadge(), StatCard(), StatCardProps (+2 more)
+
+### Community 39 - "Community 39"
+Cohesion: 0.14
+Nodes (13): 1. Token Layer (`src/app/globals.css`), 2. Component Improvements, 3. Files to touch, 4. Out of scope, Badge (`src/components/ui/Badge.tsx`), Buttons, Dark theme additions (inside `[data-theme="dark"]`), DataTable / table rows (`src/components/ui/DataTable.tsx`) (+5 more)
+
+### Community 40 - "Community 40"
+Cohesion: 0.15
+Nodes (9): amazonAdapter, AmazonMoney, AmazonOrder, AmazonOrderItem, AmazonOrderItemsResponse, AmazonOrdersResponse, AmazonTokenResponse, ebayAdapter (+1 more)
+
+### Community 41 - "Community 41"
+Cohesion: 0.15
+Nodes (12): Branching — always work on a branch, Commit and push gates, During development (feature work), Feature folders, Mandatory docs update — SKILL.md and CLAUDE.md, Project structure: feature folders, SaaS migration (in progress), Shared vs. feature-private — how the split was decided (+4 more)
+
+### Community 42 - "Community 42"
+Cohesion: 0.15
+Nodes (12): Dropshipping Listing Management — Implementation Plan, Global Constraints, Self-Review, Task 1: DB Migration + TypeScript Types, Task 2: `detectPlatform` Utility + Tests, Task 3: `dropshippingSlice` + Tests, Task 4: Store Wiring + Sidebar Entry, Task 5: eBay Listings Fetcher + Scope Update (+4 more)
+
+### Community 43 - "Community 43"
+Cohesion: 0.15
+Nodes (12): Amazon Inbound Freight (Amazon FBA only), Break-even update, Calculation, Calculation, Constraints, Custom Charge Field (both planners), Files Changed, Overview (+4 more)
+
+### Community 44 - "Community 44"
+Cohesion: 0.19
+Nodes (10): Props, hydrateExpenses, ProductSelector, hydrateSales, auditLogsSlice, AuditLogsState, hydrateAuditLogs, StoreProvider() (+2 more)
+
+### Community 45 - "Community 45"
+Cohesion: 0.15
+Nodes (12): CSV import/export, Data flow (the pattern every mutation follows), Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`), Files in this folder, Inventory link + VAT (additive fields on `Sale`), Linked Purchase (cost of goods), Order status + returns (additive fields on `Sale`), Pagination data flow (+4 more)
+
+### Community 46 - "Community 46"
+Cohesion: 0.23
+Nodes (11): FormState, FormState, DashboardShell(), Props, LucideIcon, NAV_ITEMS, NavItem, Sidebar() (+3 more)
+
+### Community 47 - "Community 47"
+Cohesion: 0.17
+Nodes (11): Backend, `EditTenantModal`, Files touched, Frontend, Out of scope, `page.tsx`, Problem, Route: `PATCH /api/admin/tenants/[id]` (+3 more)
+
+### Community 48 - "Community 48"
+Cohesion: 0.23
+Nodes (8): IntegrationsContent(), PLATFORM_LABELS, PLATFORMS, hasMinimumRole(), hasPermission(), Permission, PERMISSIONS, ROLE_HIERARCHY
+
+### Community 49 - "Community 49"
+Cohesion: 0.17
+Nodes (11): ACTION_VARIANTS, ActionBadge(), BadgeProps, BadgeVariant, CATEGORY_LABELS, PLATFORM_LABELS, PLATFORM_VARIANTS, ROLE_VARIANTS (+3 more)
+
+### Community 50 - "Community 50"
+Cohesion: 0.17
+Nodes (11): Badge.tsx, Button.tsx, DataTable.tsx, FilterBar.tsx, FormFields.tsx, Modal.tsx, StatCard.tsx, ThemeProvider.tsx (+3 more)
+
+### Community 51 - "Community 51"
+Cohesion: 0.23
+Nodes (8): companyProfileSlice, CompanyProfileState, initialState, AppDispatch, AppStore, makeStore(), RootState, CompanyProfile
+
+### Community 52 - "Community 52"
+Cohesion: 0.24
+Nodes (8): Props, Props, TenantActions(), PLAN_VARIANT, STATUS_VARIANT, Badge(), Tenant, TenantStatus
+
+### Community 53 - "Community 53"
+Cohesion: 0.25
+Nodes (7): POST(), EbayInventoryItem, EbayListing, EbayOffer, fetchActiveListings(), ensureValidAccessToken(), getConnection()
+
+### Community 54 - "Community 54"
+Cohesion: 0.18
+Nodes (10): audit.ts, currency.ts, date.ts, filters.ts, generateInvoice.ts, Gotchas, invoiceMath.ts, permissions.ts (+2 more)
+
+### Community 55 - "Community 55"
+Cohesion: 0.20
+Nodes (9): 0. Ground rules (from AGENTS.md — non-negotiable), Decisions (defaults — apply unless Aamir objects), Implementation Plan — CSV Import Formats (source dropdown + German CSV support), Key current-state facts (verified 2026-07-04), Open questions for Aamir, Phase 1 — Locale-tolerant parsing primitives, Phase 2 — Format registry, Phase 3 — Modal UI + encoding + dedup (+1 more)
+
+### Community 56 - "Community 56"
+Cohesion: 0.20
+Nodes (10): scripts, build, dev, lint, prepare, start, test, test:e2e (+2 more)
+
+### Community 57 - "Community 57"
+Cohesion: 0.20
+Nodes (9): CSV import/export, Data flow (the pattern every mutation follows), Files in this folder, Inventory link + VAT (additive fields on `Purchase`), Pagination data flow, Purchases feature, Sale link (`sale_id`), Shared dependencies (live outside this folder on purpose) (+1 more)
+
+### Community 58 - "Community 58"
+Cohesion: 0.22
+Nodes (7): geistMono, geistSans, metadata, Theme, ThemeContext, ThemeContextValue, ThemeProvider()
+
+### Community 59 - "Community 59"
+Cohesion: 0.20
+Nodes (9): Adding a third platform, `external_order_id` dedup contract, Files, Gotchas, Merge rule (re-import field ownership), Platform integrations library (`src/lib/integrations/`), Review window, The `PlatformAdapter` interface (+1 more)
+
+### Community 60 - "Community 60"
+Cohesion: 0.22
+Nodes (8): Design Refresh (Emerald Light / Violet Dark) Implementation Plan, Global Constraints, Task 1: Update design tokens (`globals.css`), Task 2: Badge — vivid fill and font weight, Task 3: StatCard — left border accent, icon prop, hover lift, Task 4: Dashboard page — add icons to StatCards, Task 5: DataTable — primary-muted row hover, Task 6: Sidebar — active pill + icon colour + hover transition
+
+### Community 61 - "Community 61"
+Cohesion: 0.22
+Nodes (8): Global Constraints, Task 1: Database Migration, Task 2: TenantStatus Type + Admin UI, Task 3: API Route Fixes, Task 4: First-Login Auto-Activation (`auth/confirm`), Task 5: Proxy Enforcement + `/account-deactivated` Page, Task 6: Update CLAUDE.md, Tenant Status Lifecycle Implementation Plan
+
+### Community 62 - "Community 62"
+Cohesion: 0.31
+Nodes (6): EditSourceModalProps, ListingsTableProps, dropshippingSlice, DropshippingState, initialState, DropshipListing
+
+### Community 63 - "Community 63"
+Cohesion: 0.22
+Nodes (8): CSV import/export, Data flow (the pattern every mutation follows), Expenses feature, Files in this folder, Pagination data flow, Shared dependencies (live outside this folder on purpose), Tests, VAT (additive fields on `Expense`)
+
+### Community 64 - "Community 64"
+Cohesion: 0.22
+Nodes (8): Data flow (the pattern every mutation follows), Files in this folder, How stock levels actually update — read this before changing anything here, Inventory feature, Pagination data flow, Shared dependencies (live outside this folder on purpose), Split selector fetch (critical constraint), Tests
+
+### Community 65 - "Community 65"
+Cohesion: 0.22
+Nodes (8): Gotchas, Gotchas — CSV import formats (German support), Gotchas — detail page, Gotchas — fee fields, Gotchas — server-side pagination, Minimal file set for common changes, Test command, Working on the Sales feature
+
+### Community 66 - "Community 66"
+Cohesion: 0.25
+Nodes (7): basicAuthHeader(), EbayLineItem, EbayMoney, EbayOrder, EbayOrdersResponse, EbayTokenResponse, requestToken()
+
+### Community 67 - "Community 67"
+Cohesion: 0.25
+Nodes (7): API routes, Data flow, Dropshipping feature, eBay API notes, Files in this folder, Shared dependencies, Tests
+
+### Community 68 - "Community 68"
+Cohesion: 0.25
+Nodes (7): API routes, Data flow (different from other features), Files in this folder, Integrations feature, Plan gating, Shared dependencies, Tests
+
+### Community 69 - "Community 69"
+Cohesion: 0.36
+Nodes (5): ConnectionCardProps, initialState, integrationsSlice, IntegrationsState, PlatformConnection
+
+### Community 70 - "Community 70"
+Cohesion: 0.25
+Nodes (7): client.ts, control.ts, Gotcha: `src/proxy.ts` doesn't use either of these, managementApi.ts, server.ts, Supabase clients (`src/lib/supabase/`), Where these are used
+
+### Community 71 - "Community 71"
+Cohesion: 0.39
+Nodes (5): CsvValue, Delimiter, detectDelimiter(), parseCsvText(), parseLine()
+
+### Community 72 - "Community 72"
+Cohesion: 0.25
+Nodes (7): Apply order (for a fresh Project B, disaster recovery), File map + apply status, Gotchas, Index rationale (004_performance_indexes.sql), Supabase migrations (`supabase/`), The "2 places" rule for schema changes, Using `run_on_all_tenant_schemas`
+
+### Community 73 - "Community 73"
+Cohesion: 0.48
+Nodes (6): find_claude_md_areas(), main(), map_files_to_areas(), Path, Stop hook — the *trigger* half of the self-improving AI Layer.  After each Claud, run()
+
+### Community 74 - "Community 74"
+Cohesion: 0.48
+Nodes (6): find_claude_md_areas(), main(), map_files_to_areas(), Path, SessionStart hook — dynamic per-module orientation.  Prints a short orientation, run()
+
+### Community 75 - "Community 75"
+Cohesion: 0.29
+Nodes (6): Global Constraints, Invoice Custom Fields Implementation Plan, Self-Review, Task 1: Export `InvoiceOptions` type and add `addBillTo` helper to `generateInvoice.ts`, Task 2: Update `InvoiceModal` with customer info UI and extra fields, Task 3: Update docs
+
+### Community 77 - "Community 77"
+Cohesion: 0.29
+Nodes (6): Data flow, Files in this folder, Related files outside this folder (cannot be colocated), Shared dependencies (live outside this folder on purpose), Tests, Users feature
+
+### Community 78 - "Community 78"
+Cohesion: 0.33
+Nodes (5): Features, KaufNest Dashboard, Local Development, Stack, Testing
+
+### Community 79 - "Community 79"
+Cohesion: 0.33
+Nodes (5): API routes (cannot be colocated — Next.js pins routes to `app/api/...`), Files in this folder, KaufNest platform admin panel, Shared dependencies, Tests
+
+### Community 80 - "Community 80"
+Cohesion: 0.33
+Nodes (5): Auth feature, Files in this folder, Related files outside this folder (cannot be colocated), Shared dependencies, Tests
+
+### Community 81 - "Community 81"
+Cohesion: 0.33
+Nodes (5): Audit Logs feature, Files in this folder, Important: the slice lives elsewhere — on purpose, Shared dependencies, Tests
+
+### Community 82 - "Community 82"
+Cohesion: 0.33
+Nodes (5): Gotchas, Minimal file set for common changes, Pagination data flow, Test command, Working on the Audit Logs feature
+
+### Community 83 - "Community 83"
+Cohesion: 0.33
+Nodes (5): Cross-cutting state & infra, Dashboard shell + Overview, Feature folders (each documents itself — start there), Files at this level, Shared shell components (live outside, in `src/components/layout/`)
+
+### Community 84 - "Community 84"
+Cohesion: 0.33
+Nodes (5): Data flow, Files in this folder, Planner feature, Shared dependencies, Tests
+
+### Community 85 - "Community 85"
+Cohesion: 0.33
+Nodes (5): Files in this folder, Settings feature, Shared dependencies, Tests, Why `generateInvoice` is NOT colocated here
+
+### Community 86 - "Community 86"
+Cohesion: 0.40
+Nodes (4): mergeImportedSale(), PLATFORM_OWNED, existingSale, incomingSale
+
+### Community 87 - "Community 87"
+Cohesion: 0.70
+Nodes (4): main(), Path, read_truncated(), run()
+
+### Community 88 - "Community 88"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Auth feature
+
+### Community 89 - "Community 89"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Expenses feature
+
+### Community 90 - "Community 90"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Integrations feature
+
+### Community 91 - "Community 91"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Inventory feature
+
+### Community 92 - "Community 92"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Planner feature
+
+### Community 93 - "Community 93"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Purchases feature
+
+### Community 94 - "Community 94"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Settings feature
+
+### Community 95 - "Community 95"
+Cohesion: 0.40
+Nodes (4): Adding a new feature with its own Supabase collection, Overview page changes, Test command, Working on the Dashboard shell / Overview
+
+### Community 96 - "Community 96"
+Cohesion: 0.40
+Nodes (4): Gotchas, Minimal file set for common changes, Test command, Working on the Users feature
+
+### Community 97 - "Community 97"
+Cohesion: 0.40
+Nodes (4): buildCommand, framework, installCommand, regions
+
+### Community 98 - "Community 98"
+Cohesion: 0.50
+Nodes (3): name, private, version
+
+### Community 99 - "Community 99"
+Cohesion: 0.50
+Nodes (3): Gotchas, Minimal file set for common changes, Working on the admin panel
+
+### Community 100 - "Community 100"
+Cohesion: 0.50
+Nodes (3): Dropshipping — Agent Playbook, Gotchas, Minimal file set per change type
+
+### Community 101 - "Community 101"
+Cohesion: 0.50
+Nodes (3): Files, Related code, Supabase SQL (`supabase/`)
 
 ## Knowledge Gaps
-- **8 isolated node(s):** `Tenant Edit Design Spec`, `Integration Order Review Design Spec`, `Dropshipping Listing Management Design Spec`, `Design Refresh Design Spec`, `verifyPlatformAdmin Auth Guard` (+3 more)
+- **683 isolated node(s):** `husky.sh script`, `$schema`, `style`, `rsc`, `tsx` (+678 more)
   These have ≤1 connection - possible missing edges or undocumented components.
+- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Profit Planner Implementation Plan` connect `Planner VAT & Break-even Logic` to `Planner Fee Calculation Engine`, `Planner Custom Charges & Freight`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
-- **Are the 2 inferred relationships involving `Pure Profit Calculation Engine calcEbayResult calcAmazonResult` (e.g. with `Custom Charge Field Percent or Flat Fixed Per Unit` and `Amazon FBA Inbound Freight to Warehouse Field`) actually correct?**
-  _`Pure Profit Calculation Engine calcEbayResult calcAmazonResult` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Tenant Edit Design Spec`, `Integration Order Review Design Spec`, `Dropshipping Listing Management Design Spec` to the rest of the system?**
-  _13 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `dependencies` connect `Community 26` to `Community 98`, `Planner Custom Charges & Freight`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **Why does `stripe` connect `Planner Custom Charges & Freight` to `Community 26`?**
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
+- **Why does `createControlClient()` connect `Planner Custom Charges & Freight` to `Community 34`, `Community 27`, `Community 37`?**
+  _High betweenness centrality (0.021) - this node is a cross-community bridge._
+- **What connects `Stop hook — the *trigger* half of the self-improving AI Layer.  After each Claud`, `SessionStart hook — dynamic per-module orientation.  Prints a short orientation`, `husky.sh script` to the rest of the system?**
+  _690 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Planner VAT & Break-even Logic` be split into smaller, more focused modules?**
+  _Cohesion score 0.11067193675889328 - nodes in this community are weakly interconnected._
+- **Should `Planner Fee Calculation Engine` be split into smaller, more focused modules?**
+  _Cohesion score 0.06923076923076923 - nodes in this community are weakly interconnected._
+- **Should `Planner Custom Charges & Freight` be split into smaller, more focused modules?**
+  _Cohesion score 0.09437386569872959 - nodes in this community are weakly interconnected._

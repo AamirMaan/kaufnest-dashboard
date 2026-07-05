@@ -1,4 +1,9 @@
-import { validateRow } from "./ImportSalesModal";
+import { IMPORT_FORMATS, validateRowForFormat, type ParsedRow } from "./importFormats";
+
+/** Fee-field behavior is format-independent; these run against the generic format. */
+function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
+  return validateRowForFormat(IMPORT_FORMATS.generic, raw, rowNum);
+}
 
 /** Minimal valid row — used as the base for every variant test. */
 const BASE: Record<string, string> = {

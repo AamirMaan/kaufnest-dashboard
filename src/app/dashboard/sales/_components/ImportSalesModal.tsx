@@ -6,98 +6,37 @@ import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Field, Select } from "@/components/ui/FormFields";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
-import type { Sale, Platform, Currency } from "@/types";
+import {
+  IMPORT_FORMATS,
+  IMPORT_FORMAT_IDS,
+  resolveHeaders,
+  canonicalizeRow,
+  validateRowForFormat,
+  type ImportFormatId,
+  type ParsedRow,
+} from "./importFormats";
+import type { Sale, Platform } from "@/types";
 
-const VALID_PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
-const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
+const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
 
-const TEMPLATE_HEADERS = ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", ""];
-
-interface ParsedRow {
-  rowNum: number;
-  data: Omit<Sale, "id" | "created_by" | "created_at" | "product_id"> | null;
-  error: string | null;
-}
-
-export function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
-  const date = raw.date?.trim();
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid or missing "date" (expected YYYY-MM-DD)` };
-  }
-  const productName = raw.product_name?.trim();
-  if (!productName) {
-    return { rowNum, data: null, error: `Row ${rowNum}: missing "product_name"` };
-  }
-  const platformRaw = (raw.platform?.trim().toLowerCase() || "other") as Platform;
-  if (!VALID_PLATFORMS.includes(platformRaw)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid "platform" "${raw.platform}" — use: ${VALID_PLATFORMS.join(", ")}` };
-  }
-  const quantity = parseInt(raw.quantity?.trim(), 10);
-  if (!quantity || quantity <= 0) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "quantity" must be a positive integer` };
-  }
-  const unitPrice = parseFloat(raw.unit_price?.trim());
-  if (isNaN(unitPrice) || unitPrice <= 0) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "unit_price" must be a positive number` };
-  }
-  const currencyRaw = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currencyRaw)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid "currency" "${raw.currency}" — use: EUR, USD, GBP` };
-  }
-  const vatRateRaw = raw.vat_rate?.trim();
-  const vatRate = vatRateRaw ? parseFloat(vatRateRaw) : null;
-  if (vatRate !== null && (isNaN(vatRate) || vatRate < 0 || vatRate > 100)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "vat_rate" must be between 0 and 100` };
-  }
-  const totalAmount = quantity * unitPrice;
-  const vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
-
-  const shippingCostRaw = raw.shipping_cost?.trim();
-  const shippingCost = shippingCostRaw ? parseFloat(shippingCostRaw) : null;
-  if (shippingCost !== null && (isNaN(shippingCost) || shippingCost < 0)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "shipping_cost" must be a non-negative number` };
-  }
-
-  const shippingChargedRaw = raw.shipping_charged?.trim();
-  const shippingCharged = shippingChargedRaw ? parseFloat(shippingChargedRaw) : null;
-  if (shippingCharged !== null && (isNaN(shippingCharged) || shippingCharged < 0)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "shipping_charged" must be a non-negative number` };
-  }
-
-  const advertisingFeeRaw = raw.advertising_fee?.trim();
-  const advertisingFee = advertisingFeeRaw ? parseFloat(advertisingFeeRaw) : null;
-  if (advertisingFee !== null && (isNaN(advertisingFee) || advertisingFee < 0)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "advertising_fee" must be a non-negative number` };
-  }
-
-  const status = raw.status?.trim() || "pending";
-  return {
-    rowNum,
-    data: {
-      platform: platformRaw,
-      product_name: productName,
-      quantity,
-      unit_price: unitPrice,
-      total_amount: totalAmount,
-      currency: currencyRaw,
-      date,
-      description: raw.description?.trim() || null,
-      vat_rate: vatRate,
-      vat_amount: vatAmount,
-      shipping_cost: shippingCost,
-      shipping_charged: shippingCharged,
-      advertising_fee: advertisingFee,
-      status,
-      restock: false,
-      external_order_id: null,
-    },
-    error: null,
-  };
+/**
+ * Read a CSV file as text. Tries UTF-8 first; if the decode produced
+ * replacement characters (�), re-reads as windows-1252 — the encoding
+ * German Excel typically saves CSVs in.
+ */
+function readFileText(file: File): Promise<string> {
+  const readAs = (encoding?: string) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve((ev.target?.result as string) ?? "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(file, encoding);
+    });
+  return readAs().then((text) => (text.includes("�") ? readAs("windows-1252") : text));
 }
 
 interface Props {
@@ -109,17 +48,25 @@ interface Props {
 export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [formatId, setFormatId] = useState<ImportFormatId>("generic");
+  const [rawText, setRawText] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
+  const [checking, setChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const validRows = parsed.filter((r) => r.data !== null);
+  const format = IMPORT_FORMATS[formatId];
+  const requiredColumns = format.columns.filter((c) => c.required).map((c) => c.key);
+
   const errors = parsed.filter((r) => r.error !== null);
-  const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0;
+  const skipped = parsed.filter((r) => r.skipped);
+  const importable = parsed.filter((r) => r.data !== null && !r.skipped);
+  const canImport = parsed.length > 0 && errors.length === 0 && importable.length > 0 && !checking;
 
   function reset() {
     setParsed([]);
+    setRawText(null);
     setFileName("");
     setImportError(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -131,22 +78,110 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     onClose();
   }
 
+  /**
+   * Duplicate pre-check (plan decision I3): rows whose (platform,
+   * external_order_id) already exists in `sales` — or appear twice in the
+   * file — are marked skipped, never overwritten. Errors elsewhere still
+   * block the import; skips don't.
+   */
+  async function markDuplicates(rows: ParsedRow[]): Promise<ParsedRow[]> {
+    const seen = new Set<string>();
+    const withFileDupes = rows.map((r) => {
+      if (!r.data?.external_order_id) return r;
+      const key = `${r.data.platform}:${r.data.external_order_id}`;
+      if (seen.has(key)) return { ...r, skipped: "duplicate in file" };
+      seen.add(key);
+      return r;
+    });
+
+    const byPlatform = new Map<Platform, string[]>();
+    for (const r of withFileDupes) {
+      if (r.data?.external_order_id && !r.skipped) {
+        const list = byPlatform.get(r.data.platform) ?? [];
+        list.push(r.data.external_order_id);
+        byPlatform.set(r.data.platform, list);
+      }
+    }
+    if (byPlatform.size === 0) return withFileDupes;
+
+    setChecking(true);
+    try {
+      const supabase = await createTenantClient();
+      const existing = new Set<string>();
+      for (const [platform, ids] of byPlatform) {
+        for (let i = 0; i < ids.length; i += IN_CHUNK) {
+          const chunk = ids.slice(i, i + IN_CHUNK);
+          const { data, error } = await supabase
+            .from("sales")
+            .select("external_order_id")
+            .eq("platform", platform)
+            .in("external_order_id", chunk);
+          if (error) throw new Error(error.message);
+          for (const row of data ?? []) {
+            if (row.external_order_id) existing.add(`${platform}:${row.external_order_id}`);
+          }
+        }
+      }
+      return withFileDupes.map((r) =>
+        r.data?.external_order_id && !r.skipped && existing.has(`${r.data.platform}:${r.data.external_order_id}`)
+          ? { ...r, skipped: "order already exists" }
+          : r,
+      );
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function parseAndValidate(text: string, fmtId: ImportFormatId) {
+    const fmt = IMPORT_FORMATS[fmtId];
+    const { headers, rows } = parseCsvText(text);
+    if (rows.length === 0) {
+      setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
+      return;
+    }
+    const { mapping, missingRequired } = resolveHeaders(headers, fmt);
+    if (missingRequired.length > 0) {
+      setParsed([{
+        rowNum: 0,
+        data: null,
+        error: `Missing required column${missingRequired.length !== 1 ? "s" : ""}: ${missingRequired.join(", ")} — download the ${fmt.label} template or check the format dropdown.`,
+      }]);
+      return;
+    }
+    const validated = rows.map((row, i) =>
+      validateRowForFormat(fmt, canonicalizeRow(row, mapping), i + 2),
+    );
+    setParsed(validated); // show validation results immediately…
+    try {
+      setParsed(await markDuplicates(validated)); // …then refine with the dedup check
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Duplicate check failed");
+    }
+  }
+
+  function handleFormatChange(next: ImportFormatId) {
+    setFormatId(next);
+    setImportError(null);
+    if (rawText !== null) {
+      void parseAndValidate(rawText, next);
+    } else {
+      setParsed([]);
+    }
+  }
+
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setImportError(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const { rows } = parseCsvText(text);
-      if (rows.length === 0) {
-        setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
-        return;
-      }
-      setParsed(rows.map((row, i) => validateRow(row, i + 2)));
-    };
-    reader.readAsText(file);
+    readFileText(file)
+      .then((text) => {
+        setRawText(text);
+        return parseAndValidate(text, formatId);
+      })
+      .catch(() => {
+        setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
+      });
   }
 
   async function handleImport() {
@@ -157,7 +192,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const payload = validRows.map((r) => ({ ...r.data!, created_by: user.id }));
+    const payload = importable.map((r) => ({ ...r.data!, created_by: user.id }));
     const { data: inserted, error } = await supabase.from("sales").insert(payload).select();
     if (error) {
       setImportError(error.message);
@@ -172,7 +207,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       userEmail: user.email ?? "",
       action: "create",
       entityType: "sale",
-      metadata: { bulk_import: true, count: inserted.length },
+      metadata: { bulk_import: true, count: inserted.length, format: formatId, skipped: skipped.length },
     });
     if (log) dispatch(addAuditLog(log));
 
@@ -191,20 +226,34 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         <>
           <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
           <Button onClick={handleImport} disabled={!canImport || loading}>
-            {loading ? "Importing…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
+            {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${importable.length} row${importable.length !== 1 ? "s" : ""}` : "Import"}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <Field label="Import format">
+          <Select
+            value={formatId}
+            onChange={(e) => handleFormatChange(e.target.value as ImportFormatId)}
+          >
+            {IMPORT_FORMAT_IDS.map((id) => (
+              <option key={id} value={id}>{IMPORT_FORMATS[id].label}</option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Required columns: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">date, product_name, platform, quantity, unit_price</code>
+            Required columns: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{requiredColumns.join(", ")}</code>
+            <span className="block text-xs mt-1">
+              German CSVs work too — semicolons, decimal commas (9,99), dates like 15.01.2024, and German column names.
+            </span>
           </p>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => exportToCsv("sales-import-template", TEMPLATE_HEADERS, [TEMPLATE_EXAMPLE])}
+            onClick={() => exportToCsv(`sales-import-${formatId}-template`, format.templateHeaders, [format.templateExample])}
           >
             Template
           </Button>
@@ -222,9 +271,20 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
         {parsed.length > 0 && (
           <div className="space-y-2">
-            {validRows.length > 0 && errors.length === 0 && (
+            {checking && (
+              <p className="text-sm text-[var(--color-text-muted)]">Checking for existing orders…</p>
+            )}
+            {!checking && errors.length === 0 && importable.length > 0 && (
               <p className="text-sm text-[var(--color-success)]">
-                ✓ {validRows.length} row{validRows.length !== 1 ? "s" : ""} ready to import
+                ✓ {importable.length} row{importable.length !== 1 ? "s" : ""} ready to import
+                {skipped.length > 0 && (
+                  <span className="text-[var(--color-text-muted)]"> · {skipped.length} skipped (order already exists)</span>
+                )}
+              </p>
+            )}
+            {!checking && errors.length === 0 && importable.length === 0 && skipped.length > 0 && (
+              <p className="text-sm text-[var(--color-text-muted)]">
+                All {skipped.length} row{skipped.length !== 1 ? "s" : ""} skipped — these orders already exist.
               </p>
             )}
             {errors.length > 0 && (
