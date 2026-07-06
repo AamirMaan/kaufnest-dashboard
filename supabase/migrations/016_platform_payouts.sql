@@ -18,7 +18,7 @@ SELECT public.run_on_all_tenant_schemas($$
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     platform     TEXT NOT NULL CHECK (platform IN ('ebay', 'amazon')),
     amount       NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
-    currency     TEXT NOT NULL DEFAULT 'EUR',
+    currency     TEXT NOT NULL DEFAULT 'EUR' CHECK (currency IN ('EUR', 'USD', 'GBP')),
     date         DATE NOT NULL,
     notes        TEXT,
     created_by   UUID REFERENCES {{schema}}.profiles(id) ON DELETE SET NULL,
