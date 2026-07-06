@@ -238,6 +238,19 @@ BEGIN
     )
   $sql$, schema_name);
 
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.platform_payouts (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      platform     TEXT NOT NULL CHECK (platform IN ('ebay', 'amazon')),
+      amount       NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+      currency     TEXT NOT NULL DEFAULT 'EUR',
+      date         DATE NOT NULL,
+      notes        TEXT,
+      created_by   UUID REFERENCES %1$I.profiles(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
@@ -368,7 +381,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -425,6 +438,11 @@ BEGIN
   -- every operation including SELECT.
   EXECUTE format('CREATE POLICY "platform_connections_all_admin" ON %1$I.platform_connections FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
+  -- platform_payouts — all authenticated tenant members can read; write restricted to admin/super_admin
+  EXECUTE format('CREATE POLICY "platform_payouts_select" ON %1$I.platform_payouts FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
+  EXECUTE format('CREATE POLICY "platform_payouts_insert" ON %1$I.platform_payouts FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "platform_payouts_delete" ON %1$I.platform_payouts FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,
   -- 004_performance_indexes.sql) — every tenant gets the growth-oriented
@@ -460,6 +478,8 @@ BEGIN
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON %1$I.audit_logs (user_id)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON %1$I.audit_logs (entity_type, entity_id)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON %1$I.audit_logs (created_at DESC)', schema_name);
+
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_platform_payouts_platform_date ON %1$I.platform_payouts (platform, date)', schema_name);
 
   -- ── 7. Grants ───────────────────────────────────────────────
   -- create schema does NOT grant anything by default — without this every

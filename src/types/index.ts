@@ -39,6 +39,17 @@ export interface Expense {
   vat_amount: number | null;
 }
 
+export interface PlatformPayout {
+  id: string;
+  platform: "ebay" | "amazon";
+  amount: number;
+  currency: Currency;
+  date: string; // ISO date
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type Platform = "amazon" | "ebay" | "etsy" | "shopify" | "other";
 
 export interface Purchase {
