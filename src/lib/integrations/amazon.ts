@@ -84,10 +84,18 @@ export const amazonAdapter: PlatformAdapter = {
 
   getAuthUrl(state) {
     const params = new URLSearchParams({
-      application_id: process.env.AMAZON_LWA_CLIENT_ID ?? "",
+      // The Seller Central consent page expects the SP-API *application id*
+      // (amzn1.sellerapps.app…) — NOT the LWA client id
+      // (amzn1.application-oa2-client…), which is only used for token calls.
+      application_id: process.env.AMAZON_APP_ID ?? "",
       state,
       redirect_uri: redirectUri(),
     });
+    // Apps still in "Draft" status in Seller Central require version=beta on
+    // the consent URL; Amazon rejects the authorization without it.
+    if (process.env.AMAZON_APP_IS_DRAFT === "true") {
+      params.set("version", "beta");
+    }
     return `${LWA_AUTH_URL}?${params.toString()}`;
   },
 

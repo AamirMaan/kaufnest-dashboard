@@ -142,6 +142,21 @@ lookup against existing `sales` rows.
   `exchangeCode` pass `redirect_uri=process.env.EBAY_RU_NAME` (eBay's "RuName"
   identifier from the developer portal) — don't swap in
   `NEXT_PUBLIC_APP_URL`-based URLs for eBay.
+- **Amazon OAuth uses two different ids**: `AMAZON_APP_ID` (SP-API application
+  id, `amzn1.sellerapps.app…`) goes on the consent URL's `application_id`
+  param; `AMAZON_LWA_CLIENT_ID`/`_SECRET` (`amzn1.application-oa2-client…`)
+  are only for the token endpoint. Don't reuse one for the other — the consent
+  page rejects LWA client ids. Draft apps additionally need `version=beta` on
+  the consent URL (`AMAZON_APP_IS_DRAFT=true`).
+- **Amazon returns the auth code as `spapi_oauth_code`**, not `code` — the
+  shared callback route reads `code ?? spapi_oauth_code`. It also picks up
+  `selling_partner_id` from the same redirect. The redirect URI
+  (`${NEXT_PUBLIC_APP_URL}/api/integrations/amazon/callback`) must be HTTPS
+  and registered on the SP-API app in Seller Central.
+- **Amazon `fetchOrders` has no `NextToken` pagination or 429 handling** —
+  more than 100 orders in the review window get truncated, and large syncs
+  can hit SP-API rate limits on the per-order `orderItems` calls. Known v1
+  limitation.
 - **Amazon SP-API auth is bearer-only here** — `fetchOrders` sends
   `x-amz-access-token: <accessToken>` with no AWS SigV4 signing. If a future
   SP-API endpoint requires SigV4, that's a bigger change to `amazon.ts`, not

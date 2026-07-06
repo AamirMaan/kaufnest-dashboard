@@ -219,6 +219,33 @@ export default function DashboardPage() {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [periodExpenses]);
 
+  // Platform balance helpers: gross sales minus ad fees, outbound shipping, and any
+  // periodExpenses whose vendor or title contains the platform name (case-insensitive).
+  // Returns null when there are no effective sales for that platform (card is hidden).
+  const ebayBalance = useMemo(() => {
+    const ebaySales = effectiveSales.filter((s) => s.platform === "ebay");
+    if (ebaySales.length === 0) return null;
+    const sales = ebaySales.reduce((acc, s) => acc + s.total_amount, 0);
+    const adFees = ebaySales.reduce((acc, s) => acc + (s.advertising_fee ?? 0), 0);
+    const shippingFees = ebaySales.reduce((acc, s) => acc + (s.shipping_cost ?? 0), 0);
+    const expenses = periodExpenses
+      .filter((e) => e.vendor?.toLowerCase().includes("ebay") || e.title.toLowerCase().includes("ebay"))
+      .reduce((acc, e) => acc + e.amount, 0);
+    return { balance: sales - adFees - shippingFees - expenses, sales, adFees, shippingFees, expenses, count: ebaySales.length };
+  }, [effectiveSales, periodExpenses]);
+
+  const amazonBalance = useMemo(() => {
+    const amazonSales = effectiveSales.filter((s) => s.platform === "amazon");
+    if (amazonSales.length === 0) return null;
+    const sales = amazonSales.reduce((acc, s) => acc + s.total_amount, 0);
+    const adFees = amazonSales.reduce((acc, s) => acc + (s.advertising_fee ?? 0), 0);
+    const shippingFees = amazonSales.reduce((acc, s) => acc + (s.shipping_cost ?? 0), 0);
+    const expenses = periodExpenses
+      .filter((e) => e.vendor?.toLowerCase().includes("amazon") || e.title.toLowerCase().includes("amazon"))
+      .reduce((acc, e) => acc + e.amount, 0);
+    return { balance: sales - adFees - shippingFees - expenses, sales, adFees, shippingFees, expenses, count: amazonSales.length };
+  }, [effectiveSales, periodExpenses]);
+
   const showCharts = periodSales.length > 0 || periodExpenses.length > 0 || periodPurchases.length > 0;
 
   // Chart palette — recharts props are SVG attributes so CSS vars don't reliably resolve there;
@@ -319,6 +346,85 @@ export default function DashboardPage() {
           icon={<Package size={18} />}
         />
       </div>
+
+      {/* Platform balances — hidden when no sales for that platform in the period */}
+      {(ebayBalance !== null || amazonBalance !== null) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+          {ebayBalance !== null && (
+            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
+              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">
+                eBay Balance
+                <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
+                  {ebayBalance.count} order{ebayBalance.count !== 1 ? "s" : ""}
+                </span>
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard
+                  label="Sales"
+                  value={formatCurrency(ebayBalance.sales, profileCurrency)}
+                  trend="neutral"
+                  subtext="Gross revenue"
+                />
+                <StatCard
+                  label="Ad Fees + Shipping"
+                  value={formatCurrency(ebayBalance.adFees + ebayBalance.shippingFees, profileCurrency)}
+                  trend="down"
+                  subtext={`${formatCurrency(ebayBalance.adFees, profileCurrency)} ads · ${formatCurrency(ebayBalance.shippingFees, profileCurrency)} ship`}
+                />
+                <StatCard
+                  label="Expenses"
+                  value={formatCurrency(ebayBalance.expenses, profileCurrency)}
+                  trend="down"
+                  subtext="Vendor/title contains &quot;eBay&quot;"
+                />
+                <StatCard
+                  label="Balance"
+                  value={formatCurrency(ebayBalance.balance, profileCurrency)}
+                  trend={ebayBalance.balance >= 0 ? "up" : "down"}
+                  subtext="Sales − fees − expenses"
+                />
+              </div>
+            </div>
+          )}
+
+          {amazonBalance !== null && (
+            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
+              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">
+                Amazon Balance
+                <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
+                  {amazonBalance.count} order{amazonBalance.count !== 1 ? "s" : ""}
+                </span>
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <StatCard
+                  label="Sales"
+                  value={formatCurrency(amazonBalance.sales, profileCurrency)}
+                  trend="neutral"
+                  subtext="Gross revenue"
+                />
+                <StatCard
+                  label="Ad Fees + Shipping"
+                  value={formatCurrency(amazonBalance.adFees + amazonBalance.shippingFees, profileCurrency)}
+                  trend="down"
+                  subtext={`${formatCurrency(amazonBalance.adFees, profileCurrency)} ads · ${formatCurrency(amazonBalance.shippingFees, profileCurrency)} ship`}
+                />
+                <StatCard
+                  label="Expenses"
+                  value={formatCurrency(amazonBalance.expenses, profileCurrency)}
+                  trend="down"
+                  subtext="Vendor/title contains &quot;Amazon&quot;"
+                />
+                <StatCard
+                  label="Balance"
+                  value={formatCurrency(amazonBalance.balance, profileCurrency)}
+                  trend={amazonBalance.balance >= 0 ? "up" : "down"}
+                  subtext="Sales − fees − expenses"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Charts — hidden when there is no data in the period */}
       {showCharts && (
