@@ -24,7 +24,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
   if (auth.error) return auth.error;
   const { client, userId } = auth.context;
 
-  const code = req.nextUrl.searchParams.get("code");
+  // eBay returns the authorization code as the standard `code` param;
+  // Amazon SP-API returns it as `spapi_oauth_code`.
+  const code =
+    req.nextUrl.searchParams.get("code") ?? req.nextUrl.searchParams.get("spapi_oauth_code");
   const state = req.nextUrl.searchParams.get("state");
   const expectedState = req.cookies.get("kn_oauth_state")?.value;
 
