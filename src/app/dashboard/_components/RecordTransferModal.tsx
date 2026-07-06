@@ -8,6 +8,7 @@ import { useAppDispatch } from "@/store/hooks";
 import { addPayout } from "@/store/slices/platformPayoutsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/currency";
+import { useToast } from "@/components/ui/Toast";
 import type { Currency, PlatformPayout } from "@/types";
 
 interface Props {
@@ -28,6 +29,7 @@ export function RecordTransferModal({
   onSaved,
 }: Props) {
   const dispatch = useAppDispatch();
+  const { error: toastError } = useToast();
   const [amount, setAmount] = useState(
     pendingBalance > 0 ? pendingBalance.toFixed(2) : ""
   );
@@ -52,6 +54,12 @@ export function RecordTransferModal({
       data: { user },
     } = await supabase.auth.getUser();
 
+    if (!user) {
+      toastError("Session expired. Please refresh and try again.");
+      setSaving(false);
+      return;
+    }
+
     const { data, error: dbError } = await supabase
       .from("platform_payouts")
       .insert({
@@ -60,13 +68,13 @@ export function RecordTransferModal({
         currency,
         date,
         notes: notes.trim() || null,
-        created_by: user!.id,
+        created_by: user.id,
       })
       .select()
       .single<PlatformPayout>();
 
     if (dbError) {
-      setError(dbError.message);
+      toastError("Failed to record transfer. Please try again.");
       setSaving(false);
       return;
     }
@@ -134,7 +142,7 @@ export function RecordTransferModal({
         </Row>
 
         {overTransfer && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
+          <p className="text-xs text-amber-600">
             This amount exceeds the current pending balance (
             {formatCurrency(pendingBalance, currency)}). The Pending tile will go
             negative — this is allowed if earlier payouts are outside the selected
