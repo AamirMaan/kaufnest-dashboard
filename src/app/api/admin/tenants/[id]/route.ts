@@ -4,6 +4,13 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { verifyPlatformAdmin } from "../route";
 import type { TenantPlan, TenantStatus } from "@/types";
 
+function makeServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "object" && err !== null && "message" in err) {
@@ -54,10 +61,7 @@ export async function PATCH(
   // we return an error before writing anything to control.tenants.
   if (body.admin_email && body.admin_email !== tenant.admin_email) {
     try {
-      const service = createServiceClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+      const service = makeServiceClient();
 
       // No getUserByEmail in the Supabase JS admin API — scan all users.
       // perPage: 1000 avoids the default 50-row cap silently truncating results.
@@ -106,4 +110,76 @@ export async function PATCH(
   }
 
   return NextResponse.json({ tenant: updated });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const check = await verifyPlatformAdmin();
+  if (!check.ok) return check.response;
+
+  const { id } = await params;
+  const control = createControlClient();
+
+  // 1. Fetch tenant to get schema_name
+  const { data: tenant, error: fetchError } = await control
+    .schema("control")
+    .from("tenants")
+    .select("schema_name, name")
+    .eq("id", id)
+    .single();
+
+  if (fetchError) {
+    if ((fetchError as { code?: string }).code === "PGRST116") {
+      return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+    }
+    return NextResponse.json(
+      { error: "Failed to fetch tenant", detail: errorMessage(fetchError) },
+      { status: 500 }
+    );
+  }
+  if (!tenant) {
+    return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  }
+
+  const service = makeServiceClient();
+
+  // 2. Drop the tenant schema (IF EXISTS — safe to retry if schema was already gone)
+  const { error: dropError } = await service.rpc("drop_tenant_schema", {
+    schema_name: tenant.schema_name,
+  });
+  if (dropError) {
+    return NextResponse.json(
+      { error: "Failed to drop tenant schema", detail: errorMessage(dropError) },
+      { status: 500 }
+    );
+  }
+
+  // 3. Delete auth users belonging to this tenant (best-effort — schema is already gone)
+  const { data: { users }, error: listError } = await service.auth.admin.listUsers({ perPage: 1000 });
+  if (!listError) {
+    const tenantUsers = users.filter(
+      (u) => u.app_metadata?.tenant_schema === tenant.schema_name
+    );
+    await Promise.allSettled(
+      tenantUsers.map((u) => service.auth.admin.deleteUser(u.id))
+    );
+  }
+
+  // 4. Remove the control-plane record
+  const { error: deleteError } = await control
+    .schema("control")
+    .from("tenants")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) {
+    return NextResponse.json(
+      { error: "Schema dropped but failed to remove tenant record", detail: errorMessage(deleteError) },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
 }

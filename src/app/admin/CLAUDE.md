@@ -31,8 +31,11 @@ not tenant roles.
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
   (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
   button (only shown when `tenant.status === "invited"`; posts to
-  `/api/admin/resend-invite`), and an "Impersonate" button (prompts for
-  super_admin email, posts to `/api/admin/impersonate`, redirects to magic link).
+  `/api/admin/resend-invite`), an "Impersonate" button (prompts for
+  super_admin email, posts to `/api/admin/impersonate`, redirects to magic
+  link), and a **"Delete" button** (danger variant; two-step inline
+  confirmation → "Yes, delete" + "Cancel"; posts to
+  `DELETE /api/admin/tenants/[tenant.id]`; calls `onRefresh` on success).
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
 
@@ -80,16 +83,17 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   that aren't `instanceof Error`) — `AddTenantModal` surfaces `detail` to the
   admin via toast + inline banner.
 - **`tenants/route.ts`** (`GET`) — lists `control.tenants`, newest first.
-- **`tenants/[id]/route.ts`** (`PATCH`) — partial update for an existing
-  tenant. Accepts `{ plan?, status?, admin_email? }`. Steps: (1) fetch current
-  row from `control.tenants` — 404 on `PGRST116`, 500 on other DB errors;
-  (2) if `admin_email` changed, scan Project B Auth users with
-  `service.auth.admin.listUsers()`, find the user by old email, call
-  `updateUserById({ email: newEmail })` — returns 500 if this fails, before
-  touching `control.tenants`; (3) `.update(patch).eq("id", id)` on
-  `control.tenants` with only the fields that were sent. Returns
-  `{ tenant: updatedRow }`. This is a **platform-admin override** — writes
-  `plan`/`status` directly, bypassing Stripe webhooks.
+- **`tenants/[id]/route.ts`** (`PATCH`, `DELETE`) —
+  - `PATCH`: partial update for `{ plan?, status?, admin_email? }`. Steps: (1) fetch
+    current row — 404 on `PGRST116`; (2) if `admin_email` changed, scan Project B
+    Auth users and call `updateUserById`; (3) `.update(patch)` only changed fields.
+    Platform-admin override — writes `plan`/`status` directly, bypassing Stripe.
+  - `DELETE`: permanently destroys a tenant. Steps: (1) fetch tenant `schema_name`;
+    (2) `service.rpc("drop_tenant_schema", { schema_name })` (requires migration
+    `017_drop_tenant_schema.sql` applied in Project B) — returns 500 on failure;
+    (3) scan auth users by `app_metadata.tenant_schema` and delete them
+    (best-effort via `Promise.allSettled`); (4) delete row from `control.tenants`.
+    **Irreversible** — all tenant data is gone after step 2.
 - **`resend-invite/route.ts`** (`POST`) — resends the invite email for an
   existing tenant's `admin_email`. Verifies platform admin, looks up the tenant
   by `tenantId` from `control.tenants`, reads the admin's `full_name` from
