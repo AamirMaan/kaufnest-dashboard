@@ -18,6 +18,7 @@ import { setCurrentUser, setTenantPlan } from "@/store/slices/currentUserSlice";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
+import { hydratePayouts } from "@/store/slices/platformPayoutsSlice";
 import type {
   Sale,
   Expense,
@@ -29,6 +30,7 @@ import type {
   TenantPlan,
   PlatformConnection,
   DropshipListing,
+  PlatformPayout,
 } from "@/types";
 
 interface StoreProviderProps {
@@ -47,6 +49,7 @@ interface StoreProviderProps {
   tenantPlan?: TenantPlan | null;
   platformConnections?: PlatformConnection[];
   dropshipListings?: DropshipListing[];
+  platformPayouts?: PlatformPayout[];
 }
 
 export function StoreProvider({
@@ -63,6 +66,7 @@ export function StoreProvider({
   tenantPlan,
   platformConnections,
   dropshipListings,
+  platformPayouts,
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
@@ -78,6 +82,7 @@ export function StoreProvider({
     if (tenantPlan)        store.dispatch(setTenantPlan(tenantPlan));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
+    if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));
     return store;
   });
 

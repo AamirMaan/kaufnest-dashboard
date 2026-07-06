@@ -24,6 +24,8 @@ import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
 import { aggregateSaleRevenue } from "./_lib/aggregateSales";
+import { computePending } from "./_lib/platformBalance";
+import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
@@ -79,6 +81,11 @@ export default function DashboardPage() {
     useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const { theme } = useTheme();
 
+  const payouts = useAppSelector((s) => s.platformPayouts.items);
+  const currentUserRole = useAppSelector((s) => s.currentUser.profile?.role);
+  const canRecordTransfer = currentUserRole === "admin" || currentUserRole === "super_admin";
+  const [transferModal, setTransferModal] = useState<"ebay" | "amazon" | null>(null);
+
   const [preset, setPreset] = useState<DatePreset>("this_month");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -116,6 +123,15 @@ export default function DashboardPage() {
           (range ? p.date >= range.from && p.date <= range.to : true)
       ),
     [purchases, range, profileCurrency]
+  );
+  const periodPayouts = useMemo(
+    () =>
+      payouts.filter(
+        (p) =>
+          p.currency === profileCurrency &&
+          (range ? p.date >= range.from && p.date <= range.to : true)
+      ),
+    [payouts, range, profileCurrency]
   );
 
   // Returned/cancelled orders don't contribute to revenue/profit — exclude them
@@ -231,8 +247,20 @@ export default function DashboardPage() {
     const expenses = periodExpenses
       .filter((e) => e.vendor?.toLowerCase().includes("ebay") || e.title.toLowerCase().includes("ebay"))
       .reduce((acc, e) => acc + e.amount, 0);
-    return { balance: sales - adFees - shippingFees - expenses, sales, adFees, shippingFees, expenses, count: ebaySales.length };
-  }, [effectiveSales, periodExpenses]);
+    const balance = sales - adFees - shippingFees - expenses;
+    const ebayPayouts = periodPayouts.filter((p) => p.platform === "ebay");
+    const transferred = ebayPayouts.reduce((acc, p) => acc + p.amount, 0);
+    return {
+      balance,
+      sales,
+      adFees,
+      shippingFees,
+      expenses,
+      transferred,
+      pending: computePending(balance, ebayPayouts),
+      count: ebaySales.length,
+    };
+  }, [effectiveSales, periodExpenses, periodPayouts]);
 
   const amazonBalance = useMemo(() => {
     const amazonSales = effectiveSales.filter((s) => s.platform === "amazon");
@@ -243,8 +271,20 @@ export default function DashboardPage() {
     const expenses = periodExpenses
       .filter((e) => e.vendor?.toLowerCase().includes("amazon") || e.title.toLowerCase().includes("amazon"))
       .reduce((acc, e) => acc + e.amount, 0);
-    return { balance: sales - adFees - shippingFees - expenses, sales, adFees, shippingFees, expenses, count: amazonSales.length };
-  }, [effectiveSales, periodExpenses]);
+    const balance = sales - adFees - shippingFees - expenses;
+    const amazonPayouts = periodPayouts.filter((p) => p.platform === "amazon");
+    const transferred = amazonPayouts.reduce((acc, p) => acc + p.amount, 0);
+    return {
+      balance,
+      sales,
+      adFees,
+      shippingFees,
+      expenses,
+      transferred,
+      pending: computePending(balance, amazonPayouts),
+      count: amazonSales.length,
+    };
+  }, [effectiveSales, periodExpenses, periodPayouts]);
 
   const showCharts = periodSales.length > 0 || periodExpenses.length > 0 || periodPurchases.length > 0;
 
@@ -352,12 +392,22 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
           {ebayBalance !== null && (
             <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">
-                eBay Balance
-                <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
-                  {ebayBalance.count} order{ebayBalance.count !== 1 ? "s" : ""}
-                </span>
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-(--color-text-base)">
+                  eBay Balance
+                  <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
+                    {ebayBalance.count} order{ebayBalance.count !== 1 ? "s" : ""}
+                  </span>
+                </h2>
+                {canRecordTransfer && (
+                  <button
+                    onClick={() => setTransferModal("ebay")}
+                    className="text-xs font-medium px-2.5 py-1 rounded-(--radius-btn) bg-(--color-primary-muted) text-(--color-primary-text) hover:bg-(--color-primary) hover:text-white transition-colors cursor-pointer"
+                  >
+                    Record Transfer
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <StatCard
                   label="Sales"
@@ -378,10 +428,22 @@ export default function DashboardPage() {
                   subtext="Vendor/title contains &quot;eBay&quot;"
                 />
                 <StatCard
-                  label="Balance"
+                  label="Balance Earned"
                   value={formatCurrency(ebayBalance.balance, profileCurrency)}
                   trend={ebayBalance.balance >= 0 ? "up" : "down"}
                   subtext="Sales − fees − expenses"
+                />
+                <StatCard
+                  label="Transferred"
+                  value={formatCurrency(ebayBalance.transferred, profileCurrency)}
+                  trend="neutral"
+                  subtext="Paid out to bank"
+                />
+                <StatCard
+                  label="Pending"
+                  value={formatCurrency(ebayBalance.pending, profileCurrency)}
+                  trend={ebayBalance.pending >= 0 ? "up" : "down"}
+                  subtext="Still in eBay account"
                 />
               </div>
             </div>
@@ -389,12 +451,22 @@ export default function DashboardPage() {
 
           {amazonBalance !== null && (
             <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">
-                Amazon Balance
-                <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
-                  {amazonBalance.count} order{amazonBalance.count !== 1 ? "s" : ""}
-                </span>
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-(--color-text-base)">
+                  Amazon Balance
+                  <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
+                    {amazonBalance.count} order{amazonBalance.count !== 1 ? "s" : ""}
+                  </span>
+                </h2>
+                {canRecordTransfer && (
+                  <button
+                    onClick={() => setTransferModal("amazon")}
+                    className="text-xs font-medium px-2.5 py-1 rounded-(--radius-btn) bg-(--color-primary-muted) text-(--color-primary-text) hover:bg-(--color-primary) hover:text-white transition-colors cursor-pointer"
+                  >
+                    Record Transfer
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <StatCard
                   label="Sales"
@@ -415,10 +487,22 @@ export default function DashboardPage() {
                   subtext="Vendor/title contains &quot;Amazon&quot;"
                 />
                 <StatCard
-                  label="Balance"
+                  label="Balance Earned"
                   value={formatCurrency(amazonBalance.balance, profileCurrency)}
                   trend={amazonBalance.balance >= 0 ? "up" : "down"}
                   subtext="Sales − fees − expenses"
+                />
+                <StatCard
+                  label="Transferred"
+                  value={formatCurrency(amazonBalance.transferred, profileCurrency)}
+                  trend="neutral"
+                  subtext="Paid out to bank"
+                />
+                <StatCard
+                  label="Pending"
+                  value={formatCurrency(amazonBalance.pending, profileCurrency)}
+                  trend={amazonBalance.pending >= 0 ? "up" : "down"}
+                  subtext="Still in Amazon account"
                 />
               </div>
             </div>
@@ -647,6 +731,20 @@ export default function DashboardPage() {
           above reflect the selected date range and use EUR as the base currency.
         </p>
       </div>
+
+      {transferModal !== null && (
+        <RecordTransferModal
+          platform={transferModal}
+          currency={profileCurrency}
+          pendingBalance={
+            transferModal === "ebay"
+              ? (ebayBalance?.pending ?? 0)
+              : (amazonBalance?.pending ?? 0)
+          }
+          onClose={() => setTransferModal(null)}
+          onSaved={() => setTransferModal(null)}
+        />
+      )}
     </div>
   );
 }

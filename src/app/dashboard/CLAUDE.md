@@ -51,6 +51,14 @@ broadly when working on a specific feature.**
     `PieChart` donut (Revenue by Platform, 1/3 width + custom legend)
   - **Top Products** and **Expenses by Category** side-by-side in a 2-col grid
     (each hidden when empty)
+  - **Platform balance cards** (eBay / Amazon, one per connected platform): each
+    card shows 6 tiles in a 2×3 layout — Sales, Ad Fees + Shipping, Expenses,
+    Balance Earned, Transferred, Pending. Platform balance cards also compute
+    `transferred` (sum of `periodPayouts` for the platform) and
+    `pending = balance − transferred`. A "Record Transfer" button
+    (admin/super_admin only) opens `RecordTransferModal`
+    (`_components/RecordTransferModal.tsx`). `periodPayouts` is filtered from
+    `state.platformPayouts.items` by currency + date range.
   Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
   are passed to recharts props (CSS variables don't render reliably inside SVG).
   No feature-private code — has no `_components`/`_store` of its own.
