@@ -26,7 +26,7 @@ import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/fi
 import { aggregateSaleRevenue } from "./_lib/aggregateSales";
 import { computePending } from "./_lib/platformBalance";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
-import type { ExpenseCategory, PlatformPayout } from "@/types";
+import type { ExpenseCategory } from "@/types";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "this_month", label: "This Month" },
