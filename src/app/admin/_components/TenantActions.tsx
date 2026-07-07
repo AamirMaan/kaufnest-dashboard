@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { EditTenantModal } from "./EditTenantModal";
+import { DeleteTenantModal } from "./DeleteTenantModal";
 import type { Tenant } from "@/types";
 
 interface Props {
@@ -16,8 +17,7 @@ export function TenantActions({ tenant, onRefresh }: Props) {
   const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   async function handleResendInvite() {
     setResending(true);
@@ -35,23 +35,6 @@ export function TenantActions({ tenant, onRefresh }: Props) {
       }
     } finally {
       setResending(false);
-    }
-  }
-
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/admin/tenants/${tenant.id}`, { method: "DELETE" });
-      const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
-      if (res.ok) {
-        success("Tenant deleted", `${tenant.name} and all its data have been permanently deleted.`);
-        onRefresh();
-      } else {
-        toastError("Delete failed", data.detail ?? data.error ?? "Could not delete tenant.");
-      }
-    } finally {
-      setDeleting(false);
-      setConfirmDelete(false);
     }
   }
 
@@ -96,20 +79,9 @@ export function TenantActions({ tenant, onRefresh }: Props) {
         <Button variant="secondary" onClick={handleImpersonate} disabled={loading}>
           {loading ? "Loading…" : "Impersonate"}
         </Button>
-        {confirmDelete ? (
-          <>
-            <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Yes, delete"}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
-              Cancel
-            </Button>
-          </>
-        ) : (
-          <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
-            Delete
-          </Button>
-        )}
+        <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
+          Delete
+        </Button>
       </div>
 
       <EditTenantModal
@@ -117,6 +89,15 @@ export function TenantActions({ tenant, onRefresh }: Props) {
         tenant={tenant}
         onClose={() => {
           setEditOpen(false);
+          onRefresh();
+        }}
+      />
+      <DeleteTenantModal
+        open={deleteOpen}
+        tenant={tenant}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          setDeleteOpen(false);
           onRefresh();
         }}
       />
