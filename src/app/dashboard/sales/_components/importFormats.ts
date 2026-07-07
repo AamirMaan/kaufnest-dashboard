@@ -33,6 +33,8 @@ export interface ParsedRow {
   error: string | null;
   /** Set by the modal's duplicate pre-check (I3) — row is valid but not imported. */
   skipped?: string | null;
+  /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
+  sku?: string | null;
 }
 
 interface ColumnSpec {
@@ -71,6 +73,7 @@ const ALIASES: Record<string, string[]> = {
   shipping_cost: ["shipping_cost", "versandkosten_bezahlt", "eigene versandkosten"],
   advertising_fee: ["advertising_fee", "werbekosten", "anzeigenkosten", "werbegebühr", "werbegebuehr"],
   order_id: ["order_id", "order-id", "bestellnummer", "bestell-nr", "bestellnr", "auftragsnummer", "external_order_id"],
+  sku: ["sku", "artikel-nr", "artikelnr", "artikelnummer"],
 };
 
 function col(key: string, required: boolean): ColumnSpec {
@@ -93,9 +96,10 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("advertising_fee", false),
   col("status", false),
   col("description", false),
+  col("sku", false),
 ];
 
-const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "shipping_charged", "shipping_cost", "advertising_fee", "status", "description"];
+const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "shipping_charged", "shipping_cost", "advertising_fee", "status", "description", "sku"];
 
 export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
   generic: {
@@ -117,9 +121,10 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
       col("shipping_charged", false),
       col("advertising_fee", false),
       col("order_id", false),
+      col("sku", false),
     ],
-    templateHeaders: ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee"],
-    templateExample: ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", ""],
+    templateHeaders: ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "sku"],
+    templateExample: ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", "", ""],
   },
   amazon: {
     id: "amazon",
@@ -128,7 +133,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
-    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "4,99", "3,20", "1,50", "shipped", ""],
+    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "4,99", "3,20", "1,50", "shipped", "", "WIDGET-BLU"],
   },
   ebay: {
     id: "ebay",
@@ -136,7 +141,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     forcedPlatform: "ebay",
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
-    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "5,99", "4,10", "0,80", "shipped", "Promoted Listings fee in advertising_fee"],
+    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "5,99", "4,10", "0,80", "shipped", "Promoted Listings fee in advertising_fee", "WIDGET-BLU"],
   },
 };
 
@@ -324,5 +329,6 @@ export function validateRowForFormat(
       external_order_id: externalOrderId,
     },
     error: null,
+    sku: raw.sku?.trim() || null,
   };
 }
