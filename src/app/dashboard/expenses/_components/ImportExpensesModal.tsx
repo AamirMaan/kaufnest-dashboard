@@ -10,6 +10,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
+import { parseExcelBuffer } from "@/lib/utils/excel";
 import type { Expense, ExpenseCategory, Currency } from "@/types";
 
 const VALID_CATEGORIES: ExpenseCategory[] = [
@@ -106,17 +107,33 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     if (!file) return;
     setFileName(file.name);
     setImportError(null);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const { rows } = parseCsvText(text);
-      if (rows.length === 0) {
-        setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
-        return;
-      }
-      setParsed(rows.map((row, i) => validateRow(row, i + 2)));
-    };
-    reader.readAsText(file);
+
+    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+    const load = isExcel
+      ? new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(parseExcelBuffer(ev.target!.result as ArrayBuffer));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsArrayBuffer(file);
+        })
+      : new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(parseCsvText(ev.target?.result as string));
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(file);
+        });
+
+    load
+      .then(({ rows }) => {
+        if (rows.length === 0) {
+          setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
+          return;
+        }
+        setParsed(rows.map((row, i) => validateRow(row, i + 2)));
+      })
+      .catch(() => {
+        setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
+      });
   }
 
   async function handleImport() {
@@ -169,7 +186,10 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Required columns: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">date, title, amount</code>
+            Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">date, title, amount</code>
+            <span className="block text-xs mt-1">
+              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">category, vendor, currency, vat_rate, description</code>
+            </span>
           </p>
           <Button
             size="sm"
@@ -185,9 +205,10 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
           onClick={() => fileRef.current?.click()}
         >
           <span className="text-sm text-[var(--color-text-muted)]">
-            {fileName || "Click to select a CSV file"}
+            {fileName || "Click to select a CSV or Excel file"}
           </span>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+          <span className="text-xs text-[var(--color-text-muted)]">.csv · .xlsx · .xls</span>
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={handleFile} />
         </div>
 
         {parsed.length > 0 && (
