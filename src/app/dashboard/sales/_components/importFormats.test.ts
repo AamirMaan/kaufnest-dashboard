@@ -209,4 +209,31 @@ describe("validateRowForFormat — generic (back-compat + new tolerance)", () =>
     const r = validateRowForFormat(GENERIC, { ...BASE, vat_rate: "19" }, 2);
     expect(r.data?.vat_amount).toBe(7.98); // 49.95 × 19/119 = 7.9752 → rounded
   });
+
+  it("sku present → carried on ParsedRow.sku, absent from data", () => {
+    const r = validateRowForFormat(GENERIC, { ...BASE, sku: "WIDGET-BLU" }, 2);
+    expect(r.error).toBeNull();
+    expect(r.sku).toBe("WIDGET-BLU");
+    // product_id resolution happens in the modal, not here
+    expect(r.data).not.toHaveProperty("product_id");
+  });
+
+  it("sku blank/absent → ParsedRow.sku is null", () => {
+    expect(validateRowForFormat(GENERIC, BASE, 2).sku).toBeNull();
+    expect(validateRowForFormat(GENERIC, { ...BASE, sku: "  " }, 2).sku).toBeNull();
+  });
+});
+
+describe("resolveHeaders — sku aliases", () => {
+  it("'artikelnummer' resolves to sku", () => {
+    const { mapping } = resolveHeaders(["date", "product_name", "quantity", "unit_price", "artikelnummer"], GENERIC);
+    expect(mapping.get("artikelnummer")).toBe("sku");
+  });
+
+  it("'sku' resolves to sku in all formats", () => {
+    for (const fmt of [GENERIC, AMAZON, EBAY]) {
+      const { mapping } = resolveHeaders(["sku"], fmt);
+      expect(mapping.get("sku")).toBe("sku");
+    }
+  });
 });

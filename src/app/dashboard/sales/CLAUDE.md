@@ -243,7 +243,15 @@ Optional in all formats: `unit_price`/`total` (see rule below), `currency`
 `normalizeStatus` — `versandt`→`shipped`, `storniert`→`cancelled`, etc.; other
 custom strings pass through; default `"pending"`), `description`,
 `shipping_cost`, `shipping_charged`, `advertising_fee` (blank → `null`,
-non-numeric or negative → row error).
+non-numeric or negative → row error), **`sku`** (German aliases: `artikel-nr`,
+`artikelnr`, `artikelnummer`; blank/absent → no link). When `sku` matches a
+product in the hydrated Redux inventory (`state.inventory.items`), the modal
+sets `product_id` on the inserted row, triggering the `sales_stock_change` DB
+trigger to decrement stock automatically. The match is case-insensitive.
+`ParsedRow.sku` carries the raw SKU string out of `validateRowForFormat`;
+`product_id` is resolved in `ImportSalesModal.handleImport` using a
+`Map<string, string>` built from `inventoryItems` — resolution is intentionally
+deferred to the modal so `importFormats.ts` stays pure and testable.
 
 **German tolerance (all formats):** delimiter auto-detect (`,`/`;`/tab —
 `lib/utils/csv.ts → detectDelimiter`), BOM strip, decimal commas and thousands
@@ -267,8 +275,9 @@ Matches are marked **skipped** — shown as "N skipped (order already exists)" �
 and are never overwritten (same protection as the integrations re-sync merge
 rule). Skips don't block importing the remaining rows; validation errors still do.
 
-`product_id` is NOT in any import format — imports create unlinked records; user
-can link via Edit afterward. `vat_amount` is computed via `vatAmountFromGross`
+`product_id` is resolved automatically when the row carries a `sku` that matches
+an inventory product (see `sku` above); otherwise it is `null` — user can link
+via Edit afterward. `vat_amount` is computed via `vatAmountFromGross`
 over `total_amount`. `restock` is always `false` for imported rows (not
 importable — edit the record afterward to mark it returned/restockable).
 Audit log: one entry for the whole batch with `{ bulk_import, count, format,

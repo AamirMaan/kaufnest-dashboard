@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useAppDispatch } from "@/store/hooks";
+import { useRef, useState, useMemo } from "react";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
@@ -47,6 +47,7 @@ interface Props {
 
 export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const inventoryItems = useAppSelector((s) => s.inventory.items);
   const fileRef = useRef<HTMLInputElement>(null);
   const [formatId, setFormatId] = useState<ImportFormatId>("generic");
   const [rawText, setRawText] = useState<string | null>(null);
@@ -56,6 +57,15 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
+  // Case-insensitive SKU → product ID lookup built from the hydrated inventory.
+  const skuToProductId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of inventoryItems) {
+      if (p.sku) map.set(p.sku.toLowerCase(), p.id);
+    }
+    return map;
+  }, [inventoryItems]);
+
   const format = IMPORT_FORMATS[formatId];
   const requiredColumns = format.columns.filter((c) => c.required).map((c) => c.key);
 
@@ -63,6 +73,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const skipped = parsed.filter((r) => r.skipped);
   const importable = parsed.filter((r) => r.data !== null && !r.skipped);
   const canImport = parsed.length > 0 && errors.length === 0 && importable.length > 0 && !checking;
+
+  const skuMatchCount = importable.filter(
+    (r) => r.sku && skuToProductId.has(r.sku.toLowerCase()),
+  ).length;
 
   function reset() {
     setParsed([]);
@@ -192,7 +206,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const payload = importable.map((r) => ({ ...r.data!, created_by: user.id }));
+    const payload = importable.map((r) => {
+      const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
+      return { ...r.data!, created_by: user.id, product_id: productId };
+    });
     const { data: inserted, error } = await supabase.from("sales").insert(payload).select();
     if (error) {
       setImportError(error.message);
@@ -277,6 +294,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
             {!checking && errors.length === 0 && importable.length > 0 && (
               <p className="text-sm text-[var(--color-success)]">
                 ✓ {importable.length} row{importable.length !== 1 ? "s" : ""} ready to import
+                {skuMatchCount > 0 && (
+                  <span className="text-[var(--color-text-muted)]"> · {skuMatchCount} linked to inventory via SKU</span>
+                )}
                 {skipped.length > 0 && (
                   <span className="text-[var(--color-text-muted)]"> · {skipped.length} skipped (order already exists)</span>
                 )}
