@@ -64,13 +64,13 @@ export function parseLocaleNumber(input: string | undefined): number | null {
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DE_DATE = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/;
+const DE_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
 
 /**
- * Parse a date that is either ISO ("2024-01-15") or German
- * ("15.01.2024", "1.2.2024", also "/" as separator) and return ISO
- * `YYYY-MM-DD`. Validates real calendar dates. Two-digit years are
- * rejected (too ambiguous) → returns `null`.
+ * Parse a date that is either ISO ("2024-01-15") or German/European
+ * DD-first format ("15.01.2024", "26-03-2026", "26/03/2026") and return
+ * ISO `YYYY-MM-DD`. Accepts `.`, `/`, or `-` as DD-first separators.
+ * Validates real calendar dates. Two-digit years are rejected → returns `null`.
  */
 export function parseFlexibleDate(input: string | undefined): string | null {
   const s = input?.trim();

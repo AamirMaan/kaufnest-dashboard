@@ -3,6 +3,7 @@ import {
   resolveHeaders,
   canonicalizeRow,
   normalizeStatus,
+  normalizePlatform,
   validateRowForFormat,
 } from "./importFormats";
 
@@ -176,6 +177,23 @@ describe("validateRowForFormat — generic (back-compat + new tolerance)", () =>
     expect(validateRowForFormat(GENERIC, { ...BASE, platform: "walmart" }, 2).error).toMatch(/platform/);
   });
 
+  it("regional amazon variants normalize to amazon", () => {
+    expect(validateRowForFormat(GENERIC, { ...BASE, platform: "amazon.de" }, 2).data?.platform).toBe("amazon");
+    expect(validateRowForFormat(GENERIC, { ...BASE, platform: "amazon.nl" }, 2).data?.platform).toBe("amazon");
+    expect(validateRowForFormat(GENERIC, { ...BASE, platform: "amazon.co.uk" }, 2).data?.platform).toBe("amazon");
+  });
+
+  it("regional ebay variants normalize to ebay", () => {
+    expect(validateRowForFormat(GENERIC, { ...BASE, platform: "ebay.de" }, 2).data?.platform).toBe("ebay");
+    expect(validateRowForFormat(GENERIC, { ...BASE, platform: "eBay.nl" }, 2).data?.platform).toBe("ebay");
+  });
+
+  it("date with dash separator DD-MM-YYYY accepted", () => {
+    const r = validateRowForFormat(GENERIC, { ...BASE, date: "26-03-2026" }, 2);
+    expect(r.error).toBeNull();
+    expect(r.data?.date).toBe("2026-03-26");
+  });
+
   it("German date + decimal comma accepted (I5)", () => {
     const r = validateRowForFormat(GENERIC, { ...BASE, date: "15.01.2024", unit_price: "9,99" }, 2);
     expect(r.error).toBeNull();
@@ -221,6 +239,24 @@ describe("validateRowForFormat — generic (back-compat + new tolerance)", () =>
   it("sku blank/absent → ParsedRow.sku is null", () => {
     expect(validateRowForFormat(GENERIC, BASE, 2).sku).toBeNull();
     expect(validateRowForFormat(GENERIC, { ...BASE, sku: "  " }, 2).sku).toBeNull();
+  });
+});
+
+describe("normalizePlatform", () => {
+  it.each<[string, string]>([
+    ["amazon", "amazon"],
+    ["amazon.de", "amazon"],
+    ["amazon.nl", "amazon"],
+    ["amazon.co.uk", "amazon"],
+    ["Amazon.de", "amazon"],
+    ["ebay", "ebay"],
+    ["ebay.de", "ebay"],
+    ["eBay", "ebay"],
+    ["shopify", "shopify"],
+    ["etsy", "etsy"],
+    ["other", "other"],
+  ])("%s → %s", (input, expected) => {
+    expect(normalizePlatform(input)).toBe(expected);
   });
 });
 
