@@ -181,6 +181,19 @@ export function canonicalizeRow(raw: Record<string, string>, mapping: Map<string
   return out;
 }
 
+// ─── Platform normalization ───────────────────────────────────────────────────
+
+/**
+ * Normalize regional marketplace variants to the canonical Platform value.
+ * "amazon.de", "amazon.nl", "amazon.co.uk" → "amazon"; "ebay.de" → "ebay".
+ */
+export function normalizePlatform(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  if (s.startsWith("amazon")) return "amazon";
+  if (s.startsWith("ebay")) return "ebay";
+  return s;
+}
+
 // ─── Status normalization (I8) ────────────────────────────────────────────────
 
 const STATUS_SYNONYMS: Record<string, string> = {
@@ -220,7 +233,7 @@ export function validateRowForFormat(
 
   const date = parseFlexibleDate(raw.date);
   if (!date) {
-    return fail(`invalid or missing "date" (expected YYYY-MM-DD or DD.MM.YYYY)`);
+    return fail(`invalid or missing "date" (expected YYYY-MM-DD, DD.MM.YYYY, or DD-MM-YYYY)`);
   }
 
   const productName = raw.product_name?.trim();
@@ -232,7 +245,7 @@ export function validateRowForFormat(
   if (format.forcedPlatform) {
     platform = format.forcedPlatform;
   } else {
-    platform = (raw.platform?.trim().toLowerCase() || "other") as Platform;
+    platform = normalizePlatform(raw.platform?.trim() || "other") as Platform;
     if (!VALID_PLATFORMS.includes(platform)) {
       return fail(`invalid "platform" "${raw.platform}" — use: ${VALID_PLATFORMS.join(", ")}`);
     }

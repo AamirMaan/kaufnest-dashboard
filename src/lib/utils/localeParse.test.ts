@@ -43,6 +43,8 @@ describe("parseFlexibleDate", () => {
     ["15.01.2024", "2024-01-15"],
     ["1.2.2024", "2024-02-01"],
     ["15/01/2024", "2024-01-15"],
+    ["26-03-2026", "2026-03-26"], // dash separator (DD-MM-YYYY)
+    ["1-2-2024", "2024-02-01"],   // dash separator, single-digit day/month
     ["29.02.2024", "2024-02-29"], // leap year
   ])("%s → %s", (input, expected) => {
     expect(parseFlexibleDate(input)).toBe(expected);
