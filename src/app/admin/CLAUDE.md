@@ -89,11 +89,19 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
     Auth users and call `updateUserById`; (3) `.update(patch)` only changed fields.
     Platform-admin override — writes `plan`/`status` directly, bypassing Stripe.
   - `DELETE`: permanently destroys a tenant. Steps: (1) fetch tenant `schema_name`;
-    (2) `service.rpc("drop_tenant_schema", { schema_name })` (requires migration
-    `017_drop_tenant_schema.sql` applied in Project B) — returns 500 on failure;
+    (2a) `removeExposedSchema(schema_name)` — removes the schema from Project B's
+    PostgREST "Exposed schemas" list via the Management API **before** dropping.
+    Order is critical: a dropped schema left in the exposed list makes PostgREST's
+    schema-cache load fail (`3F000`), which breaks the entire Data API for every
+    tenant (`PGRST002` on all requests). Returns 500 and aborts on failure —
+    nothing has been destroyed yet, safe to retry;
+    (2b) `service.rpc("drop_tenant_schema", { schema_name })` (requires migration
+    `017_drop_tenant_schema.sql` applied in Project B) — returns 500 on failure
+    (schema is unexposed but intact — retryable, `removeExposedSchema` is a no-op
+    on retry);
     (3) scan auth users by `app_metadata.tenant_schema` and delete them
     (best-effort via `Promise.allSettled`); (4) delete row from `control.tenants`.
-    **Irreversible** — all tenant data is gone after step 2.
+    **Irreversible** — all tenant data is gone after step 2b.
 - **`resend-invite/route.ts`** (`POST`) — resends the invite email for an
   existing tenant's `admin_email`. Verifies platform admin, looks up the tenant
   by `tenantId` from `control.tenants`, reads the admin's `full_name` from

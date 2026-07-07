@@ -33,13 +33,23 @@ export default async function DashboardLayout({
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single<Profile>();
 
-  if (!profile) redirect("/login");
+  if (!profile) {
+    // Log why before redirecting — a silent redirect here is undebuggable
+    // (proxy.ts declines to bounce profile-less sessions back to /dashboard,
+    // so this lands on /login rather than looping).
+    console.error("[dashboard/layout] profile fetch returned null", {
+      userId: user.id,
+      tenantSchema: user.app_metadata?.tenant_schema ?? "(none — public)",
+      error: profileError,
+    });
+    redirect("/login");
+  }
 
   const tenantSchema = user.app_metadata?.tenant_schema as string | undefined;
 
