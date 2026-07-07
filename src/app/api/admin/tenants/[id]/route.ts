@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { removeExposedSchema } from "@/lib/supabase/managementApi";
 import { verifyPlatformAdmin } from "../route";
 import type { TenantPlan, TenantStatus } from "@/types";
 
@@ -145,7 +146,21 @@ export async function DELETE(
 
   const service = makeServiceClient();
 
-  // 2. Drop the tenant schema (IF EXISTS — safe to retry if schema was already gone)
+  // 2a. Remove schema from PostgREST "Exposed schemas" BEFORE dropping it.
+  // Order matters: if a dropped schema remains in the exposed list, PostgREST's
+  // schema-cache load fails (3F000) and the whole Data API breaks for every
+  // tenant (PGRST002). Doing this first means a failure here aborts cleanly,
+  // and a later drop failure leaves the schema unexposed but intact — retryable.
+  try {
+    await removeExposedSchema(tenant.schema_name);
+  } catch (err) {
+    return NextResponse.json(
+      { error: "Failed to unexpose tenant schema", detail: errorMessage(err) },
+      { status: 500 }
+    );
+  }
+
+  // 2b. Drop the tenant schema (IF EXISTS — safe to retry if schema was already gone)
   const { error: dropError } = await service.rpc("drop_tenant_schema", {
     schema_name: tenant.schema_name,
   });

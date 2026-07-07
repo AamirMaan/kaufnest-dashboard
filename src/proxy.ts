@@ -43,11 +43,31 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from login
+  // Redirect authenticated users away from login — but only if they have a
+  // usable profile. Otherwise the dashboard layout redirects them straight
+  // back here (profile null → /login → /dashboard → …), causing
+  // ERR_TOO_MANY_REDIRECTS. A session without a profile stays on /login.
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    const tenantSchema =
+      (user.app_metadata?.tenant_schema as string | undefined) ?? "public";
+    const { data: profile, error: profileError } = await supabase
+      .schema(tenantSchema)
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .single();
+
+    if (profile) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+
+    console.error("[proxy] authenticated user has no profile — staying on /login", {
+      userId: user.id,
+      tenantSchema,
+      error: profileError,
+    });
   }
 
   // RBAC: check route-level permissions
