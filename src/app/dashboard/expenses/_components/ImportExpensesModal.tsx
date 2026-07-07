@@ -18,8 +18,8 @@ const VALID_CATEGORIES: ExpenseCategory[] = [
 ];
 const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
-const TEMPLATE_HEADERS = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "description"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Office Supplies", "office", "Staples", "49.99", "EUR", "19", "Monthly supplies"];
+const TEMPLATE_HEADERS = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "description", "invoice_number", "vendor_vat_number"];
+const TEMPLATE_EXAMPLE = ["2024-01-15", "Office Supplies", "office", "Staples", "49.99", "EUR", "19", "Monthly supplies", "RE-2024-001", "DE123456789"];
 
 interface ParsedRow {
   rowNum: number;
@@ -66,6 +66,8 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       description: raw.description?.trim() || null,
       vat_rate: vatRate,
       vat_amount: vatAmount,
+      vendor_vat_number: raw.vendor_vat_number?.trim() || null,
+      invoice_number: raw.invoice_number?.trim() || null,
     },
     error: null,
   };
@@ -188,7 +190,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
           <p className="text-sm text-[var(--color-text-muted)]">
             Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">date, title, amount</code>
             <span className="block text-xs mt-1">
-              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">category, vendor, currency, vat_rate, description</code>
+              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">category, vendor, currency, vat_rate, description, invoice_number, vendor_vat_number</code>
             </span>
           </p>
           <Button

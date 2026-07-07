@@ -37,6 +37,8 @@ export interface Expense {
   created_at: string;
   vat_rate: number | null;
   vat_amount: number | null;
+  vendor_vat_number: string | null;
+  invoice_number: string | null;
 }
 
 export interface PlatformPayout {

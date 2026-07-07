@@ -34,6 +34,8 @@ interface FormState {
   description: string;
   vat_included: boolean;
   vat_rate: string;
+  vendor_vat_number: string;
+  invoice_number: string;
   reason: string;
 }
 
@@ -48,13 +50,16 @@ function expenseToForm(e: Expense, defaultVatRate: number): FormState {
     description: e.description ?? "",
     vat_included: e.vat_rate != null,
     vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(defaultVatRate),
+    vendor_vat_number: e.vendor_vat_number ?? "",
+    invoice_number: e.invoice_number ?? "",
     reason: "",
   };
 }
 
 const blankForm: FormState = {
   title: "", amount: "", currency: "EUR", category: "other", vendor: "", date: "",
-  description: "", vat_included: false, vat_rate: "0", reason: "",
+  description: "", vat_included: false, vat_rate: "0",
+  vendor_vat_number: "", invoice_number: "", reason: "",
 };
 
 export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
@@ -96,6 +101,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         description: form.description.trim() || null,
         vat_rate: form.vat_included ? vatRate : null,
         vat_amount: form.vat_included ? vatAmount : null,
+        vendor_vat_number: form.vendor_vat_number.trim() || null,
+        invoice_number: form.invoice_number.trim() || null,
       })
       .eq("id", expense.id)
       .select()
@@ -116,8 +123,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
       entityType: "expense",
       entityId: expense.id,
       metadata: {
-        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date, vat_rate: expense.vat_rate, vat_amount: expense.vat_amount },
-        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
+        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date, vat_rate: expense.vat_rate, vat_amount: expense.vat_amount, vendor_vat_number: expense.vendor_vat_number, invoice_number: expense.invoice_number },
+        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount, vendor_vat_number: data.vendor_vat_number, invoice_number: data.invoice_number },
         reason: form.reason.trim(),
       },
     });
@@ -180,6 +187,23 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         <Field label="Vendor">
           <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
         </Field>
+
+        <Row>
+          <Field label="Invoice Number">
+            <Input
+              value={form.invoice_number}
+              onChange={(e) => set("invoice_number", e.target.value)}
+              placeholder="e.g. RE-2024-001"
+            />
+          </Field>
+          <Field label="Vendor VAT Number">
+            <Input
+              value={form.vendor_vat_number}
+              onChange={(e) => set("vendor_vat_number", e.target.value)}
+              placeholder="e.g. DE123456789"
+            />
+          </Field>
+        </Row>
 
         <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
           <Checkbox

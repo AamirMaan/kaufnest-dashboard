@@ -34,6 +34,8 @@ interface FormState {
   description: string;
   vat_included: boolean;
   vat_rate: string;
+  vendor_vat_number: string;
+  invoice_number: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -49,6 +51,8 @@ function makeDefaults(defaultVatRate: number): FormState {
     description: "",
     vat_included: false,
     vat_rate: String(defaultVatRate),
+    vendor_vat_number: "",
+    invoice_number: "",
   };
 }
 
@@ -90,6 +94,8 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
         created_by: user!.id,
         vat_rate: form.vat_included ? vatRate : null,
         vat_amount: form.vat_included ? vatAmount : null,
+        vendor_vat_number: form.vendor_vat_number.trim() || null,
+        invoice_number: form.invoice_number.trim() || null,
       })
       .select()
       .single<Expense>();
@@ -212,6 +218,23 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             placeholder="e.g. DHL, Google Ads…"
           />
         </Field>
+
+        <Row>
+          <Field label="Invoice Number">
+            <Input
+              value={form.invoice_number}
+              onChange={(e) => set("invoice_number", e.target.value)}
+              placeholder="e.g. RE-2024-001"
+            />
+          </Field>
+          <Field label="Vendor VAT Number">
+            <Input
+              value={form.vendor_vat_number}
+              onChange={(e) => set("vendor_vat_number", e.target.value)}
+              placeholder="e.g. DE123456789"
+            />
+          </Field>
+        </Row>
 
         <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">
           <Checkbox
