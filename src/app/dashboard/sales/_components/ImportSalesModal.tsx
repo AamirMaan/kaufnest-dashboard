@@ -68,6 +68,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
   const format = IMPORT_FORMATS[formatId];
   const requiredColumns = format.columns.filter((c) => c.required).map((c) => c.key);
+  const optionalColumns = format.columns.filter((c) => !c.required).map((c) => c.key);
 
   const errors = parsed.filter((r) => r.error !== null);
   const skipped = parsed.filter((r) => r.skipped);
@@ -262,7 +263,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Required columns: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{requiredColumns.join(", ")}</code>
+            Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{requiredColumns.join(", ")}</code>
+            <span className="block text-xs mt-1">
+              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{optionalColumns.join(", ")}</code>
+            </span>
             <span className="block text-xs mt-1">
               German CSVs work too — semicolons, decimal commas (9,99), dates like 15.01.2024, and German column names.
             </span>
