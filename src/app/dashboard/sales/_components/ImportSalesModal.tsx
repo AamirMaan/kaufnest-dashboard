@@ -10,6 +10,7 @@ import { Field, Select } from "@/components/ui/FormFields";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
+import { parseExcelBuffer } from "@/lib/utils/excel";
 import {
   IMPORT_FORMATS,
   IMPORT_FORMAT_IDS,
@@ -22,6 +23,8 @@ import {
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
+
+type ParsedSource = { headers: string[]; rows: Record<string, string>[] };
 
 /**
  * Read a CSV file as text. Tries UTF-8 first; if the decode produced
@@ -39,6 +42,19 @@ function readFileText(file: File): Promise<string> {
   return readAs().then((text) => (text.includes("�") ? readAs("windows-1252") : text));
 }
 
+function readFileBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => resolve(ev.target!.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function isExcelFile(name: string) {
+  return name.endsWith(".xlsx") || name.endsWith(".xls");
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -50,7 +66,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const inventoryItems = useAppSelector((s) => s.inventory.items);
   const fileRef = useRef<HTMLInputElement>(null);
   const [formatId, setFormatId] = useState<ImportFormatId>("generic");
-  const [rawText, setRawText] = useState<string | null>(null);
+  const [parsedSource, setParsedSource] = useState<ParsedSource | null>(null);
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [checking, setChecking] = useState(false);
@@ -81,7 +97,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
   function reset() {
     setParsed([]);
-    setRawText(null);
+    setParsedSource(null);
     setFileName("");
     setImportError(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -147,9 +163,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
-  async function parseAndValidate(text: string, fmtId: ImportFormatId) {
+  async function parseAndValidate(source: ParsedSource, fmtId: ImportFormatId) {
     const fmt = IMPORT_FORMATS[fmtId];
-    const { headers, rows } = parseCsvText(text);
+    const { headers, rows } = source;
     if (rows.length === 0) {
       setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
       return;
@@ -177,8 +193,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   function handleFormatChange(next: ImportFormatId) {
     setFormatId(next);
     setImportError(null);
-    if (rawText !== null) {
-      void parseAndValidate(rawText, next);
+    if (parsedSource !== null) {
+      void parseAndValidate(parsedSource, next);
     } else {
       setParsed([]);
     }
@@ -189,10 +205,15 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     if (!file) return;
     setFileName(file.name);
     setImportError(null);
-    readFileText(file)
-      .then((text) => {
-        setRawText(text);
-        return parseAndValidate(text, formatId);
+
+    const loadAndParse = isExcelFile(file.name)
+      ? readFileBuffer(file).then((buf) => parseExcelBuffer(buf))
+      : readFileText(file).then((text) => parseCsvText(text));
+
+    loadAndParse
+      .then((source) => {
+        setParsedSource(source);
+        return parseAndValidate(source, formatId);
       })
       .catch(() => {
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
@@ -285,9 +306,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           onClick={() => fileRef.current?.click()}
         >
           <span className="text-sm text-[var(--color-text-muted)]">
-            {fileName || "Click to select a CSV file"}
+            {fileName || "Click to select a CSV or Excel file"}
           </span>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} />
+          <span className="text-xs text-[var(--color-text-muted)]">.csv · .xlsx · .xls</span>
+          <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={handleFile} />
         </div>
 
         {parsed.length > 0 && (
