@@ -22,6 +22,8 @@ const makeExpense = (overrides: Partial<Expense> = {}): Expense => ({
   created_at: "2026-06-01T10:00:00.000Z",
   vat_rate: null,
   vat_amount: null,
+  vendor_vat_number: null,
+  invoice_number: null,
   ...overrides,
 });
 

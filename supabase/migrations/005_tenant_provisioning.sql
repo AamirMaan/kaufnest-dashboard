@@ -113,8 +113,10 @@ BEGIN
       created_by  uuid NOT NULL REFERENCES %1$I.profiles(id),
       created_at  timestamptz NOT NULL DEFAULT now(),
       updated_at  timestamptz NOT NULL DEFAULT now(),
-      vat_rate    numeric(5,2),
-      vat_amount  numeric(12,2)
+      vat_rate          numeric(5,2),
+      vat_amount        numeric(12,2),
+      vendor_vat_number text,
+      invoice_number    text
     )
   $sql$, schema_name);
 

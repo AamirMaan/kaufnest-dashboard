@@ -256,24 +256,31 @@ export async function generateExpensesInvoice(
   const headerY = addHeader(doc, settings, invoiceNumber, "EXPENSE REPORT");
   const startY = addBillTo(doc, options, headerY);
 
-  const rows = expenses.map((e, i) => [
-    i + 1,
-    formatDate(e.date),
-    e.title,
-    e.category.charAt(0).toUpperCase() + e.category.slice(1),
-    e.vendor ?? "—",
-    formatMoney(e.amount, e.currency),
-    e.vat_rate != null ? `${e.vat_rate}%\n${formatMoney(e.vat_amount ?? 0, e.currency)}` : "—",
-  ]);
+  const rows = expenses.map((e, i) => {
+    const vendorCell = [
+      e.vendor ?? "—",
+      e.vendor_vat_number ? `VAT ID: ${e.vendor_vat_number}` : "",
+    ].filter(Boolean).join("\n");
+    return [
+      i + 1,
+      formatDate(e.date),
+      e.title,
+      e.category.charAt(0).toUpperCase() + e.category.slice(1),
+      vendorCell,
+      e.invoice_number ?? "—",
+      formatMoney(e.amount, e.currency),
+      e.vat_rate != null ? `${e.vat_rate}%\n${formatMoney(e.vat_amount ?? 0, e.currency)}` : "—",
+    ];
+  });
 
   autoTable(doc, {
     startY,
-    head: [["#", "Date", "Title", "Category", "Vendor", "Amount", "VAT"]],
+    head: [["#", "Date", "Title", "Category", "Vendor", "Inv. #", "Amount", "VAT"]],
     body: rows,
-    styles: { fontSize: 9, cellPadding: 3 },
+    styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [200, 50, 50], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [255, 248, 248] },
-    columnStyles: { 0: { cellWidth: 8 }, 5: { halign: "right" }, 6: { halign: "right" } },
+    columnStyles: { 0: { cellWidth: 7 }, 6: { halign: "right" }, 7: { halign: "right" } },
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
