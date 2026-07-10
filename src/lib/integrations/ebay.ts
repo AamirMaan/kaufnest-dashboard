@@ -7,9 +7,12 @@ const EBAY_AUTH_URL = SANDBOX
   : "https://auth.ebay.com/oauth2/authorize";
 const EBAY_TOKEN_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
 const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
+// sell.inventory (full, not .readonly) is required for Trading API calls
+// (GetMyeBaySelling in listings.ts). Connections authorised with the old
+// readonly scope must be disconnected and reconnected.
 const EBAY_SCOPE =
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment" +
-  " https://api.ebay.com/oauth/api_scope/sell.inventory.readonly";
+  " https://api.ebay.com/oauth/api_scope/sell.inventory";
 
 interface EbayTokenResponse {
   access_token: string;
