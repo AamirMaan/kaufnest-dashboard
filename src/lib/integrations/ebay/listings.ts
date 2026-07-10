@@ -1,10 +1,23 @@
-// Fetches the seller's active eBay listings via the Inventory REST API.
-// Requires the sell.inventory.readonly OAuth scope — existing connections
-// authorised before this scope was added must be re-authorised.
+// Fetches the seller's active eBay listings via the Trading API (GetMyeBaySelling).
+//
+// Why Trading API instead of the Inventory API: the Inventory API's /offer and
+// /inventory_item endpoints fail account-wide (errorId 25707) when ANY listing in
+// the account is missing a SKU or has a SKU with special characters — including
+// old, inactive listings that eBay no longer allows editing. GetMyeBaySelling has
+// no such restriction and returns every active listing regardless of SKU.
+//
+// Auth: uses the same OAuth user access token, passed via the X-EBAY-API-IAF-TOKEN
+// header. Requires the sell.inventory OAuth scope (readonly is NOT sufficient for
+// Trading API calls) — existing connections must be re-authorised after the scope
+// change in src/lib/integrations/ebay.ts.
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
-const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
-const INVENTORY_BASE = `${EBAY_BASE}/sell/inventory/v1`;
+const TRADING_API_URL = SANDBOX
+  ? "https://api.sandbox.ebay.com/ws/api.dll"
+  : "https://api.ebay.com/ws/api.dll";
+const COMPATIBILITY_LEVEL = "1193";
+const ENTRIES_PER_PAGE = 200;
+const MAX_PAGES = 10; // safety cap: 2000 listings
 
 export interface EbayListing {
   ebayListingId: string;
@@ -16,113 +29,127 @@ export interface EbayListing {
   sku: string | null;
 }
 
-interface EbayOffer {
-  offerId: string;
-  sku?: string;
-  status: string;
-  marketplaceId?: string;
-  listing?: { listingId?: string };
-  pricingSummary?: { price?: { value?: string; currency?: string } };
+/** Extracts the text content of the first occurrence of <tag> in the given XML fragment. */
+function tagText(xml: string, tag: string): string | null {
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`));
+  return match ? match[1].trim() : null;
 }
 
-interface EbayInventoryItem {
-  sku: string;
-  product?: {
-    title?: string;
-    imageUrls?: string[];
+/** Decodes the five predefined XML entities eBay uses in text fields. */
+function decodeXml(text: string): string {
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+async function tradingApiCall(
+  callName: string,
+  requestXml: string,
+  token: string
+): Promise<string> {
+  const res = await fetch(TRADING_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/xml",
+      "X-EBAY-API-CALL-NAME": callName,
+      "X-EBAY-API-COMPATIBILITY-LEVEL": COMPATIBILITY_LEVEL,
+      "X-EBAY-API-SITEID": "0",
+      "X-EBAY-API-IAF-TOKEN": token,
+    },
+    body: requestXml,
+  });
+
+  const xml = await res.text();
+
+  if (!res.ok) {
+    throw new Error(`eBay Trading API request failed: ${res.status} ${xml.slice(0, 500)}`);
+  }
+
+  const ack = tagText(xml, "Ack");
+  if (ack === "Failure") {
+    const message = tagText(xml, "LongMessage") ?? tagText(xml, "ShortMessage") ?? "Unknown error";
+    const errorCode = tagText(xml, "ErrorCode") ?? "";
+
+    // 21916984 = token scope insufficient; 21917053 / 931 = invalid/hard-expired IAF token.
+    if (["21916984", "21917053", "931", "932"].includes(errorCode)) {
+      throw new Error(
+        "eBay rejected the access token — your eBay connection needs re-authorization. " +
+        "Go to Integrations, disconnect eBay, and reconnect to grant the required permissions."
+      );
+    }
+
+    throw new Error(`eBay Trading API error ${errorCode}: ${decodeXml(message)}`);
+  }
+
+  return xml;
+}
+
+function buildGetMyeBaySellingRequest(pageNumber: number): string {
+  return (
+    '<?xml version="1.0" encoding="utf-8"?>' +
+    '<GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">' +
+    "<ActiveList>" +
+    "<Include>true</Include>" +
+    "<Pagination>" +
+    `<EntriesPerPage>${ENTRIES_PER_PAGE}</EntriesPerPage>` +
+    `<PageNumber>${pageNumber}</PageNumber>` +
+    "</Pagination>" +
+    "</ActiveList>" +
+    "<DetailLevel>ReturnAll</DetailLevel>" +
+    "</GetMyeBaySellingRequest>"
+  );
+}
+
+function parseItem(itemXml: string): EbayListing | null {
+  const itemId = tagText(itemXml, "ItemID");
+  if (!itemId) return null;
+
+  const title = tagText(itemXml, "Title");
+  const sku = tagText(itemXml, "SKU");
+  const galleryUrl = tagText(itemXml, "GalleryURL");
+  const viewItemUrl = tagText(itemXml, "ViewItemURL");
+
+  // <CurrentPrice currencyID="EUR">12.99</CurrentPrice> inside <SellingStatus>
+  const priceMatch = itemXml.match(
+    /<CurrentPrice currencyID="([A-Z]{3})">([\d.]+)<\/CurrentPrice>/
+  );
+
+  return {
+    ebayListingId: itemId,
+    title: title ? decodeXml(title) : itemId,
+    imageUrl: galleryUrl ? decodeXml(galleryUrl) : null,
+    ebayUrl: viewItemUrl ? decodeXml(viewItemUrl) : `https://www.ebay.com/itm/${itemId}`,
+    currentPrice: priceMatch ? Number(priceMatch[2]) : 0,
+    currency: priceMatch ? priceMatch[1] : "EUR",
+    sku: sku ? decodeXml(sku) : null,
   };
 }
 
-function ebayDomain(marketplaceId?: string): string {
-  switch (marketplaceId) {
-    case "EBAY_GB": return "co.uk";
-    case "EBAY_DE": return "de";
-    case "EBAY_FR": return "fr";
-    case "EBAY_IT": return "it";
-    case "EBAY_ES": return "es";
-    case "EBAY_AU": return "com.au";
-    default:        return "com";
-  }
-}
-
-async function inventoryGet<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(`${INVENTORY_BASE}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      // eBay Inventory API rejects multi-value Accept-Language strings (e.g.
-      // "en-GB,en;q=0.9") that Next.js may forward from the browser request.
-      "Accept-Language": "en-US",
-    },
-  });
-
-  if (res.status === 403) {
-    throw new Error(
-      "eBay returned 403 Forbidden — your eBay connection needs re-authorization. " +
-      "Go to Integrations, disconnect eBay, and reconnect to grant the required permissions."
-    );
-  }
-
-  if (!res.ok) {
-    throw new Error(`eBay inventory request failed: ${res.status} ${await res.text()}`);
-  }
-
-  return res.json() as Promise<T>;
-}
-
 export async function fetchActiveListings(accessToken: string): Promise<EbayListing[]> {
-  // The Inventory API rejects /offer when ANY listing in the account has a SKU
-  // with special characters (created via the older Trading API — errorId 25707).
-  // Re-throw with an actionable message so the UI can surface it.
-  let offersBody: { offers?: EbayOffer[] };
-  try {
-    offersBody = await inventoryGet<{ offers?: EbayOffer[] }>("/offer?limit=200", accessToken);
-  } catch (err) {
-    if (err instanceof Error && err.message.includes("25707")) {
-      throw new Error(
-        "eBay cannot list your offers because one or more listings is missing a SKU or " +
-        "has a SKU with special characters (hyphens, spaces, etc.). These listings were " +
-        "likely created without a Custom Label via the older Trading API. To fix this, " +
-        "go to eBay Seller Hub → Active Listings, add a unique alphanumeric-only Custom " +
-        "Label (SKU) to each listing, then sync again."
-      );
-    }
-    throw err;
-  }
+  const listings: EbayListing[] = [];
 
-  const publishedOffers = (offersBody.offers ?? []).filter(
-    (o) => o.status === "PUBLISHED" && o.listing?.listingId
-  );
-
-  if (publishedOffers.length === 0) return [];
-
-  // Inventory items enrich offers with title/image. If eBay rejects this request
-  // (e.g. errorId 25707 — seller has items with non-alphanumeric SKUs created via
-  // the older Trading API), fall back to offer.sku/listingId and no image. The
-  // existing fallbacks in the map below already handle a missing item gracefully.
-  let itemsBySku = new Map<string, EbayInventoryItem>();
-  try {
-    const itemsBody = await inventoryGet<{ inventoryItems?: EbayInventoryItem[] }>(
-      "/inventory_item?limit=200",
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const xml = await tradingApiCall(
+      "GetMyeBaySelling",
+      buildGetMyeBaySellingRequest(page),
       accessToken
     );
-    itemsBySku = new Map((itemsBody.inventoryItems ?? []).map((item) => [item.sku, item]));
-  } catch {
-    // Non-fatal — listings will render with sku/listingId as title, no image.
+
+    // Scope parsing to the ActiveList block so Sold/Unsold items are never included.
+    const activeList = tagText(xml, "ActiveList") ?? "";
+    const itemBlocks = activeList.match(/<Item>[\s\S]*?<\/Item>/g) ?? [];
+
+    for (const block of itemBlocks) {
+      const listing = parseItem(block);
+      if (listing) listings.push(listing);
+    }
+
+    const totalPages = Number(tagText(activeList, "TotalNumberOfPages") ?? "1");
+    if (page >= totalPages) break;
   }
 
-  return publishedOffers.map((offer) => {
-    const listingId = offer.listing!.listingId!;
-    const domain = ebayDomain(offer.marketplaceId);
-    const item = offer.sku ? itemsBySku.get(offer.sku) : undefined;
-
-    return {
-      ebayListingId: listingId,
-      title: item?.product?.title ?? offer.sku ?? listingId,
-      imageUrl: item?.product?.imageUrls?.[0] ?? null,
-      ebayUrl: `https://www.ebay.${domain}/itm/${listingId}`,
-      currentPrice: Number(offer.pricingSummary?.price?.value ?? 0),
-      currency: offer.pricingSummary?.price?.currency ?? "EUR",
-      sku: offer.sku ?? null,
-    };
-  });
+  return listings;
 }

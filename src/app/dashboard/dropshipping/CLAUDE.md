@@ -33,7 +33,7 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
 - `GET /api/dropshipping/listings` — reads all rows ordered by `created_at DESC`. All
   authenticated users. Used by `dashboard/layout.tsx` for hydration and by `page.tsx` after refresh.
 - `POST /api/dropshipping/listings/refresh` — `requireIntegrationAdmin` guard; fetches
-  from eBay via `fetchActiveListings(accessToken)` (2 API calls: GET /offer + GET /inventory_item);
+  from eBay via `fetchActiveListings(accessToken)` (Trading API GetMyeBaySelling, paginated);
   upserts to `dropship_listings` with `onConflict: "ebay_listing_id"` (never overwrites
   `source_url`/`source_platform`). Returns `{ synced: number }`.
 - `PATCH /api/dropshipping/listings/[id]` — all authenticated users; validates `sourceUrl`,
@@ -41,15 +41,18 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
 
 ## eBay API notes
 
-- Scope: `sell.inventory.readonly` (added to `EBAY_SCOPE` in `src/lib/integrations/ebay.ts`
-  alongside `sell.fulfillment`). Existing connections authorised before this scope was added
-  **must be re-authorised** — the refresh route returns a user-readable 403 error if not.
-- `fetchActiveListings` is in `src/lib/integrations/ebay/listings.ts`. It fetches
-  `/sell/inventory/v1/offer?limit=200` (active offers — fatal if fails), then
-  `/sell/inventory/v1/inventory_item?limit=200` (title + images — non-fatal, wrapped in
-  try/catch), and joins by SKU. Both endpoints can return errorId 25707 when the seller
-  has listings with non-alphanumeric SKUs (Trading API legacy); the `/offer` error is
-  re-thrown with a user-readable message; the `/inventory_item` error is silently ignored.
+- Scope: `sell.inventory` (full, in `EBAY_SCOPE` in `src/lib/integrations/ebay.ts`
+  alongside `sell.fulfillment`). Trading API calls do not accept the `.readonly` variant.
+  Existing connections authorised with the old readonly scope **must be re-authorised** —
+  the refresh route returns a user-readable token error if not.
+- `fetchActiveListings` is in `src/lib/integrations/ebay/listings.ts`. It calls the
+  Trading API `GetMyeBaySelling` (XML POST to `/ws/api.dll`, OAuth token via
+  `X-EBAY-API-IAF-TOKEN` header), paginating the ActiveList (200/page, 10-page cap).
+  This replaced the Inventory API (`/offer` + `/inventory_item`), which failed
+  account-wide with errorId 25707 when any listing — even inactive, un-editable ones —
+  lacked a valid alphanumeric SKU. GetMyeBaySelling has no SKU restriction.
+  Token/scope errors (21916984, 21917053, 931, 932) are re-thrown with a user-readable
+  reconnect message.
 
 ## Data flow
 
