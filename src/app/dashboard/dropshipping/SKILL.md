@@ -4,7 +4,8 @@
 
 | Change | Files to touch |
 |---|---|
-| Add a column to `dropship_listings` | `supabase/009_dropship_listings.sql` (new migration), `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
+| Add a column to `dropship_listings` | new file in `supabase/migrations/` using `run_on_all_tenant_schemas` (table lives in each tenant schema, NOT public) + same column in `provision_tenant_schema()` in `005_tenant_provisioning.sql`, `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
+| Change AliExpress price scraping | `src/lib/integrations/aliexpress/scrape.ts` (URL derivation + HTML parsing), `src/app/api/dropshipping/listings/check-prices/route.ts` (orchestration/storage) |
 | Change source platform detection logic | `src/lib/utils/detectPlatform.ts` + its test |
 | Add a new column to the listings table | `_components/ListingsTable.tsx` — add `TableHead` + `TableCell` |
 | Change eBay listing fields fetched | `src/lib/integrations/ebay/listings.ts` → update `EbayOffer`/`EbayInventoryItem` interfaces and mapping |
@@ -12,9 +13,27 @@
 | Change refresh logic | `src/app/api/dropshipping/listings/refresh/route.ts` |
 | Change source URL editing | `_components/EditSourceModal.tsx` + PATCH route |
 | Update docs | `CLAUDE.md` (file map / data flow), `SKILL.md` (this file) |
+| Add a new platform-admin-only route | new route file + add `verifyPlatformAdmin` guard — also update `proxy.ts` matcher and `Sidebar.tsx` if it has a new nav entry |
 | Pagination (client-side) | `_components/ListingsTable.tsx` only — `page`/`pageSize` local state, `pagedListings` useMemo slice, `<Pagination>` component |
 
 ## Gotchas
+
+- **AliExpress scraping is best-effort:** AliExpress serves captcha/"punish" pages to bots.
+  `scrapeAliExpressPrice` tries JSON-LD → og:price meta → `runParams` regex, throws a
+  user-readable error otherwise. The check-prices route runs sequentially with a 1.5s delay
+  and caps at 50 listings per run — do NOT parallelize, it triggers rate limiting. On
+  serverless hosting the bulk run must fit the function timeout (~50 listings ≈ 2+ min:
+  raise `maxDuration` or lower the cap if needed).
+
+- **SKU = AliExpress item ID convention:** the seller stores the AliExpress item ID as the
+  eBay Custom Label. A numeric SKU (6–20 digits) is treated as an AliExpress item ID and the
+  supplier URL is derived from it. This rule exists in two places that must stay in sync:
+  `resolveSupplierUrl`/`isAliExpressSku` (server, scrape.ts) and `canCheckSupplierPrice`
+  (client, ListingsTable.tsx).
+
+- **Supplier snapshot preservation:** like `source_url`, the `supplier_price*` columns are
+  excluded from the eBay refresh upsert payload and preserved in `upsertListings` (Redux),
+  so an eBay refresh never wipes scraped prices.
 
 - **`source_url`/`source_platform` preservation on refresh:** `upsertListings` Redux action
   deliberately preserves existing `source_url`/`source_platform` from the current state when
@@ -41,10 +60,19 @@
   overwrite the custom Button with a different variant API. Use `@/components/ui/Button`
   (variants: `"primary"/"secondary"/"danger"/"ghost"`).
 
-- **Refresh is admin/super_admin only:** The "Refresh from eBay" button is hidden from
-  accountants in the UI via `hasPermission(role, "manage_integrations")`. The
-  `POST /api/dropshipping/listings/refresh` route uses `requireIntegrationAdmin()` which
-  enforces the same check at the API level.
+- **Platform-admin-only feature (four-layer gate):** Dropshipping is not visible to any
+  regular tenant. Gate is enforced at: (1) `Sidebar.tsx` — `showDropshippingLink = isPlatformAdmin`,
+  rendered in the same section as Admin Panel; (2) `proxy.ts` — `/dashboard/dropshipping`
+  redirects non-platform-admins to `/dashboard`; (3) all four `/api/dropshipping/*` routes —
+  gated with `verifyPlatformAdmin(user.email)` from `@/lib/supabase/control`; (4)
+  `dashboard/layout.tsx` — `dropshipListings` hydrated into Redux only when `isAdmin` is true.
+  `verifyPlatformAdmin` is a thin wrapper around `isPlatformAdmin` that returns a `NextResponse`
+  (403) or `null`. Use `const forbidden = await verifyPlatformAdmin(user.email); if (forbidden) return forbidden;`.
+
+- **Refresh is admin/super_admin only (within platform admin):** The "Refresh from eBay"
+  button is hidden from accountants via `hasPermission(role, "manage_integrations")`. The
+  `POST /api/dropshipping/listings/refresh` route uses `requireIntegrationAdmin()` in addition
+  to `verifyPlatformAdmin()` — both must pass.
 
 - **Client-side pagination (Phase 2):** `ListingsTable` now paginates the passed `listings`
   array locally (default 25/page). The fetch cap is still 200 listings per refresh. If the

@@ -253,6 +253,26 @@ BEGIN
     )
   $sql$, schema_name);
 
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.dropship_listings (
+      id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ebay_listing_id           TEXT UNIQUE NOT NULL,
+      title                     TEXT NOT NULL,
+      image_url                 TEXT,
+      ebay_url                  TEXT NOT NULL,
+      current_price             NUMERIC(10,2) NOT NULL,
+      currency                  TEXT NOT NULL DEFAULT 'EUR',
+      sku                       TEXT,
+      source_url                TEXT,
+      source_platform           TEXT CHECK (source_platform IN ('amazon', 'aliexpress')),
+      supplier_price            NUMERIC(10,2),
+      supplier_currency         TEXT,
+      supplier_price_checked_at TIMESTAMPTZ,
+      last_synced_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
@@ -383,7 +403,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'dropship_listings']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -444,6 +464,12 @@ BEGIN
   EXECUTE format('CREATE POLICY "platform_payouts_select" ON %1$I.platform_payouts FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "platform_payouts_insert" ON %1$I.platform_payouts FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
   EXECUTE format('CREATE POLICY "platform_payouts_delete" ON %1$I.platform_payouts FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
+  -- dropship_listings — all tenant members read/write (source linking and price
+  -- checks are data-entry tasks); eBay refresh is admin-only at the API route.
+  EXECUTE format('CREATE POLICY "dropship_listings_select" ON %1$I.dropship_listings FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
+  EXECUTE format('CREATE POLICY "dropship_listings_insert" ON %1$I.dropship_listings FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
+  EXECUTE format('CREATE POLICY "dropship_listings_update" ON %1$I.dropship_listings FOR UPDATE USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
 
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,

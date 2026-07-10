@@ -1,9 +1,16 @@
 # Dropshipping feature
 
-Route: `/dashboard/dropshipping`. Shows a tenant's active eBay listings fetched via their
-existing eBay OAuth connection, stored in `public.dropship_listings`. Each listing can be
-linked to an Amazon or AliExpress supplier URL. Listings refresh on demand via "Refresh
-from eBay" (admin/super_admin only). Available on Pro/Business plans only.
+Route: `/dashboard/dropshipping`. Shows the platform admin's active eBay listings fetched via
+their eBay OAuth connection, stored in `<tenant_schema>.dropship_listings` (schema-per-tenant —
+see `supabase/migrations/019_dropship_supplier_price.sql`). Each listing can be linked to an
+Amazon or AliExpress supplier URL. Listings refresh on demand via "Refresh from eBay".
+
+**Platform-admin only** — this feature is hidden from all regular tenants and only accessible
+to the KaufNest platform admin (verified via `control.admin_users`). Four layers of protection:
+1. `Sidebar.tsx` — Dropshipping link only renders when `isPlatformAdmin` is true.
+2. `proxy.ts` — `/dashboard/dropshipping` routes redirect to `/dashboard` for non-admins.
+3. All `/api/dropshipping/*` routes — gated with `verifyPlatformAdmin()`.
+4. `dashboard/layout.tsx` — `dropshipListings` hydrated into Redux only for platform admins.
 
 ## Files in this folder
 
@@ -13,8 +20,12 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
   Uses `action` prop (singular, not `actions`) on `PageHeader` to render the refresh button.
   After refresh: re-fetches full listing list via `GET /api/dropshipping/listings` and dispatches `upsertListings`.
 - `_components/ListingsTable.tsx` — shadcn `Table`. Columns: image (48×48 with fallback ImageIcon),
-  title (linked to eBay listing, new tab), price (`formatCurrency` with currency arg from listing),
-  SKU (dash if null), source (platform badge + truncated URL), Edit button (opens `EditSourceModal`).
+  title (linked to eBay listing, new tab), eBay price (`formatCurrency` with currency arg from listing),
+  AliExpress price (`SupplierPriceCell`: supplier price + margin vs eBay price when currencies match
+  + checked date), SKU (dash if null), source (platform badge + truncated URL), actions
+  (per-row AliExpress price-check icon button — shown when `canCheckSupplierPrice(listing)` —
+  and Edit button opening `EditSourceModal`). Exports `canCheckSupplierPrice` (AliExpress
+  source_url or numeric SKU), used by `page.tsx` for the bulk button count.
   Empty state card when `listings.length === 0`.
   Client-side pagination via local `page`/`pageSize` state (default 25 rows/page) slicing the
   passed `listings` prop; renders `<Pagination>` (`@/components/ui/Pagination`) below the table.
@@ -30,14 +41,23 @@ from eBay" (admin/super_admin only). Available on Pro/Business plans only.
 
 ## API routes
 
-- `GET /api/dropshipping/listings` — reads all rows ordered by `created_at DESC`. All
-  authenticated users. Used by `dashboard/layout.tsx` for hydration and by `page.tsx` after refresh.
-- `POST /api/dropshipping/listings/refresh` — `requireIntegrationAdmin` guard; fetches
-  from eBay via `fetchActiveListings(accessToken)` (Trading API GetMyeBaySelling, paginated);
-  upserts to `dropship_listings` with `onConflict: "ebay_listing_id"` (never overwrites
-  `source_url`/`source_platform`). Returns `{ synced: number }`.
-- `PATCH /api/dropshipping/listings/[id]` — all authenticated users; validates `sourceUrl`,
-  calls `detectPlatform`, updates row. Returns updated `DropshipListing`.
+- `GET /api/dropshipping/listings` — platform admin only (`verifyPlatformAdmin`); reads all
+  rows ordered by `created_at DESC`. Used by `dashboard/layout.tsx` for hydration and by
+  `page.tsx` after refresh.
+- `POST /api/dropshipping/listings/refresh` — `requireIntegrationAdmin` + `verifyPlatformAdmin`
+  guards; fetches from eBay via `fetchActiveListings(accessToken)` (Trading API GetMyeBaySelling,
+  paginated); upserts to `dropship_listings` with `onConflict: "ebay_listing_id"` (never
+  overwrites `source_url`/`source_platform`). Returns `{ synced: number }`.
+- `PATCH /api/dropshipping/listings/[id]` — platform admin only (`verifyPlatformAdmin`);
+  validates `sourceUrl`, calls `detectPlatform`, updates row. Returns updated `DropshipListing`.
+- `POST /api/dropshipping/listings/check-prices` — platform admin only (`verifyPlatformAdmin`). Body `{ id }`
+  checks one listing; empty body checks all (cap 50, sequential with 1.5s delay to avoid
+  AliExpress bot protection). Scrapes the AliExpress price via
+  `src/lib/integrations/aliexpress/scrape.ts` and stores the snapshot in
+  `supplier_price`/`supplier_currency`/`supplier_price_checked_at`. If a listing has no
+  `source_url` but a numeric SKU (= AliExpress item ID), the URL is derived as
+  `https://de.aliexpress.com/item/{sku}.html` and persisted with `source_platform`
+  `aliexpress`. Returns `{ checked, failed, results }` (per-listing ok/error).
 
 ## eBay API notes
 

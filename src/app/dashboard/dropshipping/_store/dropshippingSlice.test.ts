@@ -1,4 +1,10 @@
-import { dropshippingSlice, hydrateListings, upsertListings, updateListingSource } from "./dropshippingSlice";
+import {
+  dropshippingSlice,
+  hydrateListings,
+  upsertListings,
+  updateListingSource,
+  updateSupplierPrices,
+} from "./dropshippingSlice";
 import type { DropshipListing } from "@/types";
 
 const makeListing = (overrides: Partial<DropshipListing> = {}): DropshipListing => ({
@@ -12,6 +18,9 @@ const makeListing = (overrides: Partial<DropshipListing> = {}): DropshipListing 
   sku: "SKU-001",
   source_url: null,
   source_platform: null,
+  supplier_price: null,
+  supplier_currency: null,
+  supplier_price_checked_at: null,
   last_synced_at: "2026-06-23T00:00:00Z",
   created_at: "2026-06-23T00:00:00Z",
   ...overrides,
@@ -70,6 +79,57 @@ describe("dropshippingSlice", () => {
     expect(result.listings[0].source_url).toBe("https://www.amazon.com/dp/NEW");
     expect(result.listings[0].source_platform).toBe("amazon");
     expect(result.listings[1].source_url).toBeNull();
+  });
+
+  it("upsertListings preserves supplier price snapshot on refresh", () => {
+    const existing = makeListing({
+      supplier_price: 4.99,
+      supplier_currency: "EUR",
+      supplier_price_checked_at: "2026-07-01T00:00:00Z",
+    });
+    const state = { listings: [existing] };
+    const refreshed = makeListing({ title: "New Title" }); // supplier fields null
+    const result = reducer(state, upsertListings([refreshed]));
+    expect(result.listings[0].supplier_price).toBe(4.99);
+    expect(result.listings[0].supplier_currency).toBe("EUR");
+    expect(result.listings[0].supplier_price_checked_at).toBe("2026-07-01T00:00:00Z");
+  });
+
+  it("updateSupplierPrices sets snapshot and derived source_url only when unset", () => {
+    const unlinked = makeListing({ id: "uuid-1", ebay_listing_id: "ebay-1" });
+    const linked = makeListing({
+      id: "uuid-2",
+      ebay_listing_id: "ebay-2",
+      source_url: "https://de.aliexpress.com/item/999.html",
+      source_platform: "aliexpress",
+    });
+    const state = { listings: [unlinked, linked] };
+    const result = reducer(
+      state,
+      updateSupplierPrices([
+        {
+          id: "uuid-1",
+          supplier_price: 3.5,
+          supplier_currency: "EUR",
+          supplier_price_checked_at: "2026-07-10T00:00:00Z",
+          source_url: "https://de.aliexpress.com/item/111.html",
+          source_platform: "aliexpress",
+        },
+        {
+          id: "uuid-2",
+          supplier_price: 7.25,
+          supplier_currency: "EUR",
+          supplier_price_checked_at: "2026-07-10T00:00:00Z",
+          source_url: "https://de.aliexpress.com/item/SHOULD-NOT-OVERWRITE.html",
+          source_platform: "aliexpress",
+        },
+      ])
+    );
+    expect(result.listings[0].supplier_price).toBe(3.5);
+    expect(result.listings[0].source_url).toBe("https://de.aliexpress.com/item/111.html");
+    expect(result.listings[0].source_platform).toBe("aliexpress");
+    expect(result.listings[1].supplier_price).toBe(7.25);
+    expect(result.listings[1].source_url).toBe("https://de.aliexpress.com/item/999.html");
   });
 
   it("updateListingSource is a no-op if id not found", () => {

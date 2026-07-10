@@ -53,6 +53,10 @@ export default async function DashboardLayout({
 
   const tenantSchema = user.app_metadata?.tenant_schema as string | undefined;
 
+  // Fired in parallel with the main data fetch — avoids a sequential round-trip
+  // to the control plane before starting the main queries.
+  const isAdminPromise = isPlatformAdmin(user.email);
+
   // Fetch all collections once — hydrated into Redux so pages never refetch.
   // Products are fetched twice:
   //   1. Paginated (first page only) — for the inventory table.
@@ -142,8 +146,8 @@ export default async function DashboardLayout({
   const cookieStore = await cookies();
   const impersonatingTenant = cookieStore.get("kaufnest_impersonating")?.value ?? null;
 
-  // KaufNest platform admin? Drives the "Admin Panel" sidebar link.
-  const isAdmin = await isPlatformAdmin(user.email);
+  // KaufNest platform admin? Drives the "Admin Panel" + "Dropshipping" sidebar links.
+  const isAdmin = await isAdminPromise;
 
   // Tenant's subscription plan — drives platform-integrations gating.
   let tenantPlan: TenantPlan | null = null;
@@ -171,7 +175,7 @@ export default async function DashboardLayout({
       companyProfile={companyProfile ?? undefined}
       tenantPlan={tenantPlan}
       platformConnections={platformConnections ?? []}
-      dropshipListings={dropshipListings ?? []}
+      dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       platformPayouts={platformPayoutsData ?? []}
     >
       <ToastProvider>

@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -29,4 +30,15 @@ export async function isPlatformAdmin(email: string | null | undefined): Promise
     .single();
 
   return !!adminUser;
+}
+
+/**
+ * Returns a 403 NextResponse if the caller is not a platform admin, or null
+ * if the check passes. Use in API route handlers after resolving the user.
+ */
+export async function verifyPlatformAdmin(
+  email: string | null | undefined
+): Promise<NextResponse | null> {
+  const ok = await isPlatformAdmin(email);
+  return ok ? null : NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }

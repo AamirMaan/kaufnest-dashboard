@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ImageIcon } from "lucide-react";
+import { ImageIcon, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatCurrency } from "@/lib/utils/currency";
+import { useToast } from "@/components/ui/Toast";
+import { useAppDispatch } from "@/store/hooks";
+import { updateSupplierPrices } from "../_store/dropshippingSlice";
 import {
   Table,
   TableBody,
@@ -21,6 +24,55 @@ const DEFAULT_PAGE_SIZE = 25;
 
 interface ListingsTableProps {
   listings: DropshipListing[];
+}
+
+/** Mirrors the server-side rule: AliExpress link or numeric SKU (= AliExpress item ID). */
+export function canCheckSupplierPrice(listing: DropshipListing): boolean {
+  if (listing.source_url && listing.source_platform === "aliexpress") return true;
+  return !!listing.sku && /^\d{6,20}$/.test(listing.sku);
+}
+
+interface PriceCheckResult {
+  id: string;
+  ok: boolean;
+  supplier_price?: number;
+  supplier_currency?: string;
+  supplier_price_checked_at?: string;
+  error?: string;
+}
+
+function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
+  if (listing.supplier_price == null) {
+    return <span className="text-[var(--color-text-faint)]">—</span>;
+  }
+
+  // Margin only when both prices share a currency — otherwise comparison is misleading
+  const sameCurrency = listing.supplier_currency === listing.currency;
+  const diff = sameCurrency ? listing.current_price - listing.supplier_price : null;
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[var(--color-text-base)]">
+        {formatCurrency(listing.supplier_price, listing.supplier_currency as Currency)}
+      </span>
+      {diff !== null && (
+        <span
+          className={cn(
+            "text-xs font-medium",
+            diff > 0 ? "text-green-600" : "text-red-600"
+          )}
+        >
+          {diff > 0 ? "+" : ""}
+          {formatCurrency(diff, listing.currency as Currency)} margin
+        </span>
+      )}
+      {listing.supplier_price_checked_at && (
+        <span className="text-xs text-[var(--color-text-faint)]">
+          {new Date(listing.supplier_price_checked_at).toLocaleDateString()}
+        </span>
+      )}
+    </div>
+  );
 }
 
 function SourceBadge({ listing }: { listing: DropshipListing }) {
@@ -62,9 +114,47 @@ function SourceBadge({ listing }: { listing: DropshipListing }) {
 }
 
 export function ListingsTable({ listings }: ListingsTableProps) {
+  const dispatch = useAppDispatch();
+  const { success, error: toastError } = useToast();
   const [editTarget, setEditTarget] = useState<DropshipListing | null>(null);
+  const [checkingId, setCheckingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  async function handleCheckPrice(listing: DropshipListing) {
+    setCheckingId(listing.id);
+    try {
+      const res = await fetch("/api/dropshipping/listings/check-prices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: listing.id }),
+      });
+      const json = (await res.json()) as { results?: PriceCheckResult[]; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Price check failed");
+
+      const result = json.results?.[0];
+      if (!result?.ok || result.supplier_price == null) {
+        throw new Error(result?.error ?? "Price check failed");
+      }
+
+      dispatch(
+        updateSupplierPrices([
+          {
+            id: result.id,
+            supplier_price: result.supplier_price,
+            supplier_currency: result.supplier_currency ?? "EUR",
+            supplier_price_checked_at:
+              result.supplier_price_checked_at ?? new Date().toISOString(),
+          },
+        ])
+      );
+      success("AliExpress price updated.");
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Price check failed");
+    } finally {
+      setCheckingId(null);
+    }
+  }
 
   const pagedListings = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -89,10 +179,11 @@ export function ListingsTable({ listings }: ListingsTableProps) {
             <TableRow>
               <TableHead className="w-14">Image</TableHead>
               <TableHead>Title</TableHead>
-              <TableHead className="w-28">Price</TableHead>
+              <TableHead className="w-28">eBay Price</TableHead>
+              <TableHead className="w-36">AliExpress Price</TableHead>
               <TableHead className="w-32">SKU</TableHead>
               <TableHead>Source</TableHead>
-              <TableHead className="w-20 text-right">Actions</TableHead>
+              <TableHead className="w-32 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,6 +218,9 @@ export function ListingsTable({ listings }: ListingsTableProps) {
                   {formatCurrency(listing.current_price, listing.currency as Currency)}
                 </TableCell>
                 <TableCell className="text-sm">
+                  <SupplierPriceCell listing={listing} />
+                </TableCell>
+                <TableCell className="text-sm">
                   {listing.sku ? (
                     <span className="text-[var(--color-text-base)]">{listing.sku}</span>
                   ) : (
@@ -137,13 +231,30 @@ export function ListingsTable({ listings }: ListingsTableProps) {
                   <SourceBadge listing={listing} />
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setEditTarget(listing)}
-                  >
-                    Edit
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    {canCheckSupplierPrice(listing) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCheckPrice(listing)}
+                        disabled={checkingId !== null}
+                        title="Check AliExpress price"
+                        aria-label="Check AliExpress price"
+                      >
+                        <RefreshCw
+                          size={14}
+                          className={checkingId === listing.id ? "animate-spin" : ""}
+                        />
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setEditTarget(listing)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
