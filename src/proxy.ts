@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { canAccessRoute } from "@/lib/utils/permissions";
-import { createControlClient } from "@/lib/supabase/control";
+import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import type { UserRole } from "@/types";
 
 export async function proxy(request: NextRequest) {
@@ -105,6 +105,16 @@ export async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
+    }
+
+    // Platform-admin gate: /dashboard/dropshipping is only for platform admins
+    if (pathname.startsWith("/dashboard/dropshipping")) {
+      const adminOk = await isPlatformAdmin(user.email);
+      if (!adminOk) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
     }
   }
 

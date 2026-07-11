@@ -84,12 +84,6 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["super_admin", "admin", "accountant"],
   },
   {
-    label: "Dropshipping",
-    href: "/dashboard/dropshipping",
-    Icon: Package,
-    roles: ["super_admin", "admin", "accountant"],
-  },
-  {
     label: "Planner",
     href: "/dashboard/planner",
     Icon: Calculator,
@@ -124,6 +118,7 @@ export function Sidebar({
 
   const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
   const showAdminLink = role === "super_admin" && isPlatformAdmin;
+  const showDropshippingLink = isPlatformAdmin;
 
   return (
     <aside
@@ -191,23 +186,43 @@ export function Sidebar({
           );
         })}
 
-        {showAdminLink && (
-          <Link
-            href="/admin"
-            onClick={onMobileClose}
-            title={collapsed ? "Admin Panel" : undefined}
-            className={[
-              "flex items-center gap-3 rounded-(--radius-btn) text-sm font-medium transition-colors duration-150",
-              "mt-2 pt-2 border-t border-(--color-sidebar-border)",
-              collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
-              pathname.startsWith("/admin")
-                ? "bg-(--color-primary)/15 text-(--color-sidebar-active-text)"
-                : "text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover)",
-            ].join(" ")}
-          >
-            <Shield size={18} strokeWidth={1.75} className="shrink-0" />
-            <span className={collapsed ? "md:hidden" : ""}>Admin Panel</span>
-          </Link>
+        {(showDropshippingLink || showAdminLink) && (
+          <div className="mt-2 pt-2 border-t border-(--color-sidebar-border) space-y-0.5">
+            {showDropshippingLink && (
+              <Link
+                href="/dashboard/dropshipping"
+                onClick={onMobileClose}
+                title={collapsed ? "Dropshipping" : undefined}
+                className={[
+                  "flex items-center gap-3 rounded-(--radius-btn) text-sm font-medium transition-colors duration-150",
+                  collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
+                  pathname.startsWith("/dashboard/dropshipping")
+                    ? "bg-(--color-primary)/15 text-(--color-sidebar-active-text)"
+                    : "text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover)",
+                ].join(" ")}
+              >
+                <Package size={18} strokeWidth={1.75} className="shrink-0" />
+                <span className={collapsed ? "md:hidden" : ""}>Dropshipping</span>
+              </Link>
+            )}
+            {showAdminLink && (
+              <Link
+                href="/admin"
+                onClick={onMobileClose}
+                title={collapsed ? "Admin Panel" : undefined}
+                className={[
+                  "flex items-center gap-3 rounded-(--radius-btn) text-sm font-medium transition-colors duration-150",
+                  collapsed ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2" : "px-3 py-2",
+                  pathname.startsWith("/admin")
+                    ? "bg-(--color-primary)/15 text-(--color-sidebar-active-text)"
+                    : "text-(--color-sidebar-text) hover:text-(--color-sidebar-text-strong) hover:bg-(--color-sidebar-hover)",
+                ].join(" ")}
+              >
+                <Shield size={18} strokeWidth={1.75} className="shrink-0" />
+                <span className={collapsed ? "md:hidden" : ""}>Admin Panel</span>
+              </Link>
+            )}
+          </div>
         )}
       </nav>
     </aside>

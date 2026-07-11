@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { verifyPlatformAdmin } from "@/lib/supabase/control";
 import { detectPlatform } from "@/lib/utils/detectPlatform";
 import type { DropshipListing } from "@/types";
 
-// All authenticated roles (including accountant) may link supplier source URLs —
-// the Edit button is shown to all roles in the UI. Refresh (which calls eBay)
-// is the admin-only action; source URL editing is a data-entry task for anyone.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,6 +16,9 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const forbidden = await verifyPlatformAdmin(user.email);
+  if (forbidden) return forbidden;
 
   const { id } = await params;
   const body = (await req.json()) as { sourceUrl?: string };

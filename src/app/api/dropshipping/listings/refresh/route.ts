@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
+import { verifyPlatformAdmin } from "@/lib/supabase/control";
 import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { fetchActiveListings } from "@/lib/integrations/ebay/listings";
@@ -8,6 +9,10 @@ export async function POST() {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
   const { client } = auth.context;
+
+  const { data: { user } } = await client.auth.getUser();
+  const forbidden = await verifyPlatformAdmin(user?.email);
+  if (forbidden) return forbidden;
 
   const conn = await getConnection(client, "ebay");
   if (!conn || conn.status !== "connected") {

@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { RefreshCw, TriangleAlert, X } from "lucide-react";
+import { Euro, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { hasPermission } from "@/lib/utils/permissions";
-import { upsertListings } from "./_store/dropshippingSlice";
-import { ListingsTable } from "./_components/ListingsTable";
+import { upsertListings, updateSupplierPrices } from "./_store/dropshippingSlice";
+import { ListingsTable, canCheckSupplierPrice } from "./_components/ListingsTable";
 import type { DropshipListing } from "@/types";
 
 export default function DropshippingPage() {
@@ -21,6 +21,7 @@ export default function DropshippingPage() {
   const connections = useAppSelector((s) => s.integrations.connections);
   const listings = useAppSelector((s) => s.dropshipping.listings);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingPrices, setCheckingPrices] = useState(false);
   const [skuError, setSkuError] = useState(false);
 
   // 1. Plan gate
@@ -109,23 +110,93 @@ export default function DropshippingPage() {
     }
   }
 
+  const checkableCount = listings.filter(canCheckSupplierPrice).length;
+
+  async function handleCheckPrices() {
+    setCheckingPrices(true);
+    try {
+      const res = await fetch("/api/dropshipping/listings/check-prices", { method: "POST" });
+      const json = (await res.json()) as {
+        checked?: number;
+        failed?: number;
+        results?: Array<{
+          id: string;
+          ok: boolean;
+          supplier_price?: number;
+          supplier_currency?: string;
+          supplier_price_checked_at?: string;
+          error?: string;
+        }>;
+        error?: string;
+      };
+
+      if (!res.ok) throw new Error(json.error ?? "Price check failed");
+
+      const okResults = (json.results ?? []).filter(
+        (r) => r.ok && r.supplier_price != null
+      );
+      if (okResults.length > 0) {
+        dispatch(
+          updateSupplierPrices(
+            okResults.map((r) => ({
+              id: r.id,
+              supplier_price: r.supplier_price!,
+              supplier_currency: r.supplier_currency ?? "EUR",
+              supplier_price_checked_at:
+                r.supplier_price_checked_at ?? new Date().toISOString(),
+            }))
+          )
+        );
+      }
+
+      const failed = json.failed ?? 0;
+      if (failed > 0) {
+        const firstError = json.results?.find((r) => !r.ok)?.error;
+        toastError(
+          `Checked ${json.checked ?? 0}, failed ${failed}.${firstError ? ` ${firstError}` : ""}`
+        );
+      } else {
+        success(`Updated AliExpress prices for ${json.checked ?? 0} listing${json.checked === 1 ? "" : "s"}.`);
+      }
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Price check failed");
+    } finally {
+      setCheckingPrices(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Dropshipping Listings"
         description="Active eBay listings with linked supplier source products"
         action={
-          canRefresh ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-              {refreshing ? "Refreshing…" : "Refresh from eBay"}
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {checkableCount > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCheckPrices}
+                disabled={checkingPrices || refreshing}
+              >
+                <Euro size={14} className={checkingPrices ? "animate-pulse" : ""} />
+                {checkingPrices
+                  ? "Checking prices…"
+                  : `Check AliExpress Prices (${checkableCount})`}
+              </Button>
+            )}
+            {canRefresh && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing || checkingPrices}
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                {refreshing ? "Refreshing…" : "Refresh from eBay"}
+              </Button>
+            )}
+          </div>
         }
       />
 

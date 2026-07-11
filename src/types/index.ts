@@ -230,6 +230,9 @@ export interface DropshipListing {
   sku: string | null;
   source_url: string | null;
   source_platform: SourcePlatform | null;
+  supplier_price: number | null;
+  supplier_currency: string | null;
+  supplier_price_checked_at: string | null;
   last_synced_at: string;
   created_at: string;
 }

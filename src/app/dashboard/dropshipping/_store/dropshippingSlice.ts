@@ -20,14 +20,43 @@ export const dropshippingSlice = createSlice({
           (l) => l.ebay_listing_id === incoming.ebay_listing_id
         );
         if (index >= 0) {
-          // Preserve source_url and source_platform — refresh must not overwrite supplier links
+          // Preserve supplier link and price snapshot — refresh must not overwrite them
           state.listings[index] = {
             ...incoming,
             source_url: state.listings[index].source_url,
             source_platform: state.listings[index].source_platform,
+            supplier_price: state.listings[index].supplier_price,
+            supplier_currency: state.listings[index].supplier_currency,
+            supplier_price_checked_at: state.listings[index].supplier_price_checked_at,
           };
         } else {
           state.listings.push(incoming);
+        }
+      }
+    },
+    updateSupplierPrices(
+      state,
+      action: PayloadAction<
+        Array<{
+          id: string;
+          supplier_price: number;
+          supplier_currency: string;
+          supplier_price_checked_at: string;
+          source_url?: string;
+          source_platform?: SourcePlatform;
+        }>
+      >
+    ) {
+      for (const update of action.payload) {
+        const listing = state.listings.find((l) => l.id === update.id);
+        if (!listing) continue;
+        listing.supplier_price = update.supplier_price;
+        listing.supplier_currency = update.supplier_currency;
+        listing.supplier_price_checked_at = update.supplier_price_checked_at;
+        // The API derives+persists source_url from a numeric SKU on first check
+        if (update.source_url && !listing.source_url) {
+          listing.source_url = update.source_url;
+          listing.source_platform = update.source_platform ?? "aliexpress";
         }
       }
     },
@@ -44,5 +73,5 @@ export const dropshippingSlice = createSlice({
   },
 });
 
-export const { hydrateListings, upsertListings, updateListingSource } =
+export const { hydrateListings, upsertListings, updateSupplierPrices, updateListingSource } =
   dropshippingSlice.actions;
