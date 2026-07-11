@@ -2,14 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyPlatformAdmin } from "@/lib/supabase/control";
 import {
+  createScrapeSession,
   resolveSupplierUrl,
   scrapeAliExpressPrice,
 } from "@/lib/integrations/aliexpress/scrape";
+import { jitterDelayMs } from "@/lib/integrations/aliexpress/session";
 import type { DropshipListing } from "@/types";
 
-// Sequential with a small delay — parallel scraping trips AliExpress bot protection.
-const DELAY_BETWEEN_REQUESTS_MS = 1500;
+// Sequential with a randomized human-ish delay (2.5–5s, `jitterDelayMs`) —
+// parallel or fixed-cadence scraping trips AliExpress bot protection.
 const MAX_LISTINGS_PER_RUN = 50;
+
+// Worst case ~50 listings × ~5s+fetch ≈ 5 min. Honored on Vercel; harmless elsewhere.
+export const maxDuration = 300;
 
 export interface PriceCheckResult {
   id: string;
@@ -64,13 +69,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // One warm-up request per run: collects anti-bot cookies + a browser
+  // identity that every item-page fetch below reuses.
+  const session = await createScrapeSession();
+
   const results: PriceCheckResult[] = [];
 
   for (let i = 0; i < checkable.length; i++) {
     const { listing, url } = checkable[i];
 
     try {
-      const { price, currency } = await scrapeAliExpressPrice(url);
+      const { price, currency } = await scrapeAliExpressPrice(url, session);
       const checkedAt = new Date().toISOString();
 
       const { error: updateError } = await client
@@ -103,7 +112,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (i < checkable.length - 1) await sleep(DELAY_BETWEEN_REQUESTS_MS);
+    if (i < checkable.length - 1) await sleep(jitterDelayMs());
   }
 
   return NextResponse.json({

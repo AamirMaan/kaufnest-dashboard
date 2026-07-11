@@ -360,13 +360,13 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx": {
-    "mtime": 1782317092.0859768,
-    "ast_hash": "683d754bb483711d8f51507672a0c184",
+    "mtime": 1783763974.6129434,
+    "ast_hash": "879cf5593c6cfebe3f066cb43a5b6a20",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/ListingsTable.tsx": {
-    "mtime": 1783762064.9362576,
-    "ast_hash": "cb1ac8169676f679e2934255493e7ab0",
+    "mtime": 1783763707.1976614,
+    "ast_hash": "b5ade6ad6393b1c605d3996d21028991",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_store/dropshippingSlice.test.ts": {
@@ -885,13 +885,13 @@
     "semantic_hash": ""
   },
   "src/lib/utils/detectPlatform.test.ts": {
-    "mtime": 1782317092.257955,
-    "ast_hash": "91818a93f84e12bc9b4d2f396d7de9b3",
+    "mtime": 1783763989.4767168,
+    "ast_hash": "8d3795016042e9f3662020539c7d81c9",
     "semantic_hash": ""
   },
   "src/lib/utils/detectPlatform.ts": {
-    "mtime": 1782317092.3530493,
-    "ast_hash": "9a1972c94cde3a5be20da45d8249bf1d",
+    "mtime": 1783763559.4724636,
+    "ast_hash": "d5e87cb571adb08b582d2b7d4943998a",
     "semantic_hash": ""
   },
   "src/lib/utils/filters.test.ts": {
@@ -1285,13 +1285,13 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/CLAUDE.md": {
-    "mtime": 1783762064.828995,
-    "ast_hash": "7f42266ddbf46f759353b4d8191717a8",
+    "mtime": 1783764042.5025582,
+    "ast_hash": "1e063ade6fc47913bd8776785de8f02c",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/SKILL.md": {
-    "mtime": 1783762064.871169,
-    "ast_hash": "1e6d3388d664c2c781330039131d226c",
+    "mtime": 1783764060.623165,
+    "ast_hash": "70d58e8f07afb64f0e2fc87b1af9dbc0",
     "semantic_hash": ""
   },
   "src/app/dashboard/expenses/CLAUDE.md": {
@@ -1430,8 +1430,8 @@
     "semantic_hash": ""
   },
   "src/lib/integrations/aliexpress/scrape.ts": {
-    "mtime": 1783762066.8866694,
-    "ast_hash": "4473066b942f2c0ba1ce4541c9c5695f",
+    "mtime": 1783763580.7602313,
+    "ast_hash": "0a545aeba5ab375fd011c7faa115250f",
     "semantic_hash": ""
   },
   "src/lib/utils/excel.test.ts": {
@@ -1477,6 +1477,16 @@
   "docs/superpowers/specs/2026-07-06-platform-payouts-design.md": {
     "mtime": 1783372198.2776535,
     "ast_hash": "3ab017733dff79e1b8e0bda5fd88ea52",
+    "semantic_hash": ""
+  },
+  "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts": {
+    "mtime": 1783763998.665608,
+    "ast_hash": "27ea590c5ee35f3f6dbedfe2711821e6",
+    "semantic_hash": ""
+  },
+  "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts": {
+    "mtime": 1783763903.9415603,
+    "ast_hash": "38e3948cf9a02063506d2ffaa8579455",
     "semantic_hash": ""
   }
 }

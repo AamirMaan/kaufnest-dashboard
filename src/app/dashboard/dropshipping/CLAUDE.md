@@ -63,9 +63,11 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
 - `PATCH /api/dropshipping/listings/[id]` — platform admin only (`verifyPlatformAdmin`);
   validates `sourceUrl`, calls `detectPlatform`, updates row. Returns updated `DropshipListing`.
 - `POST /api/dropshipping/listings/check-prices` — platform admin only (`verifyPlatformAdmin`). Body `{ id }`
-  checks one listing; empty body checks all (cap 50, sequential with 1.5s delay to avoid
+  checks one listing; empty body checks all (cap 50, sequential with a randomized 2.5–5s
+  delay, one warmed-up scrape session per run, `maxDuration = 300` — all to dodge
   AliExpress bot protection). Scrapes the AliExpress price via
-  `src/lib/integrations/aliexpress/scrape.ts` and stores the snapshot in
+  `src/lib/integrations/aliexpress/scrape.ts` (pure session/header helpers + tests in
+  `.../aliexpress/session.ts`) and stores the snapshot in
   `supplier_price`/`supplier_currency`/`supplier_price_checked_at`. If a listing has no
   `source_url` but a numeric SKU (= AliExpress item ID), the URL is derived as
   `https://de.aliexpress.com/item/{sku}.html` and persisted with `source_platform`
