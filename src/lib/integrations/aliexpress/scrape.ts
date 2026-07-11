@@ -1,26 +1,18 @@
 // Best-effort AliExpress price scraper (server-only).
 //
 // The seller stores the AliExpress item ID as the eBay SKU (Custom Label), so the
-// product URL can be derived directly from a numeric SKU. Scraping parses the
-// price from the page's embedded data. AliExpress uses aggressive bot protection
-// (captcha / "punish" pages), so every parse path is best-effort and failures
-// surface as a readable error, never a crash.
+// product URL can be derived directly from a numeric SKU (see
+// `isAliExpressSku`/`aliExpressUrlFromSku` in `@/lib/utils/detectPlatform`, shared
+// with the client-side table/modal). Scraping parses the price from the page's
+// embedded data. AliExpress uses aggressive bot protection (captcha / "punish"
+// pages), so every parse path is best-effort and failures surface as a readable
+// error, never a crash.
 
-const ALIEXPRESS_DOMAIN = "de.aliexpress.com";
+import { isAliExpressSku, aliExpressUrlFromSku } from "@/lib/utils/detectPlatform";
 
 export interface SupplierPrice {
   price: number;
   currency: string;
-}
-
-/** True when the SKU looks like an AliExpress item ID (all digits, plausible length). */
-export function isAliExpressSku(sku: string | null): sku is string {
-  return !!sku && /^\d{6,20}$/.test(sku);
-}
-
-/** Builds the product URL from a numeric SKU (AliExpress item ID). */
-export function aliExpressUrlFromSku(sku: string): string {
-  return `https://${ALIEXPRESS_DOMAIN}/item/${sku}.html`;
 }
 
 /**

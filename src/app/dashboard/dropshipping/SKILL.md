@@ -7,6 +7,7 @@
 | Add a column to `dropship_listings` | new file in `supabase/migrations/` targeting `tenant_kaufnest.dropship_listings` directly (KaufNest-only feature — table exists in NO other schema, do NOT use `run_on_all_tenant_schemas` or `provision_tenant_schema()`), `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
 | Change AliExpress price scraping | `src/lib/integrations/aliexpress/scrape.ts` (URL derivation + HTML parsing), `src/app/api/dropshipping/listings/check-prices/route.ts` (orchestration/storage) |
 | Change source platform detection logic | `src/lib/utils/detectPlatform.ts` + its test |
+| Change the numeric-SKU-\>AliExpress-URL rule | `src/lib/utils/detectPlatform.ts` (`isAliExpressSku`/`aliExpressUrlFromSku`) + its test — single shared source, consumed by `scrape.ts` (server), `ListingsTable.tsx` (`canCheckSupplierPrice` + `SourceBadge` display fallback), and `resolveInitialSourceUrl.ts` (modal prefill) |
 | Add a new column to the listings table | `_components/ListingsTable.tsx` — add `TableHead` + `TableCell` |
 | Change eBay listing fields fetched | `src/lib/integrations/ebay/listings.ts` → update `EbayOffer`/`EbayInventoryItem` interfaces and mapping |
 | Add an action to the Redux slice | `_store/dropshippingSlice.ts` + `_store/dropshippingSlice.test.ts` |
@@ -27,9 +28,15 @@
 
 - **SKU = AliExpress item ID convention:** the seller stores the AliExpress item ID as the
   eBay Custom Label. A numeric SKU (6–20 digits) is treated as an AliExpress item ID and the
-  supplier URL is derived from it. This rule exists in two places that must stay in sync:
-  `resolveSupplierUrl`/`isAliExpressSku` (server, scrape.ts) and `canCheckSupplierPrice`
-  (client, ListingsTable.tsx).
+  supplier URL is derived from it via `isAliExpressSku`/`aliExpressUrlFromSku` in
+  `src/lib/utils/detectPlatform.ts` — the single shared source of truth (previously duplicated
+  across a server/client pair; now one helper used by `scrape.ts` `resolveSupplierUrl` (server),
+  `ListingsTable.tsx` `canCheckSupplierPrice` + `SourceBadge`'s display-only fallback link
+  (client), and `resolveInitialSourceUrl.ts` for the edit modal's prefill (client). Editing the
+  pattern only requires touching `detectPlatform.ts` + its test.
+  Note the display fallback in `SourceBadge` and the modal prefill in `EditSourceModal` are
+  **not** the same as persistence: the derived URL is only written to `dropship_listings.source_url`
+  once the admin opens the modal and clicks Save (or a price check runs — see below).
 
 - **Supplier snapshot preservation:** like `source_url`, the `supplier_price*` columns are
   excluded from the eBay refresh upsert payload and preserved in `upsertListings` (Redux),

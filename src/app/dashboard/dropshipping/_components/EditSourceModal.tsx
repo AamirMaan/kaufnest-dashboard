@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useAppDispatch } from "@/store/hooks";
 import { updateListingSource } from "../_store/dropshippingSlice";
 import { detectPlatform } from "@/lib/utils/detectPlatform";
+import { resolveInitialSourceUrl } from "./resolveInitialSourceUrl";
 import { Button } from "@/components/ui/Button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -48,7 +50,7 @@ function PlatformBadge({ url }: { url: string }) {
 export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
-  const [url, setUrl] = useState(listing?.source_url ?? "");
+  const [url, setUrl] = useState(() => resolveInitialSourceUrl(listing));
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -85,19 +87,22 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
 
   return (
     <Dialog open={!!listing} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[34rem]">
         <DialogHeader>
           <DialogTitle>Link Source Product</DialogTitle>
+          <DialogDescription className="truncate">
+            {listing?.title}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-2">
-          <p className="text-sm text-[var(--color-text-muted)] truncate">
-            {listing?.title}
-          </p>
+        <div className="space-y-4 py-1">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[var(--color-text-base)]">
-              Source product URL
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium text-[var(--color-text-base)]">
+                Source product URL
+              </label>
+              <PlatformBadge url={url} />
+            </div>
             <Input
               type="url"
               placeholder="https://www.amazon.com/dp/... or AliExpress URL"
@@ -105,14 +110,11 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
               onChange={(e) => setUrl(e.target.value)}
               className="w-full"
             />
-            <div className="h-5">
-              <PlatformBadge url={url} />
-            </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
           <Button

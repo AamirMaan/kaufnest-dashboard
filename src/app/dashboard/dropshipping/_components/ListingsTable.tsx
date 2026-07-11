@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatCurrency } from "@/lib/utils/currency";
+import { isAliExpressSku, aliExpressUrlFromSku } from "@/lib/utils/detectPlatform";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch } from "@/store/hooks";
 import { updateSupplierPrices } from "../_store/dropshippingSlice";
@@ -26,10 +27,10 @@ interface ListingsTableProps {
   listings: DropshipListing[];
 }
 
-/** Mirrors the server-side rule: AliExpress link or numeric SKU (= AliExpress item ID). */
+/** AliExpress link or numeric SKU (= AliExpress item ID) — see `isAliExpressSku`. */
 export function canCheckSupplierPrice(listing: DropshipListing): boolean {
   if (listing.source_url && listing.source_platform === "aliexpress") return true;
-  return !!listing.sku && /^\d{6,20}$/.test(listing.sku);
+  return isAliExpressSku(listing.sku);
 }
 
 interface PriceCheckResult {
@@ -76,7 +77,13 @@ function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
 }
 
 function SourceBadge({ listing }: { listing: DropshipListing }) {
-  if (!listing.source_url) {
+  // Not linked yet, but the SKU is a numeric AliExpress item ID — show the
+  // derived URL as a display-time fallback (not persisted until the user saves).
+  const derivedUrl = !listing.source_url && isAliExpressSku(listing.sku)
+    ? aliExpressUrlFromSku(listing.sku)
+    : null;
+
+  if (!listing.source_url && !derivedUrl) {
     return (
       <span className="inline-flex items-center rounded-full bg-[var(--color-surface-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-muted)]">
         Unlinked
@@ -84,15 +91,14 @@ function SourceBadge({ listing }: { listing: DropshipListing }) {
     );
   }
 
-  const label = listing.source_platform === "amazon"
-    ? "Amazon"
-    : listing.source_platform === "aliexpress"
-    ? "AliExpress"
-    : "Linked";
+  const url = listing.source_url ?? derivedUrl!;
+  const platform = listing.source_url ? listing.source_platform : "aliexpress";
 
-  const badgeClass = listing.source_platform === "amazon"
+  const label = platform === "amazon" ? "Amazon" : platform === "aliexpress" ? "AliExpress" : "Linked";
+
+  const badgeClass = platform === "amazon"
     ? "bg-blue-50 text-blue-700"
-    : listing.source_platform === "aliexpress"
+    : platform === "aliexpress"
     ? "bg-orange-50 text-orange-700"
     : "bg-[var(--color-surface-subtle)] text-[var(--color-text-muted)]";
 
@@ -102,13 +108,18 @@ function SourceBadge({ listing }: { listing: DropshipListing }) {
         {label}
       </span>
       <a
-        href={listing.source_url}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
         className="text-xs text-[var(--color-primary)] hover:underline truncate max-w-[180px] block"
       >
-        {listing.source_url}
+        {url}
       </a>
+      {derivedUrl && (
+        <span className="text-xs italic text-[var(--color-text-faint)]">
+          detected from SKU — not saved
+        </span>
+      )}
     </div>
   );
 }
