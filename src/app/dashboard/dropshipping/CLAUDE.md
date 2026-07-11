@@ -23,17 +23,28 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
 - `_components/ListingsTable.tsx` — shadcn `Table`. Columns: image (48×48 with fallback ImageIcon),
   title (linked to eBay listing, new tab), eBay price (`formatCurrency` with currency arg from listing),
   AliExpress price (`SupplierPriceCell`: supplier price + margin vs eBay price when currencies match
-  + checked date), SKU (dash if null), source (platform badge + truncated URL), actions
-  (per-row AliExpress price-check icon button — shown when `canCheckSupplierPrice(listing)` —
-  and Edit button opening `EditSourceModal`). Exports `canCheckSupplierPrice` (AliExpress
-  source_url or numeric SKU), used by `page.tsx` for the bulk button count.
+  + checked date), SKU (dash if null), source (platform badge + truncated URL — see `SourceBadge`
+  below), actions (per-row AliExpress price-check icon button — shown when
+  `canCheckSupplierPrice(listing)` — and Edit button opening `EditSourceModal`). Exports
+  `canCheckSupplierPrice` (AliExpress source_url or numeric SKU, via shared `isAliExpressSku`),
+  used by `page.tsx` for the bulk button count.
+  `SourceBadge`: when `source_url` is empty but the SKU is a numeric AliExpress item ID
+  (`isAliExpressSku`), shows the *derived* AliExpress URL/badge as a display-time fallback
+  (labelled "detected from SKU — not saved") — nothing is written to the DB until the admin
+  opens the edit modal and clicks Save.
   Empty state card when `listings.length === 0`.
   Client-side pagination via local `page`/`pageSize` state (default 25 rows/page) slicing the
   passed `listings` prop; renders `<Pagination>` (`@/components/ui/Pagination`) below the table.
   Renders `<EditSourceModal key={editTarget?.id ?? "none"} ... />` to remount the modal when edit target changes (state-reset pattern).
 - `_components/EditSourceModal.tsx` — shadcn `Dialog`. URL input with live `PlatformBadge`
-  (Amazon/AliExpress/Unknown based on `detectPlatform`). On save: `PATCH /api/dropshipping/listings/[id]`,
+  (Amazon/AliExpress/Unknown based on `detectPlatform`), shown inline next to the field label.
+  Initial input value comes from `resolveInitialSourceUrl(listing)` — prefills the derived
+  AliExpress URL when `source_url` is empty but the SKU qualifies, so the admin usually just
+  has to click Save instead of pasting the link. On save: `PATCH /api/dropshipping/listings/[id]`,
   dispatches `updateListingSource`, toasts success. Uses `{ success, error }` destructured from `useToast()`.
+- `_components/resolveInitialSourceUrl.ts` — pure helper (+ colocated test) extracted out of
+  `EditSourceModal.tsx` so the source_url-vs-derived-SKU precedence logic is unit-testable
+  without importing the client component tree.
 - `_store/dropshippingSlice.ts` — `state.dropshipping.listings: DropshipListing[]`.
   Actions: `hydrateListings` (full replace), `upsertListings` (replace-or-append by
   `ebay_listing_id`, preserves `source_url`/`source_platform`), `updateListingSource`
@@ -83,7 +94,10 @@ Redux only — no direct Supabase calls on the client.
 
 ## Shared dependencies
 
-- `src/lib/utils/detectPlatform` — `detectPlatform(url)`
+- `src/lib/utils/detectPlatform` — `detectPlatform(url)`, `isAliExpressSku(sku)`,
+  `aliExpressUrlFromSku(sku)` (single shared home for the "numeric SKU = AliExpress item ID"
+  rule; used by `scrape.ts` server-side and by `ListingsTable.tsx`/`resolveInitialSourceUrl.ts`
+  client-side)
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
 - `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`
 - `src/lib/utils/currency` — `formatCurrency(price, currency)`
