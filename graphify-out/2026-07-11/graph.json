@@ -970,7 +970,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "package_dependencies_stripe",
-      "community": 6,
+      "community": 58,
       "norm_label": "stripe"
     },
     {
@@ -1490,7 +1490,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_admin_page",
-      "community": 52,
+      "community": 69,
       "norm_label": "page.tsx"
     },
     {
@@ -1500,7 +1500,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_app_admin_page_plan_variant",
-      "community": 52,
+      "community": 69,
       "norm_label": "plan_variant"
     },
     {
@@ -1510,7 +1510,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_app_admin_page_status_variant",
-      "community": 52,
+      "community": 69,
       "norm_label": "status_variant"
     },
     {
@@ -1520,7 +1520,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "src_app_admin_page_adminpage",
-      "community": 52,
+      "community": 69,
       "norm_label": "adminpage()"
     },
     {
@@ -1530,7 +1530,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_admin_exit_impersonation_route",
-      "community": 6,
+      "community": 120,
       "norm_label": "route.ts"
     },
     {
@@ -1540,7 +1540,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_app_api_admin_exit_impersonation_route_post",
-      "community": 6,
+      "community": 120,
       "norm_label": "post()"
     },
     {
@@ -1650,7 +1650,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route",
-      "community": 6,
+      "community": 40,
       "norm_label": "route.ts"
     },
     {
@@ -1660,7 +1660,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_makeserviceclient",
-      "community": 6,
+      "community": 40,
       "norm_label": "makeserviceclient()"
     },
     {
@@ -1670,7 +1670,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_errormessage",
-      "community": 6,
+      "community": 40,
       "norm_label": "errormessage()"
     },
     {
@@ -1680,7 +1680,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_patch",
-      "community": 6,
+      "community": 40,
       "norm_label": "patch()"
     },
     {
@@ -1690,7 +1690,7 @@
       "source_location": "L116",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_delete",
-      "community": 6,
+      "community": 40,
       "norm_label": "delete()"
     },
     {
@@ -1710,7 +1710,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_route_verifyplatformadmin",
-      "community": 6,
+      "community": 40,
       "norm_label": "verifyplatformadmin()"
     },
     {
@@ -1750,7 +1750,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_billing_webhook_route",
-      "community": 6,
+      "community": 58,
       "norm_label": "route.ts"
     },
     {
@@ -1760,7 +1760,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_api_billing_webhook_route_post",
-      "community": 6,
+      "community": 58,
       "norm_label": "post()"
     },
     {
@@ -1790,7 +1790,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route",
-      "community": 6,
+      "community": 10,
       "norm_label": "route.ts"
     },
     {
@@ -1800,7 +1800,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_pricecheckresult",
-      "community": 6,
+      "community": 10,
       "norm_label": "pricecheckresult"
     },
     {
@@ -1810,7 +1810,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_sleep",
-      "community": 6,
+      "community": 10,
       "norm_label": "sleep()"
     },
     {
@@ -1820,7 +1820,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_post",
-      "community": 6,
+      "community": 10,
       "norm_label": "post()"
     },
     {
@@ -1830,7 +1830,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_refresh_route",
-      "community": 53,
+      "community": 37,
       "norm_label": "route.ts"
     },
     {
@@ -1840,7 +1840,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_refresh_route_post",
-      "community": 53,
+      "community": 37,
       "norm_label": "post()"
     },
     {
@@ -2120,7 +2120,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_components_recordtransfermodal",
-      "community": 15,
+      "community": 5,
       "norm_label": "recordtransfermodal.tsx"
     },
     {
@@ -2140,7 +2140,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_app_dashboard_components_recordtransfermodal_today",
-      "community": 15,
+      "community": 5,
       "norm_label": "today()"
     },
     {
@@ -2150,7 +2150,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "src_app_dashboard_components_recordtransfermodal_recordtransfermodal",
-      "community": 15,
+      "community": 5,
       "norm_label": "recordtransfermodal()"
     },
     {
@@ -2317,7 +2317,7 @@
       "label": "EditSourceModalProps",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L19",
+      "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodalprops",
       "community": 10,
@@ -2327,7 +2327,7 @@
       "label": "PlatformBadge()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L24",
+      "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_editsourcemodal_platformbadge",
       "community": 10,
@@ -2337,7 +2337,7 @@
       "label": "EditSourceModal()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L48",
+      "source_location": "L50",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
       "community": 10,
@@ -2357,7 +2357,7 @@
       "label": "ListingsTableProps",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L25",
+      "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_listingstableprops",
       "community": 10,
@@ -2367,17 +2367,17 @@
       "label": "canCheckSupplierPrice()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L30",
+      "source_location": "L31",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_canchecksupplierprice",
-      "community": 34,
+      "community": 10,
       "norm_label": "canchecksupplierprice()"
     },
     {
       "label": "PriceCheckResult",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L35",
+      "source_location": "L36",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_pricecheckresult",
       "community": 10,
@@ -2387,7 +2387,7 @@
       "label": "SupplierPriceCell()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L44",
+      "source_location": "L45",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_supplierpricecell",
       "community": 10,
@@ -2397,7 +2397,7 @@
       "label": "SourceBadge()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L78",
+      "source_location": "L79",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
       "community": 10,
@@ -2407,11 +2407,51 @@
       "label": "ListingsTable()",
       "file_type": "code",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L116",
+      "source_location": "L127",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
-      "community": 34,
+      "community": 15,
       "norm_label": "listingstable()"
+    },
+    {
+      "label": "resolveInitialSourceUrl.test.ts",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "community": 10,
+      "norm_label": "resolveinitialsourceurl.test.ts"
+    },
+    {
+      "label": "makeListing()",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L4",
+      "_origin": "ast",
+      "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test_makelisting",
+      "community": 10,
+      "norm_label": "makelisting()"
+    },
+    {
+      "label": "resolveInitialSourceUrl.ts",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "community": 10,
+      "norm_label": "resolveinitialsourceurl.ts"
+    },
+    {
+      "label": "resolveInitialSourceUrl()",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
+      "community": 10,
+      "norm_label": "resolveinitialsourceurl()"
     },
     {
       "label": "dropshippingSlice.test.ts",
@@ -2420,7 +2460,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice_test",
-      "community": 62,
+      "community": 10,
       "norm_label": "dropshippingslice.test.ts"
     },
     {
@@ -2430,7 +2470,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice_test_makelisting",
-      "community": 62,
+      "community": 10,
       "norm_label": "makelisting()"
     },
     {
@@ -2440,7 +2480,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice",
-      "community": 62,
+      "community": 10,
       "norm_label": "dropshippingslice.ts"
     },
     {
@@ -2450,7 +2490,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice_dropshippingstate",
-      "community": 62,
+      "community": 10,
       "norm_label": "dropshippingstate"
     },
     {
@@ -2460,7 +2500,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice_initialstate",
-      "community": 62,
+      "community": 10,
       "norm_label": "initialstate"
     },
     {
@@ -2470,7 +2510,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_store_dropshippingslice_dropshippingslice",
-      "community": 62,
+      "community": 10,
       "norm_label": "dropshippingslice"
     },
     {
@@ -2480,7 +2520,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_page",
-      "community": 34,
+      "community": 15,
       "norm_label": "page.tsx"
     },
     {
@@ -2490,7 +2530,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_page_dropshippingpage",
-      "community": 34,
+      "community": 15,
       "norm_label": "dropshippingpage()"
     },
     {
@@ -2660,7 +2700,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal",
-      "community": 18,
+      "community": 8,
       "norm_label": "importexpensesmodal.tsx"
     },
     {
@@ -2670,7 +2710,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_valid_categories",
-      "community": 18,
+      "community": 8,
       "norm_label": "valid_categories"
     },
     {
@@ -2680,7 +2720,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_valid_currencies",
-      "community": 18,
+      "community": 8,
       "norm_label": "valid_currencies"
     },
     {
@@ -2690,7 +2730,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_template_headers",
-      "community": 18,
+      "community": 8,
       "norm_label": "template_headers"
     },
     {
@@ -2700,7 +2740,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_template_example",
-      "community": 18,
+      "community": 8,
       "norm_label": "template_example"
     },
     {
@@ -2720,7 +2760,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_validaterow",
-      "community": 18,
+      "community": 8,
       "norm_label": "validaterow()"
     },
     {
@@ -2730,7 +2770,7 @@
       "source_location": "L76",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_props",
-      "community": 18,
+      "community": 8,
       "norm_label": "props"
     },
     {
@@ -2740,7 +2780,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_importexpensesmodal",
-      "community": 15,
+      "community": 8,
       "norm_label": "importexpensesmodal()"
     },
     {
@@ -2830,7 +2870,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_page",
-      "community": 15,
+      "community": 8,
       "norm_label": "page.tsx"
     },
     {
@@ -2840,7 +2880,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_page_categories",
-      "community": 15,
+      "community": 8,
       "norm_label": "categories"
     },
     {
@@ -2900,7 +2940,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_components_connectioncard_connectioncard",
-      "community": 15,
+      "community": 28,
       "norm_label": "connectioncard()"
     },
     {
@@ -2970,7 +3010,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_page",
-      "community": 34,
+      "community": 28,
       "norm_label": "page.tsx"
     },
     {
@@ -2980,7 +3020,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_page_platforms",
-      "community": 34,
+      "community": 28,
       "norm_label": "platforms"
     },
     {
@@ -2990,7 +3030,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_page_platform_labels",
-      "community": 34,
+      "community": 28,
       "norm_label": "platform_labels"
     },
     {
@@ -3000,7 +3040,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_page_integrationscontent",
-      "community": 34,
+      "community": 28,
       "norm_label": "integrationscontent()"
     },
     {
@@ -3010,7 +3050,7 @@
       "source_location": "L106",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_page_integrationspage",
-      "community": 34,
+      "community": 28,
       "norm_label": "integrationspage()"
     },
     {
@@ -3060,7 +3100,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal",
-      "community": 28,
+      "community": 52,
       "norm_label": "addproductmodal.tsx"
     },
     {
@@ -3070,7 +3110,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal_props",
-      "community": 28,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -3080,7 +3120,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal_formstate",
-      "community": 28,
+      "community": 52,
       "norm_label": "formstate"
     },
     {
@@ -3090,7 +3130,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal_defaults",
-      "community": 28,
+      "community": 52,
       "norm_label": "defaults"
     },
     {
@@ -3100,7 +3140,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal_addproductmodal",
-      "community": 28,
+      "community": 52,
       "norm_label": "addproductmodal()"
     },
     {
@@ -3110,7 +3150,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal",
-      "community": 28,
+      "community": 52,
       "norm_label": "editproductmodal.tsx"
     },
     {
@@ -3120,7 +3160,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_props",
-      "community": 28,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -3130,7 +3170,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_formstate",
-      "community": 28,
+      "community": 52,
       "norm_label": "formstate"
     },
     {
@@ -3140,7 +3180,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_producttoform",
-      "community": 28,
+      "community": 52,
       "norm_label": "producttoform()"
     },
     {
@@ -3150,7 +3190,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_blankform",
-      "community": 28,
+      "community": 52,
       "norm_label": "blankform"
     },
     {
@@ -3160,7 +3200,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_editproductmodal",
-      "community": 28,
+      "community": 52,
       "norm_label": "editproductmodal()"
     },
     {
@@ -3200,7 +3240,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice",
-      "community": 28,
+      "community": 51,
       "norm_label": "inventoryslice.ts"
     },
     {
@@ -3220,7 +3260,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice_inventorystate",
-      "community": 28,
+      "community": 51,
       "norm_label": "inventorystate"
     },
     {
@@ -3230,7 +3270,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice_initialstate",
-      "community": 28,
+      "community": 51,
       "norm_label": "initialstate"
     },
     {
@@ -3240,7 +3280,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice_fetchinventorypage",
-      "community": 28,
+      "community": 51,
       "norm_label": "fetchinventorypage"
     },
     {
@@ -3260,7 +3300,7 @@
       "source_location": "L83",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice_applyhydratepage",
-      "community": 28,
+      "community": 51,
       "norm_label": "applyhydratepage()"
     },
     {
@@ -3280,7 +3320,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_page",
-      "community": 28,
+      "community": 8,
       "norm_label": "page.tsx"
     },
     {
@@ -3290,7 +3330,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_page_islowstock",
-      "community": 28,
+      "community": 8,
       "norm_label": "islowstock()"
     },
     {
@@ -3820,7 +3860,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal",
-      "community": 5,
+      "community": 52,
       "norm_label": "addpurchasemodal.tsx"
     },
     {
@@ -3830,7 +3870,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal_currencies",
-      "community": 5,
+      "community": 52,
       "norm_label": "currencies"
     },
     {
@@ -3840,7 +3880,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal_props",
-      "community": 5,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -3850,7 +3890,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal_formstate",
-      "community": 5,
+      "community": 52,
       "norm_label": "formstate"
     },
     {
@@ -3860,7 +3900,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal_today",
-      "community": 5,
+      "community": 52,
       "norm_label": "today()"
     },
     {
@@ -3870,7 +3910,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_addpurchasemodal_makedefaults",
-      "community": 5,
+      "community": 52,
       "norm_label": "makedefaults()"
     },
     {
@@ -3890,7 +3930,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal",
-      "community": 5,
+      "community": 52,
       "norm_label": "editpurchasemodal.tsx"
     },
     {
@@ -3900,7 +3940,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal_currencies",
-      "community": 5,
+      "community": 52,
       "norm_label": "currencies"
     },
     {
@@ -3920,7 +3960,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal_formstate",
-      "community": 5,
+      "community": 52,
       "norm_label": "formstate"
     },
     {
@@ -3930,7 +3970,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal_purchasetoform",
-      "community": 5,
+      "community": 52,
       "norm_label": "purchasetoform()"
     },
     {
@@ -3940,7 +3980,7 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal_blankform",
-      "community": 5,
+      "community": 52,
       "norm_label": "blankform"
     },
     {
@@ -4120,7 +4160,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_page",
-      "community": 19,
+      "community": 8,
       "norm_label": "page.tsx"
     },
     {
@@ -4140,7 +4180,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page",
-      "community": 8,
+      "community": 15,
       "norm_label": "page.tsx"
     },
     {
@@ -4150,7 +4190,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page_pageprops",
-      "community": 8,
+      "community": 15,
       "norm_label": "pageprops"
     },
     {
@@ -4170,7 +4210,7 @@
       "source_location": "L494",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page_finrow",
-      "community": 8,
+      "community": 15,
       "norm_label": "finrow()"
     },
     {
@@ -4290,7 +4330,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_editsalemodal_props",
-      "community": 86,
+      "community": 12,
       "norm_label": "props"
     },
     {
@@ -4690,7 +4730,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_test",
-      "community": 86,
+      "community": 22,
       "norm_label": "ordermath.test.ts"
     },
     {
@@ -4700,7 +4740,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_test_makesale",
-      "community": 86,
+      "community": 22,
       "norm_label": "makesale()"
     },
     {
@@ -4710,7 +4750,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath",
-      "community": 86,
+      "community": 22,
       "norm_label": "ordermath.ts"
     },
     {
@@ -4720,7 +4760,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_computenetproceeds",
-      "community": 86,
+      "community": 22,
       "norm_label": "computenetproceeds()"
     },
     {
@@ -4730,7 +4770,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_computegrossprofit",
-      "community": 86,
+      "community": 22,
       "norm_label": "computegrossprofit()"
     },
     {
@@ -4890,7 +4930,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_store_salesslice_salesstate",
-      "community": 86,
+      "community": 12,
       "norm_label": "salesstate"
     },
     {
@@ -4940,7 +4980,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_page",
-      "community": 16,
+      "community": 15,
       "norm_label": "page.tsx"
     },
     {
@@ -4950,7 +4990,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_page_platforms",
-      "community": 16,
+      "community": 15,
       "norm_label": "platforms"
     },
     {
@@ -5010,7 +5050,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_editusermodal",
-      "community": 8,
+      "community": 52,
       "norm_label": "editusermodal.tsx"
     },
     {
@@ -5020,7 +5060,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_editusermodal_roles",
-      "community": 8,
+      "community": 52,
       "norm_label": "roles"
     },
     {
@@ -5050,7 +5090,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_editusermodal_editusermodal",
-      "community": 8,
+      "community": 52,
       "norm_label": "editusermodal()"
     },
     {
@@ -5060,7 +5100,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_inviteusermodal",
-      "community": 8,
+      "community": 52,
       "norm_label": "inviteusermodal.tsx"
     },
     {
@@ -5070,7 +5110,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_inviteusermodal_roles",
-      "community": 8,
+      "community": 52,
       "norm_label": "roles"
     },
     {
@@ -5080,7 +5120,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_inviteusermodal_props",
-      "community": 8,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -5100,7 +5140,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_inviteusermodal_defaults",
-      "community": 8,
+      "community": 52,
       "norm_label": "defaults"
     },
     {
@@ -5110,7 +5150,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_app_dashboard_users_components_inviteusermodal_inviteusermodal",
-      "community": 8,
+      "community": 52,
       "norm_label": "inviteusermodal()"
     },
     {
@@ -5440,7 +5480,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_modals_deleteconfirmmodal",
-      "community": 5,
+      "community": 52,
       "norm_label": "deleteconfirmmodal.tsx"
     },
     {
@@ -5450,7 +5490,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_components_modals_deleteconfirmmodal_props",
-      "community": 5,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -5460,7 +5500,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_modals_deleteconfirmmodal_deleteconfirmmodal",
-      "community": 5,
+      "community": 8,
       "norm_label": "deleteconfirmmodal()"
     },
     {
@@ -5570,7 +5610,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_badge",
-      "community": 49,
+      "community": 55,
       "norm_label": "badge.tsx"
     },
     {
@@ -5580,7 +5620,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_components_ui_badge_badgevariant",
-      "community": 49,
+      "community": 55,
       "norm_label": "badgevariant"
     },
     {
@@ -5590,7 +5630,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_components_ui_badge_variant_classes",
-      "community": 49,
+      "community": 55,
       "norm_label": "variant_classes"
     },
     {
@@ -5600,7 +5640,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "src_components_ui_badge_role_variants",
-      "community": 49,
+      "community": 55,
       "norm_label": "role_variants"
     },
     {
@@ -5610,7 +5650,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_components_ui_badge_action_variants",
-      "community": 49,
+      "community": 55,
       "norm_label": "action_variants"
     },
     {
@@ -5620,7 +5660,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_components_ui_badge_badgeprops",
-      "community": 49,
+      "community": 55,
       "norm_label": "badgeprops"
     },
     {
@@ -5630,7 +5670,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_components_ui_badge_badge",
-      "community": 49,
+      "community": 69,
       "norm_label": "badge()"
     },
     {
@@ -5640,7 +5680,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_components_ui_badge_rolebadge",
-      "community": 49,
+      "community": 55,
       "norm_label": "rolebadge()"
     },
     {
@@ -5660,7 +5700,7 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "src_components_ui_badge_category_labels",
-      "community": 49,
+      "community": 55,
       "norm_label": "category_labels"
     },
     {
@@ -5680,7 +5720,7 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_components_ui_badge_platform_labels",
-      "community": 49,
+      "community": 55,
       "norm_label": "platform_labels"
     },
     {
@@ -5690,7 +5730,7 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "src_components_ui_badge_platform_variants",
-      "community": 49,
+      "community": 55,
       "norm_label": "platform_variants"
     },
     {
@@ -5700,7 +5740,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "src_components_ui_badge_platformbadge",
-      "community": 8,
+      "community": 15,
       "norm_label": "platformbadge()"
     },
     {
@@ -5710,7 +5750,7 @@
       "source_location": "L91",
       "_origin": "ast",
       "id": "src_components_ui_badge_status_variants",
-      "community": 49,
+      "community": 55,
       "norm_label": "status_variants"
     },
     {
@@ -5720,7 +5760,7 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "src_components_ui_badge_statusbadge",
-      "community": 8,
+      "community": 15,
       "norm_label": "statusbadge()"
     },
     {
@@ -5800,7 +5840,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_datatable",
-      "community": 19,
+      "community": 8,
       "norm_label": "datatable.tsx"
     },
     {
@@ -5810,7 +5850,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_components_ui_datatable_column",
-      "community": 19,
+      "community": 8,
       "norm_label": "column"
     },
     {
@@ -5820,7 +5860,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_components_ui_datatable_sortstate",
-      "community": 19,
+      "community": 8,
       "norm_label": "sortstate"
     },
     {
@@ -5830,7 +5870,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_ui_datatable_datatableprops",
-      "community": 19,
+      "community": 8,
       "norm_label": "datatableprops"
     },
     {
@@ -5840,7 +5880,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_components_ui_datatable_datatable",
-      "community": 19,
+      "community": 8,
       "norm_label": "datatable()"
     },
     {
@@ -5850,7 +5890,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_filterbar",
-      "community": 19,
+      "community": 71,
       "norm_label": "filterbar.tsx"
     },
     {
@@ -5860,7 +5900,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_presets",
-      "community": 19,
+      "community": 71,
       "norm_label": "presets"
     },
     {
@@ -5870,7 +5910,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_currencies",
-      "community": 19,
+      "community": 71,
       "norm_label": "currencies"
     },
     {
@@ -5880,7 +5920,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterlabel",
-      "community": 19,
+      "community": 71,
       "norm_label": "filterlabel()"
     },
     {
@@ -5890,7 +5930,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterbarprops",
-      "community": 19,
+      "community": 71,
       "norm_label": "filterbarprops"
     },
     {
@@ -5900,7 +5940,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterbar",
-      "community": 19,
+      "community": 8,
       "norm_label": "filterbar()"
     },
     {
@@ -5910,7 +5950,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_formfields",
-      "community": 5,
+      "community": 52,
       "norm_label": "formfields.tsx"
     },
     {
@@ -5920,7 +5960,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_components_ui_formfields_fieldprops",
-      "community": 5,
+      "community": 52,
       "norm_label": "fieldprops"
     },
     {
@@ -5940,7 +5980,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_components_ui_formfields_inputprops",
-      "community": 5,
+      "community": 52,
       "norm_label": "inputprops"
     },
     {
@@ -5960,7 +6000,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_components_ui_formfields_selectprops",
-      "community": 5,
+      "community": 52,
       "norm_label": "selectprops"
     },
     {
@@ -5970,7 +6010,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_components_ui_formfields_select",
-      "community": 8,
+      "community": 52,
       "norm_label": "select()"
     },
     {
@@ -5980,7 +6020,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "src_components_ui_formfields_textareaprops",
-      "community": 5,
+      "community": 52,
       "norm_label": "textareaprops"
     },
     {
@@ -5990,7 +6030,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_components_ui_formfields_textarea",
-      "community": 5,
+      "community": 52,
       "norm_label": "textarea()"
     },
     {
@@ -6000,7 +6040,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "src_components_ui_formfields_row",
-      "community": 28,
+      "community": 52,
       "norm_label": "row()"
     },
     {
@@ -6010,7 +6050,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "src_components_ui_formfields_checkboxprops",
-      "community": 5,
+      "community": 52,
       "norm_label": "checkboxprops"
     },
     {
@@ -6020,7 +6060,7 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "src_components_ui_formfields_checkbox",
-      "community": 5,
+      "community": 52,
       "norm_label": "checkbox()"
     },
     {
@@ -6030,7 +6070,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_modal",
-      "community": 18,
+      "community": 52,
       "norm_label": "modal.tsx"
     },
     {
@@ -6040,7 +6080,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_components_ui_modal_modalprops",
-      "community": 18,
+      "community": 52,
       "norm_label": "modalprops"
     },
     {
@@ -6050,7 +6090,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_components_ui_modal_modal",
-      "community": 18,
+      "community": 52,
       "norm_label": "modal()"
     },
     {
@@ -6060,7 +6100,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_pagination_test",
-      "community": 28,
+      "community": 8,
       "norm_label": "pagination.test.ts"
     },
     {
@@ -6070,7 +6110,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_pagination",
-      "community": 28,
+      "community": 8,
       "norm_label": "pagination.tsx"
     },
     {
@@ -6080,7 +6120,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_components_ui_pagination_pagerangelabel",
-      "community": 28,
+      "community": 8,
       "norm_label": "pagerangelabel()"
     },
     {
@@ -6090,7 +6130,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_components_ui_pagination_page_size_options",
-      "community": 28,
+      "community": 8,
       "norm_label": "page_size_options"
     },
     {
@@ -6100,7 +6140,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_components_ui_pagination_paginationprops",
-      "community": 28,
+      "community": 8,
       "norm_label": "paginationprops"
     },
     {
@@ -6110,7 +6150,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "src_components_ui_pagination_pagination",
-      "community": 28,
+      "community": 8,
       "norm_label": "pagination()"
     },
     {
@@ -6210,7 +6250,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_toast",
-      "community": 52,
+      "community": 118,
       "norm_label": "toast.tsx"
     },
     {
@@ -6220,7 +6260,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastvariant",
-      "community": 52,
+      "community": 118,
       "norm_label": "toastvariant"
     },
     {
@@ -6230,7 +6270,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_ui_toast_toast",
-      "community": 52,
+      "community": 118,
       "norm_label": "toast"
     },
     {
@@ -6240,7 +6280,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastcontextvalue",
-      "community": 52,
+      "community": 118,
       "norm_label": "toastcontextvalue"
     },
     {
@@ -6250,7 +6290,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastcontext",
-      "community": 52,
+      "community": 118,
       "norm_label": "toastcontext"
     },
     {
@@ -6270,7 +6310,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_components_ui_toast_variant_config",
-      "community": 52,
+      "community": 118,
       "norm_label": "variant_config"
     },
     {
@@ -6510,87 +6550,67 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape",
-      "community": 6,
+      "community": 10,
       "norm_label": "scrape.ts"
     },
     {
       "label": "SupplierPrice",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L11",
+      "source_location": "L13",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_supplierprice",
-      "community": 6,
+      "community": 10,
       "norm_label": "supplierprice"
-    },
-    {
-      "label": "isAliExpressSku()",
-      "file_type": "code",
-      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L17",
-      "_origin": "ast",
-      "id": "src_lib_integrations_aliexpress_scrape_isaliexpresssku",
-      "community": 6,
-      "norm_label": "isaliexpresssku()"
-    },
-    {
-      "label": "aliExpressUrlFromSku()",
-      "file_type": "code",
-      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L22",
-      "_origin": "ast",
-      "id": "src_lib_integrations_aliexpress_scrape_aliexpressurlfromsku",
-      "community": 6,
-      "norm_label": "aliexpressurlfromsku()"
     },
     {
       "label": "resolveSupplierUrl()",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L30",
+      "source_location": "L22",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
-      "community": 6,
+      "community": 10,
       "norm_label": "resolvesupplierurl()"
     },
     {
       "label": "parseJsonLd()",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L40",
+      "source_location": "L32",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parsejsonld",
-      "community": 6,
+      "community": 10,
       "norm_label": "parsejsonld()"
     },
     {
       "label": "parseOgMeta()",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L65",
+      "source_location": "L57",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parseogmeta",
-      "community": 6,
+      "community": 10,
       "norm_label": "parseogmeta()"
     },
     {
       "label": "parseRunParams()",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L72",
+      "source_location": "L64",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parserunparams",
-      "community": 6,
+      "community": 10,
       "norm_label": "parserunparams()"
     },
     {
       "label": "scrapeAliExpressPrice()",
       "file_type": "code",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L85",
+      "source_location": "L77",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
-      "community": 6,
+      "community": 10,
       "norm_label": "scrapealiexpressprice()"
     },
     {
@@ -6600,7 +6620,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazon.ts"
     },
     {
@@ -6610,7 +6630,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazontokenresponse",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazontokenresponse"
     },
     {
@@ -6620,7 +6640,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonmoney",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonmoney"
     },
     {
@@ -6630,7 +6650,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonorder",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonorder"
     },
     {
@@ -6640,7 +6660,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonordersresponse",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonordersresponse"
     },
     {
@@ -6650,7 +6670,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonorderitem",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonorderitem"
     },
     {
@@ -6660,7 +6680,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonorderitemsresponse",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonorderitemsresponse"
     },
     {
@@ -6670,7 +6690,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_redirecturi",
-      "community": 40,
+      "community": 27,
       "norm_label": "redirecturi()"
     },
     {
@@ -6680,7 +6700,7 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_requesttoken",
-      "community": 40,
+      "community": 27,
       "norm_label": "requesttoken()"
     },
     {
@@ -6690,7 +6710,7 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_mapstatus",
-      "community": 40,
+      "community": 27,
       "norm_label": "mapstatus()"
     },
     {
@@ -6700,7 +6720,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "src_lib_integrations_amazon_amazonadapter",
-      "community": 40,
+      "community": 27,
       "norm_label": "amazonadapter"
     },
     {
@@ -6750,7 +6770,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebay.ts"
     },
     {
@@ -6760,7 +6780,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebaytokenresponse",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebaytokenresponse"
     },
     {
@@ -6770,7 +6790,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebaymoney",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebaymoney"
     },
     {
@@ -6780,7 +6800,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebaylineitem",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebaylineitem"
     },
     {
@@ -6790,7 +6810,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebayorder",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebayorder"
     },
     {
@@ -6800,7 +6820,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebayordersresponse",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebayordersresponse"
     },
     {
@@ -6810,7 +6830,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_basicauthheader",
-      "community": 66,
+      "community": 27,
       "norm_label": "basicauthheader()"
     },
     {
@@ -6820,7 +6840,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_requesttoken",
-      "community": 66,
+      "community": 27,
       "norm_label": "requesttoken()"
     },
     {
@@ -6830,7 +6850,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_mapstatus",
-      "community": 66,
+      "community": 27,
       "norm_label": "mapstatus()"
     },
     {
@@ -6840,7 +6860,7 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_ebayadapter",
-      "community": 66,
+      "community": 27,
       "norm_label": "ebayadapter"
     },
     {
@@ -6990,7 +7010,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test",
-      "community": 86,
+      "community": 12,
       "norm_label": "mergeimportedsale.test.ts"
     },
     {
@@ -7000,7 +7020,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test_existingsale",
-      "community": 86,
+      "community": 12,
       "norm_label": "existingsale"
     },
     {
@@ -7010,7 +7030,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test_incomingsale",
-      "community": 86,
+      "community": 12,
       "norm_label": "incomingsale"
     },
     {
@@ -7020,7 +7040,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale",
-      "community": 86,
+      "community": 12,
       "norm_label": "mergeimportedsale.ts"
     },
     {
@@ -7030,7 +7050,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_platform_owned",
-      "community": 86,
+      "community": 12,
       "norm_label": "platform_owned"
     },
     {
@@ -7040,7 +7060,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_mergeimportedsale",
-      "community": 86,
+      "community": 12,
       "norm_label": "mergeimportedsale()"
     },
     {
@@ -7050,7 +7070,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_registry",
-      "community": 37,
+      "community": 27,
       "norm_label": "registry.ts"
     },
     {
@@ -7060,7 +7080,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_lib_integrations_registry_adapters",
-      "community": 37,
+      "community": 27,
       "norm_label": "adapters"
     },
     {
@@ -7090,7 +7110,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore",
-      "community": 27,
+      "community": 37,
       "norm_label": "tokenstore.ts"
     },
     {
@@ -7100,7 +7120,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_connectionrow",
-      "community": 27,
+      "community": 37,
       "norm_label": "connectionrow"
     },
     {
@@ -7110,7 +7130,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_getconnection",
-      "community": 53,
+      "community": 37,
       "norm_label": "getconnection()"
     },
     {
@@ -7130,7 +7150,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_ensurevalidaccesstoken",
-      "community": 53,
+      "community": 37,
       "norm_label": "ensurevalidaccesstoken()"
     },
     {
@@ -7150,7 +7170,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_integrations_types_integrationsclient",
-      "community": 27,
+      "community": 37,
       "norm_label": "integrationsclient"
     },
     {
@@ -7210,7 +7230,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_stripe",
-      "community": 6,
+      "community": 58,
       "norm_label": "stripe.ts"
     },
     {
@@ -7220,7 +7240,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_lib_stripe_getstripe",
-      "community": 6,
+      "community": 58,
       "norm_label": "getstripe()"
     },
     {
@@ -7230,7 +7250,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_lib_stripe_plans",
-      "community": 6,
+      "community": 58,
       "norm_label": "plans"
     },
     {
@@ -7240,7 +7260,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_lib_stripe_plankey",
-      "community": 6,
+      "community": 58,
       "norm_label": "plankey"
     },
     {
@@ -7330,7 +7350,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi",
-      "community": 6,
+      "community": 40,
       "norm_label": "managementapi.ts"
     },
     {
@@ -7340,7 +7360,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_projectreffromurl",
-      "community": 6,
+      "community": 40,
       "norm_label": "projectreffromurl()"
     },
     {
@@ -7350,7 +7370,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_postgrestconfig",
-      "community": 6,
+      "community": 40,
       "norm_label": "postgrestconfig"
     },
     {
@@ -7360,7 +7380,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_addexposedschema",
-      "community": 6,
+      "community": 40,
       "norm_label": "addexposedschema()"
     },
     {
@@ -7370,7 +7390,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_removeexposedschema",
-      "community": 6,
+      "community": 40,
       "norm_label": "removeexposedschema()"
     },
     {
@@ -7440,7 +7460,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_utils_audit_writeauditlogparams",
-      "community": 11,
+      "community": 119,
       "norm_label": "writeauditlogparams"
     },
     {
@@ -7460,7 +7480,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_csv_test",
-      "community": 71,
+      "community": 18,
       "norm_label": "csv.test.ts"
     },
     {
@@ -7470,7 +7490,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_csv",
-      "community": 71,
+      "community": 18,
       "norm_label": "csv.ts"
     },
     {
@@ -7480,7 +7500,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_csv_csvvalue",
-      "community": 71,
+      "community": 18,
       "norm_label": "csvvalue"
     },
     {
@@ -7490,7 +7510,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_utils_csv_escapefield",
-      "community": 71,
+      "community": 18,
       "norm_label": "escapefield()"
     },
     {
@@ -7500,7 +7520,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_utils_csv_exporttocsv",
-      "community": 18,
+      "community": 8,
       "norm_label": "exporttocsv()"
     },
     {
@@ -7510,7 +7530,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_lib_utils_csv_delimiter",
-      "community": 71,
+      "community": 18,
       "norm_label": "delimiter"
     },
     {
@@ -7520,7 +7540,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_lib_utils_csv_detectdelimiter",
-      "community": 71,
+      "community": 18,
       "norm_label": "detectdelimiter()"
     },
     {
@@ -7530,7 +7550,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "src_lib_utils_csv_parseline",
-      "community": 71,
+      "community": 18,
       "norm_label": "parseline()"
     },
     {
@@ -7540,7 +7560,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_lib_utils_csv_parsecsvtext",
-      "community": 71,
+      "community": 18,
       "norm_label": "parsecsvtext()"
     },
     {
@@ -7550,7 +7570,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_currency_test",
-      "community": 15,
+      "community": 5,
       "norm_label": "currency.test.ts"
     },
     {
@@ -7560,7 +7580,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_currency",
-      "community": 15,
+      "community": 5,
       "norm_label": "currency.ts"
     },
     {
@@ -7570,7 +7590,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_lib_utils_currency_formatcurrency",
-      "community": 15,
+      "community": 5,
       "norm_label": "formatcurrency()"
     },
     {
@@ -7590,7 +7610,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_lib_utils_currency_sumamounts",
-      "community": 15,
+      "community": 5,
       "norm_label": "sumamounts()"
     },
     {
@@ -7600,7 +7620,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_lib_utils_currency_calculatemargin",
-      "community": 15,
+      "community": 5,
       "norm_label": "calculatemargin()"
     },
     {
@@ -7640,7 +7660,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_utils_date_formatdate",
-      "community": 19,
+      "community": 15,
       "norm_label": "formatdate()"
     },
     {
@@ -7692,6 +7712,26 @@
       "id": "src_lib_utils_detectplatform_detectplatform",
       "community": 10,
       "norm_label": "detectplatform()"
+    },
+    {
+      "label": "isAliExpressSku()",
+      "file_type": "code",
+      "source_file": "src/lib/utils/detectPlatform.ts",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "src_lib_utils_detectplatform_isaliexpresssku",
+      "community": 10,
+      "norm_label": "isaliexpresssku()"
+    },
+    {
+      "label": "aliExpressUrlFromSku()",
+      "file_type": "code",
+      "source_file": "src/lib/utils/detectPlatform.ts",
+      "source_location": "L26",
+      "_origin": "ast",
+      "id": "src_lib_utils_detectplatform_aliexpressurlfromsku",
+      "community": 10,
+      "norm_label": "aliexpressurlfromsku()"
     },
     {
       "label": "excel.test.ts",
@@ -7780,7 +7820,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_utils_filters_datepreset",
-      "community": 19,
+      "community": 71,
       "norm_label": "datepreset"
     },
     {
@@ -7890,7 +7930,7 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "src_lib_utils_filters_auditlogfilters",
-      "community": 11,
+      "community": 119,
       "norm_label": "auditlogfilters"
     },
     {
@@ -7900,7 +7940,7 @@
       "source_location": "L120",
       "_origin": "ast",
       "id": "src_lib_utils_filters_default_audit_log_filters",
-      "community": 11,
+      "community": 19,
       "norm_label": "default_audit_log_filters"
     },
     {
@@ -8230,7 +8270,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_pagedquery_test",
-      "community": 30,
+      "community": 86,
       "norm_label": "pagedquery.test.ts"
     },
     {
@@ -8240,7 +8280,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_pagedquery",
-      "community": 30,
+      "community": 86,
       "norm_label": "pagedquery.ts"
     },
     {
@@ -8250,7 +8290,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_utils_pagedquery_pagerequest",
-      "community": 30,
+      "community": 86,
       "norm_label": "pagerequest"
     },
     {
@@ -8260,7 +8300,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_lib_utils_pagedquery_rangefor",
-      "community": 30,
+      "community": 86,
       "norm_label": "rangefor()"
     },
     {
@@ -8270,7 +8310,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_test",
-      "community": 34,
+      "community": 28,
       "norm_label": "permissions.test.ts"
     },
     {
@@ -8280,7 +8320,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_permissions",
-      "community": 34,
+      "community": 28,
       "norm_label": "permissions.ts"
     },
     {
@@ -8290,7 +8330,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_permissions",
-      "community": 34,
+      "community": 28,
       "norm_label": "permissions"
     },
     {
@@ -8300,7 +8340,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_permission",
-      "community": 34,
+      "community": 28,
       "norm_label": "permission"
     },
     {
@@ -8310,7 +8350,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_haspermission",
-      "community": 34,
+      "community": 28,
       "norm_label": "haspermission()"
     },
     {
@@ -8320,7 +8360,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_canaccessroute",
-      "community": 6,
+      "community": 28,
       "norm_label": "canaccessroute()"
     },
     {
@@ -8330,7 +8370,7 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_role_hierarchy",
-      "community": 34,
+      "community": 28,
       "norm_label": "role_hierarchy"
     },
     {
@@ -8340,7 +8380,7 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "src_lib_utils_permissions_hasminimumrole",
-      "community": 34,
+      "community": 28,
       "norm_label": "hasminimumrole()"
     },
     {
@@ -8480,7 +8520,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_proxy",
-      "community": 6,
+      "community": 28,
       "norm_label": "proxy.ts"
     },
     {
@@ -8490,7 +8530,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_proxy_proxy",
-      "community": 6,
+      "community": 28,
       "norm_label": "proxy()"
     },
     {
@@ -8500,7 +8540,7 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "src_proxy_config",
-      "community": 6,
+      "community": 28,
       "norm_label": "config"
     },
     {
@@ -8520,7 +8560,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "src_store_storeprovider_storeproviderprops",
-      "community": 51,
+      "community": 10,
       "norm_label": "storeproviderprops"
     },
     {
@@ -8570,7 +8610,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice",
-      "community": 19,
+      "community": 8,
       "norm_label": "auditlogsslice.ts"
     },
     {
@@ -8590,7 +8630,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_initialstate",
-      "community": 19,
+      "community": 8,
       "norm_label": "initialstate"
     },
     {
@@ -8610,7 +8650,7 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_applyhydratepage",
-      "community": 19,
+      "community": 8,
       "norm_label": "applyhydratepage()"
     },
     {
@@ -8630,7 +8670,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_test",
-      "community": 51,
+      "community": 66,
       "norm_label": "companyprofileslice.test.ts"
     },
     {
@@ -8640,7 +8680,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_test_makeprofile",
-      "community": 51,
+      "community": 66,
       "norm_label": "makeprofile()"
     },
     {
@@ -8650,7 +8690,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice",
-      "community": 51,
+      "community": 66,
       "norm_label": "companyprofileslice.ts"
     },
     {
@@ -8660,7 +8700,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_companyprofilestate",
-      "community": 51,
+      "community": 66,
       "norm_label": "companyprofilestate"
     },
     {
@@ -8670,7 +8710,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_initialstate",
-      "community": 51,
+      "community": 66,
       "norm_label": "initialstate"
     },
     {
@@ -8680,7 +8720,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_companyprofileslice",
-      "community": 51,
+      "community": 66,
       "norm_label": "companyprofileslice"
     },
     {
@@ -8790,7 +8830,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_store",
-      "community": 62,
+      "community": 25,
       "norm_label": "store.ts"
     },
     {
@@ -8800,7 +8840,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_store_store_makestore",
-      "community": 62,
+      "community": 25,
       "norm_label": "makestore()"
     },
     {
@@ -8810,7 +8850,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_store_store_appstore",
-      "community": 62,
+      "community": 25,
       "norm_label": "appstore"
     },
     {
@@ -8820,7 +8860,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_store_store_rootstate",
-      "community": 62,
+      "community": 25,
       "norm_label": "rootstate"
     },
     {
@@ -8830,7 +8870,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_store_store_appdispatch",
-      "community": 62,
+      "community": 25,
       "norm_label": "appdispatch"
     },
     {
@@ -8930,7 +8970,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "src_types_index_sale",
-      "community": 86,
+      "community": 12,
       "norm_label": "sale"
     },
     {
@@ -8940,7 +8980,7 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "src_types_index_product",
-      "community": 28,
+      "community": 52,
       "norm_label": "product"
     },
     {
@@ -8950,7 +8990,7 @@
       "source_location": "L113",
       "_origin": "ast",
       "id": "src_types_index_auditaction",
-      "community": 11,
+      "community": 119,
       "norm_label": "auditaction"
     },
     {
@@ -8960,7 +9000,7 @@
       "source_location": "L121",
       "_origin": "ast",
       "id": "src_types_index_auditentity",
-      "community": 11,
+      "community": 119,
       "norm_label": "auditentity"
     },
     {
@@ -9000,7 +9040,7 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "src_types_index_companyprofile",
-      "community": 51,
+      "community": 66,
       "norm_label": "companyprofile"
     },
     {
@@ -9010,7 +9050,7 @@
       "source_location": "L178",
       "_origin": "ast",
       "id": "src_types_index_tenantplan",
-      "community": 25,
+      "community": 34,
       "norm_label": "tenantplan"
     },
     {
@@ -9020,7 +9060,7 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "src_types_index_tenantstatus",
-      "community": 24,
+      "community": 69,
       "norm_label": "tenantstatus"
     },
     {
@@ -9050,7 +9090,7 @@
       "source_location": "L199",
       "_origin": "ast",
       "id": "src_types_index_platformconnectionstatus",
-      "community": 27,
+      "community": 37,
       "norm_label": "platformconnectionstatus"
     },
     {
@@ -9070,7 +9110,7 @@
       "source_location": "L220",
       "_origin": "ast",
       "id": "src_types_index_sourceplatform",
-      "community": 62,
+      "community": 10,
       "norm_label": "sourceplatform"
     },
     {
@@ -9080,7 +9120,7 @@
       "source_location": "L222",
       "_origin": "ast",
       "id": "src_types_index_dropshiplisting",
-      "community": 6,
+      "community": 10,
       "norm_label": "dropshiplisting"
     },
     {
@@ -13127,7 +13167,7 @@
       "label": "API routes",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L43",
+      "source_location": "L54",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_api_routes",
       "community": 67,
@@ -13137,7 +13177,7 @@
       "label": "eBay API notes",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L63",
+      "source_location": "L74",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_ebay_api_notes",
       "community": 67,
@@ -13147,7 +13187,7 @@
       "label": "Data flow",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L78",
+      "source_location": "L89",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_data_flow",
       "community": 67,
@@ -13157,7 +13197,7 @@
       "label": "Shared dependencies",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L84",
+      "source_location": "L95",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_shared_dependencies",
       "community": 67,
@@ -13167,7 +13207,7 @@
       "label": "Tests",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L102",
+      "source_location": "L116",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_tests",
       "community": 67,
@@ -13207,7 +13247,7 @@
       "label": "Gotchas",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/SKILL.md",
-      "source_location": "L19",
+      "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_skill_gotchas",
       "community": 100,
@@ -21790,7 +21830,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L48",
+      "source_location": "L50",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
@@ -21800,7 +21840,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L19",
+      "source_location": "L21",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodalprops",
@@ -21810,10 +21850,32 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L24",
+      "source_location": "L26",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_app_dashboard_dropshipping_components_editsourcemodal_platformbadge",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
       "confidence_score": 1.0
     },
     {
@@ -21832,7 +21894,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_button",
@@ -21843,7 +21905,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_button_button",
@@ -21854,7 +21916,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog",
@@ -21865,7 +21927,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog_dialog",
@@ -21876,7 +21938,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog_dialogcontent",
@@ -21887,7 +21949,18 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
+      "target": "src_components_ui_dialog_dialogdescription",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog_dialogfooter",
@@ -21898,7 +21971,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog_dialogheader",
@@ -21909,7 +21982,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_dialog_dialogtitle",
@@ -21920,7 +21993,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L15",
+      "source_location": "L17",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_input",
@@ -21931,7 +22004,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L15",
+      "source_location": "L17",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_input_input",
@@ -21942,7 +22015,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L16",
+      "source_location": "L18",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_toast",
@@ -21953,7 +22026,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L16",
+      "source_location": "L18",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_components_ui_toast_usetoast",
@@ -22008,7 +22081,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L17",
+      "source_location": "L19",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_types_index",
@@ -22019,7 +22092,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L17",
+      "source_location": "L19",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal",
       "target": "src_types_index_dropshiplisting",
@@ -22030,7 +22103,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_editsourcemodal",
@@ -22041,7 +22114,7 @@
       "context": "field",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L20",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodalprops",
       "target": "src_types_index_dropshiplisting",
@@ -22052,7 +22125,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L25",
+      "source_location": "L27",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal_platformbadge",
       "target": "src_lib_utils_detectplatform_detectplatform",
@@ -22064,7 +22137,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L50",
+      "source_location": "L52",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
       "target": "src_components_ui_toast_usetoast"
@@ -22075,7 +22148,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx",
-      "source_location": "L49",
+      "source_location": "L51",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
       "target": "src_store_hooks_useappdispatch"
@@ -22085,7 +22158,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
@@ -22095,7 +22168,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L30",
+      "source_location": "L31",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_canchecksupplierprice",
@@ -22105,7 +22178,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L116",
+      "source_location": "L127",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
@@ -22115,7 +22188,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L25",
+      "source_location": "L26",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_listingstableprops",
@@ -22125,7 +22198,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L35",
+      "source_location": "L36",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_pricecheckresult",
@@ -22135,7 +22208,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L78",
+      "source_location": "L79",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
@@ -22145,7 +22218,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L44",
+      "source_location": "L45",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_components_listingstable_supplierpricecell",
@@ -22156,7 +22229,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L11",
+      "source_location": "L12",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_app_dashboard_dropshipping_store_dropshippingslice",
@@ -22211,7 +22284,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table",
@@ -22222,7 +22295,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_table",
@@ -22233,7 +22306,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_tablebody",
@@ -22244,7 +22317,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_tablecell",
@@ -22255,7 +22328,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_tablehead",
@@ -22266,7 +22339,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_tableheader",
@@ -22277,7 +22350,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L12",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_table_tablerow",
@@ -22288,7 +22361,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_toast",
@@ -22299,7 +22372,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_components_ui_toast_usetoast",
@@ -22354,7 +22427,40 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L10",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable",
+      "target": "src_lib_utils_detectplatform",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L11",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_store_hooks",
@@ -22365,7 +22471,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L10",
+      "source_location": "L11",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_store_hooks_useappdispatch",
@@ -22376,7 +22482,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_types_index",
@@ -22387,7 +22493,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_types_index_currency",
@@ -22398,7 +22504,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L21",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable",
       "target": "src_types_index_dropshiplisting",
@@ -22420,11 +22526,22 @@
       "context": "field",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L26",
+      "source_location": "L27",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_listingstableprops",
       "target": "src_types_index_dropshiplisting",
       "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable_canchecksupplierprice",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku"
     },
     {
       "relation": "imports",
@@ -22443,7 +22560,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L60",
+      "source_location": "L61",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_supplierpricecell",
       "target": "src_lib_utils_cn"
@@ -22454,7 +22571,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L56",
+      "source_location": "L57",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_supplierpricecell",
       "target": "src_lib_utils_currency_formatcurrency"
@@ -22465,7 +22582,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L101",
+      "source_location": "L107",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
       "target": "src_lib_utils_cn"
@@ -22476,7 +22593,29 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L118",
+      "source_location": "L83",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L82",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
+      "source_location": "L129",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
       "target": "src_components_ui_toast_usetoast"
@@ -22487,7 +22626,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/dropshipping/_components/ListingsTable.tsx",
-      "source_location": "L117",
+      "source_location": "L128",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
       "target": "src_store_hooks_useappdispatch"
@@ -22502,6 +22641,147 @@
       "source": "src_app_dashboard_dropshipping_page",
       "target": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
       "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test_makelisting",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "target": "src_types_index",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
+      "target": "src_types_index_dropshiplisting",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_lib_utils_detectplatform",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_types_index",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
+      "target": "src_types_index_dropshiplisting",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku"
     },
     {
       "relation": "imports_from",
@@ -38269,27 +38549,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L22",
-      "weight": 1.0,
-      "source": "src_lib_integrations_aliexpress_scrape",
-      "target": "src_lib_integrations_aliexpress_scrape_aliexpressurlfromsku",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L17",
-      "weight": 1.0,
-      "source": "src_lib_integrations_aliexpress_scrape",
-      "target": "src_lib_integrations_aliexpress_scrape_isaliexpresssku",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L40",
+      "source_location": "L32",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_parsejsonld",
@@ -38299,7 +38559,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L65",
+      "source_location": "L57",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_parseogmeta",
@@ -38309,7 +38569,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L72",
+      "source_location": "L64",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_parserunparams",
@@ -38319,7 +38579,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L30",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
@@ -38329,7 +38589,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L85",
+      "source_location": "L77",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
@@ -38339,40 +38599,73 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L11",
+      "source_location": "L13",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape",
       "target": "src_lib_integrations_aliexpress_scrape_supplierprice",
       "confidence_score": 1.0
     },
     {
-      "relation": "calls",
-      "context": "call",
+      "relation": "imports_from",
+      "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L36",
+      "source_location": "L11",
       "weight": 1.0,
-      "source": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
-      "target": "src_lib_integrations_aliexpress_scrape_isaliexpresssku",
+      "source": "src_lib_integrations_aliexpress_scrape",
+      "target": "src_lib_utils_detectplatform",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "src_lib_integrations_aliexpress_scrape",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "src_lib_integrations_aliexpress_scrape",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku",
       "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L36",
+      "source_location": "L28",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
-      "target": "src_lib_integrations_aliexpress_scrape_aliexpressurlfromsku",
-      "confidence_score": 1.0
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/integrations/aliexpress/scrape.ts",
+      "source_location": "L28",
+      "weight": 1.0,
+      "source": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku"
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L122",
+      "source_location": "L114",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
       "target": "src_lib_integrations_aliexpress_scrape_parsejsonld",
@@ -38383,7 +38676,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L122",
+      "source_location": "L114",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
       "target": "src_lib_integrations_aliexpress_scrape_parseogmeta",
@@ -38394,7 +38687,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/integrations/aliexpress/scrape.ts",
-      "source_location": "L122",
+      "source_location": "L114",
       "weight": 1.0,
       "source": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
       "target": "src_lib_integrations_aliexpress_scrape_parserunparams",
@@ -40459,7 +40752,39 @@
       "source_location": "L1",
       "weight": 1.0,
       "source": "src_lib_utils_detectplatform_test",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/detectPlatform.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_lib_utils_detectplatform_test",
       "target": "src_lib_utils_detectplatform_detectplatform",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/detectPlatform.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "src_lib_utils_detectplatform_test",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/detectPlatform.ts",
+      "source_location": "L26",
+      "weight": 1.0,
+      "source": "src_lib_utils_detectplatform",
+      "target": "src_lib_utils_detectplatform_aliexpressurlfromsku",
       "confidence_score": 1.0
     },
     {
@@ -40470,6 +40795,16 @@
       "weight": 1.0,
       "source": "src_lib_utils_detectplatform",
       "target": "src_lib_utils_detectplatform_detectplatform",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/detectPlatform.ts",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "src_lib_utils_detectplatform",
+      "target": "src_lib_utils_detectplatform_isaliexpresssku",
       "confidence_score": 1.0
     },
     {
@@ -47321,7 +47656,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L43",
+      "source_location": "L54",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_api_routes",
@@ -47331,7 +47666,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L78",
+      "source_location": "L89",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_data_flow",
@@ -47341,7 +47676,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L63",
+      "source_location": "L74",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_ebay_api_notes",
@@ -47361,7 +47696,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L84",
+      "source_location": "L95",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_shared_dependencies",
@@ -47371,7 +47706,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L102",
+      "source_location": "L116",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_tests",
@@ -47391,7 +47726,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/SKILL.md",
-      "source_location": "L19",
+      "source_location": "L20",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_skill_dropshipping_agent_playbook",
       "target": "src_app_dashboard_dropshipping_skill_gotchas",

@@ -5,7 +5,7 @@
 | Change | Files to touch |
 |---|---|
 | Add a column to `dropship_listings` | new file in `supabase/migrations/` targeting `tenant_kaufnest.dropship_listings` directly (KaufNest-only feature — table exists in NO other schema, do NOT use `run_on_all_tenant_schemas` or `provision_tenant_schema()`), `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
-| Change AliExpress price scraping | `src/lib/integrations/aliexpress/scrape.ts` (URL derivation + HTML parsing), `src/app/api/dropshipping/listings/check-prices/route.ts` (orchestration/storage) |
+| Change AliExpress price scraping | `src/lib/integrations/aliexpress/scrape.ts` (fetch + HTML parsing + mobile retry), `.../aliexpress/session.ts` + its test (cookie jar, UA pool, jitter, headers), `src/app/api/dropshipping/listings/check-prices/route.ts` (orchestration/storage) |
 | Change source platform detection logic | `src/lib/utils/detectPlatform.ts` + its test |
 | Change the numeric-SKU-\>AliExpress-URL rule | `src/lib/utils/detectPlatform.ts` (`isAliExpressSku`/`aliExpressUrlFromSku`) + its test — single shared source, consumed by `scrape.ts` (server), `ListingsTable.tsx` (`canCheckSupplierPrice` + `SourceBadge` display fallback), and `resolveInitialSourceUrl.ts` (modal prefill) |
 | Add a new column to the listings table | `_components/ListingsTable.tsx` — add `TableHead` + `TableCell` |
@@ -21,10 +21,23 @@
 
 - **AliExpress scraping is best-effort:** AliExpress serves captcha/"punish" pages to bots.
   `scrapeAliExpressPrice` tries JSON-LD → og:price meta → `runParams` regex, throws a
-  user-readable error otherwise. The check-prices route runs sequentially with a 1.5s delay
-  and caps at 50 listings per run — do NOT parallelize, it triggers rate limiting. On
-  serverless hosting the bulk run must fit the function timeout (~50 listings ≈ 2+ min:
-  raise `maxDuration` or lower the cap if needed).
+  user-readable error otherwise. The check-prices route runs sequentially with a randomized
+  2.5–5s delay (`jitterDelayMs`) and caps at 50 listings per run — do NOT parallelize and do
+  NOT go back to a fixed cadence, both trigger bot protection. The route declares
+  `maxDuration = 300` (worst case ≈ 5 min on Vercel); lower the cap if the host allows less.
+
+- **Anti-block session hardening (session.ts):** each bulk run calls
+  `createScrapeSession()` once — a warm-up fetch of the AliExpress homepage that collects
+  anti-bot cookies (`buildCookieHeader`) and pins one browser identity (`pickBrowserIdentity`)
+  for the whole batch. Do NOT rotate the User-Agent per request: mixing UAs on one cookie jar
+  looks *more* bot-like, not less. Chrome identities carry matching `sec-ch-ua*` client hints;
+  Firefox/Safari deliberately don't (real ones don't send them). On a blocked response
+  (`BlockedError`: punish redirect / 403 / 429 / captcha page), `scrapeAliExpressPrice`
+  retries once via `m.aliexpress.com` (`toMobileUrl`) before giving up. Warm-up failure is
+  non-fatal — it degrades to a cookieless session. All the pure pieces live in `session.ts`
+  with colocated tests; only the two `fetch`es live in `scrape.ts`. This is best-effort
+  hardening: a datacenter IP can still get blocked — the documented next step is a
+  scraping-proxy API, not more header tweaking.
 
 - **SKU = AliExpress item ID convention:** the seller stores the AliExpress item ID as the
   eBay Custom Label. A numeric SKU (6–20 digits) is treated as an AliExpress item ID and the

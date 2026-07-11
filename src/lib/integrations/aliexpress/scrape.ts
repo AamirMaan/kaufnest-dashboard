@@ -9,6 +9,15 @@
 // error, never a crash.
 
 import { isAliExpressSku, aliExpressUrlFromSku } from "@/lib/utils/detectPlatform";
+import {
+  buildCookieHeader,
+  pickBrowserIdentity,
+  sessionHeaders,
+  toMobileUrl,
+  type ScrapeSession,
+} from "./session";
+
+export type { ScrapeSession } from "./session";
 
 export interface SupplierPrice {
   price: number;
@@ -71,21 +80,39 @@ function parseRunParams(html: string): SupplierPrice | null {
 }
 
 /**
- * Fetches an AliExpress product page and extracts the (minimum) sale price.
- * Throws with a user-readable message when blocked or when no price is found.
+ * Warms up a scrape session: one homepage request to collect AliExpress's
+ * anti-bot cookies, reused for every item-page fetch in the batch so the run
+ * looks like a single browsing session. Best-effort — a failed warm-up
+ * returns a cookieless session rather than throwing.
  */
-export async function scrapeAliExpressPrice(url: string): Promise<SupplierPrice> {
+export async function createScrapeSession(): Promise<ScrapeSession> {
+  const identity = pickBrowserIdentity();
+  try {
+    const res = await fetch("https://de.aliexpress.com/", {
+      redirect: "follow",
+      headers: {
+        "User-Agent": identity.userAgent,
+        ...(identity.clientHints ?? {}),
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
+      },
+      cache: "no-store",
+    });
+    return { cookie: buildCookieHeader(res.headers.getSetCookie()), identity };
+  } catch {
+    return { cookie: "", identity };
+  }
+}
+
+/** Thrown when AliExpress serves a bot-protection response (punish/captcha/403/429). */
+class BlockedError extends Error {}
+
+async function fetchAndParse(url: string, session: ScrapeSession): Promise<SupplierPrice> {
   let res: Response;
   try {
     res = await fetch(url, {
       redirect: "follow",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-          "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "de-DE,de;q=0.9,en;q=0.5",
-      },
+      headers: sessionHeaders(session),
       // Never cache supplier prices at the framework level
       cache: "no-store",
     });
@@ -94,7 +121,7 @@ export async function scrapeAliExpressPrice(url: string): Promise<SupplierPrice>
   }
 
   if (res.url.includes("punish") || res.status === 403 || res.status === 429) {
-    throw new Error(
+    throw new BlockedError(
       "AliExpress blocked the price check (bot protection). Wait a few minutes and try again."
     );
   }
@@ -106,7 +133,7 @@ export async function scrapeAliExpressPrice(url: string): Promise<SupplierPrice>
   const html = await res.text();
 
   if (html.includes("captcha") && html.length < 20000) {
-    throw new Error(
+    throw new BlockedError(
       "AliExpress blocked the price check (captcha). Wait a few minutes and try again."
     );
   }
@@ -119,4 +146,27 @@ export async function scrapeAliExpressPrice(url: string): Promise<SupplierPrice>
   }
 
   return price;
+}
+
+/**
+ * Fetches an AliExpress product page and extracts the (minimum) sale price.
+ * When the desktop host blocks the request, retries once via m.aliexpress.com
+ * (often less strict). Throws with a user-readable message when both are
+ * blocked or when no price is found.
+ *
+ * Pass a shared session from `createScrapeSession()` for batch runs; omitting
+ * it creates a throwaway cookieless session for one-off calls.
+ */
+export async function scrapeAliExpressPrice(
+  url: string,
+  session?: ScrapeSession
+): Promise<SupplierPrice> {
+  const sess = session ?? { cookie: "", identity: pickBrowserIdentity() };
+  try {
+    return await fetchAndParse(url, sess);
+  } catch (err) {
+    const mobileUrl = err instanceof BlockedError ? toMobileUrl(url) : null;
+    if (!mobileUrl) throw err;
+    return fetchAndParse(mobileUrl, sess);
+  }
 }
