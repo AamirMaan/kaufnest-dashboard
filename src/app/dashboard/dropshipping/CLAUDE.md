@@ -1,8 +1,9 @@
 # Dropshipping feature
 
 Route: `/dashboard/dropshipping`. Shows the platform admin's active eBay listings fetched via
-their eBay OAuth connection, stored in `<tenant_schema>.dropship_listings` (schema-per-tenant —
-see `supabase/migrations/019_dropship_supplier_price.sql`). Each listing can be linked to an
+their eBay OAuth connection, stored in `tenant_kaufnest.dropship_listings` ONLY — the table
+exists in no other tenant schema and is deliberately excluded from `provision_tenant_schema()`
+(see `supabase/migrations/019_dropship_supplier_price.sql`). Each listing can be linked to an
 Amazon or AliExpress supplier URL. Listings refresh on demand via "Refresh from eBay".
 
 **Platform-admin only** — this feature is hidden from all regular tenants and only accessible

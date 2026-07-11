@@ -4,7 +4,7 @@
 
 | Change | Files to touch |
 |---|---|
-| Add a column to `dropship_listings` | new file in `supabase/migrations/` using `run_on_all_tenant_schemas` (table lives in each tenant schema, NOT public) + same column in `provision_tenant_schema()` in `005_tenant_provisioning.sql`, `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
+| Add a column to `dropship_listings` | new file in `supabase/migrations/` targeting `tenant_kaufnest.dropship_listings` directly (KaufNest-only feature — table exists in NO other schema, do NOT use `run_on_all_tenant_schemas` or `provision_tenant_schema()`), `src/types/index.ts` (`DropshipListing`), `_store/dropshippingSlice.ts` (if reducer needs updating), API routes that upsert |
 | Change AliExpress price scraping | `src/lib/integrations/aliexpress/scrape.ts` (URL derivation + HTML parsing), `src/app/api/dropshipping/listings/check-prices/route.ts` (orchestration/storage) |
 | Change source platform detection logic | `src/lib/utils/detectPlatform.ts` + its test |
 | Add a new column to the listings table | `_components/ListingsTable.tsx` — add `TableHead` + `TableCell` |
