@@ -92,7 +92,7 @@ describe("purchasesSlice", () => {
   });
 
   it("sets isFetching=true on fetchPurchasesPage.pending", () => {
-    const state = reducer(undefined, fetchPurchasesPage.pending("req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", vendor: "", currency: "all", search: "" } }));
+    const state = reducer(undefined, fetchPurchasesPage.pending("req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" } }));
     expect(state.isFetching).toBe(true);
   });
 
@@ -105,7 +105,7 @@ describe("purchasesSlice", () => {
     };
     const state = reducer(
       undefined,
-      fetchPurchasesPage.fulfilled(payload, "req-id", { page: 2, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", vendor: "", currency: "all", search: "" } })
+      fetchPurchasesPage.fulfilled(payload, "req-id", { page: 2, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" } })
     );
     expect(state.items).toHaveLength(1);
     expect(state.items[0].id).toBe("p3");
@@ -116,11 +116,11 @@ describe("purchasesSlice", () => {
   });
 
   it("clears isFetching on fetchPurchasesPage.rejected", () => {
-    const pending = reducer(undefined, fetchPurchasesPage.pending("req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", vendor: "", currency: "all", search: "" } }));
+    const pending = reducer(undefined, fetchPurchasesPage.pending("req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" } }));
     expect(pending.isFetching).toBe(true);
     const state = reducer(
       pending,
-      fetchPurchasesPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", vendor: "", currency: "all", search: "" } })
+      fetchPurchasesPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" } })
     );
     expect(state.isFetching).toBe(false);
   });
