@@ -653,7 +653,7 @@ git commit -m "feat: add updateCustomsTax action and recompute logic to dropship
 
 No test file — `EditSourceModal.tsx` is a client component with no existing
 test (this project has zero `.test.tsx` files); the PATCH route also has no
-existing test. Verification is manual (Step 3).
+existing test. Verification is manual (Step 3, after the code changes).
 
 - [ ] **Step 1: Add the input + save logic to `EditSourceModal.tsx`**
 
@@ -807,7 +807,15 @@ const { data, error } = await client
 
 The rest of the route (error handling, response) is unchanged.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Ask the user to manually verify in the browser**
+
+Ask the user to open `/dashboard/dropshipping`, open the edit modal for a
+listing that already has a supplier price, enter a customs tax rate, save,
+and confirm: the rate persists (re-opening the modal shows the saved value),
+and the margin badge in that listing's row (from Task 3) updates to reflect
+the new effective cost.
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/app/dashboard/dropshipping/_components/EditSourceModal.tsx src/app/api/dropshipping/listings/[id]/route.ts
