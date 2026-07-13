@@ -233,6 +233,8 @@ export interface DropshipListing {
   supplier_price: number | null;
   supplier_currency: string | null;
   supplier_price_checked_at: string | null;
+  customs_tax_rate: number | null;
+  customs_tax_amount: number | null;
   last_synced_at: string;
   created_at: string;
 }

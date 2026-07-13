@@ -52,6 +52,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 - `migrations/013_backfill_all_tenants.sql` — applies migrations 004, 007,
   008, 010, and 011 to all live tenant schemas at once via the helper.
   Requires 012 to be applied first. All statements are idempotent.
+- `migrations/019_dropship_supplier_price.sql` — creates
+  `tenant_kaufnest.dropship_listings` table (platform-admin-only feature),
+  adds supplier price tracking columns, migrates legacy data from
+  `public.dropship_listings`, sets up RLS policies. Direct `ALTER TABLE`
+  (not via `run_on_all_tenant_schemas` — this table is KaufNest-only).
+- `migrations/020_dropship_customs_tax.sql` — adds `customs_tax_rate`/
+  `customs_tax_amount` nullable columns to `tenant_kaufnest.dropship_listings`
+  directly (not via `run_on_all_tenant_schemas` — this table is KaufNest-only,
+  same documented exception as `019_dropship_supplier_price.sql`). Backs the
+  margin-coloring UI in `src/app/dashboard/dropshipping/`.
 
 ## Related code
 
