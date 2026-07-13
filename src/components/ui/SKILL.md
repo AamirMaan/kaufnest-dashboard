@@ -67,9 +67,17 @@ date-range + currency filter shell used by Sales/Expenses/Purchases list pages.
 
 Controlled component — caller owns all state:
 `preset, onPresetChange, dateFrom, onDateFromChange, dateTo, onDateToChange,
-currency, onCurrencyChange, hasActive, onClear`, plus `children` for
-entity-specific filter slots (e.g. a platform/category dropdown) rendered
-inline after the currency filter.
+currency, onCurrencyChange, searchValue, onSearchChange, searchPlaceholder,
+hasActive, onClear`, plus `children` for entity-specific filter slots (e.g. a
+platform/category dropdown) rendered inline after the search box.
+
+- `searchValue`/`onSearchChange` render a free-text search input (hidden when
+  `onSearchChange` is undefined, same pattern as `currency`/`onCurrencyChange`).
+  `FilterBar` owns a 400ms debounce internally via local state + a
+  `setTimeout` effect — the caller's `onSearchChange` only fires 400ms after
+  the user stops typing, so callers don't need their own debounce logic.
+  Pair with `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`) on the page/thunk
+  side before building a Supabase `.or()`/`.ilike()` query.
 
 - `preset: DatePreset` (from `@/lib/utils/filters` — `"all" | "this_month" |
   "last_month" | "this_quarter" | "this_year" | "custom"`). Selecting `"custom"`
