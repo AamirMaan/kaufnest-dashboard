@@ -66,6 +66,7 @@ export interface SalesFilters {
   platform: string;
   currency: string;
   status: string;
+  search: string;
 }
 
 export interface ExpenseFilters {
@@ -74,6 +75,7 @@ export interface ExpenseFilters {
   dateTo: string;
   category: string;
   currency: string;
+  search: string;
 }
 
 export interface PurchaseFilters {
@@ -82,6 +84,7 @@ export interface PurchaseFilters {
   dateTo: string;
   vendor: string;
   currency: string;
+  search: string;
 }
 
 export const DEFAULT_SALES_FILTERS: SalesFilters = {
@@ -91,6 +94,7 @@ export const DEFAULT_SALES_FILTERS: SalesFilters = {
   platform: "all",
   currency: "all",
   status: "all",
+  search: "",
 };
 
 export const DEFAULT_EXPENSE_FILTERS: ExpenseFilters = {
@@ -99,6 +103,7 @@ export const DEFAULT_EXPENSE_FILTERS: ExpenseFilters = {
   dateTo: "",
   category: "all",
   currency: "all",
+  search: "",
 };
 
 export const DEFAULT_PURCHASE_FILTERS: PurchaseFilters = {
@@ -107,6 +112,7 @@ export const DEFAULT_PURCHASE_FILTERS: PurchaseFilters = {
   dateTo: "",
   vendor: "",
   currency: "all",
+  search: "",
 };
 
 export interface AuditLogFilters {
@@ -125,10 +131,32 @@ export const DEFAULT_AUDIT_LOG_FILTERS: AuditLogFilters = {
   user_id: "all",
 };
 
+/**
+ * Escapes a user-typed search term for safe embedding in a PostgREST
+ * `.or()`/`.ilike()` value: backslash first (so later escapes aren't
+ * double-escaped), then `%`/`_` (LIKE wildcards — escaped so literal input
+ * doesn't behave as a wildcard), then `,` (the `.or()` condition separator —
+ * a literal comma would otherwise inject an unintended extra condition).
+ */
+export function sanitizeIlikeSearchTerm(term: string): string {
+  return term
+    .trim()
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/,/g, "\\,");
+}
+
 // Canonical revenue-eligibility rule — update here to change everywhere.
 /** Returns true for sales that count toward revenue (not returned, not cancelled). */
 export function isRevenueSale(sale: { status: string | null }): boolean {
   return sale.status !== "returned" && sale.status !== "cancelled";
+}
+
+function matchesSearch(term: string, ...fields: (string | null)[]): boolean {
+  const needle = term.trim().toLowerCase();
+  if (!needle) return true;
+  return fields.some((f) => f?.toLowerCase().includes(needle));
 }
 
 export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
@@ -138,6 +166,10 @@ export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   if (f.platform !== "all") result = result.filter((s) => s.platform === f.platform);
   if (f.currency !== "all") result = result.filter((s) => s.currency === f.currency);
   if (f.status !== "all") result = result.filter((s) => s.status === f.status);
+  if (f.search.trim())
+    result = result.filter((s) =>
+      matchesSearch(f.search, s.product_name, s.external_order_id, s.description)
+    );
   return result;
 }
 
@@ -147,6 +179,10 @@ export function filterExpenses(expenses: Expense[], f: ExpenseFilters): Expense[
   if (range) result = result.filter((e) => e.date >= range.from && e.date <= range.to);
   if (f.category !== "all") result = result.filter((e) => e.category === f.category);
   if (f.currency !== "all") result = result.filter((e) => e.currency === f.currency);
+  if (f.search.trim())
+    result = result.filter((e) =>
+      matchesSearch(f.search, e.title, e.vendor, e.description, e.invoice_number)
+    );
   return result;
 }
 
@@ -159,6 +195,10 @@ export function filterPurchases(purchases: Purchase[], f: PurchaseFilters): Purc
       p.vendor?.toLowerCase().includes(f.vendor.toLowerCase())
     );
   if (f.currency !== "all") result = result.filter((p) => p.currency === f.currency);
+  if (f.search.trim())
+    result = result.filter((p) =>
+      matchesSearch(f.search, p.product_name, p.vendor, p.description)
+    );
   return result;
 }
 
@@ -168,6 +208,7 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     f.dateFrom === "" &&
     f.dateTo === "" &&
     f.currency === "all" &&
+    f.search === "" &&
     ("platform" in f ? f.platform === "all" : true) &&
     ("status" in f ? f.status === "all" : true) &&
     ("category" in f ? f.category === "all" : true) &&
