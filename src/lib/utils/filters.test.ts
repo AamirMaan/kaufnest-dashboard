@@ -122,8 +122,12 @@ describe("sanitizeIlikeSearchTerm", () => {
     expect(sanitizeIlikeSearchTerm("50% off_sale")).toBe("50\\% off\\_sale");
   });
 
-  it("escapes commas so they can't inject an extra .or() condition", () => {
-    expect(sanitizeIlikeSearchTerm("foo,bar")).toBe("foo\\,bar");
+  it("escapes double quotes so a literal quote can't close the wrapping quotes early", () => {
+    expect(sanitizeIlikeSearchTerm('foo"bar')).toBe('foo\\"bar');
+  });
+
+  it("leaves commas and parens untouched — they become safe once the caller wraps the value in quotes", () => {
+    expect(sanitizeIlikeSearchTerm("widget (blue), size M")).toBe("widget (blue), size M");
   });
 });
 

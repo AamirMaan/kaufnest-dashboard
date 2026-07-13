@@ -126,7 +126,7 @@ export default function PurchasesPage() {
     if (filters.search.trim() !== "") {
       const term = sanitizeIlikeSearchTerm(filters.search);
       query = query.or(
-        `product_name.ilike.%${term}%,vendor.ilike.%${term}%,description.ilike.%${term}%`
+        `product_name.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%"`
       );
     }
 

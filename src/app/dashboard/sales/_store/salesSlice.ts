@@ -58,7 +58,7 @@ export const fetchSalesPage = createAsyncThunk(
     if (filters.search.trim() !== "") {
       const term = sanitizeIlikeSearchTerm(filters.search);
       query = query.or(
-        `product_name.ilike.%${term}%,external_order_id.ilike.%${term}%,description.ilike.%${term}%`
+        `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
       );
     }
 

@@ -133,18 +133,21 @@ export const DEFAULT_AUDIT_LOG_FILTERS: AuditLogFilters = {
 
 /**
  * Escapes a user-typed search term for safe embedding in a PostgREST
- * `.or()`/`.ilike()` value: backslash first (so later escapes aren't
- * double-escaped), then `%`/`_` (LIKE wildcards — escaped so literal input
- * doesn't behave as a wildcard), then `,` (the `.or()` condition separator —
- * a literal comma would otherwise inject an unintended extra condition).
+ * `.or()`/`.ilike()` value that the caller wraps in double quotes
+ * (`column.ilike."%${term}%"`). Order matters: backslash first (so later
+ * escapes aren't double-escaped), then `"` (PostgREST's quoted-value escape,
+ * required because the caller wraps the value in quotes to make reserved
+ * characters — `,` `.` `:` `(` `)` — inert without per-character escaping),
+ * then `%`/`_` (LIKE wildcards — escaped so literal input doesn't behave as
+ * a wildcard).
  */
 export function sanitizeIlikeSearchTerm(term: string): string {
   return term
     .trim()
     .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
     .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_")
-    .replace(/,/g, "\\,");
+    .replace(/_/g, "\\_");
 }
 
 // Canonical revenue-eligibility rule — update here to change everywhere.

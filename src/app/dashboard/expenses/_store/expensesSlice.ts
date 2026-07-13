@@ -55,7 +55,7 @@ export const fetchExpensesPage = createAsyncThunk(
     if (filters.search.trim() !== "") {
       const term = sanitizeIlikeSearchTerm(filters.search);
       query = query.or(
-        `title.ilike.%${term}%,vendor.ilike.%${term}%,description.ilike.%${term}%,invoice_number.ilike.%${term}%`
+        `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
       );
     }
 
