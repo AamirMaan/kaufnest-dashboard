@@ -62,7 +62,11 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   overwrites `source_url`/`source_platform`). Returns `{ synced: number }`.
 - `PATCH /api/dropshipping/listings/[id]` — platform admin only (`verifyPlatformAdmin`);
   validates `sourceUrl`, calls `detectPlatform`, updates row. Returns updated `DropshipListing`.
-- `POST /api/dropshipping/listings/check-prices` — platform admin only (`verifyPlatformAdmin`). Body `{ id }`
+- `POST /api/dropshipping/listings/check-prices` — **⚠ effectively broken since AliExpress moved
+  product pages to client-side rendering (see SKILL.md's CSR gotcha): the HTML has no price, so
+  this route now always returns "Could not find a price". Prices are populated by the LOCAL
+  Playwright script `scripts/aliexpress/scrape-prices.mjs` (`npm run scrape:aliexpress`) instead.**
+  Original behaviour: platform admin only (`verifyPlatformAdmin`). Body `{ id }`
   checks one listing; empty body checks all (cap 50, sequential with a randomized 2.5–5s
   delay, one warmed-up scrape session per run, `maxDuration = 300` — all to dodge
   AliExpress bot protection). Scrapes the AliExpress price via
