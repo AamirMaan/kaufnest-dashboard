@@ -7,10 +7,13 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 
 ## Files in this folder
 
-- `page.tsx` — list view: filtering (`FilterBar` + `filterSales`), row selection,
-  invoice trigger, Gross/VAT/Net summary, **Export CSV** button (exports `filtered`
-  via `lib/utils/csv`), **Import CSV** button, wires up the modals below.
-  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
+- `page.tsx` — list view: server-side pagination (`fetchSalesPage` thunk),
+  `FilterBar` (date preset, currency, platform, status, general keyword
+  search across product name/order ID/description), row selection, invoice
+  trigger, Gross/VAT/Net summary **(this page)**, **Export CSV** button
+  (server-side query, no `.range()`, capped at 5 000 rows), **Import CSV**
+  button, wires up the modals below. Product-name cells are `<Link>`s to
+  `/dashboard/sales/[id]`.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -33,8 +36,11 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
   `addSale`, `updateSale`, `removeSale`, `setFetching`.
   Thunk: `fetchSalesPage({ page, pageSize, filters })` — builds a Supabase query
-  with filter pushdown, `.select("*", { count: "exact" })`, `.order("date")`,
-  and `.range(from, to)` from `rangeFor()`. Dispatches `hydratePage` on success.
+  with filter pushdown (date range, platform, currency, status, and a keyword
+  `search` matched via `.or()`/`ilike` across `product_name`/
+  `external_order_id`/`description`, sanitized with `sanitizeIlikeSearchTerm`),
+  `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
+  from `rangeFor()`. Dispatches `hydratePage` on success.
   Used **only** by this feature — registered centrally in `src/store/store.ts`
   and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/salesSlice.test.ts` — reducer tests (covers `hydratePage`, `setFetching`,

@@ -28,6 +28,7 @@ import {
   isRevenueSale,
   DEFAULT_SALES_FILTERS,
   getPresetRange,
+  sanitizeIlikeSearchTerm,
   type SalesFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -137,6 +138,13 @@ export default function SalesPage() {
     if (filters.platform !== "all") query = query.eq("platform", filters.platform);
     if (filters.currency !== "all") query = query.eq("currency", filters.currency);
     if (filters.status !== "all") query = query.eq("status", filters.status);
+
+    if (filters.search.trim() !== "") {
+      const term = sanitizeIlikeSearchTerm(filters.search);
+      query = query.or(
+        `product_name.ilike.%${term}%,external_order_id.ilike.%${term}%,description.ilike.%${term}%`
+      );
+    }
 
     const { data: allRows } = await query;
     if (!allRows || allRows.length === 0) return;
@@ -319,6 +327,9 @@ export default function SalesPage() {
         onDateToChange={(v) => setFilter("dateTo", v)}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
+        searchValue={filters.search}
+        onSearchChange={(v) => setFilter("search", v)}
+        searchPlaceholder="Search product, order ID, description…"
         hasActive={hasActive}
         onClear={clearFilters}
       >
