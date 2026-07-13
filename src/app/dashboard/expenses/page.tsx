@@ -26,6 +26,7 @@ import {
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
   getPresetRange,
+  sanitizeIlikeSearchTerm,
   type ExpenseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -123,6 +124,13 @@ export default function ExpensesPage() {
     }
     if (filters.category !== "all") query = query.eq("category", filters.category);
     if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+
+    if (filters.search.trim() !== "") {
+      const term = sanitizeIlikeSearchTerm(filters.search);
+      query = query.or(
+        `title.ilike.%${term}%,vendor.ilike.%${term}%,description.ilike.%${term}%,invoice_number.ilike.%${term}%`
+      );
+    }
 
     const { data: allRows } = await query;
     if (!allRows || allRows.length === 0) return;
@@ -267,6 +275,9 @@ export default function ExpensesPage() {
         onDateToChange={(v) => setFilter("dateTo", v)}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
+        searchValue={filters.search}
+        onSearchChange={(v) => setFilter("search", v)}
+        searchPlaceholder="Search title, vendor, invoice #, description…"
         hasActive={hasActive}
         onClear={clearFilters}
       >
