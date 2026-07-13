@@ -19,6 +19,7 @@
 - `customs_tax_amount = supplier_price * customs_tax_rate / 100`, always derived, never entered directly.
 - `MarginBadge` stays feature-private (dropshipping `_components/`), not added to the shared `src/components/ui/Badge.tsx` — it's used by exactly one feature.
 - No stock/quantity tracking in this plan (explicitly deferred per the spec).
+- **This repo's `.husky/pre-commit` hook runs `npx tsc --noEmit` then `npm run lint` on every commit — no exceptions, and it must never be bypassed with `--no-verify` or any other flag.** Every commit in this plan must leave the whole repo in a compiling, lint-clean state, not just the files a given task touches — a type change that makes a field required breaks every existing object literal of that type repo-wide, not just the ones this plan's task list names. If the hook rejects a commit, fix the actual reported errors (which may be in files outside this plan's stated file list) and re-commit normally; never skip the hook.
 
 ---
 
@@ -518,6 +519,20 @@ updateSupplierPrices(
 ```
 
 - [ ] **Step 2: Update `dropshippingSlice.test.ts`**
+
+**Correction found during Task 1**: this repo's pre-commit hook runs `npx tsc
+--noEmit` + `npm run lint` on every commit, so a commit that leaves any file
+non-compiling is rejected. Task 1's type change broke two existing test
+files immediately: `dropshippingSlice.test.ts`'s `makeListing` (this file)
+AND `src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts`'s
+own separate `makeListing` (not originally in this plan's file list — missed
+during spec research). Both were already fixed as part of Task 1's commit
+sequence (a follow-up commit `f965425`, since the omission was only
+discovered once `tsc` actually ran) — **skip re-doing this step**, just
+verify `makeListing`'s defaults in this file already include
+`customs_tax_rate: null, customs_tax_amount: null` before moving on to the
+rest of this task (adding the `updateCustomsTax` import and new test cases
+below, which still need to be done).
 
 Update `makeListing`'s defaults (lines 10-27) to include the two new fields:
 
