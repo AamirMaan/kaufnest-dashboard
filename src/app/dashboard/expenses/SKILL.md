@@ -57,3 +57,8 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   inventory items).
 - `writeAuditLog` `entityId` is `string | undefined` — omit it for bulk-import
   batch entries rather than passing `null` (which is a TypeScript error).
+- The "Search" box in `FilterBar` matches `title`, `vendor`, `description`,
+  and `invoice_number` via a Supabase `.or()`/`ilike` clause (see
+  `fetchExpensesPage` in `_store/expensesSlice.ts`), sanitized with
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`). `handleExport` mirrors
+  the same predicate — keep both in sync if the column set ever changes.

@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type { Purchase } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
-import { getPresetRange } from "@/lib/utils/filters";
+import { getPresetRange, sanitizeIlikeSearchTerm } from "@/lib/utils/filters";
 import type { PurchaseFilters } from "@/lib/utils/filters";
 
 interface PurchasesState {
@@ -50,6 +50,13 @@ export const fetchPurchasesPage = createAsyncThunk(
     }
     if (filters.currency !== "all") {
       query = query.eq("currency", filters.currency);
+    }
+
+    if (filters.search.trim() !== "") {
+      const term = sanitizeIlikeSearchTerm(filters.search);
+      query = query.or(
+        `product_name.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%"`
+      );
     }
 
     const [from, to] = rangeFor({ page, pageSize });

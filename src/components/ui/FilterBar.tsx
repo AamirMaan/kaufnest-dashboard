@@ -1,6 +1,7 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 import { Button } from "./Button";
 import type { DatePreset } from "@/lib/utils/filters";
 
@@ -35,6 +36,9 @@ export interface FilterBarProps {
   onDateToChange: (v: string) => void;
   currency?: string;
   onCurrencyChange?: (v: string) => void;
+  searchValue?: string;
+  onSearchChange?: (v: string) => void;
+  searchPlaceholder?: string;
   hasActive: boolean;
   onClear: () => void;
   /** Entity-specific filter slots */
@@ -50,10 +54,40 @@ export function FilterBar({
   onDateToChange,
   currency,
   onCurrencyChange,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
   hasActive,
   onClear,
   children,
 }: FilterBarProps) {
+  const [localSearch, setLocalSearch] = useState(searchValue ?? "");
+  const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+
+  // Keep local state in sync when the parent resets/changes the value
+  // externally (e.g. the "Clear" button, or switching tabs). Adjusted during
+  // render (React's "you might not need an effect" pattern) rather than in a
+  // useEffect, since an unconditional setState-in-effect trips this project's
+  // react-hooks/set-state-in-effect lint rule and causes an extra render pass.
+  if (searchValue !== prevSearchValue) {
+    setPrevSearchValue(searchValue);
+    setLocalSearch(searchValue ?? "");
+  }
+
+  // Latest-callback ref so the debounce effect doesn't need `onSearchChange`
+  // in its deps — that prop is a new function identity on every parent
+  // render, which would otherwise restart the timer before it ever fires.
+  const onSearchChangeRef = useRef(onSearchChange);
+  useEffect(() => {
+    onSearchChangeRef.current = onSearchChange;
+  }, [onSearchChange]);
+
+  useEffect(() => {
+    if (!onSearchChangeRef.current || localSearch === searchValue) return;
+    const handle = setTimeout(() => onSearchChangeRef.current?.(localSearch), 400);
+    return () => clearTimeout(handle);
+  }, [localSearch, searchValue]);
+
   return (
     <div className="mb-4 grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
       {/* Date preset */}
@@ -111,6 +145,26 @@ export function FilterBar({
               </option>
             ))}
           </select>
+        </div>
+      )}
+
+      {/* Free-text search — hidden when the feature has no search handler */}
+      {onSearchChange !== undefined && (
+        <div className="col-span-2 sm:flex-1 sm:min-w-[220px]">
+          <FilterLabel>Search</FilterLabel>
+          <div className="relative">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-faint)]"
+            />
+            <input
+              type="text"
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder={searchPlaceholder ?? "Search…"}
+              className={`${inputCls} w-full pl-7 cursor-text`}
+            />
+          </div>
         </div>
       )}
 

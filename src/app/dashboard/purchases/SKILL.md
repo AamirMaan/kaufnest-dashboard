@@ -65,3 +65,10 @@ every mutation follows.
   which is identical across Purchases/Sales/Expenses modals.
 - `writeAuditLog` `entityId` is `string | undefined` — omit it for bulk-import
   batch entries rather than passing `null` (which is a TypeScript error).
+- The general "Search" box and the standalone "Vendor" text filter are
+  independent Supabase predicates that both apply (ANDed) — a user can narrow
+  by vendor AND search a keyword simultaneously. Search matches
+  `product_name`, `vendor`, and `description` via `.or()`/`ilike` (see
+  `fetchPurchasesPage`), sanitized with `sanitizeIlikeSearchTerm`
+  (`@/lib/utils/filters`). `handleExport` mirrors the same predicate — keep
+  both in sync if the column set ever changes.

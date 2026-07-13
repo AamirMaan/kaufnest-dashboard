@@ -1,4 +1,13 @@
-import { resolveDateRange, getPresetRange, filterSales, isRevenueSale, DEFAULT_SALES_FILTERS } from "./filters";
+import {
+  resolveDateRange,
+  getPresetRange,
+  filterSales,
+  isRevenueSale,
+  DEFAULT_SALES_FILTERS,
+  sanitizeIlikeSearchTerm,
+  isDefaultFilters,
+  DEFAULT_PURCHASE_FILTERS,
+} from "./filters";
 import type { Sale } from "@/types";
 
 describe("resolveDateRange", () => {
@@ -97,5 +106,37 @@ describe("filterSales", () => {
     const pending = makeSale({ id: "s2", status: "pending" });
 
     expect(filterSales([custom, pending], { ...DEFAULT_SALES_FILTERS, status: "awaiting customs" })).toEqual([custom]);
+  });
+});
+
+describe("sanitizeIlikeSearchTerm", () => {
+  it("trims surrounding whitespace", () => {
+    expect(sanitizeIlikeSearchTerm("  widget  ")).toBe("widget");
+  });
+
+  it("escapes backslashes first so later escapes aren't double-escaped", () => {
+    expect(sanitizeIlikeSearchTerm("a\\b")).toBe("a\\\\b");
+  });
+
+  it("escapes ilike wildcards % and _", () => {
+    expect(sanitizeIlikeSearchTerm("50% off_sale")).toBe("50\\% off\\_sale");
+  });
+
+  it("escapes double quotes so a literal quote can't close the wrapping quotes early", () => {
+    expect(sanitizeIlikeSearchTerm('foo"bar')).toBe('foo\\"bar');
+  });
+
+  it("leaves commas and parens untouched — they become safe once the caller wraps the value in quotes", () => {
+    expect(sanitizeIlikeSearchTerm("widget (blue), size M")).toBe("widget (blue), size M");
+  });
+});
+
+describe("isDefaultFilters with search", () => {
+  it("returns true when search is empty", () => {
+    expect(isDefaultFilters(DEFAULT_PURCHASE_FILTERS)).toBe(true);
+  });
+
+  it("returns false when search is non-empty", () => {
+    expect(isDefaultFilters({ ...DEFAULT_PURCHASE_FILTERS, search: "widget" })).toBe(false);
   });
 });

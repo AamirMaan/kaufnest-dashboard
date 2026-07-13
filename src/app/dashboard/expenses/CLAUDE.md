@@ -5,17 +5,22 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 
 ## Files in this folder
 
-- `page.tsx` — list view: filtering (`FilterBar` + `filterExpenses`), row
-  selection, invoice trigger, Gross/VAT/Net summary, **Export CSV** button
-  (exports `filtered` via `lib/utils/csv`), **Import CSV** button, wires up the
-  modals below.
+- `page.tsx` — list view: server-side pagination (`fetchExpensesPage` thunk),
+  `FilterBar` (date preset, currency, category, general keyword search across
+  title/vendor/description/invoice number), row selection, invoice trigger,
+  Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
+  query, no `.range()`, capped at 5 000 rows), **Import CSV** button, wires up
+  the modals below.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
   `addExpense`, `updateExpense`, `removeExpense`, `setFetching`.
   Thunk: `fetchExpensesPage({ page, pageSize, filters })` — builds a Supabase query
-  with filter pushdown, `.select("*", { count: "exact" })`, `.order("date")`,
-  and `.range(from, to)` from `rangeFor()`. Dispatches `hydratePage` on success.
+  with filter pushdown (date range, category, currency, and a keyword `search`
+  matched via `.or()`/`ilike` across `title`/`vendor`/`description`/
+  `invoice_number`, sanitized with `sanitizeIlikeSearchTerm`),
+  `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
+  from `rangeFor()`. Dispatches `hydratePage` on success.
   Used **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.

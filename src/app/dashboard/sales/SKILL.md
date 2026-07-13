@@ -200,3 +200,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - The UI says "Orders" everywhere (page title, Sidebar, modal titles, toast
   messages) but the route, table, type, and slice all stay "sales" — don't
   rename files/exports when making more "Orders"-flavored UI tweaks.
+- The "Search" box in `FilterBar` matches `product_name`, `external_order_id`,
+  and `description` via a Supabase `.or()`/`ilike` clause (see
+  `fetchSalesPage` in `_store/salesSlice.ts`), sanitized with
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`) before being embedded —
+  don't build the `.or()` string from a raw, unsanitized value. `handleExport`
+  mirrors the same predicate; keep both in sync if the column set ever changes.
