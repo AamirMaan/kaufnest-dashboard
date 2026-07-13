@@ -19,7 +19,33 @@
 
 ## Gotchas
 
-- **AliExpress scraping is best-effort:** AliExpress serves captcha/"punish" pages to bots.
+- **⚠ AliExpress detail pages are client-side-rendered — the in-app HTML scraper cannot get a
+  price. USE THE LOCAL SCRIPT.** As of 2026-07, `de.aliexpress.com/item/*` returns a CSR shell
+  (`window._d_c_.isCSR = true`, empty `window.runParams`, **zero price/€ text in the HTML**);
+  the price is fetched afterward by page JS from AliExpress's internal `mtop` API. So
+  `scrapeAliExpressPrice` (plain `fetch` + `parseJsonLd`/`parseOgMeta`/`parseRunParams`) now
+  **always** fails with "Could not find a price", regardless of headers/cookies/UA/IP — the
+  data it parses simply isn't in the response. This means the in-app **check-prices route and
+  its `session.ts` hardening are effectively dead** (kept only until removed/replaced). The
+  working replacement is `scripts/aliexpress/scrape-prices.mjs` — a **local** Playwright script
+  that renders the page in a real browser (runs the JS → price appears in the DOM) from your
+  **residential IP** (dodges the datacenter bot wall). Run `npm run scrape:aliexpress -- --dry-run`.
+  See `scripts/aliexpress/README.md`. Pure parsing helpers + `node --test` unit tests live in
+  `scripts/aliexpress/parsePrice.mjs` / `.test.mjs`. Do NOT invest more in header/cookie tricks
+  on the serverless path — if you ever need it in-app, the route is a headless-browser service
+  or the official affiliate API (`aliexpress.affiliate.productdetail.get`), not more `fetch`.
+  Two things learned running the local script: (a) **the price element's CSS classes are
+  obfuscated/randomized** — `[class*="price--current"]` etc. match nothing; read the price from
+  the **rendered body text** (e.g. `9,49€`), which the script does. (b) **AliExpress rate-limits
+  bursts even from a residential IP** — the first few listings scrape fine, then it serves
+  price-less pages (soft block, looks like "no price found") and finally captchas (hard block).
+  The script counters with long 10–25s jittered delays, soft-block retry+backoff, a captcha
+  circuit-breaker (stops after 3 in a row), and a skip-checked-in-last-12h filter so
+  **re-running mops up stragglers** — that re-run loop is the intended workflow for the full set,
+  not a single perfect pass.
+
+- **AliExpress scraping is best-effort (LEGACY — see the CSR gotcha above; this path no longer
+  finds a price):** AliExpress serves captcha/"punish" pages to bots.
   `scrapeAliExpressPrice` tries JSON-LD → og:price meta → `runParams` regex, throws a
   user-readable error otherwise. The check-prices route runs sequentially with a randomized
   2.5–5s delay (`jitterDelayMs`) and caps at 50 listings per run — do NOT parallelize and do

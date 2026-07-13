@@ -11,6 +11,8 @@
     "test:watch": "jest --watch",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "scrape:aliexpress": "node --env-file=.env.local scripts/aliexpress/scrape-prices.mjs",
+    "scrape:aliexpress:test": "node --test scripts/aliexpress/parsePrice.test.mjs",
     "prepare": "husky"
   },
   "dependencies": {
