@@ -6,17 +6,22 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchPurchasesPage` thunk),
-  `FilterBar` (date preset, currency, vendor text search), `<Pagination>`,
-  loading overlay, Gross/VAT/Net summary **(this page)**, **Export CSV** button
-  (server-side query, no `.range()`, capped at 5 000 rows), **Import CSV** button,
-  wires up the modals below.
+  `FilterBar` (date preset, currency, vendor text search, general keyword
+  search across product name/vendor/description — both apply together),
+  `<Pagination>`, loading overlay, Gross/VAT/Net summary **(this page)**,
+  **Export CSV** button (server-side query, no `.range()`, capped at 5 000
+  rows), **Import CSV** button, wires up the modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
   `loaded`, `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),
   `addPurchase`, `updatePurchase`, `removePurchase`, `setFetching`.
   Thunk: `fetchPurchasesPage({ page, pageSize, filters })` — builds a Supabase query
-  with filter pushdown (date range, vendor ilike, currency), `.select("*", { count: "exact" })`,
-  `.order("date")`, and `.range(from, to)` from `rangeFor()`.
+  with filter pushdown (date range, vendor ilike, currency, and a keyword
+  `search` matched via `.or()`/`ilike` across `product_name`/`vendor`/
+  `description`, sanitized with `sanitizeIlikeSearchTerm` — chains alongside
+  the standalone vendor filter, both apply/AND together),
+  `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
+  from `rangeFor()`.
   Used **only** by this feature — registered centrally in `src/store/store.ts`
   and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/purchasesSlice.test.ts` — reducer tests (covers `hydratePurchases`,

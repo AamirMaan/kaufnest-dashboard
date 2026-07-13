@@ -26,6 +26,7 @@ import {
   isDefaultFilters,
   DEFAULT_PURCHASE_FILTERS,
   getPresetRange,
+  sanitizeIlikeSearchTerm,
   type PurchaseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
@@ -121,6 +122,13 @@ export default function PurchasesPage() {
       query = query.ilike("vendor", `%${filters.vendor.trim()}%`);
     }
     if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+
+    if (filters.search.trim() !== "") {
+      const term = sanitizeIlikeSearchTerm(filters.search);
+      query = query.or(
+        `product_name.ilike.%${term}%,vendor.ilike.%${term}%,description.ilike.%${term}%`
+      );
+    }
 
     const { data: allRows } = await query;
     if (!allRows || allRows.length === 0) return;
@@ -293,6 +301,9 @@ export default function PurchasesPage() {
         onDateToChange={(v) => setFilter("dateTo", v)}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
+        searchValue={filters.search}
+        onSearchChange={(v) => setFilter("search", v)}
+        searchPlaceholder="Search product, vendor, description…"
         hasActive={hasActive}
         onClear={clearFilters}
       >
