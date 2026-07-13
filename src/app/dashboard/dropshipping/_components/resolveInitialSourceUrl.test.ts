@@ -16,6 +16,8 @@ function makeListing(overrides: Partial<DropshipListing> = {}): DropshipListing 
     supplier_price: null,
     supplier_currency: null,
     supplier_price_checked_at: null,
+    customs_tax_rate: null,
+    customs_tax_amount: null,
     last_synced_at: "2026-01-01T00:00:00.000Z",
     created_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
