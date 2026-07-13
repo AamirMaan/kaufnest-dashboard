@@ -794,10 +794,30 @@
       "norm_label": "test:e2e:ui"
     },
     {
-      "label": "prepare",
+      "label": "scrape:aliexpress",
       "file_type": "code",
       "source_file": "package.json",
       "source_location": "L14",
+      "_origin": "ast",
+      "id": "package_scripts_scrape_aliexpress",
+      "community": 56,
+      "norm_label": "scrape:aliexpress"
+    },
+    {
+      "label": "scrape:aliexpress:test",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "package_scripts_scrape_aliexpress_test",
+      "community": 56,
+      "norm_label": "scrape:aliexpress:test"
+    },
+    {
+      "label": "prepare",
+      "file_type": "code",
+      "source_file": "package.json",
+      "source_location": "L16",
       "_origin": "ast",
       "id": "package_scripts_prepare",
       "community": 56,
@@ -807,7 +827,7 @@
       "label": "dependencies",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L16",
+      "source_location": "L18",
       "_origin": "ast",
       "id": "package_dependencies",
       "community": 26,
@@ -817,7 +837,7 @@
       "label": "@base-ui/react",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L17",
+      "source_location": "L19",
       "_origin": "ast",
       "id": "package_dependencies_base_ui_react",
       "community": 26,
@@ -827,7 +847,7 @@
       "label": "@reduxjs/toolkit",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L18",
+      "source_location": "L20",
       "_origin": "ast",
       "id": "package_dependencies_reduxjs_toolkit",
       "community": 26,
@@ -837,7 +857,7 @@
       "label": "@supabase/ssr",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L19",
+      "source_location": "L21",
       "_origin": "ast",
       "id": "package_dependencies_supabase_ssr",
       "community": 26,
@@ -847,7 +867,7 @@
       "label": "@supabase/supabase-js",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L20",
+      "source_location": "L22",
       "_origin": "ast",
       "id": "package_dependencies_supabase_supabase_js",
       "community": 26,
@@ -857,7 +877,7 @@
       "label": "class-variance-authority",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L21",
+      "source_location": "L23",
       "_origin": "ast",
       "id": "package_dependencies_class_variance_authority",
       "community": 26,
@@ -867,7 +887,7 @@
       "label": "clsx",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L22",
+      "source_location": "L24",
       "_origin": "ast",
       "id": "package_dependencies_clsx",
       "community": 26,
@@ -877,7 +897,7 @@
       "label": "jspdf",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L23",
+      "source_location": "L25",
       "_origin": "ast",
       "id": "package_dependencies_jspdf",
       "community": 26,
@@ -887,7 +907,7 @@
       "label": "jspdf-autotable",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L24",
+      "source_location": "L26",
       "_origin": "ast",
       "id": "package_dependencies_jspdf_autotable",
       "community": 26,
@@ -897,7 +917,7 @@
       "label": "lucide-react",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L25",
+      "source_location": "L27",
       "_origin": "ast",
       "id": "package_dependencies_lucide_react",
       "community": 26,
@@ -907,7 +927,7 @@
       "label": "next",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L26",
+      "source_location": "L28",
       "_origin": "ast",
       "id": "package_dependencies_next",
       "community": 26,
@@ -917,7 +937,7 @@
       "label": "react",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L27",
+      "source_location": "L29",
       "_origin": "ast",
       "id": "package_dependencies_react",
       "community": 26,
@@ -927,7 +947,7 @@
       "label": "react-dom",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L28",
+      "source_location": "L30",
       "_origin": "ast",
       "id": "package_dependencies_react_dom",
       "community": 26,
@@ -937,7 +957,7 @@
       "label": "react-redux",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L29",
+      "source_location": "L31",
       "_origin": "ast",
       "id": "package_dependencies_react_redux",
       "community": 26,
@@ -947,7 +967,7 @@
       "label": "recharts",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L30",
+      "source_location": "L32",
       "_origin": "ast",
       "id": "package_dependencies_recharts",
       "community": 26,
@@ -957,7 +977,7 @@
       "label": "shadcn",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L31",
+      "source_location": "L33",
       "_origin": "ast",
       "id": "package_dependencies_shadcn",
       "community": 26,
@@ -967,17 +987,17 @@
       "label": "stripe",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L32",
+      "source_location": "L34",
       "_origin": "ast",
       "id": "package_dependencies_stripe",
-      "community": 58,
+      "community": 6,
       "norm_label": "stripe"
     },
     {
       "label": "tailwind-merge",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L33",
+      "source_location": "L35",
       "_origin": "ast",
       "id": "package_dependencies_tailwind_merge",
       "community": 26,
@@ -987,7 +1007,7 @@
       "label": "tw-animate-css",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L34",
+      "source_location": "L36",
       "_origin": "ast",
       "id": "package_dependencies_tw_animate_css",
       "community": 26,
@@ -997,7 +1017,7 @@
       "label": "xlsx",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L35",
+      "source_location": "L37",
       "_origin": "ast",
       "id": "package_dependencies_xlsx",
       "community": 26,
@@ -1007,7 +1027,7 @@
       "label": "devDependencies",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L37",
+      "source_location": "L39",
       "_origin": "ast",
       "id": "package_devdependencies",
       "community": 33,
@@ -1017,7 +1037,7 @@
       "label": "@playwright/test",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L38",
+      "source_location": "L40",
       "_origin": "ast",
       "id": "package_devdependencies_playwright_test",
       "community": 33,
@@ -1027,7 +1047,7 @@
       "label": "@tailwindcss/postcss",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L39",
+      "source_location": "L41",
       "_origin": "ast",
       "id": "package_devdependencies_tailwindcss_postcss",
       "community": 33,
@@ -1037,7 +1057,7 @@
       "label": "@testing-library/jest-dom",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L40",
+      "source_location": "L42",
       "_origin": "ast",
       "id": "package_devdependencies_testing_library_jest_dom",
       "community": 33,
@@ -1047,7 +1067,7 @@
       "label": "@testing-library/react",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L41",
+      "source_location": "L43",
       "_origin": "ast",
       "id": "package_devdependencies_testing_library_react",
       "community": 33,
@@ -1057,7 +1077,7 @@
       "label": "@types/jest",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L42",
+      "source_location": "L44",
       "_origin": "ast",
       "id": "package_devdependencies_types_jest",
       "community": 33,
@@ -1067,7 +1087,7 @@
       "label": "@types/node",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L43",
+      "source_location": "L45",
       "_origin": "ast",
       "id": "package_devdependencies_types_node",
       "community": 33,
@@ -1077,7 +1097,7 @@
       "label": "@types/react",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L44",
+      "source_location": "L46",
       "_origin": "ast",
       "id": "package_devdependencies_types_react",
       "community": 33,
@@ -1087,7 +1107,7 @@
       "label": "@types/react-dom",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L45",
+      "source_location": "L47",
       "_origin": "ast",
       "id": "package_devdependencies_types_react_dom",
       "community": 33,
@@ -1097,7 +1117,7 @@
       "label": "eslint",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L46",
+      "source_location": "L48",
       "_origin": "ast",
       "id": "package_devdependencies_eslint",
       "community": 33,
@@ -1107,7 +1127,7 @@
       "label": "eslint-config-next",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L47",
+      "source_location": "L49",
       "_origin": "ast",
       "id": "package_devdependencies_eslint_config_next",
       "community": 33,
@@ -1117,7 +1137,7 @@
       "label": "husky",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L48",
+      "source_location": "L50",
       "_origin": "ast",
       "id": "package_devdependencies_husky",
       "community": 102,
@@ -1127,7 +1147,7 @@
       "label": "jest",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L49",
+      "source_location": "L51",
       "_origin": "ast",
       "id": "package_devdependencies_jest",
       "community": 33,
@@ -1137,7 +1157,7 @@
       "label": "jest-environment-jsdom",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L50",
+      "source_location": "L52",
       "_origin": "ast",
       "id": "package_devdependencies_jest_environment_jsdom",
       "community": 33,
@@ -1147,7 +1167,7 @@
       "label": "tailwindcss",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L51",
+      "source_location": "L53",
       "_origin": "ast",
       "id": "package_devdependencies_tailwindcss",
       "community": 33,
@@ -1157,7 +1177,7 @@
       "label": "ts-jest",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L52",
+      "source_location": "L54",
       "_origin": "ast",
       "id": "package_devdependencies_ts_jest",
       "community": 33,
@@ -1167,7 +1187,7 @@
       "label": "typescript",
       "file_type": "code",
       "source_file": "package.json",
-      "source_location": "L53",
+      "source_location": "L55",
       "_origin": "ast",
       "id": "package_devdependencies_typescript",
       "community": 33,
@@ -1202,6 +1222,196 @@
       "id": "postcss_config_config",
       "community": 109,
       "norm_label": "config"
+    },
+    {
+      "label": "parsePrice.mjs",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice",
+      "community": 40,
+      "norm_label": "parseprice.mjs"
+    },
+    {
+      "label": "CURRENCY_BY_SYMBOL",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L4",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_currency_by_symbol",
+      "community": 40,
+      "norm_label": "currency_by_symbol"
+    },
+    {
+      "label": "parseAmount()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L11",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_parseamount",
+      "community": 40,
+      "norm_label": "parseamount()"
+    },
+    {
+      "label": "detectCurrency()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L40",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_detectcurrency",
+      "community": 40,
+      "norm_label": "detectcurrency()"
+    },
+    {
+      "label": "parsePriceString()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L54",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_parsepricestring",
+      "community": 40,
+      "norm_label": "parsepricestring()"
+    },
+    {
+      "label": "parseStock()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_parsestock",
+      "community": 40,
+      "norm_label": "parsestock()"
+    },
+    {
+      "label": "isAliExpressSku()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L83",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_isaliexpresssku",
+      "community": 40,
+      "norm_label": "isaliexpresssku()"
+    },
+    {
+      "label": "resolveSupplierUrl()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L88",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "community": 40,
+      "norm_label": "resolvesupplierurl()"
+    },
+    {
+      "label": "parsePrice.test.mjs",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_parseprice_test",
+      "community": 40,
+      "norm_label": "parseprice.test.mjs"
+    },
+    {
+      "label": "scrape-prices.mjs",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices",
+      "community": 40,
+      "norm_label": "scrape-prices.mjs"
+    },
+    {
+      "label": "args",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L38",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_args",
+      "community": 40,
+      "norm_label": "args"
+    },
+    {
+      "label": "sleep()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L65",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_sleep",
+      "community": 40,
+      "norm_label": "sleep()"
+    },
+    {
+      "label": "jitter()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L66",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_jitter",
+      "community": 40,
+      "norm_label": "jitter()"
+    },
+    {
+      "label": "supabase",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L68",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_supabase",
+      "community": 40,
+      "norm_label": "supabase"
+    },
+    {
+      "label": "extractFromPage()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L71",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_extractfrompage",
+      "community": 40,
+      "norm_label": "extractfrompage()"
+    },
+    {
+      "label": "isBlocked()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L101",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_isblocked",
+      "community": 40,
+      "norm_label": "isblocked()"
+    },
+    {
+      "label": "scrapeOne()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L105",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_scrapeone",
+      "community": 40,
+      "norm_label": "scrapeone()"
+    },
+    {
+      "label": "persist()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L150",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_persist",
+      "community": 40,
+      "norm_label": "persist()"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L161",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_scrape_prices_main",
+      "community": 40,
+      "norm_label": "main()"
     },
     {
       "label": "page.tsx",
@@ -1340,7 +1550,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_admin_components_addtenantmodal",
-      "community": 69,
+      "community": 52,
       "norm_label": "addtenantmodal.tsx"
     },
     {
@@ -1350,7 +1560,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_admin_components_addtenantmodal_props",
-      "community": 69,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -1360,7 +1570,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_admin_components_addtenantmodal_plan",
-      "community": 69,
+      "community": 52,
       "norm_label": "plan"
     },
     {
@@ -1580,7 +1790,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_admin_provision_tenant_route",
-      "community": 40,
+      "community": 6,
       "norm_label": "route.ts"
     },
     {
@@ -1590,7 +1800,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_app_api_admin_provision_tenant_route_verifyplatformadmin",
-      "community": 40,
+      "community": 6,
       "norm_label": "verifyplatformadmin()"
     },
     {
@@ -1600,7 +1810,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_app_api_admin_provision_tenant_route_post",
-      "community": 40,
+      "community": 6,
       "norm_label": "post()"
     },
     {
@@ -1610,7 +1820,7 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "src_app_api_admin_provision_tenant_route_errormessage",
-      "community": 40,
+      "community": 6,
       "norm_label": "errormessage()"
     },
     {
@@ -1650,7 +1860,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route",
-      "community": 40,
+      "community": 6,
       "norm_label": "route.ts"
     },
     {
@@ -1660,7 +1870,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_makeserviceclient",
-      "community": 40,
+      "community": 6,
       "norm_label": "makeserviceclient()"
     },
     {
@@ -1670,7 +1880,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_errormessage",
-      "community": 40,
+      "community": 6,
       "norm_label": "errormessage()"
     },
     {
@@ -1680,7 +1890,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_patch",
-      "community": 40,
+      "community": 6,
       "norm_label": "patch()"
     },
     {
@@ -1690,7 +1900,7 @@
       "source_location": "L116",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_id_route_delete",
-      "community": 40,
+      "community": 6,
       "norm_label": "delete()"
     },
     {
@@ -1710,7 +1920,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_app_api_admin_tenants_route_verifyplatformadmin",
-      "community": 40,
+      "community": 6,
       "norm_label": "verifyplatformadmin()"
     },
     {
@@ -1770,7 +1980,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_id_route",
-      "community": 10,
+      "community": 49,
       "norm_label": "route.ts"
     },
     {
@@ -1780,7 +1990,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_id_route_patch",
-      "community": 10,
+      "community": 49,
       "norm_label": "patch()"
     },
     {
@@ -1790,7 +2000,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route",
-      "community": 10,
+      "community": 37,
       "norm_label": "route.ts"
     },
     {
@@ -1800,7 +2010,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_pricecheckresult",
-      "community": 10,
+      "community": 37,
       "norm_label": "pricecheckresult"
     },
     {
@@ -1810,7 +2020,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_sleep",
-      "community": 10,
+      "community": 37,
       "norm_label": "sleep()"
     },
     {
@@ -1820,7 +2030,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_check_prices_route_post",
-      "community": 10,
+      "community": 37,
       "norm_label": "post()"
     },
     {
@@ -1830,7 +2040,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_refresh_route",
-      "community": 53,
+      "community": 27,
       "norm_label": "route.ts"
     },
     {
@@ -1840,7 +2050,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_api_dropshipping_listings_refresh_route_post",
-      "community": 53,
+      "community": 27,
       "norm_label": "post()"
     },
     {
@@ -1870,7 +2080,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_callback_route",
-      "community": 37,
+      "community": 27,
       "norm_label": "route.ts"
     },
     {
@@ -1880,7 +2090,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_callback_route_redirecttointegrations",
-      "community": 37,
+      "community": 27,
       "norm_label": "redirecttointegrations()"
     },
     {
@@ -1890,7 +2100,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_callback_route_get",
-      "community": 37,
+      "community": 27,
       "norm_label": "get()"
     },
     {
@@ -1900,7 +2110,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_callback_route_redirecttointegrationswitherror",
-      "community": 37,
+      "community": 27,
       "norm_label": "redirecttointegrationswitherror()"
     },
     {
@@ -1910,7 +2120,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_connect_route",
-      "community": 37,
+      "community": 27,
       "norm_label": "route.ts"
     },
     {
@@ -1920,7 +2130,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_connect_route_get",
-      "community": 37,
+      "community": 27,
       "norm_label": "get()"
     },
     {
@@ -1930,7 +2140,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_disconnect_route",
-      "community": 37,
+      "community": 27,
       "norm_label": "route.ts"
     },
     {
@@ -1940,7 +2150,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_app_api_integrations_platform_disconnect_route_post",
-      "community": 37,
+      "community": 27,
       "norm_label": "post()"
     },
     {
@@ -1960,7 +2170,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_app_api_integrations_review_import_route_post",
-      "community": 34,
+      "community": 27,
       "norm_label": "post()"
     },
     {
@@ -1980,7 +2190,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_api_integrations_review_route_revieworder",
-      "community": 34,
+      "community": 27,
       "norm_label": "revieworder"
     },
     {
@@ -1990,7 +2200,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_app_api_integrations_review_route_reviewresponse",
-      "community": 34,
+      "community": 27,
       "norm_label": "reviewresponse"
     },
     {
@@ -2010,7 +2220,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_app_api_integrations_review_route_get",
-      "community": 34,
+      "community": 27,
       "norm_label": "get()"
     },
     {
@@ -2120,7 +2330,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_components_recordtransfermodal",
-      "community": 5,
+      "community": 52,
       "norm_label": "recordtransfermodal.tsx"
     },
     {
@@ -2130,7 +2340,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_components_recordtransfermodal_props",
-      "community": 5,
+      "community": 52,
       "norm_label": "props"
     },
     {
@@ -2160,7 +2370,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_lib_aggregatesales_test",
-      "community": 46,
+      "community": 58,
       "norm_label": "aggregatesales.test.ts"
     },
     {
@@ -2170,7 +2380,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_app_dashboard_lib_aggregatesales_test_makesale",
-      "community": 46,
+      "community": 58,
       "norm_label": "makesale()"
     },
     {
@@ -2180,7 +2390,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_lib_aggregatesales",
-      "community": 46,
+      "community": 58,
       "norm_label": "aggregatesales.ts"
     },
     {
@@ -2190,7 +2400,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_lib_aggregatesales_aggregatesalerevenue",
-      "community": 46,
+      "community": 58,
       "norm_label": "aggregatesalerevenue()"
     },
     {
@@ -2240,7 +2450,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_components_auditlogdetailmodal",
-      "community": 18,
+      "community": 38,
       "norm_label": "auditlogdetailmodal.tsx"
     },
     {
@@ -2250,7 +2460,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_components_auditlogdetailmodal_props",
-      "community": 18,
+      "community": 38,
       "norm_label": "props"
     },
     {
@@ -2260,7 +2470,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_components_auditlogdetailmodal_kvtable",
-      "community": 18,
+      "community": 38,
       "norm_label": "kvtable()"
     },
     {
@@ -2270,7 +2480,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_components_auditlogdetailmodal_auditlogdetailmodal",
-      "community": 55,
+      "community": 38,
       "norm_label": "auditlogdetailmodal()"
     },
     {
@@ -2280,7 +2490,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_page",
-      "community": 8,
+      "community": 38,
       "norm_label": "page.tsx"
     },
     {
@@ -2290,7 +2500,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_page_audit_actions",
-      "community": 8,
+      "community": 38,
       "norm_label": "audit_actions"
     },
     {
@@ -2300,7 +2510,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_dashboard_audit_logs_page_auditlogspage",
-      "community": 15,
+      "community": 38,
       "norm_label": "auditlogspage()"
     },
     {
@@ -2330,7 +2540,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_editsourcemodal_platformbadge",
-      "community": 10,
+      "community": 49,
       "norm_label": "platformbadge()"
     },
     {
@@ -2340,7 +2550,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_editsourcemodal_editsourcemodal",
-      "community": 10,
+      "community": 34,
       "norm_label": "editsourcemodal()"
     },
     {
@@ -2370,7 +2580,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_canchecksupplierprice",
-      "community": 10,
+      "community": 49,
       "norm_label": "canchecksupplierprice()"
     },
     {
@@ -2400,7 +2610,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_sourcebadge",
-      "community": 10,
+      "community": 49,
       "norm_label": "sourcebadge()"
     },
     {
@@ -2410,7 +2620,7 @@
       "source_location": "L127",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_listingstable_listingstable",
-      "community": 15,
+      "community": 34,
       "norm_label": "listingstable()"
     },
     {
@@ -2420,7 +2630,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test",
-      "community": 10,
+      "community": 49,
       "norm_label": "resolveinitialsourceurl.test.ts"
     },
     {
@@ -2430,7 +2640,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_test_makelisting",
-      "community": 10,
+      "community": 49,
       "norm_label": "makelisting()"
     },
     {
@@ -2440,7 +2650,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl",
-      "community": 10,
+      "community": 49,
       "norm_label": "resolveinitialsourceurl.ts"
     },
     {
@@ -2450,7 +2660,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_components_resolveinitialsourceurl_resolveinitialsourceurl",
-      "community": 10,
+      "community": 49,
       "norm_label": "resolveinitialsourceurl()"
     },
     {
@@ -2520,7 +2730,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_page",
-      "community": 15,
+      "community": 34,
       "norm_label": "page.tsx"
     },
     {
@@ -2530,7 +2740,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_page_dropshippingpage",
-      "community": 15,
+      "community": 34,
       "norm_label": "dropshippingpage()"
     },
     {
@@ -2700,7 +2910,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal",
-      "community": 18,
+      "community": 28,
       "norm_label": "importexpensesmodal.tsx"
     },
     {
@@ -2710,7 +2920,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_valid_categories",
-      "community": 18,
+      "community": 28,
       "norm_label": "valid_categories"
     },
     {
@@ -2720,7 +2930,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_valid_currencies",
-      "community": 18,
+      "community": 28,
       "norm_label": "valid_currencies"
     },
     {
@@ -2730,7 +2940,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_template_headers",
-      "community": 18,
+      "community": 28,
       "norm_label": "template_headers"
     },
     {
@@ -2740,7 +2950,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_template_example",
-      "community": 18,
+      "community": 28,
       "norm_label": "template_example"
     },
     {
@@ -2760,7 +2970,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_validaterow",
-      "community": 18,
+      "community": 15,
       "norm_label": "validaterow()"
     },
     {
@@ -2770,7 +2980,7 @@
       "source_location": "L76",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_props",
-      "community": 18,
+      "community": 28,
       "norm_label": "props"
     },
     {
@@ -2780,7 +2990,7 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_components_importexpensesmodal_importexpensesmodal",
-      "community": 18,
+      "community": 15,
       "norm_label": "importexpensesmodal()"
     },
     {
@@ -2870,7 +3080,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_page",
-      "community": 8,
+      "community": 15,
       "norm_label": "page.tsx"
     },
     {
@@ -2880,7 +3090,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_page_categories",
-      "community": 8,
+      "community": 15,
       "norm_label": "categories"
     },
     {
@@ -2930,7 +3140,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_components_connectioncard_connectioncardprops",
-      "community": 49,
+      "community": 24,
       "norm_label": "connectioncardprops"
     },
     {
@@ -2940,7 +3150,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_components_connectioncard_connectioncard",
-      "community": 15,
+      "community": 55,
       "norm_label": "connectioncard()"
     },
     {
@@ -2950,7 +3160,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice_test",
-      "community": 49,
+      "community": 24,
       "norm_label": "integrationsslice.test.ts"
     },
     {
@@ -2960,7 +3170,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice_test_makeconnection",
-      "community": 49,
+      "community": 24,
       "norm_label": "makeconnection()"
     },
     {
@@ -2970,7 +3180,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice",
-      "community": 49,
+      "community": 24,
       "norm_label": "integrationsslice.ts"
     },
     {
@@ -2980,7 +3190,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice_integrationsstate",
-      "community": 49,
+      "community": 24,
       "norm_label": "integrationsstate"
     },
     {
@@ -2990,7 +3200,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice_initialstate",
-      "community": 49,
+      "community": 24,
       "norm_label": "initialstate"
     },
     {
@@ -3000,7 +3210,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_dashboard_integrations_store_integrationsslice_integrationsslice",
-      "community": 49,
+      "community": 24,
       "norm_label": "integrationsslice"
     },
     {
@@ -3140,7 +3350,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_addproductmodal_addproductmodal",
-      "community": 52,
+      "community": 8,
       "norm_label": "addproductmodal()"
     },
     {
@@ -3150,7 +3360,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal",
-      "community": 52,
+      "community": 8,
       "norm_label": "editproductmodal.tsx"
     },
     {
@@ -3160,7 +3370,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_props",
-      "community": 52,
+      "community": 8,
       "norm_label": "props"
     },
     {
@@ -3170,7 +3380,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_formstate",
-      "community": 52,
+      "community": 8,
       "norm_label": "formstate"
     },
     {
@@ -3180,7 +3390,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_producttoform",
-      "community": 52,
+      "community": 8,
       "norm_label": "producttoform()"
     },
     {
@@ -3190,7 +3400,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_blankform",
-      "community": 52,
+      "community": 8,
       "norm_label": "blankform"
     },
     {
@@ -3200,7 +3410,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_components_editproductmodal_editproductmodal",
-      "community": 52,
+      "community": 8,
       "norm_label": "editproductmodal()"
     },
     {
@@ -3250,7 +3460,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_dashboard_inventory_store_inventoryslice_productselector",
-      "community": 19,
+      "community": 25,
       "norm_label": "productselector"
     },
     {
@@ -3370,7 +3580,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_page",
-      "community": 46,
+      "community": 5,
       "norm_label": "page.tsx"
     },
     {
@@ -3380,7 +3590,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_app_dashboard_page_range_presets",
-      "community": 46,
+      "community": 5,
       "norm_label": "range_presets"
     },
     {
@@ -3390,7 +3600,7 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_app_dashboard_page_platform_colors",
-      "community": 46,
+      "community": 5,
       "norm_label": "platform_colors"
     },
     {
@@ -3400,7 +3610,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_app_dashboard_page_fallback_colors",
-      "community": 46,
+      "community": 5,
       "norm_label": "fallback_colors"
     },
     {
@@ -3410,7 +3620,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "src_app_dashboard_page_platformcolor",
-      "community": 46,
+      "community": 5,
       "norm_label": "platformcolor()"
     },
     {
@@ -3420,7 +3630,7 @@
       "source_location": "L60",
       "_origin": "ast",
       "id": "src_app_dashboard_page_describerange",
-      "community": 46,
+      "community": 5,
       "norm_label": "describerange()"
     },
     {
@@ -3430,7 +3640,7 @@
       "source_location": "L70",
       "_origin": "ast",
       "id": "src_app_dashboard_page_compacteur",
-      "community": 46,
+      "community": 5,
       "norm_label": "compacteur()"
     },
     {
@@ -3440,7 +3650,7 @@
       "source_location": "L76",
       "_origin": "ast",
       "id": "src_app_dashboard_page_dashboardpage",
-      "community": 46,
+      "community": 5,
       "norm_label": "dashboardpage()"
     },
     {
@@ -3820,7 +4030,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_planner_page",
-      "community": 34,
+      "community": 9,
       "norm_label": "page.tsx"
     },
     {
@@ -3830,7 +4040,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_app_dashboard_planner_page_platformtab",
-      "community": 34,
+      "community": 9,
       "norm_label": "platformtab"
     },
     {
@@ -3840,7 +4050,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "src_app_dashboard_planner_page_tabs",
-      "community": 34,
+      "community": 9,
       "norm_label": "tabs"
     },
     {
@@ -3950,7 +4160,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_editpurchasemodal_props",
-      "community": 12,
+      "community": 22,
       "norm_label": "props"
     },
     {
@@ -4040,7 +4250,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_importpurchasesmodal_parsedrow",
-      "community": 12,
+      "community": 22,
       "norm_label": "parsedrow"
     },
     {
@@ -4050,7 +4260,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_importpurchasesmodal_validaterow",
-      "community": 18,
+      "community": 15,
       "norm_label": "validaterow()"
     },
     {
@@ -4070,7 +4280,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_components_importpurchasesmodal_importpurchasesmodal",
-      "community": 18,
+      "community": 15,
       "norm_label": "importpurchasesmodal()"
     },
     {
@@ -4110,7 +4320,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_store_purchasesslice_purchasesstate",
-      "community": 12,
+      "community": 22,
       "norm_label": "purchasesstate"
     },
     {
@@ -4160,7 +4370,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_purchases_page",
-      "community": 8,
+      "community": 15,
       "norm_label": "page.tsx"
     },
     {
@@ -4180,7 +4390,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page",
-      "community": 55,
+      "community": 22,
       "norm_label": "page.tsx"
     },
     {
@@ -4190,7 +4400,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page_pageprops",
-      "community": 55,
+      "community": 22,
       "norm_label": "pageprops"
     },
     {
@@ -4210,7 +4420,7 @@
       "source_location": "L494",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_id_page_finrow",
-      "community": 55,
+      "community": 22,
       "norm_label": "finrow()"
     },
     {
@@ -4330,7 +4540,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_editsalemodal_props",
-      "community": 12,
+      "community": 58,
       "norm_label": "props"
     },
     {
@@ -4420,7 +4630,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal",
-      "community": 18,
+      "community": 28,
       "norm_label": "importsalesmodal.tsx"
     },
     {
@@ -4430,7 +4640,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal_parsedsource",
-      "community": 18,
+      "community": 28,
       "norm_label": "parsedsource"
     },
     {
@@ -4440,7 +4650,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal_readfiletext",
-      "community": 18,
+      "community": 28,
       "norm_label": "readfiletext()"
     },
     {
@@ -4450,7 +4660,7 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal_readfilebuffer",
-      "community": 18,
+      "community": 28,
       "norm_label": "readfilebuffer()"
     },
     {
@@ -4460,7 +4670,7 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal_isexcelfile",
-      "community": 18,
+      "community": 28,
       "norm_label": "isexcelfile()"
     },
     {
@@ -4470,7 +4680,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_importsalesmodal_props",
-      "community": 18,
+      "community": 28,
       "norm_label": "props"
     },
     {
@@ -4730,7 +4940,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_test",
-      "community": 12,
+      "community": 22,
       "norm_label": "ordermath.test.ts"
     },
     {
@@ -4740,7 +4950,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_test_makesale",
-      "community": 12,
+      "community": 22,
       "norm_label": "makesale()"
     },
     {
@@ -4750,7 +4960,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath",
-      "community": 12,
+      "community": 22,
       "norm_label": "ordermath.ts"
     },
     {
@@ -4760,7 +4970,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_computenetproceeds",
-      "community": 12,
+      "community": 22,
       "norm_label": "computenetproceeds()"
     },
     {
@@ -4770,7 +4980,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_components_ordermath_computegrossprofit",
-      "community": 12,
+      "community": 22,
       "norm_label": "computegrossprofit()"
     },
     {
@@ -5010,7 +5220,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_app_dashboard_settings_page",
-      "community": 52,
+      "community": 48,
       "norm_label": "page.tsx"
     },
     {
@@ -5020,7 +5230,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_app_dashboard_settings_page_demo_sale",
-      "community": 52,
+      "community": 48,
       "norm_label": "demo_sale"
     },
     {
@@ -5030,7 +5240,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_app_dashboard_settings_page_company_profile_roles",
-      "community": 52,
+      "community": 48,
       "norm_label": "company_profile_roles"
     },
     {
@@ -5390,7 +5600,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_layout_pageheader",
-      "community": 8,
+      "community": 34,
       "norm_label": "pageheader.tsx"
     },
     {
@@ -5400,7 +5610,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_layout_pageheader_pageheaderprops",
-      "community": 8,
+      "community": 34,
       "norm_label": "pageheaderprops"
     },
     {
@@ -5410,7 +5620,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_components_layout_pageheader_pageheader",
-      "community": 8,
+      "community": 34,
       "norm_label": "pageheader()"
     },
     {
@@ -5510,7 +5720,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal",
-      "community": 12,
+      "community": 53,
       "norm_label": "invoicemodal.tsx"
     },
     {
@@ -5520,7 +5730,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_salesinvoiceprops",
-      "community": 12,
+      "community": 53,
       "norm_label": "salesinvoiceprops"
     },
     {
@@ -5540,7 +5750,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_purchaseinvoiceprops",
-      "community": 12,
+      "community": 22,
       "norm_label": "purchaseinvoiceprops"
     },
     {
@@ -5550,7 +5760,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_props",
-      "community": 12,
+      "community": 53,
       "norm_label": "props"
     },
     {
@@ -5560,7 +5770,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_summaryrow",
-      "community": 12,
+      "community": 53,
       "norm_label": "summaryrow()"
     },
     {
@@ -5570,7 +5780,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_salestotalsbycurrency",
-      "community": 12,
+      "community": 53,
       "norm_label": "salestotalsbycurrency()"
     },
     {
@@ -5580,7 +5790,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_simpletotalsbycurrency",
-      "community": 12,
+      "community": 53,
       "norm_label": "simpletotalsbycurrency()"
     },
     {
@@ -5590,7 +5800,7 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_empty_opts",
-      "community": 12,
+      "community": 53,
       "norm_label": "empty_opts"
     },
     {
@@ -5600,7 +5810,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "src_components_modals_invoicemodal_invoicemodal",
-      "community": 12,
+      "community": 15,
       "norm_label": "invoicemodal()"
     },
     {
@@ -5670,7 +5880,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_components_ui_badge_badge",
-      "community": 69,
+      "community": 55,
       "norm_label": "badge()"
     },
     {
@@ -5690,7 +5900,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "src_components_ui_badge_actionbadge",
-      "community": 18,
+      "community": 38,
       "norm_label": "actionbadge()"
     },
     {
@@ -5710,7 +5920,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "src_components_ui_badge_categorybadge",
-      "community": 46,
+      "community": 55,
       "norm_label": "categorybadge()"
     },
     {
@@ -5830,7 +6040,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_components_ui_button_button",
-      "community": 8,
+      "community": 69,
       "norm_label": "button"
     },
     {
@@ -5890,7 +6100,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_filterbar",
-      "community": 8,
+      "community": 66,
       "norm_label": "filterbar.tsx"
     },
     {
@@ -5900,7 +6110,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_presets",
-      "community": 8,
+      "community": 66,
       "norm_label": "presets"
     },
     {
@@ -5910,7 +6120,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_currencies",
-      "community": 8,
+      "community": 66,
       "norm_label": "currencies"
     },
     {
@@ -5920,7 +6130,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterlabel",
-      "community": 8,
+      "community": 66,
       "norm_label": "filterlabel()"
     },
     {
@@ -5930,7 +6140,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterbarprops",
-      "community": 8,
+      "community": 66,
       "norm_label": "filterbarprops"
     },
     {
@@ -5940,7 +6150,7 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_components_ui_filterbar_filterbar",
-      "community": 8,
+      "community": 66,
       "norm_label": "filterbar()"
     },
     {
@@ -5970,7 +6180,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_components_ui_formfields_field",
-      "community": 69,
+      "community": 52,
       "norm_label": "field()"
     },
     {
@@ -5990,7 +6200,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_components_ui_formfields_input",
-      "community": 69,
+      "community": 52,
       "norm_label": "input()"
     },
     {
@@ -6070,7 +6280,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_modal",
-      "community": 18,
+      "community": 52,
       "norm_label": "modal.tsx"
     },
     {
@@ -6080,7 +6290,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_components_ui_modal_modalprops",
-      "community": 18,
+      "community": 52,
       "norm_label": "modalprops"
     },
     {
@@ -6090,7 +6300,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_components_ui_modal_modal",
-      "community": 18,
+      "community": 52,
       "norm_label": "modal()"
     },
     {
@@ -6160,7 +6370,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_statcard",
-      "community": 46,
+      "community": 5,
       "norm_label": "statcard.tsx"
     },
     {
@@ -6170,7 +6380,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_statcard_statcardprops",
-      "community": 46,
+      "community": 5,
       "norm_label": "statcardprops"
     },
     {
@@ -6180,7 +6390,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_components_ui_statcard_statcard",
-      "community": 46,
+      "community": 5,
       "norm_label": "statcard()"
     },
     {
@@ -6250,7 +6460,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_ui_toast",
-      "community": 69,
+      "community": 118,
       "norm_label": "toast.tsx"
     },
     {
@@ -6260,7 +6470,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastvariant",
-      "community": 69,
+      "community": 118,
       "norm_label": "toastvariant"
     },
     {
@@ -6270,7 +6480,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_components_ui_toast_toast",
-      "community": 69,
+      "community": 118,
       "norm_label": "toast"
     },
     {
@@ -6280,7 +6490,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastcontextvalue",
-      "community": 69,
+      "community": 118,
       "norm_label": "toastcontextvalue"
     },
     {
@@ -6290,7 +6500,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_components_ui_toast_toastcontext",
-      "community": 69,
+      "community": 118,
       "norm_label": "toastcontext"
     },
     {
@@ -6300,7 +6510,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_components_ui_toast_usetoast",
-      "community": 15,
+      "community": 34,
       "norm_label": "usetoast()"
     },
     {
@@ -6310,7 +6520,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_components_ui_toast_variant_config",
-      "community": 69,
+      "community": 118,
       "norm_label": "variant_config"
     },
     {
@@ -6550,7 +6760,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape",
-      "community": 10,
+      "community": 37,
       "norm_label": "scrape.ts"
     },
     {
@@ -6560,7 +6770,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_supplierprice",
-      "community": 10,
+      "community": 37,
       "norm_label": "supplierprice"
     },
     {
@@ -6570,7 +6780,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_resolvesupplierurl",
-      "community": 10,
+      "community": 49,
       "norm_label": "resolvesupplierurl()"
     },
     {
@@ -6580,7 +6790,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parsejsonld",
-      "community": 10,
+      "community": 37,
       "norm_label": "parsejsonld()"
     },
     {
@@ -6590,7 +6800,7 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parseogmeta",
-      "community": 10,
+      "community": 37,
       "norm_label": "parseogmeta()"
     },
     {
@@ -6600,7 +6810,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_parserunparams",
-      "community": 10,
+      "community": 37,
       "norm_label": "parserunparams()"
     },
     {
@@ -6610,7 +6820,7 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_createscrapesession",
-      "community": 10,
+      "community": 37,
       "norm_label": "createscrapesession()"
     },
     {
@@ -6620,7 +6830,7 @@
       "source_location": "L108",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_blockederror",
-      "community": 10,
+      "community": 37,
       "norm_label": "blockederror"
     },
     {
@@ -6630,7 +6840,7 @@
       "source_location": "L110",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_fetchandparse",
-      "community": 10,
+      "community": 37,
       "norm_label": "fetchandparse()"
     },
     {
@@ -6640,7 +6850,7 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_scrape_scrapealiexpressprice",
-      "community": 10,
+      "community": 37,
       "norm_label": "scrapealiexpressprice()"
     },
     {
@@ -6650,7 +6860,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_test",
-      "community": 10,
+      "community": 37,
       "norm_label": "session.test.ts"
     },
     {
@@ -6660,7 +6870,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session",
-      "community": 10,
+      "community": 37,
       "norm_label": "session.ts"
     },
     {
@@ -6670,7 +6880,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_browseridentity",
-      "community": 10,
+      "community": 37,
       "norm_label": "browseridentity"
     },
     {
@@ -6680,7 +6890,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_scrapesession",
-      "community": 10,
+      "community": 37,
       "norm_label": "scrapesession"
     },
     {
@@ -6690,7 +6900,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_chromeidentity",
-      "community": 10,
+      "community": 37,
       "norm_label": "chromeidentity()"
     },
     {
@@ -6700,7 +6910,7 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_browser_identities",
-      "community": 10,
+      "community": 37,
       "norm_label": "browser_identities"
     },
     {
@@ -6710,7 +6920,7 @@
       "source_location": "L53",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_pickbrowseridentity",
-      "community": 10,
+      "community": 37,
       "norm_label": "pickbrowseridentity()"
     },
     {
@@ -6720,7 +6930,7 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_buildcookieheader",
-      "community": 10,
+      "community": 37,
       "norm_label": "buildcookieheader()"
     },
     {
@@ -6730,7 +6940,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_jitterdelayms",
-      "community": 10,
+      "community": 37,
       "norm_label": "jitterdelayms()"
     },
     {
@@ -6740,7 +6950,7 @@
       "source_location": "L90",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_tomobileurl",
-      "community": 10,
+      "community": 37,
       "norm_label": "tomobileurl()"
     },
     {
@@ -6750,7 +6960,7 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "src_lib_integrations_aliexpress_session_sessionheaders",
-      "community": 10,
+      "community": 37,
       "norm_label": "sessionheaders()"
     },
     {
@@ -6870,7 +7080,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_authguard",
-      "community": 37,
+      "community": 27,
       "norm_label": "authguard.ts"
     },
     {
@@ -6880,7 +7090,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_lib_integrations_authguard_integrationauthcontext",
-      "community": 37,
+      "community": 6,
       "norm_label": "integrationauthcontext"
     },
     {
@@ -6890,7 +7100,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "src_lib_integrations_authguard_integrationauthresult",
-      "community": 37,
+      "community": 27,
       "norm_label": "integrationauthresult"
     },
     {
@@ -6900,7 +7110,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_lib_integrations_authguard_requireintegrationadmin",
-      "community": 37,
+      "community": 27,
       "norm_label": "requireintegrationadmin()"
     },
     {
@@ -7010,7 +7220,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings",
-      "community": 53,
+      "community": 27,
       "norm_label": "listings.ts"
     },
     {
@@ -7020,7 +7230,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_ebaylisting",
-      "community": 53,
+      "community": 27,
       "norm_label": "ebaylisting"
     },
     {
@@ -7030,7 +7240,7 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_tagtext",
-      "community": 53,
+      "community": 27,
       "norm_label": "tagtext()"
     },
     {
@@ -7040,7 +7250,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_decodexml",
-      "community": 53,
+      "community": 27,
       "norm_label": "decodexml()"
     },
     {
@@ -7050,7 +7260,7 @@
       "source_location": "L48",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_tradingapicall",
-      "community": 53,
+      "community": 27,
       "norm_label": "tradingapicall()"
     },
     {
@@ -7060,7 +7270,7 @@
       "source_location": "L90",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_buildgetmyebaysellingrequest",
-      "community": 53,
+      "community": 27,
       "norm_label": "buildgetmyebaysellingrequest()"
     },
     {
@@ -7070,7 +7280,7 @@
       "source_location": "L106",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_parseitem",
-      "community": 53,
+      "community": 27,
       "norm_label": "parseitem()"
     },
     {
@@ -7080,7 +7290,7 @@
       "source_location": "L131",
       "_origin": "ast",
       "id": "src_lib_integrations_ebay_listings_fetchactivelistings",
-      "community": 53,
+      "community": 27,
       "norm_label": "fetchactivelistings()"
     },
     {
@@ -7150,7 +7360,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test",
-      "community": 12,
+      "community": 58,
       "norm_label": "mergeimportedsale.test.ts"
     },
     {
@@ -7160,7 +7370,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test_existingsale",
-      "community": 12,
+      "community": 58,
       "norm_label": "existingsale"
     },
     {
@@ -7170,7 +7380,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_test_incomingsale",
-      "community": 12,
+      "community": 58,
       "norm_label": "incomingsale"
     },
     {
@@ -7180,7 +7390,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale",
-      "community": 12,
+      "community": 58,
       "norm_label": "mergeimportedsale.ts"
     },
     {
@@ -7190,7 +7400,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_platform_owned",
-      "community": 12,
+      "community": 58,
       "norm_label": "platform_owned"
     },
     {
@@ -7200,7 +7410,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_lib_integrations_mergeimportedsale_mergeimportedsale",
-      "community": 12,
+      "community": 58,
       "norm_label": "mergeimportedsale()"
     },
     {
@@ -7230,7 +7440,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_integrations_registry_isintegrationplatform",
-      "community": 37,
+      "community": 27,
       "norm_label": "isintegrationplatform()"
     },
     {
@@ -7240,7 +7450,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_lib_integrations_registry_getadapter",
-      "community": 37,
+      "community": 27,
       "norm_label": "getadapter()"
     },
     {
@@ -7270,7 +7480,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_getconnection",
-      "community": 53,
+      "community": 27,
       "norm_label": "getconnection()"
     },
     {
@@ -7280,7 +7490,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_upsertconnection",
-      "community": 37,
+      "community": 27,
       "norm_label": "upsertconnection()"
     },
     {
@@ -7290,7 +7500,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "src_lib_integrations_tokenstore_ensurevalidaccesstoken",
-      "community": 53,
+      "community": 27,
       "norm_label": "ensurevalidaccesstoken()"
     },
     {
@@ -7370,7 +7580,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_stripe",
-      "community": 58,
+      "community": 6,
       "norm_label": "stripe.ts"
     },
     {
@@ -7390,7 +7600,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_lib_stripe_plans",
-      "community": 58,
+      "community": 6,
       "norm_label": "plans"
     },
     {
@@ -7400,7 +7610,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "src_lib_stripe_plankey",
-      "community": 58,
+      "community": 6,
       "norm_label": "plankey"
     },
     {
@@ -7490,7 +7700,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi",
-      "community": 40,
+      "community": 6,
       "norm_label": "managementapi.ts"
     },
     {
@@ -7500,7 +7710,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_projectreffromurl",
-      "community": 40,
+      "community": 6,
       "norm_label": "projectreffromurl()"
     },
     {
@@ -7510,7 +7720,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_postgrestconfig",
-      "community": 40,
+      "community": 6,
       "norm_label": "postgrestconfig"
     },
     {
@@ -7520,7 +7730,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_addexposedschema",
-      "community": 40,
+      "community": 6,
       "norm_label": "addexposedschema()"
     },
     {
@@ -7530,7 +7740,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "src_lib_supabase_managementapi_removeexposedschema",
-      "community": 40,
+      "community": 6,
       "norm_label": "removeexposedschema()"
     },
     {
@@ -7600,7 +7810,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_utils_audit_writeauditlogparams",
-      "community": 11,
+      "community": 38,
       "norm_label": "writeauditlogparams"
     },
     {
@@ -7660,7 +7870,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_lib_utils_csv_exporttocsv",
-      "community": 8,
+      "community": 28,
       "norm_label": "exporttocsv()"
     },
     {
@@ -7710,7 +7920,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_currency_test",
-      "community": 5,
+      "community": 15,
       "norm_label": "currency.test.ts"
     },
     {
@@ -7720,7 +7930,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_currency",
-      "community": 5,
+      "community": 15,
       "norm_label": "currency.ts"
     },
     {
@@ -7730,7 +7940,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_lib_utils_currency_formatcurrency",
-      "community": 5,
+      "community": 15,
       "norm_label": "formatcurrency()"
     },
     {
@@ -7740,7 +7950,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "src_lib_utils_currency_calculatenetprofit",
-      "community": 46,
+      "community": 5,
       "norm_label": "calculatenetprofit()"
     },
     {
@@ -7750,7 +7960,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_lib_utils_currency_sumamounts",
-      "community": 8,
+      "community": 15,
       "norm_label": "sumamounts()"
     },
     {
@@ -7760,7 +7970,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_lib_utils_currency_calculatemargin",
-      "community": 5,
+      "community": 15,
       "norm_label": "calculatemargin()"
     },
     {
@@ -7780,7 +7990,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_date_test",
-      "community": 55,
+      "community": 38,
       "norm_label": "date.test.ts"
     },
     {
@@ -7790,7 +8000,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_date",
-      "community": 55,
+      "community": 38,
       "norm_label": "date.ts"
     },
     {
@@ -7800,7 +8010,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_utils_date_formatdate",
-      "community": 55,
+      "community": 38,
       "norm_label": "formatdate()"
     },
     {
@@ -7810,7 +8020,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_lib_utils_date_formatdatetime",
-      "community": 55,
+      "community": 38,
       "norm_label": "formatdatetime()"
     },
     {
@@ -7820,7 +8030,7 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "src_lib_utils_date_getmonthrange",
-      "community": 55,
+      "community": 38,
       "norm_label": "getmonthrange()"
     },
     {
@@ -7830,7 +8040,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_detectplatform_test",
-      "community": 10,
+      "community": 49,
       "norm_label": "detectplatform.test.ts"
     },
     {
@@ -7840,7 +8050,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_detectplatform",
-      "community": 10,
+      "community": 49,
       "norm_label": "detectplatform.ts"
     },
     {
@@ -7850,7 +8060,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_utils_detectplatform_detectplatform",
-      "community": 10,
+      "community": 49,
       "norm_label": "detectplatform()"
     },
     {
@@ -7860,7 +8070,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "src_lib_utils_detectplatform_isaliexpresssku",
-      "community": 10,
+      "community": 49,
       "norm_label": "isaliexpresssku()"
     },
     {
@@ -7870,7 +8080,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "src_lib_utils_detectplatform_aliexpressurlfromsku",
-      "community": 10,
+      "community": 49,
       "norm_label": "aliexpressurlfromsku()"
     },
     {
@@ -7880,7 +8090,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_excel_test",
-      "community": 18,
+      "community": 28,
       "norm_label": "excel.test.ts"
     },
     {
@@ -7890,7 +8100,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "src_lib_utils_excel_test_makebuffer",
-      "community": 18,
+      "community": 28,
       "norm_label": "makebuffer()"
     },
     {
@@ -7900,7 +8110,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_excel",
-      "community": 18,
+      "community": 28,
       "norm_label": "excel.ts"
     },
     {
@@ -7910,7 +8120,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_lib_utils_excel_celltostring",
-      "community": 18,
+      "community": 28,
       "norm_label": "celltostring()"
     },
     {
@@ -7920,7 +8130,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "src_lib_utils_excel_parseexcelbuffer",
-      "community": 18,
+      "community": 28,
       "norm_label": "parseexcelbuffer()"
     },
     {
@@ -7960,7 +8170,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_utils_filters_datepreset",
-      "community": 8,
+      "community": 66,
       "norm_label": "datepreset"
     },
     {
@@ -8030,7 +8240,7 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "src_lib_utils_filters_purchasefilters",
-      "community": 11,
+      "community": 22,
       "norm_label": "purchasefilters"
     },
     {
@@ -8070,7 +8280,7 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "src_lib_utils_filters_auditlogfilters",
-      "community": 11,
+      "community": 38,
       "norm_label": "auditlogfilters"
     },
     {
@@ -8080,7 +8290,7 @@
       "source_location": "L120",
       "_origin": "ast",
       "id": "src_lib_utils_filters_default_audit_log_filters",
-      "community": 11,
+      "community": 38,
       "norm_label": "default_audit_log_filters"
     },
     {
@@ -8140,7 +8350,7 @@
       "source_location": "L178",
       "_origin": "ast",
       "id": "src_lib_utils_filters_isdefaultauditlogfilters",
-      "community": 15,
+      "community": 38,
       "norm_label": "isdefaultauditlogfilters()"
     },
     {
@@ -8160,7 +8370,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_lib_utils_generateinvoice_invoiceoptions",
-      "community": 12,
+      "community": 53,
       "norm_label": "invoiceoptions"
     },
     {
@@ -8300,7 +8510,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_invoicemath_test",
-      "community": 12,
+      "community": 53,
       "norm_label": "invoicemath.test.ts"
     },
     {
@@ -8310,7 +8520,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_invoicemath",
-      "community": 12,
+      "community": 53,
       "norm_label": "invoicemath.ts"
     },
     {
@@ -8320,7 +8530,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_lib_utils_invoicemath_bulktotals",
-      "community": 12,
+      "community": 53,
       "norm_label": "bulktotals"
     },
     {
@@ -8330,7 +8540,7 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "src_lib_utils_invoicemath_computebulktotals",
-      "community": 12,
+      "community": 53,
       "norm_label": "computebulktotals()"
     },
     {
@@ -8340,7 +8550,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "src_lib_utils_invoicemath_orderinvoicetotals",
-      "community": 12,
+      "community": 53,
       "norm_label": "orderinvoicetotals"
     },
     {
@@ -8530,7 +8740,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_lib_utils_plangating",
-      "community": 34,
+      "community": 27,
       "norm_label": "plangating.ts"
     },
     {
@@ -8540,7 +8750,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_lib_utils_plangating_planlimits",
-      "community": 34,
+      "community": 27,
       "norm_label": "planlimits"
     },
     {
@@ -8550,7 +8760,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_lib_utils_plangating_plan_limits",
-      "community": 34,
+      "community": 27,
       "norm_label": "plan_limits"
     },
     {
@@ -8560,7 +8770,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_lib_utils_plangating_getplanlimits",
-      "community": 34,
+      "community": 27,
       "norm_label": "getplanlimits()"
     },
     {
@@ -8570,7 +8780,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "src_lib_utils_plangating_canadduser",
-      "community": 34,
+      "community": 27,
       "norm_label": "canadduser()"
     },
     {
@@ -8590,7 +8800,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_lib_utils_plangating_hasaifeatures",
-      "community": 34,
+      "community": 27,
       "norm_label": "hasaifeatures()"
     },
     {
@@ -8690,7 +8900,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_storeprovider",
-      "community": 19,
+      "community": 25,
       "norm_label": "storeprovider.tsx"
     },
     {
@@ -8700,7 +8910,7 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "src_store_storeprovider_storeproviderprops",
-      "community": 19,
+      "community": 25,
       "norm_label": "storeproviderprops"
     },
     {
@@ -8710,7 +8920,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "src_store_storeprovider_storeprovider",
-      "community": 19,
+      "community": 25,
       "norm_label": "storeprovider()"
     },
     {
@@ -8720,7 +8930,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_hooks",
-      "community": 55,
+      "community": 18,
       "norm_label": "hooks.ts"
     },
     {
@@ -8730,7 +8940,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_test",
-      "community": 86,
+      "community": 25,
       "norm_label": "auditlogsslice.test.ts"
     },
     {
@@ -8740,7 +8950,7 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_test_makelog",
-      "community": 86,
+      "community": 25,
       "norm_label": "makelog()"
     },
     {
@@ -8760,7 +8970,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_auditlogsstate",
-      "community": 18,
+      "community": 38,
       "norm_label": "auditlogsstate"
     },
     {
@@ -8780,7 +8990,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_fetchauditlogspage",
-      "community": 18,
+      "community": 38,
       "norm_label": "fetchauditlogspage"
     },
     {
@@ -8800,7 +9010,7 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_auditlogsslice",
-      "community": 86,
+      "community": 25,
       "norm_label": "auditlogsslice"
     },
     {
@@ -8810,7 +9020,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_test",
-      "community": 24,
+      "community": 71,
       "norm_label": "companyprofileslice.test.ts"
     },
     {
@@ -8820,7 +9030,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_test_makeprofile",
-      "community": 24,
+      "community": 71,
       "norm_label": "makeprofile()"
     },
     {
@@ -8830,7 +9040,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice",
-      "community": 24,
+      "community": 71,
       "norm_label": "companyprofileslice.ts"
     },
     {
@@ -8840,7 +9050,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_companyprofilestate",
-      "community": 24,
+      "community": 71,
       "norm_label": "companyprofilestate"
     },
     {
@@ -8850,7 +9060,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_initialstate",
-      "community": 24,
+      "community": 71,
       "norm_label": "initialstate"
     },
     {
@@ -8860,7 +9070,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_store_slices_companyprofileslice_companyprofileslice",
-      "community": 24,
+      "community": 71,
       "norm_label": "companyprofileslice"
     },
     {
@@ -9100,7 +9310,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "src_types_index_purchase",
-      "community": 12,
+      "community": 22,
       "norm_label": "purchase"
     },
     {
@@ -9110,7 +9320,7 @@
       "source_location": "L75",
       "_origin": "ast",
       "id": "src_types_index_sale",
-      "community": 12,
+      "community": 58,
       "norm_label": "sale"
     },
     {
@@ -9120,7 +9330,7 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "src_types_index_product",
-      "community": 52,
+      "community": 8,
       "norm_label": "product"
     },
     {
@@ -9130,7 +9340,7 @@
       "source_location": "L113",
       "_origin": "ast",
       "id": "src_types_index_auditaction",
-      "community": 11,
+      "community": 38,
       "norm_label": "auditaction"
     },
     {
@@ -9140,7 +9350,7 @@
       "source_location": "L121",
       "_origin": "ast",
       "id": "src_types_index_auditentity",
-      "community": 11,
+      "community": 38,
       "norm_label": "auditentity"
     },
     {
@@ -9150,7 +9360,7 @@
       "source_location": "L123",
       "_origin": "ast",
       "id": "src_types_index_auditlog",
-      "community": 18,
+      "community": 38,
       "norm_label": "auditlog"
     },
     {
@@ -9180,7 +9390,7 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "src_types_index_companyprofile",
-      "community": 24,
+      "community": 71,
       "norm_label": "companyprofile"
     },
     {
@@ -9240,7 +9450,7 @@
       "source_location": "L206",
       "_origin": "ast",
       "id": "src_types_index_platformconnection",
-      "community": 49,
+      "community": 24,
       "norm_label": "platformconnection"
     },
     {
@@ -9250,7 +9460,7 @@
       "source_location": "L220",
       "_origin": "ast",
       "id": "src_types_index_sourceplatform",
-      "community": 19,
+      "community": 49,
       "norm_label": "sourceplatform"
     },
     {
@@ -12834,6 +13044,76 @@
       "norm_label": "constraints"
     },
     {
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme",
+      "community": 62,
+      "norm_label": "readme.md"
+    },
+    {
+      "label": "AliExpress price scraper (local)",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "community": 62,
+      "norm_label": "aliexpress price scraper (local)"
+    },
+    {
+      "label": "Why this runs locally, not on Vercel",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_why_this_runs_locally_not_on_vercel",
+      "community": 62,
+      "norm_label": "why this runs locally, not on vercel"
+    },
+    {
+      "label": "Prerequisites",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L23",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_prerequisites",
+      "community": 62,
+      "norm_label": "prerequisites"
+    },
+    {
+      "label": "Usage",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L29",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_usage",
+      "community": 62,
+      "norm_label": "usage"
+    },
+    {
+      "label": "Files",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L45",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_files",
+      "community": 62,
+      "norm_label": "files"
+    },
+    {
+      "label": "Notes",
+      "file_type": "document",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L51",
+      "_origin": "ast",
+      "id": "scripts_aliexpress_readme_notes",
+      "community": 62,
+      "norm_label": "notes"
+    },
+    {
       "label": "CLAUDE.md",
       "file_type": "document",
       "source_file": "src/app/(auth)/CLAUDE.md",
@@ -13317,7 +13597,7 @@
       "label": "eBay API notes",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L76",
+      "source_location": "L80",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_ebay_api_notes",
       "community": 67,
@@ -13327,7 +13607,7 @@
       "label": "Data flow",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L91",
+      "source_location": "L95",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_data_flow",
       "community": 67,
@@ -13337,7 +13617,7 @@
       "label": "Shared dependencies",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L97",
+      "source_location": "L101",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_shared_dependencies",
       "community": 67,
@@ -13347,7 +13627,7 @@
       "label": "Tests",
       "file_type": "document",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L118",
+      "source_location": "L122",
       "_origin": "ast",
       "id": "src_app_dashboard_dropshipping_claude_tests",
       "community": 67,
@@ -15050,7 +15330,7 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "src_app_dashboard_expenses_store_expensesslice_hydrateexpenses",
-      "community": 19,
+      "community": 25,
       "norm_label": "hydrateexpenses"
     },
     {
@@ -15080,7 +15360,7 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "src_app_dashboard_sales_store_salesslice_hydratesales",
-      "community": 19,
+      "community": 25,
       "norm_label": "hydratesales"
     },
     {
@@ -15110,7 +15390,7 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "src_store_slices_auditlogsslice_hydrateauditlogs",
-      "community": 86,
+      "community": 25,
       "norm_label": "hydrateauditlogs"
     },
     {
@@ -15816,7 +16096,7 @@
       "relation": "imports",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L48",
+      "source_location": "L50",
       "weight": 1.0,
       "context": "import",
       "source": "package_devdependencies_husky",
@@ -16185,7 +16465,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L16",
+      "source_location": "L18",
       "weight": 1.0,
       "source": "package",
       "target": "package_dependencies",
@@ -16195,7 +16475,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L37",
+      "source_location": "L39",
       "weight": 1.0,
       "source": "package",
       "target": "package_devdependencies",
@@ -16275,10 +16555,30 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L14",
+      "source_location": "L16",
       "weight": 1.0,
       "source": "package_scripts",
       "target": "package_scripts_prepare",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_scrape_aliexpress",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "package.json",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "package_scripts",
+      "target": "package_scripts_scrape_aliexpress_test",
       "confidence_score": 1.0
     },
     {
@@ -16335,7 +16635,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L17",
+      "source_location": "L19",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_base_ui_react",
@@ -16345,7 +16645,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L21",
+      "source_location": "L23",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_class_variance_authority",
@@ -16355,7 +16655,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L22",
+      "source_location": "L24",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_clsx",
@@ -16365,7 +16665,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L23",
+      "source_location": "L25",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_jspdf",
@@ -16375,7 +16675,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L24",
+      "source_location": "L26",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_jspdf_autotable",
@@ -16385,7 +16685,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L25",
+      "source_location": "L27",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_lucide_react",
@@ -16395,7 +16695,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L26",
+      "source_location": "L28",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_next",
@@ -16405,7 +16705,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L27",
+      "source_location": "L29",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_react",
@@ -16415,7 +16715,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L28",
+      "source_location": "L30",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_react_dom",
@@ -16425,7 +16725,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L29",
+      "source_location": "L31",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_react_redux",
@@ -16435,7 +16735,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L30",
+      "source_location": "L32",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_recharts",
@@ -16445,7 +16745,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L18",
+      "source_location": "L20",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_reduxjs_toolkit",
@@ -16455,7 +16755,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L31",
+      "source_location": "L33",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_shadcn",
@@ -16465,7 +16765,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L32",
+      "source_location": "L34",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_stripe",
@@ -16475,7 +16775,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L19",
+      "source_location": "L21",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_supabase_ssr",
@@ -16485,7 +16785,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L20",
+      "source_location": "L22",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_supabase_supabase_js",
@@ -16495,7 +16795,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L33",
+      "source_location": "L35",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_tailwind_merge",
@@ -16505,7 +16805,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L34",
+      "source_location": "L36",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_tw_animate_css",
@@ -16515,7 +16815,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L35",
+      "source_location": "L37",
       "weight": 1.0,
       "source": "package_dependencies",
       "target": "package_dependencies_xlsx",
@@ -16525,7 +16825,7 @@
       "relation": "imports",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L32",
+      "source_location": "L34",
       "weight": 1.0,
       "context": "import",
       "source": "package_dependencies_stripe",
@@ -16536,7 +16836,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L46",
+      "source_location": "L48",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_eslint",
@@ -16546,7 +16846,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L47",
+      "source_location": "L49",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_eslint_config_next",
@@ -16556,7 +16856,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L48",
+      "source_location": "L50",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_husky",
@@ -16566,7 +16866,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L49",
+      "source_location": "L51",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_jest",
@@ -16576,7 +16876,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L50",
+      "source_location": "L52",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_jest_environment_jsdom",
@@ -16586,7 +16886,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L38",
+      "source_location": "L40",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_playwright_test",
@@ -16596,7 +16896,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L51",
+      "source_location": "L53",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_tailwindcss",
@@ -16606,7 +16906,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L39",
+      "source_location": "L41",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_tailwindcss_postcss",
@@ -16616,7 +16916,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L40",
+      "source_location": "L42",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_testing_library_jest_dom",
@@ -16626,7 +16926,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L41",
+      "source_location": "L43",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_testing_library_react",
@@ -16636,7 +16936,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L52",
+      "source_location": "L54",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_ts_jest",
@@ -16646,7 +16946,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L42",
+      "source_location": "L44",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_types_jest",
@@ -16656,7 +16956,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L43",
+      "source_location": "L45",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_types_node",
@@ -16666,7 +16966,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L44",
+      "source_location": "L46",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_types_react",
@@ -16676,7 +16976,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L45",
+      "source_location": "L47",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_types_react_dom",
@@ -16686,7 +16986,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "package.json",
-      "source_location": "L53",
+      "source_location": "L55",
       "weight": 1.0,
       "source": "package_devdependencies",
       "target": "package_devdependencies_typescript",
@@ -16700,6 +17000,430 @@
       "weight": 1.0,
       "source": "postcss_config",
       "target": "postcss_config_config",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_currency_by_symbol",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L40",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_detectcurrency",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L83",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_parseamount",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L54",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_parsepricestring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L64",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_parsestock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L88",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice",
+      "target": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_parseprice",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L55",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_parsepricestring",
+      "target": "scripts_aliexpress_parseprice_parseamount",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_parseamount",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_parsepricestring",
+      "target": "scripts_aliexpress_parseprice_detectcurrency",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_detectcurrency",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_parsepricestring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_parseprice_parsepricestring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L128",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_scrapeone",
+      "target": "scripts_aliexpress_parseprice_parsepricestring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_parsestock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_parseprice_parsestock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L140",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_scrapeone",
+      "target": "scripts_aliexpress_parseprice_parsestock",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.mjs",
+      "source_location": "L90",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "target": "scripts_aliexpress_parseprice_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_isaliexpresssku",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/parsePrice.test.mjs",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_parseprice_test",
+      "target": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L175",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_main",
+      "target": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L106",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_scrapeone",
+      "target": "scripts_aliexpress_parseprice_resolvesupplierurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L71",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_extractfrompage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L101",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_isblocked",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L66",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_jitter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L161",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_main",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L150",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_persist",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_scrapeone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L65",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_sleep",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L68",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices",
+      "target": "scripts_aliexpress_scrape_prices_supabase",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L223",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_main",
+      "target": "scripts_aliexpress_scrape_prices_sleep",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L223",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_main",
+      "target": "scripts_aliexpress_scrape_prices_jitter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L121",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_scrapeone",
+      "target": "scripts_aliexpress_scrape_prices_extractfrompage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L124",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_scrapeone",
+      "target": "scripts_aliexpress_scrape_prices_isblocked",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L203",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_main",
+      "target": "scripts_aliexpress_scrape_prices_scrapeone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/scrape-prices.mjs",
+      "source_location": "L210",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_scrape_prices_main",
+      "target": "scripts_aliexpress_scrape_prices_persist",
       "confidence_score": 1.0
     },
     {
@@ -47809,6 +48533,66 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme",
+      "target": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "target": "scripts_aliexpress_readme_files",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "target": "scripts_aliexpress_readme_notes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L23",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "target": "scripts_aliexpress_readme_prerequisites",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "target": "scripts_aliexpress_readme_usage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/aliexpress/README.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "scripts_aliexpress_readme_aliexpress_price_scraper_local",
+      "target": "scripts_aliexpress_readme_why_this_runs_locally_not_on_vercel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/CLAUDE.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -48190,7 +48974,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L91",
+      "source_location": "L95",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_data_flow",
@@ -48200,7 +48984,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L76",
+      "source_location": "L80",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_ebay_api_notes",
@@ -48220,7 +49004,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L97",
+      "source_location": "L101",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_shared_dependencies",
@@ -48230,7 +49014,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/dropshipping/CLAUDE.md",
-      "source_location": "L118",
+      "source_location": "L122",
       "weight": 1.0,
       "source": "src_app_dashboard_dropshipping_claude_dropshipping_feature",
       "target": "src_app_dashboard_dropshipping_claude_tests",
@@ -49998,5 +50782,5 @@
       "source_file": "superpowers/plans/2026-06-25-design-refresh.md"
     }
   ],
-  "built_at_commit": "f8f25266beca08b66a981e354f8703d22e3c1421"
+  "built_at_commit": "40529bbcb472a4e8f5a99cb3abc17299ee3d408a"
 }

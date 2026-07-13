@@ -170,8 +170,8 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1783456671.850518,
-    "ast_hash": "537f006f5ed0adf00ae9b2b2b8e7b5d8",
+    "mtime": 1783786919.9109051,
+    "ast_hash": "443c115fc63c6e1c0fddbba1a724f16e",
     "semantic_hash": ""
   },
   "playwright.config.ts": {
@@ -1285,13 +1285,13 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/CLAUDE.md": {
-    "mtime": 1783770406.4030888,
-    "ast_hash": "8812f6d0757bfacddc0560abded28ee0",
+    "mtime": 1783787236.4382126,
+    "ast_hash": "81530da1a5d9dcc8665a681a6945f9a8",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/SKILL.md": {
-    "mtime": 1783770459.056775,
-    "ast_hash": "c10bdb1d669df0e312d858fa233d2445",
+    "mtime": 1783786964.2620525,
+    "ast_hash": "5536b0d8bbef6d85ae00b2a7856afdb9",
     "semantic_hash": ""
   },
   "src/app/dashboard/expenses/CLAUDE.md": {
@@ -1497,6 +1497,26 @@
   "src/lib/integrations/aliexpress/session.ts": {
     "mtime": 1783770266.7924197,
     "ast_hash": "ea8f0a7b3933953bf1b67a765b3d67eb",
+    "semantic_hash": ""
+  },
+  "scripts/aliexpress/parsePrice.mjs": {
+    "mtime": 1783786657.1746073,
+    "ast_hash": "85f3ec95a16b6fc0b578995d1a1d3daf",
+    "semantic_hash": ""
+  },
+  "scripts/aliexpress/parsePrice.test.mjs": {
+    "mtime": 1783786752.0167842,
+    "ast_hash": "6fa91c14b626f8271382000287d5814b",
+    "semantic_hash": ""
+  },
+  "scripts/aliexpress/scrape-prices.mjs": {
+    "mtime": 1783787080.9135957,
+    "ast_hash": "784d04e013c007992158b62eab375ddb",
+    "semantic_hash": ""
+  },
+  "scripts/aliexpress/README.md": {
+    "mtime": 1783786937.593695,
+    "ast_hash": "aba53b654a0a73f0ae891c6d22a11e31",
     "semantic_hash": ""
   }
 }
