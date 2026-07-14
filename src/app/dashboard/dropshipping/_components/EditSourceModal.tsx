@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppDispatch } from "@/store/hooks";
-import { updateListingSource } from "../_store/dropshippingSlice";
+import { updateListingSource, updateCustomsTax } from "../_store/dropshippingSlice";
 import { detectPlatform } from "@/lib/utils/detectPlatform";
 import { resolveInitialSourceUrl } from "./resolveInitialSourceUrl";
 import { Button } from "@/components/ui/Button";
@@ -52,15 +52,28 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
   const { success, error: toastError } = useToast();
   const [url, setUrl] = useState(() => resolveInitialSourceUrl(listing));
   const [saving, setSaving] = useState(false);
+  const [customsTaxAmount, setCustomsTaxAmount] = useState<string>(
+    () => listing?.customs_tax_amount.toString() ?? ""
+  );
 
   async function handleSave() {
     if (!listing || url.trim() === "") return;
+
+    const amount = parseFloat(customsTaxAmount);
+    if (Number.isNaN(amount) || amount < 0) {
+      toastError("Enter a valid customs fee (0 or greater).");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/dropshipping/listings/${listing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl: url.trim() }),
+        body: JSON.stringify({
+          sourceUrl: url.trim(),
+          customsTaxAmount: amount,
+        }),
       });
 
       if (!res.ok) {
@@ -68,7 +81,7 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
         throw new Error(json.error ?? "Failed to save source URL");
       }
 
-      const updated = (await res.json()) as { source_url: string; source_platform: "amazon" | "aliexpress" | null };
+      const updated = (await res.json()) as DropshipListing;
       dispatch(
         updateListingSource({
           id: listing.id,
@@ -76,7 +89,13 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
           sourcePlatform: updated.source_platform,
         })
       );
-      success("Source URL saved.");
+      dispatch(
+        updateCustomsTax({
+          id: listing.id,
+          customsTaxAmount: updated.customs_tax_amount,
+        })
+      );
+      success("Listing saved.");
       onClose();
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Failed to save");
@@ -108,6 +127,21 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
               placeholder="https://www.amazon.com/dp/... or AliExpress URL"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              className="w-full"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-[var(--color-text-base)]">
+              Customs Fee (€)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="3.00"
+              value={customsTaxAmount}
+              onChange={(e) => setCustomsTaxAmount(e.target.value)}
               className="w-full"
             />
           </div>

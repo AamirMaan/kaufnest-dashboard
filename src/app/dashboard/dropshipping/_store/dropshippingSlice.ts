@@ -20,7 +20,7 @@ export const dropshippingSlice = createSlice({
           (l) => l.ebay_listing_id === incoming.ebay_listing_id
         );
         if (index >= 0) {
-          // Preserve supplier link and price snapshot — refresh must not overwrite them
+          // Preserve supplier link, price snapshot, and customs fee — refresh must not overwrite them
           state.listings[index] = {
             ...incoming,
             source_url: state.listings[index].source_url,
@@ -28,6 +28,7 @@ export const dropshippingSlice = createSlice({
             supplier_price: state.listings[index].supplier_price,
             supplier_currency: state.listings[index].supplier_currency,
             supplier_price_checked_at: state.listings[index].supplier_price_checked_at,
+            customs_tax_amount: state.listings[index].customs_tax_amount,
           };
         } else {
           state.listings.push(incoming);
@@ -53,6 +54,8 @@ export const dropshippingSlice = createSlice({
         listing.supplier_price = update.supplier_price;
         listing.supplier_currency = update.supplier_currency;
         listing.supplier_price_checked_at = update.supplier_price_checked_at;
+        // customs_tax_amount is a flat, independently-set fee — a price
+        // refresh must not touch it.
         // The API derives+persists source_url from a numeric SKU on first check
         if (update.source_url && !listing.source_url) {
           listing.source_url = update.source_url;
@@ -70,8 +73,17 @@ export const dropshippingSlice = createSlice({
         listing.source_platform = action.payload.sourcePlatform;
       }
     },
+    updateCustomsTax(
+      state,
+      action: PayloadAction<{ id: string; customsTaxAmount: number }>
+    ) {
+      const listing = state.listings.find((l) => l.id === action.payload.id);
+      if (listing) {
+        listing.customs_tax_amount = action.payload.customsTaxAmount;
+      }
+    },
   },
 });
 
-export const { hydrateListings, upsertListings, updateSupplierPrices, updateListingSource } =
+export const { hydrateListings, upsertListings, updateSupplierPrices, updateListingSource, updateCustomsTax } =
   dropshippingSlice.actions;

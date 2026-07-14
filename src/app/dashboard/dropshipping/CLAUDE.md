@@ -22,8 +22,11 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   After refresh: re-fetches full listing list via `GET /api/dropshipping/listings` and dispatches `upsertListings`.
 - `_components/ListingsTable.tsx` — shadcn `Table`. Columns: image (48×48 with fallback ImageIcon),
   title (linked to eBay listing, new tab), eBay price (`formatCurrency` with currency arg from listing),
-  AliExpress price (`SupplierPriceCell`: supplier price + margin vs eBay price when currencies match
-  + checked date), SKU (dash if null), source (platform badge + truncated URL — see `SourceBadge`
+  AliExpress price (`SupplierPriceCell`: supplier price + flat customs fee
+  (always shown, defaults to €3) + a color-coded margin badge (`danger`
+  <10%, `warning` <25%, `success` >=25%, via `computeMarginPct`/
+  `marginBadgeVariant` in `_components/marginMath.ts`) when currencies match +
+  checked date), SKU (dash if null), source (platform badge + truncated URL — see `SourceBadge`
   below), actions (per-row AliExpress price-check icon button — shown when
   `canCheckSupplierPrice(listing)` — and Edit button opening `EditSourceModal`). Exports
   `canCheckSupplierPrice` (AliExpress source_url or numeric SKU, via shared `isAliExpressSku`),
@@ -36,6 +39,18 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   Client-side pagination via local `page`/`pageSize` state (default 25 rows/page) slicing the
   passed `listings` prop; renders `<Pagination>` (`@/components/ui/Pagination`) below the table.
   Renders `<EditSourceModal key={editTarget?.id ?? "none"} ... />` to remount the modal when edit target changes (state-reset pattern).
+  **Filtering + sorting (client-side)**: a filter row above the table offers
+  Margin Health (`all`/`danger`/`warning`/`success`, via `matchesMarginFilter`
+  in `_components/listingFilters.ts`) and a Search box (title/SKU substring,
+  via `matchesListingSearch`) — both pure, unit-tested helpers. The table
+  body uses the shared `DataTable` component (not raw shadcn `Table`
+  primitives) for column sorting: eBay Price (by price), AliExpress Price
+  (by computed margin %, via `computeMarginPct`), and a dedicated "Last
+  Checked" column (by `supplier_price_checked_at`) — split out from the
+  AliExpress Price cell specifically because `DataTable` only supports one
+  `sortValue` per column header. Filtering happens before pagination;
+  sorting happens only within the current page (same limitation as Sales/
+  Purchases/Expenses' `DataTable` usage).
 - `_components/EditSourceModal.tsx` — shadcn `Dialog`. URL input with live `PlatformBadge`
   (Amazon/AliExpress/Unknown based on `detectPlatform`), shown inline next to the field label.
   Initial input value comes from `resolveInitialSourceUrl(listing)` — prefills the derived
@@ -47,9 +62,13 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   without importing the client component tree.
 - `_store/dropshippingSlice.ts` — `state.dropshipping.listings: DropshipListing[]`.
   Actions: `hydrateListings` (full replace), `upsertListings` (replace-or-append by
-  `ebay_listing_id`, preserves `source_url`/`source_platform`), `updateListingSource`
-  (updates by `id`).
-- `_store/dropshippingSlice.test.ts` — 5 tests covering all three reducers.
+  `ebay_listing_id`, preserves `source_url`/`source_platform`/`supplier_price`
+  family/`customs_tax_amount`), `updateListingSource` (updates `source_url`/
+  `source_platform` by `id`), `updateSupplierPrices` (updates the price
+  snapshot by `id`, never touches `customs_tax_amount`), `updateCustomsTax`
+  (updates `customs_tax_amount` by `id`).
+- `_store/dropshippingSlice.test.ts` — covers all four reducers, including
+  refresh-preservation and the customs-fee/price-update independence.
 
 ## API routes
 
@@ -97,6 +116,29 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
 `dashboard/layout.tsx` fetches `dropship_listings` and passes to `StoreProvider` as
 `dropshipListings`; `StoreProvider` dispatches `hydrateListings`. `page.tsx` reads from
 Redux only — no direct Supabase calls on the client.
+
+## Margin calculation (customs_tax_amount)
+
+`DropshipListing.customs_tax_amount` is a flat EU customs handling fee, in
+`supplier_currency`, **not derived from price** — it's a plain per-listing
+number (DB column `NOT NULL DEFAULT 3`, so every listing has a value from
+creation; the €3 default represents the typical flat fee for low-value
+parcels since the EU removed the duty-free de minimis threshold). Feeds
+into the margin shown in `SupplierPriceCell`:
+`effective_cost = supplier_price + customs_tax_amount`,
+`margin_pct = (current_price - effective_cost) / current_price * 100`, only
+computed when `supplier_currency === currency` (same gate as the old
+raw-delta display it replaced). See `_components/marginMath.ts` for the pure
+implementation (`computeMarginPct`, `marginBadgeVariant`) and its colocated
+tests. Editable via `EditSourceModal.tsx`'s "Customs Fee (€)" field — enter
+a higher number to override the €3 default for a specific listing.
+
+**Sync safety**: because it's a flat, independently-set value (not derived
+from `supplier_price`), `customs_tax_amount` must survive both an eBay
+refresh (never touched — see `refresh/route.ts`'s row mapping, which simply
+never includes it as a key) and a fresh AliExpress price check (see
+`check-prices/route.ts` and `scripts/aliexpress/scrape-prices.mjs`, neither
+of which write this column) — a price update must never overwrite it.
 
 ## Shared dependencies
 

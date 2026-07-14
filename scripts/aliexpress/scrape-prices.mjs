@@ -168,6 +168,8 @@ async function scrapeOne(context, listing) {
 }
 
 async function persist(r) {
+  // customs_tax_amount is a flat, independently-set fee — a price refresh
+  // must not touch it.
   const patch = {
     supplier_price: r.price,
     supplier_currency: r.currency,

@@ -21,10 +21,23 @@ export async function PATCH(
   if (forbidden) return forbidden;
 
   const { id } = await params;
-  const body = (await req.json()) as { sourceUrl?: string };
+  const body = (await req.json()) as {
+    sourceUrl?: string;
+    customsTaxAmount?: number;
+  };
 
   if (typeof body.sourceUrl !== "string" || body.sourceUrl.trim() === "") {
     return NextResponse.json({ error: "sourceUrl is required" }, { status: 400 });
+  }
+
+  if (
+    body.customsTaxAmount !== undefined &&
+    (typeof body.customsTaxAmount !== "number" || body.customsTaxAmount < 0)
+  ) {
+    return NextResponse.json(
+      { error: "customsTaxAmount must be a number >= 0" },
+      { status: 400 }
+    );
   }
 
   const sourceUrl = body.sourceUrl.trim();
@@ -32,7 +45,15 @@ export async function PATCH(
 
   const { data, error } = await client
     .from("dropship_listings")
-    .update({ source_url: sourceUrl, source_platform: sourcePlatform })
+    .update({
+      source_url: sourceUrl,
+      source_platform: sourcePlatform,
+      // Only set when the caller actually sent it — never silently overwrite
+      // a stored customs fee for a future caller that only patches sourceUrl.
+      ...(body.customsTaxAmount !== undefined
+        ? { customs_tax_amount: body.customsTaxAmount }
+        : {}),
+    })
     .eq("id", id)
     .select("*")
     .single<DropshipListing>();

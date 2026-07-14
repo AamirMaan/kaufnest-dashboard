@@ -144,3 +144,24 @@
   not a `.dark` class. Any `dark:` Tailwind variants in shadcn components will not respond
   to the theme toggle. Use `var(--color-*)` CSS variables or the mapped shadcn tokens
   (`bg-card`, `text-muted-foreground`, etc.) which cascade correctly.
+
+- The margin badge in `SupplierPriceCell` is fed by
+  `computeMarginPct`/`marginBadgeVariant` (`_components/marginMath.ts`, pure +
+  unit-tested) — don't recompute margin math inline in the component; extend
+  the pure helper instead so the tests stay meaningful.
+- `customs_tax_amount` is a flat, independently-set euro fee (DB column
+  `NOT NULL DEFAULT 3`) — it is **not** derived from `supplier_price`, unlike
+  `supplier_price` itself. Any code path that updates `supplier_price`
+  (refresh, price-check route, the Playwright script) must leave
+  `customs_tax_amount` alone entirely; only `EditSourceModal`'s save flow
+  (via `updateCustomsTax`) should ever change it.
+- `ListingsTable.tsx` filters/sorts/paginates entirely client-side (small
+  dataset). Order of operations: filter (`listingFilters.ts`) → paginate →
+  hand the current page to `DataTable` for local sort. If you add a new
+  filter, filter `listings` before `pagedListings` is computed, not after —
+  filtering after pagination would only filter the visible page instead of
+  the whole list.
+- `DataTable` supports exactly one `sortValue` per column — this is why the
+  checked date has its own "Last Checked" column instead of sharing a sort
+  key with the "AliExpress Price" (margin) column. Don't try to attach two
+  sort behaviors to one header.

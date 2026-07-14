@@ -233,6 +233,8 @@ export interface DropshipListing {
   supplier_price: number | null;
   supplier_currency: string | null;
   supplier_price_checked_at: string | null;
+  /** Flat EU customs handling fee for this listing, in supplier_currency. Defaults to 3 (DB column default) — editable per listing. */
+  customs_tax_amount: number;
   last_synced_at: string;
   created_at: string;
 }
