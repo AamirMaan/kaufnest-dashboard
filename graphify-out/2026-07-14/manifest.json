@@ -280,8 +280,8 @@
     "semantic_hash": ""
   },
   "src/app/api/dropshipping/listings/[id]/route.ts": {
-    "mtime": 1784014593.4456465,
-    "ast_hash": "b3bdf2e2791f675e66f27a71ac91428a",
+    "mtime": 1784019507.1838834,
+    "ast_hash": "3e78063759084b92adb7d19112361259",
     "semantic_hash": ""
   },
   "src/app/api/dropshipping/listings/refresh/route.ts": {
@@ -360,23 +360,23 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/EditSourceModal.tsx": {
-    "mtime": 1784014584.6926868,
-    "ast_hash": "b33765f3126bb94c151dffe130248cb3",
+    "mtime": 1784019480.4773073,
+    "ast_hash": "4737b599bb2ab360d12dcb931b6c6330",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/ListingsTable.tsx": {
-    "mtime": 1784013759.1878889,
-    "ast_hash": "736200abf6246cd719940d903eadf42d",
+    "mtime": 1784019439.5422542,
+    "ast_hash": "8ddce194db224773cc7a4000bde0ee8c",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_store/dropshippingSlice.test.ts": {
-    "mtime": 1784014226.3916826,
-    "ast_hash": "3a013c7f511adbc47735fc87f18b1bec",
+    "mtime": 1784019582.2722776,
+    "ast_hash": "bdff08b09f439e9e71fe9a97aa03c259",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_store/dropshippingSlice.ts": {
-    "mtime": 1784014211.9908702,
-    "ast_hash": "03cee05b952e140655c7f87a5908db6e",
+    "mtime": 1784019543.9318678,
+    "ast_hash": "7ca0ed6760747f46ae0ab9fc53e0c4f4",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/page.tsx": {
@@ -530,18 +530,18 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/purchases/_store/purchasesSlice.test.ts": {
-    "mtime": 1783977105.0455332,
-    "ast_hash": "81ed3670d45c30c82a0e6e8f360c5146",
+    "mtime": 1784017539.1624694,
+    "ast_hash": "992956590acfc45216e1982d7746b8fd",
     "semantic_hash": ""
   },
   "src/app/dashboard/purchases/_store/purchasesSlice.ts": {
-    "mtime": 1783977105.0471883,
-    "ast_hash": "d208ede18ca9636ecf66cd6a5a328e5d",
+    "mtime": 1784017539.1647828,
+    "ast_hash": "11841e2c7d1b76e53535c042c6ba8369",
     "semantic_hash": ""
   },
   "src/app/dashboard/purchases/page.tsx": {
-    "mtime": 1783977105.049093,
-    "ast_hash": "373aad158dad9a80006b693d67ad68a2",
+    "mtime": 1784017539.1701467,
+    "ast_hash": "aaa88c1fd52414f3d140debc80c847a7",
     "semantic_hash": ""
   },
   "src/app/dashboard/sales/[id]/page.tsx": {
@@ -710,8 +710,8 @@
     "semantic_hash": ""
   },
   "src/components/ui/FilterBar.tsx": {
-    "mtime": 1783977105.0509038,
-    "ast_hash": "8487c06a11dba1d183d66aeb9559c895",
+    "mtime": 1784017539.1725895,
+    "ast_hash": "56a5d14a2e4b9d22b079290ede8e9bd8",
     "semantic_hash": ""
   },
   "src/components/ui/FormFields.tsx": {
@@ -900,8 +900,8 @@
     "semantic_hash": ""
   },
   "src/lib/utils/filters.ts": {
-    "mtime": 1783977105.0544071,
-    "ast_hash": "a74d102b4835e3c1449deab6e3e53d6c",
+    "mtime": 1784017539.1784115,
+    "ast_hash": "fd7e256399aa7306c51b4b7ae0238edd",
     "semantic_hash": ""
   },
   "src/lib/utils/generateInvoice.ts": {
@@ -1015,8 +1015,8 @@
     "semantic_hash": ""
   },
   "src/types/index.ts": {
-    "mtime": 1783978191.9965968,
-    "ast_hash": "e447ffbb3bc71ef9e8b9a8053e2e64ea",
+    "mtime": 1784019378.1873097,
+    "ast_hash": "79e952558e10ad724bb0a15942847554",
     "semantic_hash": ""
   },
   "supabase/009_dropship_listings.sql": {
@@ -1285,13 +1285,13 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/CLAUDE.md": {
-    "mtime": 1784013783.6319656,
-    "ast_hash": "a0d4d9585303645bd8c90d5e8c64f6de",
+    "mtime": 1784019746.4658487,
+    "ast_hash": "668378672a430d0ba60823f1a623c47e",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/SKILL.md": {
-    "mtime": 1784013791.4474292,
-    "ast_hash": "56c5f4d4cd66c9577ba480ec70f91345",
+    "mtime": 1784019762.4602964,
+    "ast_hash": "f54532825aafc62547c1dfd0bc3a1140",
     "semantic_hash": ""
   },
   "src/app/dashboard/expenses/CLAUDE.md": {
@@ -1335,13 +1335,13 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/purchases/CLAUDE.md": {
-    "mtime": 1783977105.042532,
-    "ast_hash": "1f489e4b6633e06594c19d743a9f9ce2",
+    "mtime": 1784017539.1564388,
+    "ast_hash": "761b5dae8d21264e145b5a28f04b1527",
     "semantic_hash": ""
   },
   "src/app/dashboard/purchases/SKILL.md": {
-    "mtime": 1783977105.0440106,
-    "ast_hash": "39446d4ea0fb93c8df8e6125a57aa716",
+    "mtime": 1784017539.159634,
+    "ast_hash": "ed606d201f6a94e3db12923205a4a937",
     "semantic_hash": ""
   },
   "src/app/dashboard/sales/CLAUDE.md": {
@@ -1375,8 +1375,8 @@
     "semantic_hash": ""
   },
   "src/components/ui/SKILL.md": {
-    "mtime": 1783977105.0527735,
-    "ast_hash": "eadf3159e00b9366641ba60876770a9d",
+    "mtime": 1784017539.1754522,
+    "ast_hash": "ab7b05b5043d8dc61649383f7aa3f889",
     "semantic_hash": ""
   },
   "src/lib/integrations/SKILL.md": {
@@ -1395,13 +1395,13 @@
     "semantic_hash": ""
   },
   "supabase/CLAUDE.md": {
-    "mtime": 1783978224.4422686,
-    "ast_hash": "1e1006e7ac8c0d69a8d2412f2be5cf57",
+    "mtime": 1784019777.6604047,
+    "ast_hash": "beae99babb36174305874b7fb9fad976",
     "semantic_hash": ""
   },
   "supabase/SKILL.md": {
-    "mtime": 1783978217.718068,
-    "ast_hash": "150d485803bd7c2825f22fa45fa25f38",
+    "mtime": 1784019789.1123214,
+    "ast_hash": "ac3779ca4e3efd169bd981a5b6fc0b1c",
     "semantic_hash": ""
   },
   "src/app/admin/_components/DeleteTenantModal.tsx": {
@@ -1410,8 +1410,8 @@
     "semantic_hash": ""
   },
   "src/app/api/dropshipping/listings/check-prices/route.ts": {
-    "mtime": 1784014937.5100482,
-    "ast_hash": "0ab92e2dfe62ed166c09bc187ba2ad11",
+    "mtime": 1784019620.9323533,
+    "ast_hash": "9bd048c3d306d41694b9fd9efaf2616d",
     "semantic_hash": ""
   },
   "src/app/dashboard/_components/RecordTransferModal.tsx": {
@@ -1480,8 +1480,8 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.test.ts": {
-    "mtime": 1783978737.4955635,
-    "ast_hash": "4d8cc498a616dedf8384cf36d882893a",
+    "mtime": 1784019599.7330556,
+    "ast_hash": "3148dfba97a2910fc94abab46206dd7a",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/resolveInitialSourceUrl.ts": {
@@ -1510,27 +1510,27 @@
     "semantic_hash": ""
   },
   "scripts/aliexpress/scrape-prices.mjs": {
-    "mtime": 1784014950.092359,
-    "ast_hash": "5f6870e66cc76e9d6193f796ee601a77",
+    "mtime": 1784019683.8138275,
+    "ast_hash": "04b64470f59e0899b569f1cfc80f50d5",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/marginMath.test.ts": {
-    "mtime": 1783978860.050167,
-    "ast_hash": "315e50150ac2a89188b4f96cfece70ec",
+    "mtime": 1784019420.6569247,
+    "ast_hash": "6c533056a88563531b5d3aaf2f1e8848",
     "semantic_hash": ""
   },
   "src/app/dashboard/dropshipping/_components/marginMath.ts": {
-    "mtime": 1783978877.8647335,
-    "ast_hash": "e56f17d21693f262b220ea89a352c8ef",
+    "mtime": 1784019366.6880195,
+    "ast_hash": "11ab84ffa82222a31114116f957d0a44",
     "semantic_hash": ""
   },
   "supabase/migrations/020_dropship_customs_tax.sql": {
-    "mtime": 1783978187.9779668,
-    "ast_hash": "69f179b904f3139bf518e98c3ae30aa5",
+    "mtime": 1784019394.0538702,
+    "ast_hash": "21aa907ebf4069f9c386238b5fc37273",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-07-13-dropshipping-margin-customs-tax.md": {
-    "mtime": 1783978737.4935386,
+    "mtime": 1784017537.6039968,
     "ast_hash": "3db5a0d8d15c4c7bad03327edcf98bbd",
     "semantic_hash": ""
   },
@@ -1540,7 +1540,7 @@
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-07-13-dropshipping-margin-customs-tax-design.md": {
-    "mtime": 1783977569.213819,
+    "mtime": 1784017537.6061687,
     "ast_hash": "f316d85f8e209d90b6115b10e320e6f9",
     "semantic_hash": ""
   },
