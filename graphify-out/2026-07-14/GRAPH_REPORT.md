@@ -1,16 +1,16 @@
 # Graph Report - KaufNest Dashboard  (2026-07-14)
 
 ## Corpus Check
-- 309 files · ~179,153 words
+- 309 files · ~179,616 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1619 nodes · 3367 edges · 116 communities (108 shown, 8 thin omitted)
+- 1619 nodes · 3367 edges · 117 communities (109 shown, 8 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 9 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5280db13`
+- Built from commit: `690d8aef`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -81,6 +81,7 @@
 - [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 64|Community 64]]
 - [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
 - [[_COMMUNITY_Community 67|Community 67]]
 - [[_COMMUNITY_Community 68|Community 68]]
 - [[_COMMUNITY_Community 69|Community 69]]
@@ -157,7 +158,7 @@
 - **Planner Calculation Core: Engine, Fee Constants, Break-even Formula** — superpowers_plans_2026_06_23_planner_calculation_engine, superpowers_plans_2026_06_23_planner_fee_constants, superpowers_plans_2026_06_23_planner_min_selling_price_formula [EXTRACTED 0.95]
 - **Design Token Theming System: Emerald Light, Violet Dark, Vivid Badges** — superpowers_plans_2026_06_25_design_refresh_emerald_primary, superpowers_plans_2026_06_25_design_refresh_violet_dark_primary, superpowers_plans_2026_06_25_design_refresh_badge_semantic_vivid [INFERRED 0.85]
 
-## Communities (116 total, 8 thin omitted)
+## Communities (117 total, 8 thin omitted)
 
 ### Community 0 - "Dropshipping Listing Pipeline"
 Cohesion: 0.38
@@ -256,12 +257,12 @@ Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.21
-Nodes (10): WriteAuditLogParams, AuditLogFilters, companyProfileSlice, CompanyProfileState, initialState, AuditAction, AuditEntity, CompanyProfile (+2 more)
+Cohesion: 0.43
+Nodes (4): companyProfileSlice, CompanyProfileState, initialState, CompanyProfile
 
 ### Community 25 - "Community 25"
-Cohesion: 0.18
-Nodes (9): Props, initialState, usersSlice, UsersState, currentUserSlice, CurrentUserState, initialState, Profile (+1 more)
+Cohesion: 0.14
+Nodes (15): Props, initialState, usersSlice, UsersState, WriteAuditLogParams, AuditLogFilters, currentUserSlice, CurrentUserState (+7 more)
 
 ### Community 26 - "Community 26"
 Cohesion: 0.11
@@ -356,8 +357,8 @@ Cohesion: 0.22
 Nodes (8): Final check, Global Constraints, Orders / Purchases / Expenses Text Search Implementation Plan, Task 1: `filters.ts` — search field, sanitize helper, updated predicates, Task 2: `FilterBar.tsx` — debounced search input, Task 3: Sales (Orders) — wire up search, Task 4: Purchases — wire up search, Task 5: Expenses — wire up search
 
 ### Community 49 - "Community 49"
-Cohesion: 0.11
-Nodes (21): Props, hydrateExpenses, initialState, integrationsSlice, IntegrationsState, hydrateSales, ToastProvider(), auditLogsSlice (+13 more)
+Cohesion: 0.13
+Nodes (17): Props, hydrateExpenses, hydrateSales, ToastProvider(), auditLogsSlice, AuditLogsState, hydrateAuditLogs, initialState (+9 more)
 
 ### Community 50 - "Community 50"
 Cohesion: 0.17
@@ -422,6 +423,10 @@ Nodes (8): Data flow (the pattern every mutation follows), Files in this folder,
 ### Community 65 - "Community 65"
 Cohesion: 0.22
 Nodes (8): Gotchas, Gotchas — CSV import formats (German support), Gotchas — detail page, Gotchas — fee fields, Gotchas — server-side pagination, Minimal file set for common changes, Test command, Working on the Sales feature
+
+### Community 66 - "Community 66"
+Cohesion: 0.43
+Nodes (4): initialState, integrationsSlice, IntegrationsState, PlatformConnection
 
 ### Community 67 - "Community 67"
 Cohesion: 0.22
