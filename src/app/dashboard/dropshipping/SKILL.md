@@ -155,3 +155,13 @@
   (refresh, price-check route, the Playwright script) must leave
   `customs_tax_amount` alone entirely; only `EditSourceModal`'s save flow
   (via `updateCustomsTax`) should ever change it.
+- `ListingsTable.tsx` filters/sorts/paginates entirely client-side (small
+  dataset). Order of operations: filter (`listingFilters.ts`) → paginate →
+  hand the current page to `DataTable` for local sort. If you add a new
+  filter, filter `listings` before `pagedListings` is computed, not after —
+  filtering after pagination would only filter the visible page instead of
+  the whole list.
+- `DataTable` supports exactly one `sortValue` per column — this is why the
+  checked date has its own "Last Checked" column instead of sharing a sort
+  key with the "AliExpress Price" (margin) column. Don't try to attach two
+  sort behaviors to one header.

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ImageIcon, RefreshCw } from "lucide-react";
+import { ImageIcon, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { DataTable } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatCurrency } from "@/lib/utils/currency";
 import { isAliExpressSku, aliExpressUrlFromSku } from "@/lib/utils/detectPlatform";
@@ -12,18 +13,14 @@ import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch } from "@/store/hooks";
 import { updateSupplierPrices } from "../_store/dropshippingSlice";
 import { computeMarginPct, marginBadgeVariant } from "./marginMath";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { matchesMarginFilter, matchesListingSearch, type MarginFilterBand } from "./listingFilters";
 import { EditSourceModal } from "./EditSourceModal";
 import type { DropshipListing, Currency } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 25;
+
+const filterInputCls =
+  "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
 
 interface ListingsTableProps {
   listings: DropshipListing[];
@@ -50,9 +47,6 @@ function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
   }
 
   const marginPct = computeMarginPct(listing);
-  // Round once and reuse for both the label and the color so they never
-  // disagree at a threshold boundary (e.g. a true 9.6% rounding to "10%"
-  // reads as warning/yellow, not danger/red, matching the displayed number).
   const roundedMarginPct = marginPct !== null ? Math.round(marginPct) : null;
 
   return (
@@ -70,11 +64,6 @@ function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
             variant={marginBadgeVariant(roundedMarginPct)}
           />
         </div>
-      )}
-      {listing.supplier_price_checked_at && (
-        <span className="text-xs text-[var(--color-text-faint)]">
-          {new Date(listing.supplier_price_checked_at).toLocaleDateString()}
-        </span>
       )}
     </div>
   );
@@ -135,6 +124,9 @@ export function ListingsTable({ listings }: ListingsTableProps) {
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [marginFilter, setMarginFilter] = useState<MarginFilterBand>("all");
+  const [search, setSearch] = useState("");
+  const hasActiveFilters = marginFilter !== "all" || search.trim() !== "";
 
   async function handleCheckPrice(listing: DropshipListing) {
     setCheckingId(listing.id);
@@ -171,10 +163,18 @@ export function ListingsTable({ listings }: ListingsTableProps) {
     }
   }
 
+  const filteredListings = useMemo(
+    () =>
+      listings.filter(
+        (l) => matchesMarginFilter(l, marginFilter) && matchesListingSearch(l, search)
+      ),
+    [listings, marginFilter, search]
+  );
+
   const pagedListings = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return listings.slice(start, start + pageSize);
-  }, [listings, page, pageSize]);
+    return filteredListings.slice(start, start + pageSize);
+  }, [filteredListings, page, pageSize]);
 
   if (listings.length === 0) {
     return (
@@ -186,101 +186,178 @@ export function ListingsTable({ listings }: ListingsTableProps) {
     );
   }
 
+  const columns = [
+    {
+      header: "Image",
+      className: "w-14",
+      render: (listing: DropshipListing) =>
+        listing.image_url ? (
+          <img
+            src={listing.image_url}
+            alt=""
+            width={48}
+            height={48}
+            className="h-12 w-12 rounded object-cover"
+          />
+        ) : (
+          <div className="flex h-12 w-12 items-center justify-center rounded bg-[var(--color-surface-subtle)]">
+            <ImageIcon size={20} className="text-[var(--color-text-faint)]" />
+          </div>
+        ),
+    },
+    {
+      header: "Title",
+      className: "max-w-[240px]",
+      render: (listing: DropshipListing) => (
+        <a
+          href={listing.ebay_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium text-[var(--color-text-base)] hover:text-[var(--color-primary)] hover:underline line-clamp-2"
+        >
+          {listing.title}
+        </a>
+      ),
+    },
+    {
+      header: "eBay Price",
+      className: "w-28",
+      sortValue: (listing: DropshipListing) => listing.current_price,
+      render: (listing: DropshipListing) => (
+        <span className="text-sm text-[var(--color-text-base)]">
+          {formatCurrency(listing.current_price, listing.currency as Currency)}
+        </span>
+      ),
+    },
+    {
+      header: "AliExpress Price",
+      className: "w-36",
+      sortValue: (listing: DropshipListing) => computeMarginPct(listing) ?? -Infinity,
+      render: (listing: DropshipListing) => <SupplierPriceCell listing={listing} />,
+    },
+    {
+      header: "Last Checked",
+      className: "w-28",
+      sortValue: (listing: DropshipListing) => listing.supplier_price_checked_at ?? "",
+      render: (listing: DropshipListing) =>
+        listing.supplier_price_checked_at ? (
+          <span className="text-xs text-[var(--color-text-faint)]">
+            {new Date(listing.supplier_price_checked_at).toLocaleDateString()}
+          </span>
+        ) : (
+          <span className="text-xs text-[var(--color-text-faint)]">—</span>
+        ),
+    },
+    {
+      header: "SKU",
+      className: "w-32",
+      render: (listing: DropshipListing) =>
+        listing.sku ? (
+          <span className="text-sm text-[var(--color-text-base)]">{listing.sku}</span>
+        ) : (
+          <span className="text-sm text-[var(--color-text-faint)]">—</span>
+        ),
+    },
+    {
+      header: "Source",
+      render: (listing: DropshipListing) => <SourceBadge listing={listing} />,
+    },
+    {
+      header: "Actions",
+      className: "w-32 text-right",
+      render: (listing: DropshipListing) => (
+        <div className="flex items-center justify-end gap-1">
+          {canCheckSupplierPrice(listing) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleCheckPrice(listing)}
+              disabled={checkingId !== null}
+              title="Check AliExpress price"
+              aria-label="Check AliExpress price"
+            >
+              <RefreshCw
+                size={14}
+                className={checkingId === listing.id ? "animate-spin" : ""}
+              />
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={() => setEditTarget(listing)}>
+            Edit
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
-      <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-14">Image</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead className="w-28">eBay Price</TableHead>
-              <TableHead className="w-36">AliExpress Price</TableHead>
-              <TableHead className="w-32">SKU</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pagedListings.map((listing) => (
-              <TableRow key={listing.id}>
-                <TableCell>
-                  {listing.image_url ? (
-                    <img
-                      src={listing.image_url}
-                      alt=""
-                      width={48}
-                      height={48}
-                      className="h-12 w-12 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded bg-[var(--color-surface-subtle)]">
-                      <ImageIcon size={20} className="text-[var(--color-text-faint)]" />
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="max-w-[240px]">
-                  <a
-                    href={listing.ebay_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-[var(--color-text-base)] hover:text-[var(--color-primary)] hover:underline line-clamp-2"
-                  >
-                    {listing.title}
-                  </a>
-                </TableCell>
-                <TableCell className="text-sm text-[var(--color-text-base)]">
-                  {formatCurrency(listing.current_price, listing.currency as Currency)}
-                </TableCell>
-                <TableCell className="text-sm">
-                  <SupplierPriceCell listing={listing} />
-                </TableCell>
-                <TableCell className="text-sm">
-                  {listing.sku ? (
-                    <span className="text-[var(--color-text-base)]">{listing.sku}</span>
-                  ) : (
-                    <span className="text-[var(--color-text-faint)]">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <SourceBadge listing={listing} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    {canCheckSupplierPrice(listing) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCheckPrice(listing)}
-                        disabled={checkingId !== null}
-                        title="Check AliExpress price"
-                        aria-label="Check AliExpress price"
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={checkingId === listing.id ? "animate-spin" : ""}
-                        />
-                      </Button>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setEditTarget(listing)}
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-4 py-3">
+        <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">
+            Margin Health
+          </span>
+          <select
+            value={marginFilter}
+            onChange={(e) => {
+              setMarginFilter(e.target.value as MarginFilterBand);
+              setPage(1);
+            }}
+            className={filterInputCls}
+          >
+            <option value="all">All</option>
+            <option value="danger">Red (&lt;10%)</option>
+            <option value="warning">Yellow (&lt;25%)</option>
+            <option value="success">Green (&gt;=25%)</option>
+          </select>
+        </div>
+        <div className="flex-1 min-w-[200px]">
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">
+            Search
+          </span>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search title or SKU…"
+            className={`${filterInputCls} w-full cursor-text`}
+          />
+        </div>
+        {hasActiveFilters && (
+          <div>
+            <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">
+              &nbsp;
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setMarginFilter("all");
+                setSearch("");
+                setPage(1);
+              }}
+            >
+              <X size={13} />
+              Clear
+            </Button>
+          </div>
+        )}
       </div>
+
+      <DataTable
+        columns={columns}
+        rows={pagedListings}
+        keyField="id"
+        emptyMessage="No listings match the current filters."
+      />
 
       <Pagination
         page={page}
         pageSize={pageSize}
-        total={listings.length}
+        total={filteredListings.length}
         onPageChange={(p) => setPage(p)}
         onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
       />

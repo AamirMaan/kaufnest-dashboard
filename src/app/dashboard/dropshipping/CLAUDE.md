@@ -39,6 +39,18 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   Client-side pagination via local `page`/`pageSize` state (default 25 rows/page) slicing the
   passed `listings` prop; renders `<Pagination>` (`@/components/ui/Pagination`) below the table.
   Renders `<EditSourceModal key={editTarget?.id ?? "none"} ... />` to remount the modal when edit target changes (state-reset pattern).
+  **Filtering + sorting (client-side)**: a filter row above the table offers
+  Margin Health (`all`/`danger`/`warning`/`success`, via `matchesMarginFilter`
+  in `_components/listingFilters.ts`) and a Search box (title/SKU substring,
+  via `matchesListingSearch`) — both pure, unit-tested helpers. The table
+  body uses the shared `DataTable` component (not raw shadcn `Table`
+  primitives) for column sorting: eBay Price (by price), AliExpress Price
+  (by computed margin %, via `computeMarginPct`), and a dedicated "Last
+  Checked" column (by `supplier_price_checked_at`) — split out from the
+  AliExpress Price cell specifically because `DataTable` only supports one
+  `sortValue` per column header. Filtering happens before pagination;
+  sorting happens only within the current page (same limitation as Sales/
+  Purchases/Expenses' `DataTable` usage).
 - `_components/EditSourceModal.tsx` — shadcn `Dialog`. URL input with live `PlatformBadge`
   (Amazon/AliExpress/Unknown based on `detectPlatform`), shown inline next to the field label.
   Initial input value comes from `resolveInitialSourceUrl(listing)` — prefills the derived
