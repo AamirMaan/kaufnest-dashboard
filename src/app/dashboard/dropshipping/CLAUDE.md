@@ -22,8 +22,11 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
   After refresh: re-fetches full listing list via `GET /api/dropshipping/listings` and dispatches `upsertListings`.
 - `_components/ListingsTable.tsx` — shadcn `Table`. Columns: image (48×48 with fallback ImageIcon),
   title (linked to eBay listing, new tab), eBay price (`formatCurrency` with currency arg from listing),
-  AliExpress price (`SupplierPriceCell`: supplier price + margin vs eBay price when currencies match
-  + checked date), SKU (dash if null), source (platform badge + truncated URL — see `SourceBadge`
+  AliExpress price (`SupplierPriceCell`: supplier price + customs tax
+  breakdown (rate/amount, when set) + a color-coded margin badge (`danger`
+  <10%, `warning` <25%, `success` >=25%, via `computeMarginPct`/
+  `marginBadgeVariant` in `_components/marginMath.ts`) when currencies match +
+  checked date), SKU (dash if null), source (platform badge + truncated URL — see `SourceBadge`
   below), actions (per-row AliExpress price-check icon button — shown when
   `canCheckSupplierPrice(listing)` — and Edit button opening `EditSourceModal`). Exports
   `canCheckSupplierPrice` (AliExpress source_url or numeric SKU, via shared `isAliExpressSku`),
@@ -97,6 +100,24 @@ to the KaufNest platform admin (verified via `control.admin_users`). Four layers
 `dashboard/layout.tsx` fetches `dropship_listings` and passes to `StoreProvider` as
 `dropshipListings`; `StoreProvider` dispatches `hydrateListings`. `page.tsx` reads from
 Redux only — no direct Supabase calls on the client.
+
+## Margin calculation (customs_tax_rate/customs_tax_amount)
+
+`DropshipListing.customs_tax_rate`/`customs_tax_amount` (nullable, no
+default — rates vary by product category) feed into the margin shown in
+`SupplierPriceCell`: `effective_cost = supplier_price + customs_tax_amount`,
+`margin_pct = (current_price - effective_cost) / current_price * 100`, only
+computed when `supplier_currency === currency` (same gate as the old
+raw-delta display). See `_components/marginMath.ts` for the pure
+implementation (`computeMarginPct`, `marginBadgeVariant`) and its colocated
+tests. Editable via `EditSourceModal.tsx`'s "Customs Tax Rate (%)" field.
+
+**Sync safety**: `customs_tax_rate`/`customs_tax_amount` must survive an
+eBay refresh (never touched — see `refresh/route.ts`'s row mapping, which
+simply never includes them as keys) and must be recomputed whenever a fresh
+AliExpress price check updates `supplier_price` (see `check-prices/route.ts`
+and `scripts/aliexpress/scrape-prices.mjs`) — otherwise the tax amount goes
+stale relative to the new cost snapshot.
 
 ## Shared dependencies
 

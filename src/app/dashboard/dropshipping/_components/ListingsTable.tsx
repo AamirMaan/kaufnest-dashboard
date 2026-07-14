@@ -4,12 +4,14 @@ import { useState, useMemo } from "react";
 import { ImageIcon, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { formatCurrency } from "@/lib/utils/currency";
 import { isAliExpressSku, aliExpressUrlFromSku } from "@/lib/utils/detectPlatform";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch } from "@/store/hooks";
 import { updateSupplierPrices } from "../_store/dropshippingSlice";
+import { computeMarginPct, marginBadgeVariant } from "./marginMath";
 import {
   Table,
   TableBody,
@@ -47,25 +49,28 @@ function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
     return <span className="text-[var(--color-text-faint)]">—</span>;
   }
 
-  // Margin only when both prices share a currency — otherwise comparison is misleading
-  const sameCurrency = listing.supplier_currency === listing.currency;
-  const diff = sameCurrency ? listing.current_price - listing.supplier_price : null;
+  const marginPct = computeMarginPct(listing);
 
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[var(--color-text-base)]">
         {formatCurrency(listing.supplier_price, listing.supplier_currency as Currency)}
       </span>
-      {diff !== null && (
-        <span
-          className={cn(
-            "text-xs font-medium",
-            diff > 0 ? "text-green-600" : "text-red-600"
+      {listing.customs_tax_rate != null && (
+        <span className="text-xs text-[var(--color-text-faint)]">
+          Customs: {listing.customs_tax_rate}%
+          {listing.customs_tax_amount != null && (
+            <> ({formatCurrency(listing.customs_tax_amount, listing.supplier_currency as Currency)})</>
           )}
-        >
-          {diff > 0 ? "+" : ""}
-          {formatCurrency(diff, listing.currency as Currency)} margin
         </span>
+      )}
+      {marginPct !== null && (
+        <div>
+          <Badge
+            label={`${Math.round(marginPct)}% margin`}
+            variant={marginBadgeVariant(marginPct)}
+          />
+        </div>
       )}
       {listing.supplier_price_checked_at && (
         <span className="text-xs text-[var(--color-text-faint)]">
