@@ -21,10 +21,22 @@ export async function PATCH(
   if (forbidden) return forbidden;
 
   const { id } = await params;
-  const body = (await req.json()) as { sourceUrl?: string };
+  const body = (await req.json()) as {
+    sourceUrl?: string;
+    customsTaxRate?: number | null;
+    customsTaxAmount?: number | null;
+  };
 
   if (typeof body.sourceUrl !== "string" || body.sourceUrl.trim() === "") {
     return NextResponse.json({ error: "sourceUrl is required" }, { status: 400 });
+  }
+
+  if (
+    body.customsTaxRate !== undefined &&
+    body.customsTaxRate !== null &&
+    typeof body.customsTaxRate !== "number"
+  ) {
+    return NextResponse.json({ error: "customsTaxRate must be a number or null" }, { status: 400 });
   }
 
   const sourceUrl = body.sourceUrl.trim();
@@ -32,7 +44,12 @@ export async function PATCH(
 
   const { data, error } = await client
     .from("dropship_listings")
-    .update({ source_url: sourceUrl, source_platform: sourcePlatform })
+    .update({
+      source_url: sourceUrl,
+      source_platform: sourcePlatform,
+      customs_tax_rate: body.customsTaxRate ?? null,
+      customs_tax_amount: body.customsTaxAmount ?? null,
+    })
     .eq("id", id)
     .select("*")
     .single<DropshipListing>();
