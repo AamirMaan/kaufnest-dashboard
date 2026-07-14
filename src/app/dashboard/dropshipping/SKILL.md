@@ -149,8 +149,9 @@
   `computeMarginPct`/`marginBadgeVariant` (`_components/marginMath.ts`, pure +
   unit-tested) — don't recompute margin math inline in the component; extend
   the pure helper instead so the tests stay meaningful.
-- `customs_tax_amount` is always derived (`supplier_price × customs_tax_rate /
-  100`) — never accept it as direct user input. Any code path that updates
-  `supplier_price` (refresh, price-check route, the Playwright script) must
-  also recompute `customs_tax_amount` if a rate is already set, or the two
-  columns silently drift out of sync.
+- `customs_tax_amount` is a flat, independently-set euro fee (DB column
+  `NOT NULL DEFAULT 3`) — it is **not** derived from `supplier_price`, unlike
+  `supplier_price` itself. Any code path that updates `supplier_price`
+  (refresh, price-check route, the Playwright script) must leave
+  `customs_tax_amount` alone entirely; only `EditSourceModal`'s save flow
+  (via `updateCustomsTax`) should ever change it.

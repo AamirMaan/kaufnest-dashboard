@@ -50,25 +50,24 @@ function SupplierPriceCell({ listing }: { listing: DropshipListing }) {
   }
 
   const marginPct = computeMarginPct(listing);
+  // Round once and reuse for both the label and the color so they never
+  // disagree at a threshold boundary (e.g. a true 9.6% rounding to "10%"
+  // reads as warning/yellow, not danger/red, matching the displayed number).
+  const roundedMarginPct = marginPct !== null ? Math.round(marginPct) : null;
 
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[var(--color-text-base)]">
         {formatCurrency(listing.supplier_price, listing.supplier_currency as Currency)}
       </span>
-      {listing.customs_tax_rate != null && (
-        <span className="text-xs text-[var(--color-text-faint)]">
-          Customs: {listing.customs_tax_rate}%
-          {listing.customs_tax_amount != null && (
-            <> ({formatCurrency(listing.customs_tax_amount, listing.supplier_currency as Currency)})</>
-          )}
-        </span>
-      )}
-      {marginPct !== null && (
+      <span className="text-xs text-[var(--color-text-faint)]">
+        Customs: {formatCurrency(listing.customs_tax_amount, listing.supplier_currency as Currency)}
+      </span>
+      {roundedMarginPct !== null && (
         <div>
           <Badge
-            label={`${Math.round(marginPct)}% margin`}
-            variant={marginBadgeVariant(marginPct)}
+            label={`${roundedMarginPct}% margin`}
+            variant={marginBadgeVariant(roundedMarginPct)}
           />
         </div>
       )}

@@ -23,8 +23,7 @@ export async function PATCH(
   const { id } = await params;
   const body = (await req.json()) as {
     sourceUrl?: string;
-    customsTaxRate?: number | null;
-    customsTaxAmount?: number | null;
+    customsTaxAmount?: number;
   };
 
   if (typeof body.sourceUrl !== "string" || body.sourceUrl.trim() === "") {
@@ -32,11 +31,13 @@ export async function PATCH(
   }
 
   if (
-    body.customsTaxRate !== undefined &&
-    body.customsTaxRate !== null &&
-    typeof body.customsTaxRate !== "number"
+    body.customsTaxAmount !== undefined &&
+    (typeof body.customsTaxAmount !== "number" || body.customsTaxAmount < 0)
   ) {
-    return NextResponse.json({ error: "customsTaxRate must be a number or null" }, { status: 400 });
+    return NextResponse.json(
+      { error: "customsTaxAmount must be a number >= 0" },
+      { status: 400 }
+    );
   }
 
   const sourceUrl = body.sourceUrl.trim();
@@ -47,8 +48,11 @@ export async function PATCH(
     .update({
       source_url: sourceUrl,
       source_platform: sourcePlatform,
-      customs_tax_rate: body.customsTaxRate ?? null,
-      customs_tax_amount: body.customsTaxAmount ?? null,
+      // Only set when the caller actually sent it — never silently overwrite
+      // a stored customs fee for a future caller that only patches sourceUrl.
+      ...(body.customsTaxAmount !== undefined
+        ? { customs_tax_amount: body.customsTaxAmount }
+        : {}),
     })
     .eq("id", id)
     .select("*")

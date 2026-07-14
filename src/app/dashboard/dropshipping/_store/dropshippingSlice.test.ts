@@ -22,8 +22,7 @@ const makeListing = (overrides: Partial<DropshipListing> = {}): DropshipListing 
   supplier_price: null,
   supplier_currency: null,
   supplier_price_checked_at: null,
-  customs_tax_rate: null,
-  customs_tax_amount: null,
+  customs_tax_amount: 3,
   last_synced_at: "2026-06-23T00:00:00Z",
   created_at: "2026-06-23T00:00:00Z",
   ...overrides,
@@ -98,37 +97,31 @@ describe("dropshippingSlice", () => {
     expect(result.listings[0].supplier_price_checked_at).toBe("2026-07-01T00:00:00Z");
   });
 
-  it("upsertListings preserves customs tax fields on refresh", () => {
-    const existing = makeListing({
-      customs_tax_rate: 12.5,
-      customs_tax_amount: 2,
-    });
+  it("upsertListings preserves the customs fee on refresh", () => {
+    const existing = makeListing({ customs_tax_amount: 8 });
     const state = { listings: [existing] };
-    const refreshed = makeListing({ title: "New Title" }); // customs fields null
+    const refreshed = makeListing({ title: "New Title", customs_tax_amount: 3 }); // refresh's default, should be ignored
     const result = reducer(state, upsertListings([refreshed]));
-    expect(result.listings[0].customs_tax_rate).toBe(12.5);
-    expect(result.listings[0].customs_tax_amount).toBe(2);
+    expect(result.listings[0].customs_tax_amount).toBe(8);
   });
 
-  it("updateCustomsTax sets rate and amount on the matching listing", () => {
+  it("updateCustomsTax sets the fee on the matching listing", () => {
     const listing1 = makeListing({ id: "uuid-1", ebay_listing_id: "ebay-1" });
     const listing2 = makeListing({ id: "uuid-2", ebay_listing_id: "ebay-2" });
     const state = { listings: [listing1, listing2] };
     const result = reducer(
       state,
-      updateCustomsTax({ id: "uuid-1", customsTaxRate: 19, customsTaxAmount: 3.5 })
+      updateCustomsTax({ id: "uuid-1", customsTaxAmount: 5.5 })
     );
-    expect(result.listings[0].customs_tax_rate).toBe(19);
-    expect(result.listings[0].customs_tax_amount).toBe(3.5);
-    expect(result.listings[1].customs_tax_rate).toBeNull();
+    expect(result.listings[0].customs_tax_amount).toBe(5.5);
+    expect(result.listings[1].customs_tax_amount).toBe(3);
   });
 
-  it("updateSupplierPrices recomputes customs_tax_amount when a rate is already set", () => {
+  it("updateSupplierPrices does not touch the customs fee — it's independent of price", () => {
     const listing = makeListing({
       id: "uuid-1",
       ebay_listing_id: "ebay-1",
-      customs_tax_rate: 12.5,
-      customs_tax_amount: 1, // stale, based on an old supplier_price
+      customs_tax_amount: 8, // a custom, overridden fee
     });
     const state = { listings: [listing] };
     const result = reducer(
@@ -142,25 +135,8 @@ describe("dropshippingSlice", () => {
         },
       ])
     );
-    // 16 * 12.5 = 200, rounded / 100 = 2
-    expect(result.listings[0].customs_tax_amount).toBe(2);
-  });
-
-  it("updateSupplierPrices leaves customs_tax_amount null when no rate is set", () => {
-    const listing = makeListing({ id: "uuid-1", ebay_listing_id: "ebay-1" });
-    const state = { listings: [listing] };
-    const result = reducer(
-      state,
-      updateSupplierPrices([
-        {
-          id: "uuid-1",
-          supplier_price: 16,
-          supplier_currency: "EUR",
-          supplier_price_checked_at: "2026-07-10T00:00:00Z",
-        },
-      ])
-    );
-    expect(result.listings[0].customs_tax_amount).toBeNull();
+    expect(result.listings[0].supplier_price).toBe(16);
+    expect(result.listings[0].customs_tax_amount).toBe(8);
   });
 
   it("updateSupplierPrices sets snapshot and derived source_url only when unset", () => {

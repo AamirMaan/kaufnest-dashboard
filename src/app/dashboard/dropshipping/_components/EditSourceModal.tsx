@@ -52,29 +52,26 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
   const { success, error: toastError } = useToast();
   const [url, setUrl] = useState(() => resolveInitialSourceUrl(listing));
   const [saving, setSaving] = useState(false);
-  const [customsTaxRate, setCustomsTaxRate] = useState<string>(
-    () => listing?.customs_tax_rate?.toString() ?? ""
+  const [customsTaxAmount, setCustomsTaxAmount] = useState<string>(
+    () => listing?.customs_tax_amount.toString() ?? ""
   );
 
   async function handleSave() {
     if (!listing || url.trim() === "") return;
+
+    const amount = parseFloat(customsTaxAmount);
+    if (Number.isNaN(amount) || amount < 0) {
+      toastError("Enter a valid customs fee (0 or greater).");
+      return;
+    }
+
     setSaving(true);
     try {
-      const rate = customsTaxRate.trim() === "" ? null : parseFloat(customsTaxRate);
-      // supplier_price × rate gives a percentage-scaled number (e.g. 16 × 12.5 = 200);
-      // Math.round(...) / 100 converts that back down to a currency amount rounded
-      // to 2 decimal places (200 → 2.00), avoiding floating-point rounding drift.
-      const amount =
-        rate != null && listing.supplier_price != null
-          ? Math.round(listing.supplier_price * rate) / 100
-          : null;
-
       const res = await fetch(`/api/dropshipping/listings/${listing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceUrl: url.trim(),
-          customsTaxRate: rate,
           customsTaxAmount: amount,
         }),
       });
@@ -95,7 +92,6 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
       dispatch(
         updateCustomsTax({
           id: listing.id,
-          customsTaxRate: updated.customs_tax_rate,
           customsTaxAmount: updated.customs_tax_amount,
         })
       );
@@ -137,15 +133,15 @@ export function EditSourceModal({ listing, onClose }: EditSourceModalProps) {
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-[var(--color-text-base)]">
-              Customs Tax Rate (%)
+              Customs Fee (€)
             </label>
             <Input
               type="number"
               step="0.01"
               min="0"
-              placeholder="e.g. 12.5"
-              value={customsTaxRate}
-              onChange={(e) => setCustomsTaxRate(e.target.value)}
+              placeholder="3.00"
+              value={customsTaxAmount}
+              onChange={(e) => setCustomsTaxAmount(e.target.value)}
               className="w-full"
             />
           </div>

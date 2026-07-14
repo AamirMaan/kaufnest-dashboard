@@ -57,11 +57,13 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   adds supplier price tracking columns, migrates legacy data from
   `public.dropship_listings`, sets up RLS policies. Direct `ALTER TABLE`
   (not via `run_on_all_tenant_schemas` — this table is KaufNest-only).
-- `migrations/020_dropship_customs_tax.sql` — adds `customs_tax_rate`/
-  `customs_tax_amount` nullable columns to `tenant_kaufnest.dropship_listings`
-  directly (not via `run_on_all_tenant_schemas` — this table is KaufNest-only,
-  same documented exception as `019_dropship_supplier_price.sql`). Backs the
-  margin-coloring UI in `src/app/dashboard/dropshipping/`.
+- `migrations/020_dropship_customs_tax.sql` — adds `customs_tax_amount`
+  (`NUMERIC(12,2) NOT NULL DEFAULT 3`, a flat EU customs handling fee, not
+  a percentage) to `tenant_kaufnest.dropship_listings` directly (not via
+  `run_on_all_tenant_schemas` — this table is KaufNest-only, same documented
+  exception as `019_dropship_supplier_price.sql`). The `DEFAULT 3` also
+  backfills every existing row. Backs the margin-coloring UI in
+  `src/app/dashboard/dropshipping/`.
 
 ## Related code
 

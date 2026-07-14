@@ -15,8 +15,7 @@ const makeListing = (overrides: Partial<DropshipListing> = {}): DropshipListing 
   supplier_price: null,
   supplier_currency: null,
   supplier_price_checked_at: null,
-  customs_tax_rate: null,
-  customs_tax_amount: null,
+  customs_tax_amount: 3,
   last_synced_at: "2026-06-23T00:00:00Z",
   created_at: "2026-06-23T00:00:00Z",
   ...overrides,
@@ -38,27 +37,25 @@ describe("computeMarginPct", () => {
     expect(computeMarginPct(listing)).toBeNull();
   });
 
-  it("computes gross margin percentage without customs tax", () => {
+  it("factors the default €3 customs fee into effective cost", () => {
     const listing = makeListing({
       current_price: 20,
       currency: "EUR",
       supplier_price: 16,
       supplier_currency: "EUR",
-      customs_tax_rate: null,
-      customs_tax_amount: null,
+      customs_tax_amount: 3,
     });
-    // (20 - 16) / 20 * 100 = 20
-    expect(computeMarginPct(listing)).toBeCloseTo(20);
+    // effective_cost = 16 + 3 = 19; (20 - 19) / 20 * 100 = 5
+    expect(computeMarginPct(listing)).toBeCloseTo(5);
   });
 
-  it("factors customs_tax_amount into effective cost", () => {
+  it("factors a custom (overridden) customs fee into effective cost", () => {
     const listing = makeListing({
       current_price: 20,
       currency: "EUR",
       supplier_price: 16,
       supplier_currency: "EUR",
-      customs_tax_rate: 12.5,
-      customs_tax_amount: 2, // 16 * 12.5 / 100 = 2
+      customs_tax_amount: 2,
     });
     // effective_cost = 16 + 2 = 18; (20 - 18) / 20 * 100 = 10
     expect(computeMarginPct(listing)).toBeCloseTo(10);
@@ -70,7 +67,6 @@ describe("computeMarginPct", () => {
       currency: "EUR",
       supplier_price: 9,
       supplier_currency: "EUR",
-      customs_tax_rate: 20,
       customs_tax_amount: 1.8,
     });
     // effective_cost = 9 + 1.8 = 10.8; (10 - 10.8) / 10 * 100 = -8
