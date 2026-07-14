@@ -69,7 +69,8 @@ Controlled component — caller owns all state:
 `preset, onPresetChange, dateFrom, onDateFromChange, dateTo, onDateToChange,
 currency, onCurrencyChange, searchValue, onSearchChange, searchPlaceholder,
 hasActive, onClear`, plus `children` for entity-specific filter slots (e.g. a
-platform/category dropdown) rendered inline after the search box.
+platform/category dropdown) rendered inline before the search box — search is
+the catch-all, so it renders last, to the right of the more specific dropdowns.
 
 - `searchValue`/`onSearchChange` render a free-text search input (hidden when
   `onSearchChange` is undefined, same pattern as `currency`/`onCurrencyChange`).

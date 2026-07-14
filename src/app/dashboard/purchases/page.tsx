@@ -33,9 +33,6 @@ import {
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import type { Purchase, Currency, Product } from "@/types";
 
-const filterInputCls =
-  "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
-
 export default function PurchasesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
@@ -117,9 +114,6 @@ export default function PurchasesPage() {
         : getPresetRange(filters.preset);
     if (range && filters.preset !== "all") {
       query = query.gte("date", range.from).lte("date", range.to);
-    }
-    if (filters.vendor.trim() !== "") {
-      query = query.ilike("vendor", `%${filters.vendor.trim()}%`);
     }
     if (filters.currency !== "all") query = query.eq("currency", filters.currency);
 
@@ -306,18 +300,7 @@ export default function PurchasesPage() {
         searchPlaceholder="Search product, vendor, description…"
         hasActive={hasActive}
         onClear={clearFilters}
-      >
-        <div>
-          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Vendor</span>
-          <input
-            type="text"
-            value={filters.vendor}
-            onChange={(e) => setFilter("vendor", e.target.value)}
-            placeholder="Search vendor…"
-            className={filterInputCls}
-          />
-        </div>
-      </FilterBar>
+      />
 
       {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
       <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
