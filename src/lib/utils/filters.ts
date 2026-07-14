@@ -82,7 +82,6 @@ export interface PurchaseFilters {
   preset: DatePreset;
   dateFrom: string;
   dateTo: string;
-  vendor: string;
   currency: string;
   search: string;
 }
@@ -110,7 +109,6 @@ export const DEFAULT_PURCHASE_FILTERS: PurchaseFilters = {
   preset: "all",
   dateFrom: "",
   dateTo: "",
-  vendor: "",
   currency: "all",
   search: "",
 };
@@ -193,10 +191,6 @@ export function filterPurchases(purchases: Purchase[], f: PurchaseFilters): Purc
   let result = purchases;
   const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
   if (range) result = result.filter((p) => p.date >= range.from && p.date <= range.to);
-  if (f.vendor.trim())
-    result = result.filter((p) =>
-      p.vendor?.toLowerCase().includes(f.vendor.toLowerCase())
-    );
   if (f.currency !== "all") result = result.filter((p) => p.currency === f.currency);
   if (f.search.trim())
     result = result.filter((p) =>
@@ -214,8 +208,7 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     f.search === "" &&
     ("platform" in f ? f.platform === "all" : true) &&
     ("status" in f ? f.status === "all" : true) &&
-    ("category" in f ? f.category === "all" : true) &&
-    ("vendor" in f ? f.vendor === "" : true)
+    ("category" in f ? f.category === "all" : true)
   );
 }
 

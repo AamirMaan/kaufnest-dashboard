@@ -148,7 +148,12 @@ export function FilterBar({
         </div>
       )}
 
-      {/* Free-text search — hidden when the feature has no search handler */}
+      {/* Entity-specific slot */}
+      {children}
+
+      {/* Free-text search — hidden when the feature has no search handler.
+          Rendered after the entity-specific dropdowns so it reads as the
+          catch-all search sitting to the right of the more specific filters. */}
       {onSearchChange !== undefined && (
         <div className="col-span-2 sm:flex-1 sm:min-w-[220px]">
           <FilterLabel>Search</FilterLabel>
@@ -167,9 +172,6 @@ export function FilterBar({
           </div>
         </div>
       )}
-
-      {/* Entity-specific slot */}
-      {children}
 
       {/* Clear button */}
       {hasActive && (

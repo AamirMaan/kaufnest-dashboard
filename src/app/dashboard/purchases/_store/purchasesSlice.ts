@@ -45,9 +45,6 @@ export const fetchPurchasesPage = createAsyncThunk(
       query = query.gte("date", range.from).lte("date", range.to);
     }
 
-    if (filters.vendor.trim() !== "") {
-      query = query.ilike("vendor", `%${filters.vendor.trim()}%`);
-    }
     if (filters.currency !== "all") {
       query = query.eq("currency", filters.currency);
     }
