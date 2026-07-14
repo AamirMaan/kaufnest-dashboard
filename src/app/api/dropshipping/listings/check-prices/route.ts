@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
           supplier_price: price,
           supplier_currency: currency,
           supplier_price_checked_at: checkedAt,
+          ...(listing.customs_tax_rate != null
+            ? { customs_tax_amount: Math.round(price * listing.customs_tax_rate) / 100 }
+            : {}),
           // Persist the derived URL so the Source column links the listing too.
           ...(listing.source_url
             ? {}

@@ -167,11 +167,14 @@ async function scrapeOne(context, listing) {
   return { id: listing.id, status: "soft_block", url };
 }
 
-async function persist(r) {
+async function persist(r, customsTaxRate) {
   const patch = {
     supplier_price: r.price,
     supplier_currency: r.currency,
     supplier_price_checked_at: new Date().toISOString(),
+    ...(customsTaxRate != null
+      ? { customs_tax_amount: Math.round(r.price * customsTaxRate) / 100 }
+      : {}),
     ...(r.derived ? { source_url: r.url, source_platform: "aliexpress" } : {}),
   };
   const { error } = await supabase.from("dropship_listings").update(patch).eq("id", r.id);
@@ -188,7 +191,7 @@ function isStale(listing) {
 async function main() {
   let query = supabase
     .from("dropship_listings")
-    .select("id, title, sku, source_url, source_platform, currency, supplier_price_checked_at")
+    .select("id, title, sku, source_url, source_platform, currency, supplier_price_checked_at, customs_tax_rate")
     .order("supplier_price_checked_at", { ascending: true, nullsFirst: true });
   if (ONLY_ID) query = query.eq("id", ONLY_ID);
 
@@ -242,7 +245,7 @@ async function main() {
       console.log(`✓ ${label} → ${r.price} ${r.currency}${stock}`);
       if (!DRY_RUN) {
         try {
-          await persist(r);
+          await persist(r, listing.customs_tax_rate);
           tally.wrote++;
         } catch (e) {
           console.log(`  ⚠ write failed: ${e.message}`);
