@@ -1,0 +1,92 @@
+import { buildInventoryItemPayload, buildOfferPayload } from "./publishPayloads";
+import type { EbayListingDraft } from "@/types";
+
+function makeDraft(overrides: Partial<EbayListingDraft> = {}): EbayListingDraft {
+  return {
+    id: "draft-1",
+    source_type: "inventory",
+    product_id: "product-1",
+    source_url: null,
+    source_platform: null,
+    title: "Wireless Mouse",
+    description: "A great mouse.",
+    price: 19.99,
+    currency: "EUR",
+    quantity: 5,
+    condition: "new",
+    category_id: "9355",
+    category_name: "Cell Phones",
+    image_urls: ["https://example.com/img.jpg"],
+    fulfillment_policy_id: "fp-1",
+    payment_policy_id: "pp-1",
+    return_policy_id: "rp-1",
+    ebay_sku: "KNabc123def456",
+    status: "draft",
+    ebay_offer_id: null,
+    ebay_listing_id: null,
+    publish_error: null,
+    created_by: "user-1",
+    created_at: "2026-07-20T10:00:00.000Z",
+    updated_at: "2026-07-20T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+describe("buildInventoryItemPayload", () => {
+  it("maps a new-condition draft to the eBay InventoryItem shape", () => {
+    const payload = buildInventoryItemPayload(makeDraft());
+    expect(payload).toEqual({
+      availability: { shipToLocationAvailability: { quantity: 5 } },
+      condition: "NEW",
+      product: {
+        title: "Wireless Mouse",
+        description: "A great mouse.",
+        imageUrls: ["https://example.com/img.jpg"],
+      },
+    });
+  });
+
+  it("maps used and refurbished conditions to their eBay enum values", () => {
+    expect(buildInventoryItemPayload(makeDraft({ condition: "used" })).condition).toBe(
+      "USED_EXCELLENT"
+    );
+    expect(
+      buildInventoryItemPayload(makeDraft({ condition: "refurbished" })).condition
+    ).toBe("CERTIFIED_REFURBISHED");
+  });
+
+  it("defaults description to an empty string when null", () => {
+    const payload = buildInventoryItemPayload(makeDraft({ description: null }));
+    expect(payload.product.description).toBe("");
+  });
+});
+
+describe("buildOfferPayload", () => {
+  it("maps a draft to the eBay Offer shape", () => {
+    const payload = buildOfferPayload(makeDraft(), "EBAY_DE");
+    expect(payload).toEqual({
+      sku: "KNabc123def456",
+      marketplaceId: "EBAY_DE",
+      format: "FIXED_PRICE",
+      availableQuantity: 5,
+      categoryId: "9355",
+      listingDescription: "A great mouse.",
+      pricingSummary: { price: { value: "19.99", currency: "EUR" } },
+      listingPolicies: {
+        fulfillmentPolicyId: "fp-1",
+        paymentPolicyId: "pp-1",
+        returnPolicyId: "rp-1",
+      },
+    });
+  });
+
+  it("falls back to title as the listing description when description is null", () => {
+    const payload = buildOfferPayload(makeDraft({ description: null }), "EBAY_DE");
+    expect(payload.listingDescription).toBe("Wireless Mouse");
+  });
+
+  it("formats price with exactly two decimal places", () => {
+    const payload = buildOfferPayload(makeDraft({ price: 20 }), "EBAY_DE");
+    expect(payload.pricingSummary.price.value).toBe("20.00");
+  });
+});
