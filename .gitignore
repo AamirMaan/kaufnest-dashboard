@@ -46,3 +46,4 @@ graphify-out/cost.json        # local only
 
 # Playwright E2E — saved auth state (contains real session tokens)
 e2e/.auth/
+.worktrees/
