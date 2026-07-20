@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -23,8 +22,6 @@ export default function ListingsPage() {
   function goToPage(nextPage: number) {
     dispatch(fetchListingsPage({ page: nextPage, pageSize }));
   }
-
-  useEffect(() => {}, []);
 
   if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
     return (

@@ -61,7 +61,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   await client.from("ebay_listing_drafts").update({ status: "publishing" }).eq("id", id);
 
   try {
-    const result = await publishListing(accessToken, draft, sku, draft.ebay_offer_id);
+    const result = await publishListing(
+      accessToken,
+      draft,
+      sku,
+      draft.ebay_offer_id,
+      async (offerId) => {
+        await client.from("ebay_listing_drafts").update({ ebay_offer_id: offerId }).eq("id", id);
+      }
+    );
 
     const { data: updated, error: updateError } = await client
       .from("ebay_listing_drafts")

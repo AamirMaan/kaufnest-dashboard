@@ -39,10 +39,16 @@ interface TaxonomySuggestionsResponse {
   categorySuggestions?: TaxonomyCategoryNode[];
 }
 
-// Category tree "0" (EBAY_DE's default tree) is queried directly — this
+// Category tree "77" (EBAY_DE's default tree) is queried directly — this
 // codebase only supports a single marketplace for v1 (see design spec's
 // "out of scope"), so there's no per-request tree lookup.
 const CATEGORY_TREE_ID = process.env.EBAY_CATEGORY_TREE_ID || "77";
+
+// No sensible cross-tenant default exists — this is seller-account-specific
+// (must already exist as an inventory location in the tenant's eBay Seller
+// Hub). Read from env with an empty-string fallback, same as other
+// required-but-unvalidated eBay fields in this file.
+const MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY || "";
 
 export async function searchCategories(
   accessToken: string,
@@ -127,7 +133,8 @@ export async function publishListing(
   accessToken: string,
   draft: EbayListingDraft,
   sku: string,
-  existingOfferId: string | null
+  existingOfferId: string | null,
+  onOfferCreated?: (offerId: string) => Promise<void>
 ): Promise<PublishResult> {
   const inventoryItemPayload = buildInventoryItemPayload(draft);
   const putInventoryRes = await ebayFetch(
@@ -137,7 +144,11 @@ export async function publishListing(
   );
   await throwIfNotOk(putInventoryRes, "createOrReplaceInventoryItem");
 
-  const offerPayload = buildOfferPayload({ ...draft, ebay_sku: sku }, MARKETPLACE_ID);
+  const offerPayload = buildOfferPayload(
+    { ...draft, ebay_sku: sku },
+    MARKETPLACE_ID,
+    MERCHANT_LOCATION_KEY
+  );
 
   let offerId = existingOfferId;
   if (offerId) {
@@ -154,6 +165,7 @@ export async function publishListing(
     await throwIfNotOk(createRes, "createOffer");
     const created = (await createRes.json()) as { offerId: string };
     offerId = created.offerId;
+    if (onOfferCreated) await onOfferCreated(offerId);
   }
 
   const publishRes = await ebayFetch(`/sell/inventory/v1/offer/${offerId}/publish`, accessToken, {

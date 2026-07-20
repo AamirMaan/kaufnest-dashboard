@@ -40,21 +40,17 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `ListingWizard.tsx`'s two `writeAuditLog` calls the next time this file is
   touched for an unrelated reason (small enough to bundle, not urgent enough
   to justify its own PR).
-- **Offer-creation resume gap**: if `publishListing` throws between
-  `createOffer` succeeding and `publishOffer` completing, the created
-  `offerId` is NOT surfaced back to the publish route (it's local to
-  `publishListing`'s try block) — a retry in that exact failure window calls
-  `createOffer` again rather than `updateOffer`, and eBay's `createOffer` is
-  not idempotent by SKU, so repeated failures right there could accumulate
-  orphaned unpublished offers on eBay's side. Narrow window (one HTTP call),
-  not fixed in v1 — see Task 12 of the implementation plan for the reasoning.
-  If this becomes a real problem, the fix is having `publishListing` report
-  the offerId via a thrown error's `cause` (or a callback) instead of only on
-  full success. (The publish route's catch-block comment currently claims it
-  persists "whatever offerId was captured before the failure" — it doesn't;
-  the `.update()` call in that branch only writes `status`/`ebay_sku`/
-  `publish_error`, not `ebay_offer_id`. Don't trust that comment as evidence
-  the gap is closed.)
+- **Offer-creation resume gap — fixed.** `publishListing` now takes an
+  optional `onOfferCreated(offerId)` callback (5th param) that fires
+  immediately after `createOffer` returns a new `offerId`, before
+  `publishOffer` is attempted. The publish route
+  (`app/api/listings/[id]/publish/route.ts`) passes a callback that writes
+  `ebay_offer_id` to the draft row right away, so if `publishOffer` then
+  throws, a retry resumes with `updateOffer` instead of calling `createOffer`
+  again. The catch block's own `.update()` still only writes
+  `status`/`ebay_sku`/`publish_error` — it relies on the callback having
+  already persisted `ebay_offer_id` earlier in the same request, not on
+  writing it itself.
 - **Save Draft / Publish skip the step validators.** `_lib/wizardValidation.ts`'s
   five validators (`validateSourceStep` … `validatePoliciesStep`) only run
   from `ListingWizard.tsx`'s `goNext()`, when the user clicks "Next" within
@@ -103,6 +99,15 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `EBAY_MARKETPLACE_ID` points at — mismatched tree/marketplace IDs return
   category suggestions that `createOffer` then rejects as invalid for that
   marketplace.
+- **`EBAY_MERCHANT_LOCATION_KEY` env var — required, no default.** Every
+  eBay Offer must reference a `merchantLocationKey` pointing at an existing
+  inventory location in the seller's eBay account, or `publishOffer` fails.
+  Unlike `EBAY_MARKETPLACE_ID`/`EBAY_CATEGORY_TREE_ID` this has no sensible
+  cross-tenant default (it's seller-account-specific), so it falls back to
+  `""` when unset — the tenant's eBay seller account must already have at
+  least one inventory location configured via eBay Seller Hub before
+  publishing will succeed. There's no in-app UI to create or select one in
+  v1.
 
 ## Tests
 

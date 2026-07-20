@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import { X, ImageIcon, Upload } from "lucide-react";
-import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import type { DraftFormState } from "../_lib/wizardValidation";
 

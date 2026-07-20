@@ -37,9 +37,14 @@ export interface OfferPayload {
     paymentPolicyId: string;
     returnPolicyId: string;
   };
+  merchantLocationKey: string;
 }
 
-export function buildOfferPayload(draft: EbayListingDraft, marketplaceId: string): OfferPayload {
+export function buildOfferPayload(
+  draft: EbayListingDraft,
+  marketplaceId: string,
+  merchantLocationKey: string
+): OfferPayload {
   return {
     sku: draft.ebay_sku ?? "",
     marketplaceId,
@@ -53,5 +58,6 @@ export function buildOfferPayload(draft: EbayListingDraft, marketplaceId: string
       paymentPolicyId: draft.payment_policy_id ?? "",
       returnPolicyId: draft.return_policy_id ?? "",
     },
+    merchantLocationKey,
   };
 }

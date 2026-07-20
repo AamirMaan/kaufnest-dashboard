@@ -63,7 +63,7 @@ describe("buildInventoryItemPayload", () => {
 
 describe("buildOfferPayload", () => {
   it("maps a draft to the eBay Offer shape", () => {
-    const payload = buildOfferPayload(makeDraft(), "EBAY_DE");
+    const payload = buildOfferPayload(makeDraft(), "EBAY_DE", "LOC-1");
     expect(payload).toEqual({
       sku: "KNabc123def456",
       marketplaceId: "EBAY_DE",
@@ -77,16 +77,17 @@ describe("buildOfferPayload", () => {
         paymentPolicyId: "pp-1",
         returnPolicyId: "rp-1",
       },
+      merchantLocationKey: "LOC-1",
     });
   });
 
   it("falls back to title as the listing description when description is null", () => {
-    const payload = buildOfferPayload(makeDraft({ description: null }), "EBAY_DE");
+    const payload = buildOfferPayload(makeDraft({ description: null }), "EBAY_DE", "LOC-1");
     expect(payload.listingDescription).toBe("Wireless Mouse");
   });
 
   it("formats price with exactly two decimal places", () => {
-    const payload = buildOfferPayload(makeDraft({ price: 20 }), "EBAY_DE");
+    const payload = buildOfferPayload(makeDraft({ price: 20 }), "EBAY_DE", "LOC-1");
     expect(payload.pricingSummary.price.value).toBe("20.00");
   });
 });
