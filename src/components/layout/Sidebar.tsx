@@ -15,6 +15,7 @@ import {
   Plug,
   Calculator,
   Package,
+  Tag,
   X,
   ChevronLeft,
   ChevronRight,
@@ -81,6 +82,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Integrations",
     href: "/dashboard/integrations",
     Icon: Plug,
+    roles: ["super_admin", "admin", "accountant"],
+  },
+  {
+    label: "Listings",
+    href: "/dashboard/listings",
+    Icon: Tag,
     roles: ["super_admin", "admin", "accountant"],
   },
   {
