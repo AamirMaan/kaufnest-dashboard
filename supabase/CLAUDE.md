@@ -64,6 +64,14 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   exception as `019_dropship_supplier_price.sql`). The `DEFAULT 3` also
   backfills every existing row. Backs the margin-coloring UI in
   `src/app/dashboard/dropshipping/`.
+- `migrations/021_ebay_listing_drafts.sql` — creates `ebay_listing_drafts` in
+  every tenant schema via `run_on_all_tenant_schemas` (also baked into
+  `provision_tenant_schema()`). Backs the Listings feature
+  (`src/app/dashboard/listings/`, `src/lib/integrations/ebay/publish.ts`).
+- `migrations/022_listing_images_bucket.sql` — creates the `listing-images`
+  Storage bucket and its tenant-path-scoped RLS policies (first Storage
+  bucket in this codebase — see its own header comment for the
+  `current_tenant_role()` helper it introduces).
 
 ## Related code
 
