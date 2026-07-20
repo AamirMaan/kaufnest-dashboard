@@ -19,6 +19,7 @@ import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
 import { hydratePayouts } from "@/store/slices/platformPayoutsSlice";
+import { hydrateListingDrafts } from "@/app/dashboard/listings/_store/listingsSlice";
 import type {
   Sale,
   Expense,
@@ -31,6 +32,7 @@ import type {
   PlatformConnection,
   DropshipListing,
   PlatformPayout,
+  EbayListingDraft,
 } from "@/types";
 
 interface StoreProviderProps {
@@ -50,6 +52,7 @@ interface StoreProviderProps {
   platformConnections?: PlatformConnection[];
   dropshipListings?: DropshipListing[];
   platformPayouts?: PlatformPayout[];
+  listingDrafts?: { data: EbayListingDraft[]; count: number };
 }
 
 export function StoreProvider({
@@ -67,6 +70,7 @@ export function StoreProvider({
   platformConnections,
   dropshipListings,
   platformPayouts,
+  listingDrafts,
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
@@ -83,6 +87,7 @@ export function StoreProvider({
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));
+    if (listingDrafts)     store.dispatch(hydrateListingDrafts({ data: listingDrafts.data, count: listingDrafts.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     return store;
   });
 
