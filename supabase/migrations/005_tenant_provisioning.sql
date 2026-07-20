@@ -253,6 +253,37 @@ BEGIN
     )
   $sql$, schema_name);
 
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.ebay_listing_drafts (
+      id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      source_type            text NOT NULL CHECK (source_type IN ('inventory', 'dropship')),
+      product_id             uuid REFERENCES %1$I.products(id),
+      source_url             text,
+      source_platform        text,
+      title                  text NOT NULL,
+      description            text,
+      price                  numeric(12,2) NOT NULL CHECK (price >= 0),
+      currency               text NOT NULL DEFAULT 'EUR',
+      quantity               integer NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+      condition              text NOT NULL CHECK (condition IN ('new', 'used', 'refurbished')),
+      category_id            text,
+      category_name          text,
+      image_urls             text[] NOT NULL DEFAULT '{}',
+      fulfillment_policy_id  text,
+      payment_policy_id      text,
+      return_policy_id       text,
+      ebay_sku               text,
+      status                 text NOT NULL DEFAULT 'draft'
+                               CHECK (status IN ('draft', 'publishing', 'published', 'failed')),
+      ebay_offer_id          text,
+      ebay_listing_id        text,
+      publish_error          text,
+      created_by             uuid NOT NULL REFERENCES %1$I.profiles(id),
+      created_at             timestamptz NOT NULL DEFAULT now(),
+      updated_at             timestamptz NOT NULL DEFAULT now()
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
@@ -260,6 +291,7 @@ BEGIN
   EXECUTE format('CREATE OR REPLACE TRIGGER set_sales_updated_at BEFORE UPDATE ON %1$I.sales FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_products_updated_at BEFORE UPDATE ON %1$I.products FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_platform_connections_updated_at BEFORE UPDATE ON %1$I.platform_connections FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
+  EXECUTE format('CREATE OR REPLACE TRIGGER set_ebay_listing_drafts_updated_at BEFORE UPDATE ON %1$I.ebay_listing_drafts FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
 
   -- ── 3. Tenant-membership + role helper functions ──────────
   -- is_tenant_member(): caller's JWT app_metadata.tenant_schema must equal
@@ -383,7 +415,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -445,6 +477,9 @@ BEGIN
   EXECUTE format('CREATE POLICY "platform_payouts_insert" ON %1$I.platform_payouts FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
   EXECUTE format('CREATE POLICY "platform_payouts_delete" ON %1$I.platform_payouts FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
+  -- ebay_listing_drafts — admin/super_admin only, all operations (mirrors platform_connections)
+  EXECUTE format('CREATE POLICY "ebay_listing_drafts_all_admin" ON %1$I.ebay_listing_drafts FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,
   -- 004_performance_indexes.sql) — every tenant gets the growth-oriented
@@ -482,6 +517,9 @@ BEGIN
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON %1$I.audit_logs (created_at DESC)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_platform_payouts_platform_date ON %1$I.platform_payouts (platform, date)', schema_name);
+
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_status ON %1$I.ebay_listing_drafts (status)', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_created_by ON %1$I.ebay_listing_drafts (created_by)', schema_name);
 
   -- ── 7. Grants ───────────────────────────────────────────────
   -- create schema does NOT grant anything by default — without this every

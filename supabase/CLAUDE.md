@@ -27,7 +27,10 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 - `migrations/005_tenant_provisioning.sql` — canonical
   `public.provision_tenant_schema(schema_name)` + `public.set_user_tenant()`,
   used by Phase 4 dynamic tenant provisioning
-  (`src/app/api/admin/provision-tenant/route.ts`).
+  (`src/app/api/admin/provision-tenant/route.ts`). Now also creates the
+  `ebay_listing_drafts` table (+ trigger, RLS, indexes) for every new tenant
+  — see `021_ebay_listing_drafts.sql` below for the twin change applied to
+  existing tenants.
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
 - `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
@@ -64,6 +67,15 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   exception as `019_dropship_supplier_price.sql`). The `DEFAULT 3` also
   backfills every existing row. Backs the margin-coloring UI in
   `src/app/dashboard/dropshipping/`.
+- `migrations/021_ebay_listing_drafts.sql` — creates `ebay_listing_drafts`
+  (draft eBay listings sourced from Inventory `product_id` OR a dropship
+  `source_url`/`source_platform`; `status` lifecycle
+  `draft → publishing → published/failed`) in every `tenant_%` schema via
+  `run_on_all_tenant_schemas` (apply AFTER `012`). Also baked into
+  `provision_tenant_schema()` (`005_tenant_provisioning.sql`) so future
+  tenants get it from creation — table, `updated_at` trigger, RLS
+  (admin/super_admin only, mirrors `platform_connections`), and
+  `status`/`created_by` indexes. Backs the eBay Listing Creation feature.
 
 ## Related code
 
