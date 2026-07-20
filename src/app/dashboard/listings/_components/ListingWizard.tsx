@@ -149,7 +149,7 @@ export function ListingWizard({ draftId }: Props) {
     setStep(STEPS[STEPS.indexOf(step) - 1]);
   }
 
-  function toInsertPayload(userId: string) {
+  function toPayload() {
     return {
       source_type: draft.source_type,
       product_id: draft.source_type === "inventory" ? draft.product_id || null : null,
@@ -168,7 +168,6 @@ export function ListingWizard({ draftId }: Props) {
       fulfillment_policy_id: draft.fulfillment_policy_id || null,
       payment_policy_id: draft.payment_policy_id || null,
       return_policy_id: draft.return_policy_id || null,
-      created_by: userId,
     };
   }
 
@@ -183,7 +182,7 @@ export function ListingWizard({ draftId }: Props) {
       if (existingRow) {
         const { data, error: updateError } = await supabase
           .from("ebay_listing_drafts")
-          .update(toInsertPayload(user.id))
+          .update(toPayload())
           .eq("id", existingRow.id)
           .select()
           .single<EbayListingDraft>();
@@ -203,7 +202,7 @@ export function ListingWizard({ draftId }: Props) {
 
       const { data, error: insertError } = await supabase
         .from("ebay_listing_drafts")
-        .insert(toInsertPayload(user.id))
+        .insert({ ...toPayload(), created_by: user.id })
         .select()
         .single<EbayListingDraft>();
       if (insertError) throw insertError;
