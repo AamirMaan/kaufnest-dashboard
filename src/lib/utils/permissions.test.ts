@@ -55,6 +55,12 @@ describe("hasPermission", () => {
     expect(hasPermission("accountant", "view_analytics")).toBe(false);
   });
 
+  it("restricts manage_listings to admin and super_admin", () => {
+    expect(hasPermission("super_admin", "manage_listings")).toBe(true);
+    expect(hasPermission("admin", "manage_listings")).toBe(true);
+    expect(hasPermission("accountant", "manage_listings")).toBe(false);
+  });
+
   it("allows all roles to create and update sales", () => {
     const roles: UserRole[] = ["super_admin", "admin", "accountant"];
     roles.forEach((role) => {

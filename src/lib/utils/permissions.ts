@@ -23,6 +23,8 @@ const PERMISSIONS = {
   view_analytics: ["super_admin", "admin"],
   // Platform integrations (OAuth connections hold tokens)
   manage_integrations: ["super_admin", "admin"],
+  // eBay listing creation/publishing
+  manage_listings: ["super_admin", "admin"],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
