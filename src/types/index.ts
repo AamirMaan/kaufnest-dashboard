@@ -238,3 +238,37 @@ export interface DropshipListing {
   last_synced_at: string;
   created_at: string;
 }
+
+// ─── eBay Listing Drafts ──────────────────────────────────────────────────────
+
+export type ListingSourceType = "inventory" | "dropship";
+export type ListingCondition = "new" | "used" | "refurbished";
+export type ListingStatus = "draft" | "publishing" | "published" | "failed";
+
+export interface EbayListingDraft {
+  id: string;
+  source_type: ListingSourceType;
+  product_id: string | null;
+  source_url: string | null;
+  source_platform: SourcePlatform | null;
+  title: string;
+  description: string | null;
+  price: number;
+  currency: Currency;
+  quantity: number;
+  condition: ListingCondition;
+  category_id: string | null;
+  category_name: string | null;
+  image_urls: string[];
+  fulfillment_policy_id: string | null;
+  payment_policy_id: string | null;
+  return_policy_id: string | null;
+  ebay_sku: string | null;
+  status: ListingStatus;
+  ebay_offer_id: string | null;
+  ebay_listing_id: string | null;
+  publish_error: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}

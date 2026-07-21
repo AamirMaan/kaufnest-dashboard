@@ -10,6 +10,7 @@ import { companyProfileSlice } from "./slices/companyProfileSlice";
 import { integrationsSlice } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { dropshippingSlice } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
 import { platformPayoutsSlice } from "./slices/platformPayoutsSlice";
+import { listingsSlice } from "@/app/dashboard/listings/_store/listingsSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -25,6 +26,7 @@ export const makeStore = () =>
       integrations: integrationsSlice.reducer,
       dropshipping: dropshippingSlice.reducer,
       platformPayouts: platformPayoutsSlice.reducer,
+      listings: listingsSlice.reducer,
     },
   });
 

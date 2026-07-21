@@ -78,6 +78,7 @@ broadly when working on a specific feature.**
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
 | `settings/` | `/dashboard/settings` | invoice template settings |
 | `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |
+| `listings/` | `/dashboard/listings` | eBay listing creation (draft → publish), `listingsSlice` (Pro/Business plans only, `manage_listings` permission) |
 
 ## Shared shell components (live outside, in `src/components/layout/`)
 
