@@ -74,7 +74,7 @@ broadly when working on a specific feature.**
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
 | `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |
-| `users/` | `/dashboard/users` | user invites/roles, `usersSlice` (super_admin only) |
+| `users/` | `/dashboard/users` | user invites/roles/permission overrides, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
 | `settings/` | `/dashboard/settings` | invoice template settings |
 | `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |

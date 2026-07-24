@@ -80,6 +80,24 @@ describe("hasPermission", () => {
     expect(hasPermission("admin", "delete_purchase")).toBe(true);
     expect(hasPermission("super_admin", "delete_purchase")).toBe(true);
   });
+
+  it("grants a permission an accountant's role lacks when it's in the override list", () => {
+    expect(hasPermission("accountant", "delete_sale")).toBe(false);
+    expect(hasPermission("accountant", "delete_sale", ["delete_sale"])).toBe(true);
+  });
+
+  it("overrides are additive only — an unrelated override doesn't grant other permissions", () => {
+    expect(hasPermission("accountant", "manage_users", ["delete_sale"])).toBe(false);
+  });
+
+  it("ignores a null/undefined overrides list (defaults to role-only check)", () => {
+    expect(hasPermission("accountant", "delete_sale", null)).toBe(false);
+    expect(hasPermission("accountant", "delete_sale", undefined)).toBe(false);
+  });
+
+  it("a role that already has the permission is unaffected by overrides", () => {
+    expect(hasPermission("super_admin", "delete_sale", [])).toBe(true);
+  });
 });
 
 describe("canAccessRoute", () => {
@@ -133,6 +151,11 @@ describe("canAccessRoute", () => {
     roles.forEach((role) => {
       expect(canAccessRoute(role, "/dashboard")).toBe(true);
     });
+  });
+
+  it("allows access via an override even when the role alone would be denied", () => {
+    expect(canAccessRoute("accountant", "/dashboard/users", ["manage_users"])).toBe(true);
+    expect(canAccessRoute("accountant", "/dashboard/audit-logs", ["view_audit_logs"])).toBe(true);
   });
 });
 

@@ -28,6 +28,19 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 - `_components/ImportExpensesModal.tsx` — bulk CSV import: same pattern as the
   Sales/Purchases import modals but for expenses. See "CSV import/export" below.
 
+## Delete gating (super_admin + permission overrides)
+
+`page.tsx` computes `canDelete = isSuperAdmin || hasDeleteOverride`, where
+`hasDeleteOverride` reads
+`s.currentUser.profile?.permission_overrides?.includes("delete_expense")`
+directly (not via `hasPermission()` from `lib/utils/permissions.ts` — see the
+Sales feature's CLAUDE.md for why: it would resurrect the matrix's
+`["super_admin", "admin"]` default, silently giving every admin delete rights
+they've never had in this UI). Overrides are granted per-user via the Users
+feature's Permissions modal and also enforced in Postgres RLS
+(`{{schema}}.current_user_has_override('delete_expense')` in the
+`expenses_delete` policy, see `supabase/migrations/023_user_permission_overrides.sql`).
+
 ## Pagination data flow
 
 Server-side pagination is active. `page.tsx` **does not apply `filterExpenses`

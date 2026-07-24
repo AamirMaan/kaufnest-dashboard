@@ -14,10 +14,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   const { data: profile } = await client
     .from("profiles")
-    .select("role")
+    .select("role, permission_overrides")
     .eq("id", userId)
-    .single<Pick<Profile, "role">>();
-  if (!profile?.role || !hasPermission(profile.role, "manage_listings")) {
+    .single<Pick<Profile, "role" | "permission_overrides">>();
+  if (!profile?.role || !hasPermission(profile.role, "manage_listings", profile.permission_overrides)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

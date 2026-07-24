@@ -37,7 +37,7 @@ Domain-specific wrappers (prefer these over the base `Badge` when the value maps
 to a known domain enum — they own the label text + color mapping):
 
 - `RoleBadge({ role: UserRole })` — `super_admin`→danger, `admin`→warning, `accountant`→info
-- `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning
+- `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning, permission_change→warning
 - `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`, just maps the enum to a display label
 - `PlatformBadge({ platform: Platform })` — amazon→warning, ebay→danger, etsy→success, shopify→info, other→default
 

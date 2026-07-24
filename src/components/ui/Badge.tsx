@@ -23,6 +23,7 @@ const ACTION_VARIANTS: Record<AuditAction, BadgeVariant> = {
   login: "default",
   logout: "default",
   role_change: "warning",
+  permission_change: "warning",
 };
 
 interface BadgeProps {

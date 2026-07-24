@@ -22,6 +22,7 @@ function IntegrationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const connections = useAppSelector((s) => s.integrations.connections);
 
@@ -40,7 +41,7 @@ function IntegrationsContent() {
 
   if (!role) return null;
 
-  const canManage = hasPermission(role, "manage_integrations");
+  const canManage = hasPermission(role, "manage_integrations", permissionOverrides);
 
   if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
     return (

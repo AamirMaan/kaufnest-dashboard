@@ -72,6 +72,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   Storage bucket and its tenant-path-scoped RLS policies (first Storage
   bucket in this codebase — see its own header comment for the
   `current_tenant_role()` helper it introduces).
+- `migrations/023_user_permission_overrides.sql` — adds
+  `profiles.permission_overrides` (jsonb array of `Permission` keys,
+  additive-only per-user grants beyond role defaults) to every tenant schema
+  via `run_on_all_tenant_schemas`; also adds the
+  `{{schema}}.current_user_has_override(perm)` SQL function and updates the
+  `sales_delete`/`expenses_delete`/`purchases_delete` RLS policies to OR in
+  that check (those three DELETE policies were role-only, not
+  app-code-gated). Also baked into `provision_tenant_schema()`. Backs the
+  Users feature's Permissions modal
+  (`src/app/dashboard/users/_components/PermissionsModal.tsx`).
 
 ## Related code
 

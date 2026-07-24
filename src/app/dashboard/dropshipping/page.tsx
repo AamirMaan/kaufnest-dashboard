@@ -18,6 +18,7 @@ export default function DropshippingPage() {
   const { success, error: toastError } = useToast();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const connections = useAppSelector((s) => s.integrations.connections);
   const listings = useAppSelector((s) => s.dropshipping.listings);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,7 +78,7 @@ export default function DropshippingPage() {
     );
   }
 
-  const canRefresh = role && hasPermission(role, "manage_integrations");
+  const canRefresh = role && hasPermission(role, "manage_integrations", permissionOverrides);
 
   async function handleRefresh() {
     setRefreshing(true);

@@ -161,7 +161,7 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
-| `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles + `usersSlice` |
+| `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles/permission overrides + `usersSlice` |
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
 | `src/app/dashboard/settings/` | `/dashboard/settings` | invoice template settings (thin — no private state) |
 | `src/app/dashboard/integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections + `integrationsSlice` (Pro/Business plans only; admin/super_admin only) |

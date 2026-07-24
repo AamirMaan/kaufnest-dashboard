@@ -7,6 +7,11 @@ export interface Profile {
   email: string;
   full_name: string;
   role: UserRole;
+  // Permission keys (see `Permission` in lib/utils/permissions.ts) granted to
+  // this user ADDITIVELY on top of their role's defaults. Kept as `string[]`
+  // here (not `Permission[]`) to avoid a circular import — permissions.ts
+  // imports `UserRole` from this file.
+  permission_overrides: string[];
   created_at: string;
 }
 
@@ -116,7 +121,8 @@ export type AuditAction =
   | "delete"
   | "login"
   | "logout"
-  | "role_change";
+  | "role_change"
+  | "permission_change";
 
 export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product";
 
