@@ -28,8 +28,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
   companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
   `state.companyProfile.profile`; button transiently disabled until profile
-  hydrates), Delete (super_admin only, same role gate as list page, navigates
-  back to `/dashboard/sales` after delete). Net proceeds computed via
+  hydrates), Delete (super_admin OR a user granted the `delete_sale`
+  permission override, same gate as list page, navigates back to
+  `/dashboard/sales` after delete). Net proceeds computed via
   `_components/orderMath.ts`.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`).
@@ -66,6 +67,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+
+## Delete gating (super_admin + permission overrides)
+
+`page.tsx` and `[id]/page.tsx` both compute `canDelete = isSuperAdmin ||
+hasDeleteOverride`, where `hasDeleteOverride` reads
+`s.currentUser.profile?.permission_overrides?.includes("delete_sale")`
+directly (NOT via `hasPermission()` from `lib/utils/permissions.ts` — this
+file never imports that module, to avoid resurrecting the matrix's
+`["super_admin", "admin"]` default for `delete_sale`, which would silently
+give ALL admins delete rights they've never had in this UI). Overrides are
+granted per-user via the Users feature's Permissions modal
+(`src/app/dashboard/users/_components/PermissionsModal.tsx`) and are also
+enforced in Postgres RLS (`{{schema}}.current_user_has_override('delete_sale')`
+in the `sales_delete` policy, see `supabase/migrations/023_user_permission_overrides.sql`)
+— so this isn't just a UI-level gate, the DB backs it too.
 
 ## Pagination data flow
 

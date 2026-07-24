@@ -11,7 +11,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { RoleBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
-import { Pencil, RefreshCw } from "lucide-react";
+import { PermissionsModal } from "./_components/PermissionsModal";
+import { Pencil, RefreshCw, ShieldCheck } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -34,6 +35,7 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
+  const [permissionsTarget, setPermissionsTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
 
@@ -143,6 +145,14 @@ export default function UsersPage() {
           <Button
             size="icon"
             variant="ghost"
+            onClick={() => setPermissionsTarget(p)}
+            title="Manage permissions"
+          >
+            <ShieldCheck size={15} className="text-emerald-500" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
             onClick={() => handleResendInvite(p)}
             disabled={resendingInvite === p.id}
             title="Resend invite"
@@ -178,6 +188,11 @@ export default function UsersPage() {
       />
       <InviteUserModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <EditUserModal key={editTarget?.id ?? "edit-user"} user={editTarget} onClose={() => setEditTarget(null)} />
+      <PermissionsModal
+        key={permissionsTarget?.id ?? "permissions"}
+        user={permissionsTarget}
+        onClose={() => setPermissionsTarget(null)}
+      />
     </div>
   );
 }

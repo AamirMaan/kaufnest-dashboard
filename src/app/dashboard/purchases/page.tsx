@@ -42,6 +42,10 @@ export default function PurchasesPage() {
   const total = useAppSelector((s) => s.purchases.total);
   const isFetching = useAppSelector((s) => s.purchases.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+  const hasDeleteOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_purchase") ?? false
+  );
+  const canDelete = isSuperAdmin || hasDeleteOverride;
 
   const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_PURCHASE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
@@ -247,7 +251,7 @@ export default function PurchasesPage() {
           >
             <FileDown size={15} className="text-violet-500" />
           </Button>
-          {isSuperAdmin && (
+          {canDelete && (
             <Button
               size="icon"
               variant="danger"

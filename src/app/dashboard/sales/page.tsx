@@ -50,6 +50,10 @@ export default function SalesPage() {
   const total = useAppSelector((s) => s.sales.total);
   const isFetching = useAppSelector((s) => s.sales.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+  const hasDeleteOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
+  );
+  const canDelete = isSuperAdmin || hasDeleteOverride;
 
   const [filters, setFilters] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
   const hasActive = !isDefaultFilters(filters);
@@ -279,7 +283,7 @@ export default function SalesPage() {
           >
             <FileDown size={15} className="text-violet-500" />
           </Button>
-          {isSuperAdmin && (
+          {canDelete && (
             <Button
               size="icon"
               variant="danger"

@@ -6,6 +6,7 @@ const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
   email: "admin@acme.example",
   full_name: "Admin User",
   role: "admin",
+  permission_overrides: [],
   created_at: "2026-06-01T10:00:00.000Z",
   ...overrides,
 });

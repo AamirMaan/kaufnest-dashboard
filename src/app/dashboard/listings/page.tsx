@@ -15,9 +15,10 @@ export default function ListingsPage() {
   const dispatch = useAppDispatch();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const { items, page, pageSize, total, isFetching } = useAppSelector((s) => s.listings);
 
-  const canManage = role && hasPermission(role, "manage_listings");
+  const canManage = role && hasPermission(role, "manage_listings", permissionOverrides);
 
   function goToPage(nextPage: number) {
     dispatch(fetchListingsPage({ page: nextPage, pageSize }));

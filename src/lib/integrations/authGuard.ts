@@ -36,11 +36,11 @@ export async function requireIntegrationAdmin(): Promise<IntegrationAuthResult> 
 
   const { data: profile } = await client
     .from("profiles")
-    .select("role")
+    .select("role, permission_overrides")
     .eq("id", user.id)
-    .single<Pick<Profile, "role">>();
+    .single<Pick<Profile, "role" | "permission_overrides">>();
 
-  if (!profile?.role || !hasPermission(profile.role, "manage_integrations")) {
+  if (!profile?.role || !hasPermission(profile.role, "manage_integrations", profile.permission_overrides)) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

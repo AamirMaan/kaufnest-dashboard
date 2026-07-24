@@ -29,23 +29,56 @@ const PERMISSIONS = {
 
 export type Permission = keyof typeof PERMISSIONS;
 
+/** Every permission key, for enumerating a full permission checklist (e.g. the Permissions modal). */
+export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
+
+/** Human-readable label for each permission, grouped for display. */
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  create_expense: "Create expenses",
+  update_expense: "Edit expenses",
+  delete_expense: "Delete expenses",
+  create_purchase: "Create purchases",
+  update_purchase: "Edit purchases",
+  delete_purchase: "Delete purchases",
+  create_sale: "Create orders",
+  update_sale: "Edit orders",
+  delete_sale: "Delete orders",
+  manage_users: "Manage users (invite, edit, change roles)",
+  invite_user: "Invite new users",
+  change_user_role: "Change user roles",
+  view_audit_logs: "View audit logs",
+  view_analytics: "View analytics",
+  manage_integrations: "Manage platform integrations (eBay/Amazon)",
+  manage_listings: "Create and publish eBay listings",
+};
+
 /**
- * Check if a role has the given permission.
+ * Check if a role — plus any additive per-user permission overrides — grants
+ * the given permission. `overrides` (from `Profile.permission_overrides`) can
+ * only ADD permissions on top of the role's defaults, never take one away.
  */
-export function hasPermission(role: UserRole, permission: Permission): boolean {
+export function hasPermission(
+  role: UserRole,
+  permission: Permission,
+  overrides: readonly string[] | null | undefined = []
+): boolean {
   const allowed = PERMISSIONS[permission] as readonly string[];
-  return allowed.includes(role);
+  return allowed.includes(role) || (overrides?.includes(permission) ?? false);
 }
 
 /**
- * Check if a role can access a given dashboard route path.
+ * Check if a role — plus any overrides — can access a given dashboard route path.
  */
-export function canAccessRoute(role: UserRole, pathname: string): boolean {
+export function canAccessRoute(
+  role: UserRole,
+  pathname: string,
+  overrides: readonly string[] | null | undefined = []
+): boolean {
   if (pathname.startsWith("/dashboard/users")) {
-    return hasPermission(role, "manage_users");
+    return hasPermission(role, "manage_users", overrides);
   }
   if (pathname.startsWith("/dashboard/audit-logs")) {
-    return hasPermission(role, "view_audit_logs");
+    return hasPermission(role, "view_audit_logs", overrides);
   }
   return true; // all authenticated roles can access other routes
 }

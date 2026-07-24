@@ -27,6 +27,7 @@ export default function ReviewPage() {
   const toast = useToast();
   const dispatch = useAppDispatch();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
 
   const [data, setData] = useState<ReviewResponse | null>(null);
@@ -60,17 +61,17 @@ export default function ReviewPage() {
       !role ||
       !tenantPlan ||
       !hasPlatformIntegrations(tenantPlan) ||
-      !hasPermission(role, "manage_integrations")
+      !hasPermission(role, "manage_integrations", permissionOverrides)
     ) {
       router.replace("/dashboard/integrations");
     }
-  }, [role, tenantPlan, router]);
+  }, [role, permissionOverrides, tenantPlan, router]);
 
   const isEligible =
     !!role &&
     !!tenantPlan &&
     hasPlatformIntegrations(tenantPlan) &&
-    hasPermission(role, "manage_integrations");
+    hasPermission(role, "manage_integrations", permissionOverrides);
 
   useEffect(() => {
     if (!isEligible) return;

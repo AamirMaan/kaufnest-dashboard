@@ -83,6 +83,7 @@ BEGIN
       full_name  text NOT NULL DEFAULT '',
       role       text NOT NULL DEFAULT 'accountant'
                    CHECK (role IN ('super_admin', 'admin', 'accountant')),
+      permission_overrides jsonb NOT NULL DEFAULT '[]'::jsonb,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   $sql$, schema_name);
@@ -322,6 +323,24 @@ BEGIN
     $func$;
   $sql$, schema_name);
 
+  -- current_user_has_override(perm): true when `perm` (a Permission key from
+  -- src/lib/utils/permissions.ts) is present in the caller's additive
+  -- permission_overrides array. Used by the delete policies below to grant
+  -- e.g. delete_sale to a non-admin/super_admin user without changing their
+  -- role — see 023_user_permission_overrides.sql.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.current_user_has_override(perm text)
+    RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+      SELECT COALESCE(
+        (SELECT permission_overrides FROM profiles WHERE id = auth.uid()) ? perm,
+        false
+      );
+    $func$;
+  $sql$, schema_name);
+
   -- ── 4. Stock-sync triggers ─────────────────────────────────
   -- Same INSERT/UPDATE/DELETE-aware logic as the public schema
   -- (002_inventory_and_vat.sql / 003_add_order_status.sql): each function
@@ -439,19 +458,19 @@ BEGIN
   EXECUTE format('CREATE POLICY "expenses_select" ON %1$I.expenses FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "expenses_insert" ON %1$I.expenses FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "expenses_update" ON %1$I.expenses FOR UPDATE USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
-  EXECUTE format('CREATE POLICY "expenses_delete" ON %1$I.expenses FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "expenses_delete" ON %1$I.expenses FOR DELETE USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''delete_expense'')))', schema_name);
 
   -- purchases
   EXECUTE format('CREATE POLICY "purchases_select" ON %1$I.purchases FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "purchases_insert" ON %1$I.purchases FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "purchases_update" ON %1$I.purchases FOR UPDATE USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
-  EXECUTE format('CREATE POLICY "purchases_delete" ON %1$I.purchases FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "purchases_delete" ON %1$I.purchases FOR DELETE USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''delete_purchase'')))', schema_name);
 
   -- sales
   EXECUTE format('CREATE POLICY "sales_select" ON %1$I.sales FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "sales_insert" ON %1$I.sales FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
   EXECUTE format('CREATE POLICY "sales_update" ON %1$I.sales FOR UPDATE USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
-  EXECUTE format('CREATE POLICY "sales_delete" ON %1$I.sales FOR DELETE USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "sales_delete" ON %1$I.sales FOR DELETE USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''delete_sale'')))', schema_name);
 
   -- products
   EXECUTE format('CREATE POLICY "products_select" ON %1$I.products FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);

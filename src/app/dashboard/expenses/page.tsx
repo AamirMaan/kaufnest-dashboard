@@ -49,6 +49,10 @@ export default function ExpensesPage() {
   const total = useAppSelector((s) => s.expenses.total);
   const isFetching = useAppSelector((s) => s.expenses.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+  const hasDeleteOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_expense") ?? false
+  );
+  const canDelete = isSuperAdmin || hasDeleteOverride;
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
@@ -227,7 +231,7 @@ export default function ExpensesPage() {
           >
             <FileDown size={15} className="text-violet-500" />
           </Button>
-          {isSuperAdmin && (
+          {canDelete && (
             <Button
               size="icon"
               variant="danger"

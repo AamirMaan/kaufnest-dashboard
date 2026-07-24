@@ -95,13 +95,13 @@ export async function proxy(request: NextRequest) {
     const { data: profile } = await supabase
       .schema(tenantSchema)
       .from("profiles")
-      .select("role")
+      .select("role, permission_overrides")
       .eq("id", user.id)
-      .single();
+      .single<{ role: UserRole; permission_overrides: string[] | null }>();
 
     const role = (profile?.role ?? "accountant") as UserRole;
 
-    if (!canAccessRoute(role, pathname)) {
+    if (!canAccessRoute(role, pathname, profile?.permission_overrides)) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);

@@ -1,4 +1,4 @@
-import { usersSlice, hydrateUsers, addUser, updateUserRole } from "./usersSlice";
+import { usersSlice, hydrateUsers, addUser, updateUser, updateUserRole } from "./usersSlice";
 import { pageRangeLabel } from "@/components/ui/Pagination";
 import type { Profile } from "@/types";
 
@@ -7,6 +7,7 @@ const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
   email: "user@example.com",
   full_name: "Test User",
   role: "accountant",
+  permission_overrides: [],
   created_at: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
@@ -64,6 +65,16 @@ describe("usersSlice", () => {
     const initial = reducer(undefined, hydrateUsers([makeProfile({ id: "u1", role: "admin" })]));
     const state = reducer(initial, updateUserRole({ id: "u1", role: "accountant" }));
     expect(state.items[0].role).toBe("accountant");
+  });
+
+  it("updates a user's permission_overrides via updateUser (used by the Permissions modal)", () => {
+    const initial = reducer(
+      undefined,
+      hydrateUsers([makeProfile({ id: "u1", role: "accountant", permission_overrides: [] })])
+    );
+    const updated = makeProfile({ id: "u1", role: "accountant", permission_overrides: ["delete_sale"] });
+    const state = reducer(initial, updateUser(updated));
+    expect(state.items[0].permission_overrides).toEqual(["delete_sale"]);
   });
 });
 

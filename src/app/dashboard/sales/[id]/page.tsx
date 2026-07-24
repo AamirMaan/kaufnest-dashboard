@@ -37,6 +37,10 @@ export default function SaleDetailPage({ params }: PageProps) {
   const isSuperAdmin = useAppSelector(
     (s) => s.currentUser.profile?.role === "super_admin"
   );
+  const hasDeleteOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
+  );
+  const canDelete = isSuperAdmin || hasDeleteOverride;
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
@@ -454,7 +458,7 @@ export default function SaleDetailPage({ params }: PageProps) {
           Download Invoice
         </Button>
 
-        {isSuperAdmin && (
+        {canDelete && (
           <Button
             variant="danger"
             onClick={() => {

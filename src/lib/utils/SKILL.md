@@ -99,17 +99,43 @@ Static role-based permission matrix — no Supabase calls, pure lookups against
   `/dashboard/integrations` — accountants see the page (if the tenant's plan
   has it) but get a "contact your admin" message instead of the connection
   cards.
-- `hasPermission(role, permission)` — the primitive check; most call sites
-  should use this directly (e.g. to show/hide an Edit/Delete button).
-- `canAccessRoute(role, pathname)` — route-level gate used by `src/proxy.ts`
-  (this app's middleware-equivalent) to block `/dashboard/users` and
-  `/dashboard/audit-logs` for roles without `manage_users`/`view_audit_logs`.
-  Everything else returns `true` (any authenticated role).
+- `ALL_PERMISSIONS` — `Object.keys(PERMISSIONS) as Permission[]`, for
+  enumerating every permission (used by the Users feature's Permissions modal
+  to render a full checklist).
+- `PERMISSION_LABELS` — `Record<Permission, string>` human-readable label per
+  permission, also consumed by the Permissions modal.
+- `hasPermission(role, permission, overrides?)` — the primitive check; most
+  call sites should use this directly (e.g. to show/hide an Edit/Delete
+  button). Third param `overrides` (a `Profile.permission_overrides` array,
+  optional, defaults to `[]`) is **additive only** — it can grant a
+  permission the role lacks, never take one away. Pass
+  `profile?.permission_overrides` whenever you have the full profile
+  available (Redux `state.currentUser.profile` client-side, or a
+  `role, permission_overrides` Supabase select server-side); omit it only
+  where role-only is intentional/fine.
+- `canAccessRoute(role, pathname, overrides?)` — route-level gate used by
+  `src/proxy.ts` (this app's middleware-equivalent) to block `/dashboard/users`
+  and `/dashboard/audit-logs` for roles (and overrides) without
+  `manage_users`/`view_audit_logs`. Everything else returns `true` (any
+  authenticated role).
 - `ROLE_HIERARCHY = ["accountant", "admin", "super_admin"]` (ascending) backs
   `hasMinimumRole(role, minimum)` — an index comparison, for "at least as
-  privileged as X" checks rather than an exact-permission lookup.
+  privileged as X" checks rather than an exact-permission lookup. Not
+  override-aware (overrides only ever apply to a specific `Permission` key,
+  never to the role hierarchy itself).
 - Adding a new role to `UserRole` means updating `ROLE_HIERARCHY` *and* every
   relevant `PERMISSIONS` array — neither is enforced by the type system.
+- **Per-user permission overrides** (`Profile.permission_overrides: string[]`,
+  a jsonb array column, see `supabase/migrations/023_user_permission_overrides.sql`):
+  managed via the Users feature's Permissions modal
+  (`src/app/dashboard/users/_components/PermissionsModal.tsx`), super_admin
+  only. `delete_sale`/`delete_expense`/`delete_purchase` overrides are ALSO
+  enforced in Postgres RLS (`{{schema}}.current_user_has_override(perm)`,
+  since those three DELETE policies are role-only, not app-code-gated) — see
+  that migration's header comment. Every other permission in the matrix is
+  only ever checked in application code (proxy.ts/authGuard.ts/page-level
+  `hasPermission` calls), so granting e.g. `manage_integrations` via an
+  override needs no RLS change — the app code is already the sole gate.
 
 ## invoiceMath.ts
 
