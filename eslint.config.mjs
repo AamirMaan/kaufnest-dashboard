@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Other git worktrees (e.g. .worktrees/<branch>/) are full parallel
+    // checkouts with their own .next build output — the patterns above only
+    // match at the repo root, not nested inside a worktree directory.
+    ".worktrees/**",
   ]),
 ]);
 
