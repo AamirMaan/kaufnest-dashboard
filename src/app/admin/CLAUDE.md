@@ -31,10 +31,11 @@ not tenant roles.
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
   (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
   button (only shown when `tenant.status === "invited"`; posts to
-  `/api/admin/resend-invite`), an "Impersonate" button (prompts for
-  super_admin email, posts to `/api/admin/impersonate`, redirects to magic
-  link), and a **"Delete" button** (danger variant; two-step inline
-  confirmation → "Yes, delete" + "Cancel"; posts to
+  `/api/admin/resend-invite`), an "Impersonate" button (confirm dialog naming
+  `tenant.admin_email`, posts `{ tenantId }` only to `/api/admin/impersonate`
+  — the target email is never client-supplied, see that route below —
+  redirects to the returned magic link), and a **"Delete" button** (danger
+  variant; two-step inline confirmation → "Yes, delete" + "Cancel"; posts to
   `DELETE /api/admin/tenants/[tenant.id]`; calls `onRefresh` on success).
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
@@ -117,11 +118,20 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   the status to `"active"` (lines 39-45) to mark the tenant as having completed
   first login. This is the transition point: invites become non-resendable once
   the admin logs in.
-- **`impersonate/route.ts`** (`POST`) — looks up the tenant in
-  `control.tenants`, generates a Supabase magic link
-  (`service.auth.admin.generateLink`) for the given admin email, and sets the
-  `kaufnest_impersonating` cookie (httpOnly, 8h) read by `DashboardShell`'s
-  impersonation banner.
+- **`impersonate/route.ts`** (`POST`, body `{ tenantId }` only) — checks the
+  caller is a platform admin AND `control.admin_users.can_impersonate` is
+  true (a column that existed but was previously unchecked — see
+  `verifyCanImpersonate()` in this file, a locally-scoped variant of the
+  shared `isPlatformAdmin`, needed because impersonation requires the extra
+  `can_impersonate` flag that plain admin-panel access doesn't). Looks up the
+  tenant in `control.tenants` and generates a Supabase magic link
+  (`service.auth.admin.generateLink`) for `tenant.admin_email` **only** —
+  never a client-supplied address (previously accepted an arbitrary
+  `adminEmail` from the request body, see AUDIT_2026-07-24.md §2.4 — fixed).
+  400s if the tenant has no `admin_email` on file. Writes a row to
+  `control.admin_audit_log` (`control-plane/004_admin_audit_log.sql`) before
+  returning the link, and sets the `kaufnest_impersonating` cookie (httpOnly,
+  8h) read by `DashboardShell`'s impersonation banner.
 - **`exit-impersonation/route.ts`** (`POST`) — clears the
   `kaufnest_impersonating` cookie.
 

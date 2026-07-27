@@ -25,10 +25,16 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   `shipping_charged`, `advertising_fee`) set to `null` — these are editable
   later via the Edit Sale modal. Has a colocated `mapToSale.test.ts`.
 - `tokenStore.ts` — `getConnection`, `upsertConnection`,
-  `ensureValidAccessToken` (refresh-on-demand).
+  `ensureValidAccessToken` (refresh-on-demand). `getConnection` decrypts,
+  `upsertConnection` encrypts — see "Token encryption at rest" below.
+- `tokenCrypto.ts` — `encryptToken`/`decryptToken`/`isEncryptedToken`, AES-256-GCM
+  helpers used exclusively by `tokenStore.ts`. Colocated `tokenCrypto.test.ts`.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
   session+role+tenant-schema check for the connect/callback/disconnect/review
   routes.
+- `ebay/publicKey.ts`, `ebay/verifyNotificationSignature.ts` — support the
+  `/api/notifications/ebay-account-deletion` webhook's signature check, not
+  the main OAuth/sync flow — see "eBay account-deletion webhook" below.
 
 ## The `PlatformAdapter` interface
 
@@ -75,6 +81,56 @@ platform-agnostic via `getAdapter`.
 The review route (`GET /api/integrations/review`) calls `ensureValidAccessToken`
 before `fetchOrders` — adapters' `fetchOrders` always receive a fresh token and
 never refresh themselves.
+
+## Token encryption at rest
+
+`platform_connections.access_token`/`refresh_token` are encrypted (AES-256-GCM,
+`tokenCrypto.ts`) before every write and decrypted on every read — entirely
+inside `tokenStore.ts`'s `getConnection`/`upsertConnection`, so every other
+file in the codebase (adapters, API routes) only ever sees plaintext tokens
+in memory and never needs to know encryption exists. **Never** call
+`.from("platform_connections")` directly for these columns — always go
+through `getConnection`/`upsertConnection`.
+
+- Requires `TOKEN_ENCRYPTION_KEY` (base64, 32 bytes — `openssl rand -base64 32`)
+  in every environment that reads/writes this table. Missing/wrong-length key
+  throws immediately (`tokenCrypto.ts`'s `getKey()`), it does not fail silently.
+- **Rollout is non-breaking by design**: `decryptToken()` checks for the
+  `v1:` prefix and returns legacy (pre-encryption) plaintext values
+  unchanged rather than throwing — so tokens stored before this change keep
+  working. They get re-encrypted automatically the next time
+  `ensureValidAccessToken` refreshes them (writes go through
+  `upsertConnection`, which always encrypts) or the user reconnects the
+  platform. To close that window immediately instead of waiting, run
+  `npm run encrypt-existing-tokens` (optionally `-- --dry-run` first) — see
+  `scripts/encrypt-existing-tokens.mjs`.
+- Losing `TOKEN_ENCRYPTION_KEY` makes every already-encrypted token
+  unrecoverable (not just unreadable by this app — genuinely gone). Back it
+  up like any other production secret; rotating it requires decrypting with
+  the old key and re-encrypting with the new one (no rotation tooling exists
+  yet — this is a v1 implementation, single static key).
+
+## eBay account-deletion webhook (`/api/notifications/ebay-account-deletion`)
+
+Not part of the OAuth/sync flow above — this is eBay's required
+"Marketplace Account Deletion/Closure" notification endpoint, which **deletes
+data** (a tenant's synced eBay sales + connection row) when a seller closes
+their eBay account, so it authenticates the caller before doing anything:
+
+- `GET` — eBay's endpoint-registration challenge/response, using
+  `EBAY_VERIFICATION_TOKEN` (document this in `.env.local.example` — it's
+  unrelated to the OAuth `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`).
+- `POST` — the actual notification. Verified via eBay's `X-EBAY-SIGNATURE`
+  header (`ebay/verifyNotificationSignature.ts` parses it and checks the
+  signature over the raw body; `ebay/publicKey.ts` fetches — and caches —
+  eBay's signing public key by `kid`, using an eBay *application* token,
+  client_credentials grant, reusing `EBAY_CLIENT_ID`/`EBAY_CLIENT_SECRET`).
+  A missing/invalid signature returns **401 and skips cleanup** — this is
+  intentionally not a silent 200, so a broken signature check is visible as
+  failed deliveries in eBay's Developer Portal instead of failing open.
+- Gotcha: signature verification needs the **raw request body bytes**
+  (`req.text()`), not the parsed JSON — `JSON.parse` happens only after the
+  signature check passes.
 
 ## Merge rule (re-import field ownership)
 

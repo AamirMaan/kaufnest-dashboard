@@ -1,5 +1,6 @@
 import type { IntegrationPlatform, PlatformConnectionStatus } from "@/types";
 import type { IntegrationsClient, PlatformAdapter } from "./types";
+import { encryptToken, decryptToken } from "./tokenCrypto";
 
 /** Full `platform_connections` row, including the OAuth tokens — server-only. */
 export interface ConnectionRow {
@@ -28,7 +29,14 @@ export async function getConnection(
     .maybeSingle();
 
   if (error) throw error;
-  return data as ConnectionRow | null;
+  if (!data) return null;
+
+  const row = data as ConnectionRow;
+  return {
+    ...row,
+    access_token: decryptToken(row.access_token),
+    refresh_token: decryptToken(row.refresh_token),
+  };
 }
 
 export async function upsertConnection(
@@ -36,9 +44,17 @@ export async function upsertConnection(
   platform: IntegrationPlatform,
   fields: Partial<Omit<ConnectionRow, "id" | "platform">>
 ): Promise<void> {
+  const encryptedFields = { ...fields };
+  if ("access_token" in encryptedFields) {
+    encryptedFields.access_token = encryptToken(encryptedFields.access_token);
+  }
+  if ("refresh_token" in encryptedFields) {
+    encryptedFields.refresh_token = encryptToken(encryptedFields.refresh_token);
+  }
+
   const { error } = await client
     .from("platform_connections")
-    .upsert({ platform, ...fields }, { onConflict: "platform" });
+    .upsert({ platform, ...encryptedFields }, { onConflict: "platform" });
 
   if (error) throw error;
 }

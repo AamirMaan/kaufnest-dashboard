@@ -39,17 +39,20 @@ export function TenantActions({ tenant, onRefresh }: Props) {
   }
 
   async function handleImpersonate() {
-    const email = window.prompt(
-      `Enter the super_admin email address for tenant "${tenant.name}":`
-    );
-    if (!email) return;
+    if (
+      !window.confirm(
+        `Impersonate ${tenant.admin_email ?? "this tenant's admin"} for tenant "${tenant.name}"?`
+      )
+    ) {
+      return;
+    }
 
     setLoading(true);
     try {
       const res = await fetch("/api/admin/impersonate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: tenant.id, adminEmail: email }),
+        body: JSON.stringify({ tenantId: tenant.id }),
       });
 
       const data = (await res.json()) as { ok?: boolean; magicLink?: string; error?: string };

@@ -2,6 +2,8 @@ import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { createServiceClientForTenant } from "@/lib/supabase/server";
+import { parseSignatureHeader, verifySignature } from "@/lib/integrations/ebay/verifyNotificationSignature";
+import { fetchEbayPublicKey } from "@/lib/integrations/ebay/publicKey";
 
 // Must match exactly what you register in the eBay developer portal.
 const ENDPOINT_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/notifications/ebay-account-deletion`;
@@ -27,23 +29,53 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST — eBay MARKETPLACE_ACCOUNT_DELETION notification.
- * Always returns 200 to acknowledge receipt. Cleanup is best-effort:
- * finds any tenant whose eBay connection's external_account_id matches
- * the deleted user's userId or username, then removes their synced eBay
- * sales and the connection row.
+ *
+ * SECURITY: this endpoint deletes tenant data, so the caller must be proven
+ * to be eBay before anything runs. eBay signs every notification with the
+ * `X-EBAY-SIGNATURE` header (base64 JSON: key id + digest algo + base64
+ * signature over the raw body) — see verifyNotificationSignature.ts. A
+ * missing/invalid signature returns 401 and skips cleanup entirely; this is
+ * intentionally NOT a silent 200, so a broken/misconfigured signature check
+ * shows up as failed deliveries in eBay's Developer Portal rather than
+ * failing open.
+ *
+ * On a verified notification, cleanup is still best-effort: finds any
+ * tenant whose eBay connection's external_account_id matches the deleted
+ * user's userId or username, then removes their synced eBay sales and the
+ * connection row.
  */
 export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+
+  const parsedSignature = parseSignatureHeader(req.headers.get("x-ebay-signature"));
+  if (!parsedSignature) {
+    return NextResponse.json({ error: "Missing or malformed X-EBAY-SIGNATURE header" }, { status: 401 });
+  }
+
+  let verified: boolean;
+  try {
+    const { key, digest } = await fetchEbayPublicKey(parsedSignature.kid);
+    verified = verifySignature(rawBody, parsedSignature.signature, key, digest || parsedSignature.digest);
+  } catch (err) {
+    console.error("[ebay-account-deletion] signature verification failed", err);
+    verified = false;
+  }
+
+  if (!verified) {
+    return NextResponse.json({ error: "Signature verification failed" }, { status: 401 });
+  }
+
   let userId: string | undefined;
   let username: string | undefined;
 
   try {
-    const body = (await req.json()) as {
+    const body = JSON.parse(rawBody) as {
       notification?: { data?: { userId?: string; username?: string } };
     };
     userId = body.notification?.data?.userId;
     username = body.notification?.data?.username;
   } catch {
-    // Malformed body — still acknowledge
+    // Malformed body despite a valid signature — nothing to act on.
     return new NextResponse(null, { status: 200 });
   }
 

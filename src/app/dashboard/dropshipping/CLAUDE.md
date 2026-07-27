@@ -7,11 +7,19 @@ exists in no other tenant schema and is deliberately excluded from `provision_te
 Amazon or AliExpress supplier URL. Listings refresh on demand via "Refresh from eBay".
 
 **Platform-admin only** — this feature is hidden from all regular tenants and only accessible
-to the KaufNest platform admin (verified via `control.admin_users`). Four layers of protection:
+to the KaufNest platform admin (verified via `control.admin_users`). Five layers of protection:
 1. `Sidebar.tsx` — Dropshipping link only renders when `isPlatformAdmin` is true.
 2. `proxy.ts` — `/dashboard/dropshipping` routes redirect to `/dashboard` for non-admins.
 3. All `/api/dropshipping/*` routes — gated with `verifyPlatformAdmin()`.
 4. `dashboard/layout.tsx` — `dropshipListings` hydrated into Redux only for platform admins.
+5. **RLS** (`supabase/migrations/024_dropship_listings_rls_tighten.sql`) —
+   `dropship_listings` SELECT/INSERT/UPDATE require tenant role
+   admin/super_admin (previously any authenticated tenant member could read/
+   write the table directly via the Supabase client, bypassing layers 1–4 —
+   see AUDIT_2026-07-24.md §2.5). Note this is tenant-*role*-based, not true
+   platform-admin — `control.admin_users` lives in a different Supabase
+   project and can't be checked from Project B's RLS; layer 3 remains the
+   actual platform-admin boundary.
 
 ## Files in this folder
 
