@@ -30,7 +30,7 @@ Two Supabase projects:
 | `migrations/010_order_fees.sql` | `tenant_kaufnest.sales` | ⏳ **pending** (apply in Supabase SQL editor — Project B) — adds `shipping_cost`, `shipping_charged`, `advertising_fee` nullable `numeric(12,2)` columns with `>= 0` CHECKs; also baked into `provision_tenant_schema()` for future tenants |
 | `migrations/011_pagination_indexes.sql` | `tenant_kaufnest.*` | ⏳ **pending** — 4 new indexes: `audit_logs (created_at desc, action, user_id)` and `products (name asc)` for efficient pagination range queries and filter queries |
 | `migrations/012_tenant_migration_helper.sql` | `public` | ⏳ **apply first** — installs `public.run_on_all_tenant_schemas(sql text)` helper; **must be applied before any migration that uses it** |
-| `migrations/013_backfill_all_tenants.sql` | all `tenant_%` schemas | ⏳ **apply second** — backfills migrations 004/007/008/010/011 to all 5 live tenants using the helper; replaces the per-tenant ALTERs those files previously required |
+| `migrations/013_backfill_all_tenants.sql` | all `tenant_%` schemas | ⏳ **apply second** — backfills migrations 004/007/008/010/011 to every live tenant using the helper; replaces the per-tenant ALTERs those files previously required |
 | `migrations/014_company_profile_insert_policy.sql` | all `tenant_%` schemas | ⏳ **apply now** — adds missing INSERT RLS policy on `company_profile`; fixes "new row violates row-level security" error from Settings page `.upsert()` |
 | `migrations/015_purchases_sale_id.sql` | all `tenant_%` schemas | ⏳ **apply now** — adds `sale_id uuid` FK + `idx_purchases_sale_id` index to `purchases`; links a cost-of-goods purchase to the triggering sale |
 | `migrations/019_dropship_supplier_price.sql` | `tenant_kaufnest.dropship_listings` | ⏳ **pending** — creates `dropship_listings` table in `tenant_kaufnest` (platform-admin-only feature, not applied to all tenants), adds `supplier_price`/`supplier_currency`/`supplier_price_checked_at` columns, migrates legacy data from `public.dropship_listings`, sets up RLS policies |
@@ -38,16 +38,27 @@ Two Supabase projects:
 | `migrations/021_ebay_listing_drafts.sql` | all `tenant_%` schemas | ⏳ **pending** — creates `ebay_listing_drafts` table (draft eBay listings, sourced from Inventory or a third-party URL) via `run_on_all_tenant_schemas`; also baked into `provision_tenant_schema()`. Backs `src/app/dashboard/listings/` |
 | `migrations/022_listing_images_bucket.sql` | Storage (Project B) | ⏳ **pending** — creates the `listing-images` Storage bucket + `public.current_tenant_role()` helper + tenant-path-scoped RLS policies (public read, admin/super_admin write/delete by tenant) |
 | `migrations/023_user_permission_overrides.sql` | all `tenant_%` schemas | ⏳ **pending** — adds `profiles.permission_overrides` (jsonb array, additive per-user permission grants), `{{schema}}.current_user_has_override(perm)` function, and updates `sales_delete`/`expenses_delete`/`purchases_delete` RLS policies to also allow via override; also baked into `provision_tenant_schema()`. Backs the Users feature's Permissions modal |
+| `migrations/024_dropship_listings_rls_tighten.sql` | `tenant_kaufnest.dropship_listings` | ⏳ **pending** — restricts SELECT/INSERT/UPDATE from any authenticated tenant member to admin/super_admin role (KaufNest-only direct `ALTER`, same exception as 019/020) |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
+| `control-plane/004_admin_audit_log.sql` | `control` (Project A) | ⏳ **pending** — creates `control.admin_audit_log`, written to by `/api/admin/impersonate` on every impersonation |
 
 `tenant_kaufnest` already exists in Project B with all data migrated, RLS +
 grants in place, and Phase 3 client routing verified (see
 `SAAS_MIGRATION.md` Phase 2/3 checklists). With 005 applied, Phase 4 dynamic
 provisioning (`/api/admin/provision-tenant`) is code-complete — see
-`src/app/admin/SKILL.md`. The outstanding pieces are 004, 007, and 008, all
-additive/idempotent and safe to run anytime.
+`src/app/admin/SKILL.md`.
+
+**The table above (not this paragraph) is the authoritative apply-status
+list** — every migration marked ⏳ is outstanding, not just 004/007/008 (an
+earlier version of this paragraph named only those three, which drifted out
+of sync as later migrations were added; see AUDIT_2026-07-24.md §3.3). That
+table is itself unverified against the live databases — this repo has no
+migration ledger, so "applied" here reflects what *should* have been run,
+not a confirmed live check. Confirm on the actual Project A/B databases
+before treating any specific migration as safely skippable. All ⏳ entries
+are additive/idempotent and safe to run anytime, in file-number order.
 
 ## Apply order (for a fresh Project B, disaster recovery)
 
@@ -83,7 +94,9 @@ $$);
 ```
 
 **Never write `ALTER TABLE tenant_kaufnest.*` directly in a new migration.**
-With 5+ live tenants, hardcoding one schema name leaves all others stale.
+With multiple live tenants (see the named list at the top of this file —
+that's the source of truth; don't repeat a specific count here, it drifts),
+hardcoding one schema name leaves all others stale.
 `run_on_all_tenant_schemas` discovers every `tenant_%` schema at runtime, so
 adding a new tenant (via `/api/admin/provision-tenant`) is automatically
 included in all future migrations.

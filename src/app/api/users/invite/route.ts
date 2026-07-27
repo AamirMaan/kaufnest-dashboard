@@ -115,6 +115,7 @@ export async function POST(request: Request) {
     });
 
     if (profileError) {
+      console.error("[invite] failed to create user profile", profileError);
       return NextResponse.json(
         { error: "Failed to create user profile.", detail: profileError.message },
         { status: 500 }

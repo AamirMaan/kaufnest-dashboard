@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template itself — this SHOULD be committed (every SKILL.md/
+# README references it as the checked-in setup guide, but `.env*` above was
+# silently swallowing it too, so it was never actually in git history).
+!.env.local.example
 
 # vercel
 .vercel

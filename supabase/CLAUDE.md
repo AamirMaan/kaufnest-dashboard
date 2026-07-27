@@ -7,6 +7,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 
 ## Files
 
+- `_archive/` — superseded migrations kept for historical reference only,
+  never apply these. `_archive/009_dropship_listings.sql` (moved here from
+  `supabase/009_dropship_listings.sql` — its "9" collided with
+  `migrations/009_tenant_status_rename.sql`, a foot-gun for anyone applying
+  migrations by globbing the tree) created `dropship_listings` in the wrong
+  schema (`public`); superseded by `migrations/019_dropship_supplier_price.sql`.
 - `control-plane/001_schema.sql` — Project A (`control` schema): `control.tenants`,
   `control.admin_users`, seed admin, plus the `tenant_kaufnest` registration row.
 - `control-plane/002_grants.sql` — `GRANT USAGE`/table privileges on `control`
@@ -16,6 +22,10 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 - `control-plane/003_add_admin_email.sql` — adds nullable
   `control.tenants.admin_email`, populated by `/api/admin/provision-tenant`
   and shown in `/admin`'s tenants table.
+- `control-plane/004_admin_audit_log.sql` — creates `control.admin_audit_log`
+  (admin_email, action, tenant_id, metadata, created_at). Written to by
+  `/api/admin/impersonate` on every impersonation; not yet used by any other
+  admin action.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,
@@ -82,6 +92,13 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   app-code-gated). Also baked into `provision_tenant_schema()`. Backs the
   Users feature's Permissions modal
   (`src/app/dashboard/users/_components/PermissionsModal.tsx`).
+- `migrations/024_dropship_listings_rls_tighten.sql` — tightens
+  `tenant_kaufnest.dropship_listings` SELECT/INSERT/UPDATE RLS from "any
+  authenticated tenant member" to tenant role admin/super_admin (direct
+  `ALTER`, same KaufNest-only exception as 019/020 — this table isn't
+  provisioned for other tenants). See AUDIT_2026-07-24.md §2.5 — can't check
+  true platform-admin status here since `control.admin_users` lives in a
+  different Supabase project than this table.
 
 ## Related code
 

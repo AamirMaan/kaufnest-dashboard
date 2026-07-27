@@ -7,11 +7,16 @@ and `tenant_kaufnest` (Project B's first tenant — schema, data, RLS, grants,
 client routing) are **already provisioned live**, and
 `005_tenant_provisioning.sql` (the `provision_tenant_schema()`/
 `set_user_tenant()` functions Phase 4 dynamic provisioning depends on) is
-**applied** — see `supabase/SKILL.md` for exact apply-status per migration
-file. Outstanding migrations: see `supabase/SKILL.md` for the authoritative
-apply-status of each migration file. Apply pending migrations (004, 007, 008,
-control-plane 002/003) in the Supabase dashboards before running Phase 4–5
-features. Stripe is also outstanding.
+**applied**.
+
+**`supabase/SKILL.md`'s file-map table is the single source of truth for
+migration apply-status** — do not duplicate a specific "outstanding: X, Y, Z"
+list here, it will drift out of sync with that table as new migrations are
+added (this happened once already — see the 2026-07-24 audit — and the fix
+was to stop maintaining two lists instead of just re-syncing them). That
+table itself is **unverified against the live databases** (this repo has no
+migration ledger yet); confirm actual apply-status there directly before
+relying on it for anything load-bearing. Stripe is also outstanding.
 
 **Key rules that apply once Phase 3 DB migration is live:**
 1. Never query `public.*` — all tenant data lives in `tenant_<slug>` schemas.
@@ -19,8 +24,10 @@ features. Stripe is also outstanding.
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
 5. **Tenant schema DDL must use `run_on_all_tenant_schemas`** — never write
-   `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are 5+
-   live tenants; hardcoding one schema name leaves the rest stale. Use:
+   `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are
+   multiple live tenants (see `supabase/SKILL.md`'s intro for the current
+   named list — treat that as the source of truth, not a count repeated
+   here); hardcoding one schema name leaves the rest stale. Use:
    ```sql
    SELECT public.run_on_all_tenant_schemas($$
      ALTER TABLE {{schema}}.sales ADD COLUMN IF NOT EXISTS …;
@@ -41,8 +48,13 @@ New shared code from the migration:
 - `src/app/api/billing/` — Stripe checkout + webhook routes
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
   (server-only, never imported client-side — see its `SKILL.md`)
-- `src/app/api/integrations/` + `src/app/api/cron/sync-integrations/` —
-  connect/callback/disconnect/sync routes and the scheduled sync cron
+- `src/app/api/integrations/` — connect/callback/disconnect/review/import
+  routes. Order sync is **manual only**, via the Integrations feature's
+  "Review Orders" page — there is no scheduled/cron sync route (a
+  `src/app/api/cron/sync-integrations/` route was previously documented here
+  and in `.env.local.example`'s `CRON_SECRET`, but neither the route nor a
+  `vercel.json` crons entry was ever implemented; removed as of the
+  2026-07-24 audit rather than left as a dead reference)
 - **Pagination architecture (Phase 3):** All main data tables use server-side
   pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
   row count via `.select("*", { count: "exact" }).range(0,
