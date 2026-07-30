@@ -95,9 +95,20 @@ export async function proxy(request: NextRequest) {
     const { data: profile } = await supabase
       .schema(tenantSchema)
       .from("profiles")
-      .select("role, permission_overrides")
+      .select("role, status, permission_overrides")
       .eq("id", user.id)
-      .single<{ role: UserRole; permission_overrides: string[] | null }>();
+      .single<{ role: UserRole; status: string; permission_overrides: string[] | null }>();
+
+    // Per-user deactivation (super_admin toggle on /dashboard/users) — distinct
+    // from the whole-tenant deactivation check above. A deactivated user can
+    // still authenticate with Supabase (this proxy can't intercept that
+    // client-side call) but is bounced out of the dashboard here, same
+    // fail-open-on-missing-profile posture as the rest of this block.
+    if (profile?.status === "deactivated") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/account-suspended";
+      return NextResponse.redirect(url);
+    }
 
     const role = (profile?.role ?? "accountant") as UserRole;
 

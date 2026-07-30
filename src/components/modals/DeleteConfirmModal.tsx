@@ -11,15 +11,30 @@ interface Props {
   description: string;
   onConfirm: (reason: string) => Promise<void>;
   onClose: () => void;
+  /** Defaults to "Delete"/"Deleting…" — override for non-delete destructive actions (e.g. "Deactivate"). */
+  confirmLabel?: string;
+  confirmingLabel?: string;
+  reasonLabel?: string;
+  reasonPlaceholder?: string;
 }
 
-export function DeleteConfirmModal({ open, title, description, onConfirm, onClose }: Props) {
+export function DeleteConfirmModal({
+  open,
+  title,
+  description,
+  onConfirm,
+  onClose,
+  confirmLabel = "Delete",
+  confirmingLabel = "Deleting…",
+  reasonLabel = "Reason for Deletion",
+  reasonPlaceholder = "Briefly explain why this record is being deleted…",
+}: Props) {
   const [reason, setReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleConfirm() {
-    if (!reason.trim()) return setError("Reason for deletion is required.");
+    if (!reason.trim()) return setError(`${reasonLabel} is required.`);
     setError(null);
     setDeleting(true);
     await onConfirm(reason.trim());
@@ -44,7 +59,7 @@ export function DeleteConfirmModal({ open, title, description, onConfirm, onClos
             Cancel
           </Button>
           <Button variant="danger" type="button" onClick={handleConfirm} disabled={deleting}>
-            {deleting ? "Deleting…" : "Delete"}
+            {deleting ? confirmingLabel : confirmLabel}
           </Button>
         </>
       }
@@ -60,11 +75,11 @@ export function DeleteConfirmModal({ open, title, description, onConfirm, onClos
           </div>
         )}
 
-        <Field label="Reason for Deletion" required>
+        <Field label={reasonLabel} required>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Briefly explain why this record is being deleted…"
+            placeholder={reasonPlaceholder}
           />
         </Field>
       </div>

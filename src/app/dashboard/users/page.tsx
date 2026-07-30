@@ -2,17 +2,19 @@
 
 import { useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { updateUserRole } from "./_store/usersSlice";
+import { updateUserRole, updateUser } from "./_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { RoleBadge } from "@/components/ui/Badge";
+import { RoleBadge, StatusBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
 import { PermissionsModal } from "./_components/PermissionsModal";
-import { Pencil, RefreshCw, ShieldCheck } from "lucide-react";
+import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
+import { canDeactivateUser } from "./_lib/userStatusGuards";
+import { Pencil, RefreshCw, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -31,13 +33,16 @@ export default function UsersPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const users = useAppSelector((s) => s.users.items);
+  const currentUserId = useAppSelector((s) => s.currentUser.profile?.id);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [permissionsTarget, setPermissionsTarget] = useState<Profile | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
+  const [reactivating, setReactivating] = useState<string | null>(null);
 
   const pagedUsers = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -91,6 +96,60 @@ export default function UsersPage() {
     setChangingRole(null);
   }
 
+  async function writeStatusChange(
+    profile: Profile,
+    newStatus: Profile["status"],
+    reason?: string
+  ) {
+    const supabase = await createTenantClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ status: newStatus })
+      .eq("id", profile.id)
+      .select()
+      .single<Profile>();
+
+    if (error) {
+      toastError(
+        newStatus === "deactivated" ? "Deactivation failed" : "Reactivation failed",
+        error.message
+      );
+      return;
+    }
+
+    dispatch(updateUser(data));
+
+    const { data: { user: caller } } = await supabase.auth.getUser();
+    const log = await writeAuditLog(supabase, {
+      userId: caller!.id,
+      userEmail: caller!.email ?? "",
+      action: "status_change",
+      entityType: "user",
+      entityId: profile.id,
+      metadata: {
+        from: profile.status,
+        to: newStatus,
+        target_email: profile.email,
+        ...(reason ? { reason } : {}),
+      },
+    });
+    if (log) dispatch(addAuditLog(log));
+  }
+
+  async function handleDeactivate(reason: string) {
+    if (!deactivateTarget) return;
+    await writeStatusChange(deactivateTarget, "deactivated", reason);
+    success("User deactivated", `${deactivateTarget.email} no longer has dashboard access.`);
+    setDeactivateTarget(null);
+  }
+
+  async function handleReactivate(profile: Profile) {
+    setReactivating(profile.id);
+    await writeStatusChange(profile, "active");
+    success("User reactivated", `${profile.email} can access the dashboard again.`);
+    setReactivating(null);
+  }
+
   const columns = [
     {
       header: "Name",
@@ -109,6 +168,10 @@ export default function UsersPage() {
     {
       header: "Role",
       render: (p: Profile) => <RoleBadge role={p.role} />,
+    },
+    {
+      header: "Status",
+      render: (p: Profile) => <StatusBadge status={p.status} />,
     },
     {
       header: "Joined",
@@ -137,30 +200,54 @@ export default function UsersPage() {
     },
     {
       header: "Actions",
-      render: (p: Profile) => (
-        <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
-            <Pencil size={15} className="text-blue-500" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setPermissionsTarget(p)}
-            title="Manage permissions"
-          >
-            <ShieldCheck size={15} className="text-emerald-500" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => handleResendInvite(p)}
-            disabled={resendingInvite === p.id}
-            title="Resend invite"
-          >
-            <RefreshCw size={15} className={resendingInvite === p.id ? "animate-spin text-[var(--color-text-muted)]" : "text-teal-500"} />
-          </Button>
-        </div>
-      ),
+      render: (p: Profile) => {
+        const deactivateGuard = canDeactivateUser(p, currentUserId ?? "", users);
+        return (
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
+              <Pencil size={15} className="text-blue-500" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setPermissionsTarget(p)}
+              title="Manage permissions"
+            >
+              <ShieldCheck size={15} className="text-emerald-500" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => handleResendInvite(p)}
+              disabled={resendingInvite === p.id}
+              title="Resend invite"
+            >
+              <RefreshCw size={15} className={resendingInvite === p.id ? "animate-spin text-[var(--color-text-muted)]" : "text-teal-500"} />
+            </Button>
+            {p.status === "active" ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setDeactivateTarget(p)}
+                disabled={!deactivateGuard.allowed}
+                title={deactivateGuard.allowed ? "Deactivate user" : deactivateGuard.reason}
+              >
+                <UserX size={15} className={deactivateGuard.allowed ? "text-red-500" : "text-[var(--color-text-faint)]"} />
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => handleReactivate(p)}
+                disabled={reactivating === p.id}
+                title="Reactivate user"
+              >
+                <UserCheck size={15} className={reactivating === p.id ? "animate-spin text-[var(--color-text-muted)]" : "text-emerald-500"} />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -192,6 +279,21 @@ export default function UsersPage() {
         key={permissionsTarget?.id ?? "permissions"}
         user={permissionsTarget}
         onClose={() => setPermissionsTarget(null)}
+      />
+      <DeleteConfirmModal
+        open={!!deactivateTarget}
+        title="Deactivate User"
+        description={
+          deactivateTarget
+            ? `${deactivateTarget.full_name || deactivateTarget.email} will immediately lose dashboard access. Their existing records (sales, expenses, purchases, etc.) are not affected — this does not delete their account.`
+            : ""
+        }
+        confirmLabel="Deactivate"
+        confirmingLabel="Deactivating…"
+        reasonLabel="Reason for Deactivation"
+        reasonPlaceholder="Briefly explain why this user is being deactivated…"
+        onConfirm={handleDeactivate}
+        onClose={() => setDeactivateTarget(null)}
       />
     </div>
   );

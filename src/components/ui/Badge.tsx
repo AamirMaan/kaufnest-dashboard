@@ -24,6 +24,7 @@ const ACTION_VARIANTS: Record<AuditAction, BadgeVariant> = {
   logout: "default",
   role_change: "warning",
   permission_change: "warning",
+  status_change: "warning",
 };
 
 interface BadgeProps {
@@ -96,6 +97,8 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   delivered: "success",
   returned: "danger",
   cancelled: "warning",
+  active: "success",
+  deactivated: "danger",
 };
 
 export function StatusBadge({ status }: { status: string }) {

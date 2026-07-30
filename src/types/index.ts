@@ -2,6 +2,8 @@
 
 export type UserRole = "super_admin" | "admin" | "accountant";
 
+export type UserStatus = "active" | "deactivated";
+
 export interface Profile {
   id: string;
   email: string;
@@ -12,6 +14,10 @@ export interface Profile {
   // here (not `Permission[]`) to avoid a circular import — permissions.ts
   // imports `UserRole` from this file.
   permission_overrides: string[];
+  // Deactivating a user only revokes dashboard access (gated in src/proxy.ts)
+  // — never a hard delete, since created_by FKs on sales/expenses/purchases/
+  // etc. would block deleting any profile that's ever created a record.
+  status: UserStatus;
   created_at: string;
 }
 
@@ -122,7 +128,8 @@ export type AuditAction =
   | "login"
   | "logout"
   | "role_change"
-  | "permission_change";
+  | "permission_change"
+  | "status_change";
 
 export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product";
 

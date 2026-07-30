@@ -8,6 +8,7 @@ const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
   full_name: "Test User",
   role: "accountant",
   permission_overrides: [],
+  status: "active",
   created_at: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
@@ -75,6 +76,16 @@ describe("usersSlice", () => {
     const updated = makeProfile({ id: "u1", role: "accountant", permission_overrides: ["delete_sale"] });
     const state = reducer(initial, updateUser(updated));
     expect(state.items[0].permission_overrides).toEqual(["delete_sale"]);
+  });
+
+  it("updates a user's status via updateUser (used by the Deactivate/Reactivate actions)", () => {
+    const initial = reducer(
+      undefined,
+      hydrateUsers([makeProfile({ id: "u1", status: "active" })])
+    );
+    const deactivated = makeProfile({ id: "u1", status: "deactivated" });
+    const state = reducer(initial, updateUser(deactivated));
+    expect(state.items[0].status).toBe("deactivated");
   });
 });
 

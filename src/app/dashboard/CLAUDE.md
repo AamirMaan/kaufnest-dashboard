@@ -23,12 +23,26 @@ broadly when working on a specific feature.**
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
   **If you add a new feature with its own collection, hydrate it here.**
-- `page.tsx` — the Overview/home page (`/dashboard`). Pure aggregation: reads
-  `sales`/`expenses`/`purchases` from Redux, applies a user-controlled date-range
-  filter (`resolveDateRange` from `lib/utils/filters`, preset + custom from/to),
-  derives `effectiveSales = periodSales.filter(isRevenueSale)` (canonical
-  predicate from `lib/utils/filters` — excludes `status === "returned"` AND
-  `status === "cancelled"`) and renders:
+- `page.tsx` — the Overview/home page (`/dashboard`). **Does NOT read
+  `sales`/`expenses`/`purchases`/`platform_payouts` from Redux** — those
+  slices hold only one paginated page (50 rows, most-recent-first) each, and
+  get replaced wholesale whenever the Sales/Expenses/Purchases pages fetch a
+  different page, so this page's date-ranged aggregates would silently go
+  wrong (e.g. the VAT Position section disappearing) once a tenant had more
+  than one page of records, or had recently paged through those tables
+  elsewhere in the app (see the 2026-07-27 fix). Instead, on mount and
+  whenever the date-range filter changes, it fetches all four tables
+  directly via `createTenantClient()` (`.select("*").order("date", {
+  ascending: false }).limit(5000)`, plus `.gte`/`.lte` when a range is
+  selected — same shape as the CSV-export queries in Sales/Expenses/
+  Purchases), into **local `useState`**, not a Redux slice (page-only data,
+  no other feature needs it). `isLoading` drives the same "opacity-60
+  pointer-events-none" overlay convention used by the paginated list pages.
+  Applies a user-controlled date-range filter (`resolveDateRange` from
+  `lib/utils/filters`, preset + custom from/to) on top of the already
+  range-scoped fetch, derives `effectiveSales = periodSales.filter(isRevenueSale)`
+  (canonical predicate from `lib/utils/filters` — excludes `status === "returned"`
+  AND `status === "cancelled"`) and renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
     units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
     Collected, monthly trend revenue, Revenue by Platform, and Top Products all
@@ -58,13 +72,14 @@ broadly when working on a specific feature.**
     `pending = balance − transferred`. A "Record Transfer" button
     (admin/super_admin only) opens `RecordTransferModal`
     (`_components/RecordTransferModal.tsx`). `periodPayouts` is filtered from
-    `state.platformPayouts.items` by currency + date range.
+    the locally-fetched `payouts` state by currency + date range.
   Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
   are passed to recharts props (CSS variables don't render reliably inside SVG).
   No feature-private code — has no `_components`/`_store` of its own.
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`.
+  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
+  `lib/supabase/client` (`createTenantClient`).
 
 ## Feature folders (each documents itself — start there)
 
@@ -74,7 +89,7 @@ broadly when working on a specific feature.**
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
 | `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |
-| `users/` | `/dashboard/users` | user invites/roles/permission overrides, `usersSlice` (super_admin only) |
+| `users/` | `/dashboard/users` | user invites/roles/permission overrides/deactivation, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
 | `settings/` | `/dashboard/settings` | invoice template settings |
 | `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |

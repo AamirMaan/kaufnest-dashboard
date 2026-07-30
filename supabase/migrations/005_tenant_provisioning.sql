@@ -84,6 +84,8 @@ BEGIN
       role       text NOT NULL DEFAULT 'accountant'
                    CHECK (role IN ('super_admin', 'admin', 'accountant')),
       permission_overrides jsonb NOT NULL DEFAULT '[]'::jsonb,
+      status     text NOT NULL DEFAULT 'active'
+                   CHECK (status IN ('active', 'deactivated')),
       created_at timestamptz NOT NULL DEFAULT now()
     )
   $sql$, schema_name);

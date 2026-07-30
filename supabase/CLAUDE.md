@@ -99,6 +99,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   provisioned for other tenants). See AUDIT_2026-07-24.md §2.5 — can't check
   true platform-admin status here since `control.admin_users` lives in a
   different Supabase project than this table.
+- `migrations/025_user_status.sql` — adds `profiles.status` ('active' |
+  'deactivated', default 'active') to every tenant schema via
+  `run_on_all_tenant_schemas`; also baked into `provision_tenant_schema()`.
+  Deliberately not a delete — see the migration's header comment for why.
+  Backs the Users feature's Deactivate/Reactivate action
+  (`src/app/dashboard/users/page.tsx`), enforced in `src/proxy.ts`.
 
 ## Related code
 

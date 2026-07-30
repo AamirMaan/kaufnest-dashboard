@@ -35,6 +35,12 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   application code need no DB change at all.
 - **Pagination (client-side)**: `page.tsx` only — `page`/`pageSize` local state,
   `pagedUsers` useMemo slice, `<Pagination>` component. No slice changes needed.
+- **Deactivate/reactivate**: `page.tsx` (button + `writeStatusChange`),
+  `_lib/userStatusGuards.ts` (the block-rules), `src/proxy.ts` (the actual
+  enforcement — profiles.status check), `src/app/account-suspended/page.tsx`
+  (landing page). This is intentionally NOT a delete — see this folder's
+  CLAUDE.md "Deactivate/reactivate" section for why (FK constraints on
+  created_by across sales/expenses/purchases/etc.).
 
 ## Test command
 
@@ -49,10 +55,26 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   `s.currentUser.profile?.role` checks before changing access logic.
 - Role changes must go through `writeAuditLog` with action `role_change` —
   this is the audit trail super-admins rely on to review who changed what.
-  Permission-override changes use action `permission_change` (also add to
-  `ACTION_VARIANTS` in `components/ui/Badge.tsx` if you add a new
-  `AuditAction` — it's a `Record<AuditAction, BadgeVariant>`, TS errors if
-  you forget).
+  Permission-override changes use action `permission_change`, status changes
+  (deactivate/reactivate) use `status_change` (also add to `ACTION_VARIANTS`
+  in `components/ui/Badge.tsx` if you add a new `AuditAction` — it's a
+  `Record<AuditAction, BadgeVariant>`, TS errors if you forget).
+- **Deactivating never deletes anything** — `sales`/`expenses`/`purchases`/
+  `ebay_listing_drafts` all have `created_by uuid NOT NULL REFERENCES
+  profiles(id)` with no `ON DELETE` action, so a hard delete of any profile
+  that's ever created a record throws a Postgres FK violation. Don't add a
+  "permanently delete this user" action without first deciding how to handle
+  those references (reassign? make the column nullable + `ON DELETE SET
+  NULL` across every tenant schema via the "2 places" rule?) — this was
+  explicitly scoped OUT when the feature was built (2026-07-29).
+- `canDeactivateUser()` in `_lib/userStatusGuards.ts` is checked **client-side
+  only** (disables the button + shows the reason as a tooltip) — there is no
+  matching DB-level/RLS enforcement of "can't deactivate the last super_admin"
+  or "can't deactivate yourself". If you're worried about a race (two
+  super_admins deactivating different people simultaneously), that's a real
+  gap, but matches this codebase's existing pattern of trusting the client
+  for role-adjacent guards (e.g. permission overrides) rather than
+  duplicating every check in RLS.
 - `PermissionsModal` reuses `usersSlice`'s generic `updateUser` action (full
   profile replace) rather than a dedicated `updatePermissions` action — same
   pattern as `EditUserModal`. Don't add a new slice action for this unless
