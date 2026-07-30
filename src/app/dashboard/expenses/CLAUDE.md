@@ -91,7 +91,10 @@ editable fields.
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
   `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`), `Toast`
 - `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
-  Purchases (don't fork these; extend them if you need new shared behavior)
+  Purchases (don't fork these; extend them if you need new shared behavior —
+  `DeleteConfirmModal` also grew optional `confirmLabel`/`confirmingLabel`/
+  `reasonLabel`/`reasonPlaceholder` props for the Users feature's Deactivate
+  confirmation, all defaulting to the original "Delete" wording)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`

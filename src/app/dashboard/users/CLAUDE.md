@@ -1,22 +1,31 @@
 # Users feature
 
 Route: `/dashboard/users`. Super-admin-only user management: invite new users,
-edit profile/role, change roles (`super_admin`, `admin`, `accountant`), and
-grant per-user permission overrides beyond the role's defaults.
+edit profile/role, change roles (`super_admin`, `admin`, `accountant`), grant
+per-user permission overrides beyond the role's defaults, and
+deactivate/reactivate a user's dashboard access.
 
 ## Files in this folder
 
-- `page.tsx` — list view, role badges, wires up the modals below. Gated to
-  `super_admin` (see `lib/utils/permissions.ts`). Client-side pagination via
-  local `page`/`pageSize` state (default 25 rows/page) slicing `state.users.items`;
-  renders `<Pagination>` (`@/components/ui/Pagination`) below the `DataTable`.
-  Row actions: Edit (`EditUserModal`), Manage permissions (`PermissionsModal`,
-  `ShieldCheck` icon), Resend invite.
+- `page.tsx` — list view, role + status badges, wires up the modals below.
+  Gated to `super_admin` (see `lib/utils/permissions.ts`). Client-side
+  pagination via local `page`/`pageSize` state (default 25 rows/page) slicing
+  `state.users.items`; renders `<Pagination>` (`@/components/ui/Pagination`)
+  below the `DataTable`. Row actions: Edit (`EditUserModal`), Manage
+  permissions (`PermissionsModal`, `ShieldCheck` icon), Resend invite,
+  Deactivate/Reactivate (`UserX`/`UserCheck` icon, toggles based on
+  `p.status`) — see "Deactivate/reactivate" below.
 - `_store/usersSlice.ts` — Redux slice for `state.users` (`items`, `loaded`).
   Actions: `hydrateUsers`, `addUser`, `updateUser`, `updateUserRole`. Used
   **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/usersSlice.test.ts` — reducer tests. Run with `npx jest dashboard/users`.
+- `_lib/userStatusGuards.ts` (+ colocated test) — pure `canDeactivateUser(target,
+  currentUserId, allUsers)` helper. Blocks deactivating an already-deactivated
+  user, deactivating your own account, or deactivating the last remaining
+  active `super_admin`. `page.tsx` uses this to disable the Deactivate button
+  (with the block reason as its `title` tooltip) rather than letting the
+  write fail server-side.
 - `_components/InviteUserModal.tsx` — sends an invite (calls the API route below),
   then dispatches `addUser`.
 - `_components/EditUserModal.tsx` — edits profile fields and/or role, dispatches `updateUser`.
@@ -30,6 +39,35 @@ grant per-user permission overrides beyond the role's defaults.
   dispatches `updateUser` (reused from `usersSlice`, not a dedicated action —
   it's a full-profile replace like `EditUserModal`), and audit-logs with
   action `permission_change`.
+
+## Deactivate/reactivate (revoke access, never a hard delete)
+
+- `Profile.status: "active" | "deactivated"` (`profiles.status`, see
+  `supabase/migrations/025_user_status.sql`) — deliberately NOT a delete.
+  `sales`/`expenses`/`purchases`/`ebay_listing_drafts` all have a NOT NULL
+  `created_by REFERENCES profiles(id)` with no cascade, so hard-deleting any
+  profile that's ever created a record throws a foreign-key error. Mirrors
+  the existing whole-tenant deactivation pattern
+  (`control.tenants.status`, gated in `src/proxy.ts`) at the per-user level.
+- `page.tsx`'s Deactivate button opens the shared `DeleteConfirmModal`
+  (`components/modals/DeleteConfirmModal`, relabeled via its
+  `confirmLabel`/`reasonLabel` props — see that component's own note) and
+  requires a reason. Reactivate is a single click, no modal, no reason
+  (mirrors Resend Invite's "low-friction, easily reversible" treatment).
+  Both go through the same local `writeStatusChange()` helper in `page.tsx`:
+  write `profiles.status`, dispatch `updateUser`, `writeAuditLog` with action
+  `status_change` (metadata `{ from, to, target_email, reason? }`), dispatch
+  `addAuditLog`.
+- **`src/proxy.ts`** is what actually enforces this — it fetches
+  `role, status, permission_overrides` in one query now (previously just
+  `role, permission_overrides`) and redirects to `/account-suspended` when
+  `status === "deactivated"`, before the RBAC check. A deactivated user can
+  still authenticate with Supabase (proxy can't intercept that client-side
+  call, same as tenant-level deactivation) but is bounced out of every
+  `/dashboard/*` route immediately after.
+- `src/app/account-suspended/page.tsx` — the page they land on. Distinct from
+  `src/app/account-deactivated/page.tsx` (whole-tenant deactivation) so the
+  messaging is accurate ("a super admin on your team" vs. "your organisation").
 
 ## Related files outside this folder (cannot be colocated)
 
@@ -67,20 +105,25 @@ grant per-user permission overrides beyond the role's defaults.
    `await createTenantClient()` (`@/lib/supabase/client`), dispatch `updateUser`/`updateUserRole`.
 4. Permissions: `PermissionsModal` writes `profiles.permission_overrides`
    (jsonb array of `Permission` keys) the same way, dispatches `updateUser`.
-5. All of invite/role-change/permission-change call `writeAuditLog`
-   (`@/lib/utils/audit`) then dispatch `addAuditLog`
+5. Deactivate/reactivate: `page.tsx`'s `writeStatusChange()` writes
+   `profiles.status` the same way, dispatches `updateUser`.
+6. All of invite/role-change/permission-change/status-change call
+   `writeAuditLog` (`@/lib/utils/audit`) then dispatch `addAuditLog`
    (`@/store/slices/auditLogsSlice`) — role changes use the `role_change`
-   audit action, permission changes use `permission_change`, resend uses
-   `resend_invite`.
+   audit action, permission changes use `permission_change`, status changes
+   use `status_change`, resend uses `resend_invite`.
 
 ## Shared dependencies (live outside this folder on purpose)
 
-- `components/ui/*` — `Button`, `DataTable`, `Badge` (`RoleBadge`), `Pagination`, `FormFields` (`Checkbox`)
+- `components/ui/*` — `Button`, `DataTable`, `Badge` (`RoleBadge`, `StatusBadge`), `Pagination`, `FormFields` (`Checkbox`)
+- `components/modals/DeleteConfirmModal` — reused for the Deactivate
+  confirmation (relabeled via props); NOT shared-with-Sales/Expenses/
+  Purchases in the sense of touching the same data, just the same component
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state
 - `lib/utils/{audit,date,permissions}` — `permissions.ts` supplies
   `hasPermission`, `ALL_PERMISSIONS`/`PERMISSION_LABELS` (used by
   `PermissionsModal`)
-- `types` (`Profile`, `UserRole`)
+- `types` (`Profile`, `UserRole`, `UserStatus`)
 
 ## Permission overrides (additive per-user grants)
 
@@ -100,4 +143,5 @@ grant per-user permission overrides beyond the role's defaults.
 
 ## Tests
 
-`npx jest dashboard/users` runs `_store/usersSlice.test.ts`.
+`npx jest dashboard/users` runs `_store/usersSlice.test.ts` and
+`_lib/userStatusGuards.test.ts`.

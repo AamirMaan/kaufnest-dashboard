@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -15,11 +15,12 @@ import {
 } from "recharts";
 import { DollarSign, TrendingDown, ShoppingCart, BarChart3, Package } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
-import { type Currency } from "@/types";
+import { type Currency, type Sale, type Expense, type Purchase, type PlatformPayout } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryBadge } from "@/components/ui/Badge";
 import { useTheme } from "@/components/ui/ThemeProvider";
+import { createTenantClient } from "@/lib/supabase/client";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
@@ -27,6 +28,10 @@ import { aggregateSaleRevenue } from "./_lib/aggregateSales";
 import { computePending } from "./_lib/platformBalance";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
+
+// Row cap for each of the four queries below — matches the "capped at 5 000
+// rows" convention already used by Sales/Expenses/Purchases' CSV export.
+const OVERVIEW_ROW_CAP = 5000;
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "this_month", label: "This Month" },
@@ -74,14 +79,10 @@ function compactEur(v: number): string {
 }
 
 export default function DashboardPage() {
-  const sales = useAppSelector((s) => s.sales.items);
-  const expenses = useAppSelector((s) => s.expenses.items);
-  const purchases = useAppSelector((s) => s.purchases.items);
   const profileCurrency: Currency =
     useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const { theme } = useTheme();
 
-  const payouts = useAppSelector((s) => s.platformPayouts.items);
   const currentUserRole = useAppSelector((s) => s.currentUser.profile?.role);
   const canRecordTransfer = currentUserRole === "admin" || currentUserRole === "super_admin";
   const [transferModal, setTransferModal] = useState<"ebay" | "amazon" | null>(null);
@@ -94,6 +95,61 @@ export default function DashboardPage() {
     () => resolveDateRange(preset, dateFrom, dateTo),
     [preset, dateFrom, dateTo]
   );
+
+  // Sales/expenses/purchases/payouts for this page are fetched directly,
+  // scoped to the selected date range — NOT read from state.sales.items etc.
+  // Those Redux slices hold only ONE paginated page (50 rows, most-recent-
+  // first, see the Pagination architecture note in this folder's CLAUDE.md)
+  // and get replaced wholesale whenever the Sales/Expenses/Purchases pages
+  // fetch a different page — so deriving Overview's date-ranged aggregates
+  // from them silently produced wrong (often empty) results, e.g. the VAT
+  // Position section disappearing, once a tenant had more than one page of
+  // records or had recently paged through those tables elsewhere.
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [payouts, setPayouts] = useState<PlatformPayout[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setIsLoading(true);
+      const supabase = await createTenantClient();
+
+      let salesQuery = supabase.from("sales").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
+      let expensesQuery = supabase.from("expenses").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
+      let purchasesQuery = supabase.from("purchases").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
+      let payoutsQuery = supabase.from("platform_payouts").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
+
+      if (range) {
+        salesQuery = salesQuery.gte("date", range.from).lte("date", range.to);
+        expensesQuery = expensesQuery.gte("date", range.from).lte("date", range.to);
+        purchasesQuery = purchasesQuery.gte("date", range.from).lte("date", range.to);
+        payoutsQuery = payoutsQuery.gte("date", range.from).lte("date", range.to);
+      }
+
+      const [salesRes, expensesRes, purchasesRes, payoutsRes] = await Promise.all([
+        salesQuery.returns<Sale[]>(),
+        expensesQuery.returns<Expense[]>(),
+        purchasesQuery.returns<Purchase[]>(),
+        payoutsQuery.returns<PlatformPayout[]>(),
+      ]);
+
+      if (cancelled) return;
+      setSales(salesRes.data ?? []);
+      setExpenses(expensesRes.data ?? []);
+      setPurchases(purchasesRes.data ?? []);
+      setPayouts(payoutsRes.data ?? []);
+      setIsLoading(false);
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
 
   // Guard against multi-currency totals: only include records in the profile
   // currency so EUR + USD + GBP are never summed into a single meaningless number.
@@ -344,6 +400,8 @@ export default function DashboardPage() {
         }
       />
 
+      {/* Loading overlay — subtle opacity fade while the date-range-scoped fetch is in flight */}
+      <div className={isLoading ? "opacity-60 pointer-events-none transition-opacity" : ""}>
       {/* KPI stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard
@@ -730,6 +788,7 @@ export default function DashboardPage() {
           Use the sidebar to navigate to Orders, Expenses, and Purchases. Figures
           above reflect the selected date range and use EUR as the base currency.
         </p>
+      </div>
       </div>
 
       {transferModal !== null && (

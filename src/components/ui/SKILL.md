@@ -37,13 +37,23 @@ Domain-specific wrappers (prefer these over the base `Badge` when the value maps
 to a known domain enum — they own the label text + color mapping):
 
 - `RoleBadge({ role: UserRole })` — `super_admin`→danger, `admin`→warning, `accountant`→info
-- `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning, permission_change→warning
+- `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning, permission_change→warning, status_change→warning
 - `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`, just maps the enum to a display label
 - `PlatformBadge({ platform: Platform })` — amazon→warning, ebay→danger, etsy→success, shopify→info, other→default
+- `StatusBadge({ status: string })` — generic (not typed to a specific enum,
+  so adding a value needs no `Record<Enum,...>` TS enforcement — easy to
+  forget). Order statuses (Sales feature): pending→default, processing/
+  shipped→info, delivered→success, returned→danger, cancelled→warning; any
+  unmapped string (custom order statuses) falls back to `variant="default"`.
+  User statuses (Users feature, `Profile.status`): `active`→success,
+  `deactivated`→danger — same `STATUS_VARIANTS` map, both domains share it
+  since the string values don't collide.
 
 If you add a new value to `UserRole`/`AuditAction`/`ExpenseCategory`/`Platform`
 in `src/types/index.ts`, you must add it to the corresponding `*_LABELS`/`*_VARIANTS`
-record here too (TS will error on the `Record<Enum, ...>` if you forget).
+record here too (TS will error on the `Record<Enum, ...>` if you forget) — for
+`StatusBadge`'s `STATUS_VARIANTS` specifically, TS won't catch a missing entry
+(it's `Record<string, BadgeVariant>`), it'll just silently render `"default"`.
 
 ## DataTable.tsx
 
