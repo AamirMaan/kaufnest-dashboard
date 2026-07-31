@@ -105,6 +105,11 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   Deliberately not a delete — see the migration's header comment for why.
   Backs the Users feature's Deactivate/Reactivate action
   (`src/app/dashboard/users/page.tsx`), enforced in `src/proxy.ts`.
+- `migrations/026_ebay_messages.sql` — creates `ebay_messages` in every
+  tenant schema via `run_on_all_tenant_schemas` (also baked into
+  `provision_tenant_schema()`); admin/super_admin-only RLS, same bar as
+  `ebay_listing_drafts`. Backs the Messages feature
+  (`src/app/dashboard/messages/`, `src/lib/integrations/ebay/messages.ts`).
 
 ## Related code
 

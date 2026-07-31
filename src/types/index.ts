@@ -131,7 +131,7 @@ export type AuditAction =
   | "permission_change"
   | "status_change";
 
-export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product";
+export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message";
 
 export interface AuditLog {
   id: string;
@@ -282,6 +282,25 @@ export interface EbayListingDraft {
   ebay_listing_id: string | null;
   publish_error: string | null;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── eBay Messages ────────────────────────────────────────────────────────────
+
+export type MessageDirection = "inbound" | "outbound";
+
+export interface EbayMessage {
+  id: string;
+  external_message_id: string | null;
+  item_id: string;
+  buyer_username: string;
+  direction: MessageDirection;
+  subject: string | null;
+  body: string;
+  question_type: string | null;
+  is_read: boolean;
+  ebay_created_at: string;
   created_at: string;
   updated_at: string;
 }

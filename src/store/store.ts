@@ -11,6 +11,7 @@ import { integrationsSlice } from "@/app/dashboard/integrations/_store/integrati
 import { dropshippingSlice } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
 import { platformPayoutsSlice } from "./slices/platformPayoutsSlice";
 import { listingsSlice } from "@/app/dashboard/listings/_store/listingsSlice";
+import { messagesSlice } from "@/app/dashboard/messages/_store/messagesSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -27,6 +28,7 @@ export const makeStore = () =>
       dropshipping: dropshippingSlice.reducer,
       platformPayouts: platformPayoutsSlice.reducer,
       listings: listingsSlice.reducer,
+      messages: messagesSlice.reducer,
     },
   });
 

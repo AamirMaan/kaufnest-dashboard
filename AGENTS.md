@@ -183,6 +183,8 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections + `integrationsSlice` (Pro/Business plans only; admin/super_admin only) |
 | `src/app/dashboard/planner/` | `/dashboard/planner` | order/inventory planning tools |
 | `src/app/dashboard/dropshipping/` | `/dashboard/dropshipping` | dropshipping supplier listings + sync |
+| `src/app/dashboard/listings/` | `/dashboard/listings` | eBay listing creation (draft → publish) + `listingsSlice` (Pro/Business plans only; `manage_listings` permission) |
+| `src/app/dashboard/messages/` | `/dashboard/messages` | eBay buyer message sync/reply + `messagesSlice` (Pro/Business plans only; `manage_messages` permission) |
 
 Each feature folder follows the same shape (where it has private code):
 

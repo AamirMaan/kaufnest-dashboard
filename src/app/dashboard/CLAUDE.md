@@ -8,7 +8,9 @@ broadly when working on a specific feature.**
 
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
-  (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**/**platform_connections**)
+  (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**/
+  **platform_connections**/dropship_listings/platform_payouts/
+  ebay_listing_drafts/**ebay_messages**)
   from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
   individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
   cookie, and calls `isPlatformAdmin(user.email)` (`@/lib/supabase/control`) to
@@ -94,6 +96,7 @@ broadly when working on a specific feature.**
 | `settings/` | `/dashboard/settings` | invoice template settings |
 | `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |
 | `listings/` | `/dashboard/listings` | eBay listing creation (draft → publish), `listingsSlice` (Pro/Business plans only, `manage_listings` permission) |
+| `messages/` | `/dashboard/messages` | eBay buyer message sync/reply, `messagesSlice` (Pro/Business plans only, `manage_messages` permission) |
 
 ## Shared shell components (live outside, in `src/components/layout/`)
 

@@ -287,6 +287,23 @@ BEGIN
     )
   $sql$, schema_name);
 
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.ebay_messages (
+      id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      external_message_id   text,
+      item_id                text NOT NULL,
+      buyer_username         text NOT NULL,
+      direction              text NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+      subject                text,
+      body                   text NOT NULL,
+      question_type          text,
+      is_read                boolean NOT NULL DEFAULT false,
+      ebay_created_at        timestamptz NOT NULL,
+      created_at             timestamptz NOT NULL DEFAULT now(),
+      updated_at             timestamptz NOT NULL DEFAULT now()
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
@@ -295,6 +312,7 @@ BEGIN
   EXECUTE format('CREATE OR REPLACE TRIGGER set_products_updated_at BEFORE UPDATE ON %1$I.products FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_platform_connections_updated_at BEFORE UPDATE ON %1$I.platform_connections FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
   EXECUTE format('CREATE OR REPLACE TRIGGER set_ebay_listing_drafts_updated_at BEFORE UPDATE ON %1$I.ebay_listing_drafts FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
+  EXECUTE format('CREATE OR REPLACE TRIGGER set_ebay_messages_updated_at BEFORE UPDATE ON %1$I.ebay_messages FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
 
   -- ── 3. Tenant-membership + role helper functions ──────────
   -- is_tenant_member(): caller's JWT app_metadata.tenant_schema must equal
@@ -436,7 +454,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts', 'ebay_messages']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -501,6 +519,9 @@ BEGIN
   -- ebay_listing_drafts — admin/super_admin only, all operations (mirrors platform_connections)
   EXECUTE format('CREATE POLICY "ebay_listing_drafts_all_admin" ON %1$I.ebay_listing_drafts FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
+  -- ebay_messages — admin/super_admin only, all operations (mirrors ebay_listing_drafts)
+  EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,
   -- 004_performance_indexes.sql) — every tenant gets the growth-oriented
@@ -541,6 +562,8 @@ BEGIN
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_status ON %1$I.ebay_listing_drafts (status)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_created_by ON %1$I.ebay_listing_drafts (created_by)', schema_name);
+  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_ebay_messages_external_id ON %1$I.ebay_messages (external_message_id) WHERE external_message_id IS NOT NULL', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_messages_thread ON %1$I.ebay_messages (buyer_username, item_id, ebay_created_at)', schema_name);
 
   -- ── 7. Grants ───────────────────────────────────────────────
   -- create schema does NOT grant anything by default — without this every

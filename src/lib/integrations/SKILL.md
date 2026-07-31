@@ -35,6 +35,14 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
 - `ebay/publicKey.ts`, `ebay/verifyNotificationSignature.ts` — support the
   `/api/notifications/ebay-account-deletion` webhook's signature check, not
   the main OAuth/sync flow — see "eBay account-deletion webhook" below.
+- `ebay/tradingApi.ts` — shared eBay Trading API (legacy XML) helper:
+  `tradingApiCall()`, `tagText()`/`decodeXml()`/`escapeXml()`. Extracted from
+  `ebay/listings.ts` when `ebay/messages.ts` needed the same auth/
+  error-handling — both files import from here now, neither defines its own
+  copy. See "eBay messages (Trading API)" below.
+- `ebay/messages.ts` — `fetchMemberMessages()`/`replyToMessage()`, backs the
+  Messages feature (`src/app/dashboard/messages/`). See "eBay messages
+  (Trading API)" below.
 
 ## The `PlatformAdapter` interface
 
@@ -131,6 +139,33 @@ their eBay account, so it authenticates the caller before doing anything:
 - Gotcha: signature verification needs the **raw request body bytes**
   (`req.text()`), not the parsed JSON — `JSON.parse` happens only after the
   signature check passes.
+
+## eBay messages (Trading API)
+
+There's no REST endpoint for general buyer<->seller messaging — eBay's
+Post-Order API only covers returns/INR-dispute messages. General "question
+about an item" messages live in the legacy **Trading API**
+(`GetMemberMessages` to read, `AddMemberMessageRTQ` to reply), the same API
+`ebay/listings.ts` already uses for `GetMyeBaySelling`. `ebay/tradingApi.ts`
+now holds the shared `tradingApiCall()`/XML-entity helpers both files use.
+
+- **Reuses the existing `sell.inventory` scope** — no new scope was added to
+  `EBAY_SCOPE` in `ebay.ts`. This is unverified against a live eBay account
+  (no sandbox test message data was available at implementation time); if
+  Trading API messaging calls turn out to need a scope `sell.inventory`
+  doesn't cover, `tradingApiCall()`'s existing token-error handling
+  (`21916984`/`21917053`/`931`/`932` → "disconnect and reconnect" message)
+  will surface it, but reconnecting alone won't fix it — see
+  `src/app/dashboard/messages/SKILL.md`'s gotchas for the full explanation.
+- **Reply-only in v1** — `replyToMessage()` wraps `AddMemberMessageRTQ`
+  (respond to an existing message, needs its `ParentMessageID`). Starting a
+  new conversation (`AddMemberMessageAAQToPartner`) isn't implemented.
+- **No push sync** — same manual-only model as order review (no cron infra
+  in this codebase). A user must click "Sync messages" in the Messages
+  feature to pull new buyer messages in.
+- User-supplied reply text is escaped via `escapeXml()`
+  (`ebay/tradingApi.ts`) before being interpolated into the request XML —
+  required since it's free text that could contain `&`/`<`/`>`.
 
 ## Merge rule (re-import field ownership)
 

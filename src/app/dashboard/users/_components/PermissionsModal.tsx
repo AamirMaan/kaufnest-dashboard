@@ -40,7 +40,7 @@ const PERMISSION_GROUPS: { title: string; permissions: Permission[] }[] = [
   },
   {
     title: "Platform integrations",
-    permissions: ["manage_integrations", "manage_listings"],
+    permissions: ["manage_integrations", "manage_listings", "manage_messages"],
   },
 ];
 
