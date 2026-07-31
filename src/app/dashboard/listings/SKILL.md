@@ -107,6 +107,15 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   dropdowns (not an error) if the connected eBay account has none. There's
   no in-app guidance for setting these up on eBay's side; the design spec's
   "Approach" section explains why this was assumed rather than solved for.
+  **Distinguish this from a 403** (`fetchBusinessPolicies` failing outright
+  with errorId 1100 "Insufficient permissions") — that's not "no policies
+  configured," it's the connection missing the `sell.account` OAuth scope
+  (fixed by adding it to `EBAY_SCOPE` in `ebay.ts`, but any connection made
+  *before* that fix still lacks it and needs to disconnect/reconnect in
+  Integrations — a code deploy alone doesn't retroactively add scope to an
+  already-issued token). Unlike category search (see above), this one
+  correctly uses the tenant's own user token — Business Policies really are
+  seller-specific, an application token wouldn't work here.
 - **Single marketplace, hardcoded via `EBAY_MARKETPLACE_ID` env var**
   (`lib/integrations/ebay/publish.ts`, defaults `"EBAY_DE"`) — every draft
   publishes to the same marketplace regardless of `draft.currency`. Setting
