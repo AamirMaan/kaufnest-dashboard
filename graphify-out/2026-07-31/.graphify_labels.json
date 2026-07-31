@@ -128,17 +128,5 @@
   "126": "Listings feature",
   "127": "FilterBar.tsx",
   "128": "Listings feature playbook",
-  "129": "DataTable.tsx",
-  "130": "encrypt-existing-tokens.mjs",
-  "131": "Messages feature playbook",
-  "132": "eslint-config-next",
-  "133": "husky",
-  "134": "@playwright/test",
-  "135": "tailwindcss",
-  "136": "ts-jest",
-  "137": "@types/jest",
-  "138": "@types/node",
-  "139": "@types/react",
-  "140": "typescript",
-  "141": "page.tsx"
+  "129": "DataTable.tsx"
 }
