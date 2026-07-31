@@ -25,6 +25,8 @@ const PERMISSIONS = {
   manage_integrations: ["super_admin", "admin"],
   // eBay listing creation/publishing
   manage_listings: ["super_admin", "admin"],
+  // eBay buyer message sync/reply
+  manage_messages: ["super_admin", "admin"],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -50,6 +52,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   view_analytics: "View analytics",
   manage_integrations: "Manage platform integrations (eBay/Amazon)",
   manage_listings: "Create and publish eBay listings",
+  manage_messages: "Reply to and manage eBay messages",
 };
 
 /**
