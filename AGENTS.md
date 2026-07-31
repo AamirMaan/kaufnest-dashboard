@@ -81,10 +81,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## During development (feature work)
 
-- **Don't start the dev server or `curl` routes to verify functionality.** Instead,
-  add/extend unit tests in the feature's `_store/` (or `_components/`/lib) folder
-  alongside the code you changed, then ask the user to manually exercise the feature
-  in the browser and report back what they see.
+- **Don't start the dev server yourself or `curl` routes to verify functionality**
+  (i.e. don't shell out to `next dev`/`curl`). Instead, add/extend unit tests in the
+  feature's `_store/` (or `_components/`/lib) folder alongside the code you changed.
+  If the Playwright MCP server (`.mcp.json`) is connected and `npm run dev` is
+  already running, using it to drive a real browser for verification is fine and
+  encouraged — that's a connected tool, not the agent starting a server. Otherwise,
+  ask the user to manually exercise the feature in the browser and report back what
+  they see.
 - **Don't run `npm test`, `npx tsc --noEmit`, or `npm run lint` mid-task** just to
   check your work. Ask the user to run the relevant test command and paste output
   back. Running these repeatedly burns tokens on output the user can capture in one

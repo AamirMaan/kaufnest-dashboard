@@ -62,6 +62,13 @@ not a confirmed live check. Confirm on the actual Project A/B databases
 before treating any specific migration as safely skippable. All ⏳ entries
 are additive/idempotent and safe to run anytime, in file-number order.
 
+**Confirming apply-status is no longer guesswork** — `.mcp.json`'s
+`supabase-data`/`supabase-control` servers (read-only) can query
+`information_schema.columns`/`information_schema.tables` directly against
+both live projects. E.g. to confirm migration 025 is applied to a given
+tenant schema, check whether `<schema>.profiles` has a `status` column.
+Prefer this over updating this table from memory/assumption.
+
 ## Apply order (for a fresh Project B, disaster recovery)
 
 1. `001_init.sql`

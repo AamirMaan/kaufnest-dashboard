@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "supabase-data": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=ytutoqhgkfrwobxqtyci&read_only=true&features=database,debugging"
+    },
+    "supabase-control": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=hijxwwjnpyqnbyjqyplw&read_only=true&features=database,debugging"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}
