@@ -8,11 +8,17 @@ const EBAY_AUTH_URL = SANDBOX
 const EBAY_TOKEN_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
 const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
 // sell.inventory (full, not .readonly) is required for Trading API calls
-// (GetMyeBaySelling in listings.ts). Connections authorised with the old
-// readonly scope must be disconnected and reconnected.
+// (GetMyeBaySelling in listings.ts). sell.account is required for the
+// Business Policies endpoints (fetchBusinessPolicies in publish.ts —
+// /sell/account/v1/{fulfillment,payment,return}_policy), which 403 with
+// errorId 1100 ("Insufficient permissions") without it. Connections
+// authorised before either scope was added must be disconnected and
+// reconnected — a code deploy alone does not retroactively grant scopes to
+// an already-issued token/refresh-token pair.
 const EBAY_SCOPE =
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment" +
-  " https://api.ebay.com/oauth/api_scope/sell.inventory";
+  " https://api.ebay.com/oauth/api_scope/sell.inventory" +
+  " https://api.ebay.com/oauth/api_scope/sell.account";
 
 interface EbayTokenResponse {
   access_token: string;

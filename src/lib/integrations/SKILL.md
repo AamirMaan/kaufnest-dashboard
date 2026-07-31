@@ -241,6 +241,16 @@ lookup against existing `sales` rows.
   `exchangeCode` pass `redirect_uri=process.env.EBAY_RU_NAME` (eBay's "RuName"
   identifier from the developer portal) — don't swap in
   `NEXT_PUBLIC_APP_URL`-based URLs for eBay.
+- **`EBAY_SCOPE` (`ebay.ts`) has grown twice already** — started with just
+  `sell.fulfillment` (order sync), then `sell.inventory` (Trading API calls
+  in `listings.ts`), then `sell.account` (Business Policies in
+  `publish.ts`). Each addition invalidates every already-connected tenant's
+  eBay connection — a code deploy doesn't retroactively grant a new scope to
+  an existing token/refresh-token pair, the tenant must disconnect and
+  reconnect eBay in Integrations. If a REST call starts 403ing with
+  `errorId 1100`/`"Insufficient permissions"` after adding a new eBay
+  feature, check whether it needs a scope not yet in `EBAY_SCOPE` before
+  assuming the bug is elsewhere.
 - **Amazon OAuth uses two different ids**: `AMAZON_APP_ID` (SP-API application
   id, `amzn1.sellerapps.app…`) goes on the consent URL's `application_id`
   param; `AMAZON_LWA_CLIENT_ID`/`_SECRET` (`amzn1.application-oa2-client…`)
