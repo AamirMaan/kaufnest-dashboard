@@ -20,6 +20,7 @@ import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrat
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
 import { hydratePayouts } from "@/store/slices/platformPayoutsSlice";
 import { hydrateListingDrafts } from "@/app/dashboard/listings/_store/listingsSlice";
+import { hydrateMessages } from "@/app/dashboard/messages/_store/messagesSlice";
 import type {
   Sale,
   Expense,
@@ -33,6 +34,7 @@ import type {
   DropshipListing,
   PlatformPayout,
   EbayListingDraft,
+  EbayMessage,
 } from "@/types";
 
 interface StoreProviderProps {
@@ -53,6 +55,7 @@ interface StoreProviderProps {
   dropshipListings?: DropshipListing[];
   platformPayouts?: PlatformPayout[];
   listingDrafts?: { data: EbayListingDraft[]; count: number };
+  messages?: { data: EbayMessage[]; count: number };
 }
 
 export function StoreProvider({
@@ -71,6 +74,7 @@ export function StoreProvider({
   dropshipListings,
   platformPayouts,
   listingDrafts,
+  messages,
 }: StoreProviderProps) {
   const [store] = useState(() => {
     const store = makeStore();
@@ -88,6 +92,7 @@ export function StoreProvider({
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));
     if (listingDrafts)     store.dispatch(hydrateListingDrafts({ data: listingDrafts.data, count: listingDrafts.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
+    if (messages)          store.dispatch(hydrateMessages({ data: messages.data, count: messages.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     return store;
   });
 

@@ -19,6 +19,7 @@ import type {
   DropshipListing,
   PlatformPayout,
   EbayListingDraft,
+  EbayMessage,
 } from "@/types";
 
 export default async function DashboardLayout({
@@ -76,6 +77,7 @@ export default async function DashboardLayout({
     { data: dropshipListings },
     { data: platformPayoutsData },
     { data: listingDraftsData, count: listingDraftsCount },
+    { data: messagesData, count: messagesCount },
   ] = await Promise.all([
     supabase
       .from("sales")
@@ -148,6 +150,12 @@ export default async function DashboardLayout({
       .order("created_at", { ascending: false })
       .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<EbayListingDraft[]>(),
+    supabase
+      .from("ebay_messages")
+      .select("*", { count: "exact" })
+      .order("ebay_created_at", { ascending: false })
+      .range(0, DEFAULT_PAGE_SIZE - 1)
+      .returns<EbayMessage[]>(),
   ]);
 
   // Read impersonation cookie — set by /api/admin/impersonate
@@ -186,6 +194,7 @@ export default async function DashboardLayout({
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       platformPayouts={platformPayoutsData ?? []}
       listingDrafts={{ data: listingDraftsData ?? [], count: listingDraftsCount ?? 0 }}
+      messages={{ data: messagesData ?? [], count: messagesCount ?? 0 }}
     >
       <ToastProvider>
         <DashboardShell

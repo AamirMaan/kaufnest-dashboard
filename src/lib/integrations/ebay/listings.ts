@@ -6,16 +6,10 @@
 // old, inactive listings that eBay no longer allows editing. GetMyeBaySelling has
 // no such restriction and returns every active listing regardless of SKU.
 //
-// Auth: uses the same OAuth user access token, passed via the X-EBAY-API-IAF-TOKEN
-// header. Requires the sell.inventory OAuth scope (readonly is NOT sufficient for
-// Trading API calls) — existing connections must be re-authorised after the scope
-// change in src/lib/integrations/ebay.ts.
+// Auth/error-handling shared with messages.ts via ./tradingApi.
 
-const SANDBOX = process.env.EBAY_SANDBOX === "true";
-const TRADING_API_URL = SANDBOX
-  ? "https://api.sandbox.ebay.com/ws/api.dll"
-  : "https://api.ebay.com/ws/api.dll";
-const COMPATIBILITY_LEVEL = "1193";
+import { tradingApiCall, tagText, decodeXml } from "./tradingApi";
+
 const ENTRIES_PER_PAGE = 200;
 const MAX_PAGES = 10; // safety cap: 2000 listings
 
@@ -27,64 +21,6 @@ export interface EbayListing {
   currentPrice: number;
   currency: string;
   sku: string | null;
-}
-
-/** Extracts the text content of the first occurrence of <tag> in the given XML fragment. */
-function tagText(xml: string, tag: string): string | null {
-  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`));
-  return match ? match[1].trim() : null;
-}
-
-/** Decodes the five predefined XML entities eBay uses in text fields. */
-function decodeXml(text: string): string {
-  return text
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&");
-}
-
-async function tradingApiCall(
-  callName: string,
-  requestXml: string,
-  token: string
-): Promise<string> {
-  const res = await fetch(TRADING_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml",
-      "X-EBAY-API-CALL-NAME": callName,
-      "X-EBAY-API-COMPATIBILITY-LEVEL": COMPATIBILITY_LEVEL,
-      "X-EBAY-API-SITEID": "0",
-      "X-EBAY-API-IAF-TOKEN": token,
-    },
-    body: requestXml,
-  });
-
-  const xml = await res.text();
-
-  if (!res.ok) {
-    throw new Error(`eBay Trading API request failed: ${res.status} ${xml.slice(0, 500)}`);
-  }
-
-  const ack = tagText(xml, "Ack");
-  if (ack === "Failure") {
-    const message = tagText(xml, "LongMessage") ?? tagText(xml, "ShortMessage") ?? "Unknown error";
-    const errorCode = tagText(xml, "ErrorCode") ?? "";
-
-    // 21916984 = token scope insufficient; 21917053 / 931 = invalid/hard-expired IAF token.
-    if (["21916984", "21917053", "931", "932"].includes(errorCode)) {
-      throw new Error(
-        "eBay rejected the access token — your eBay connection needs re-authorization. " +
-        "Go to Integrations, disconnect eBay, and reconnect to grant the required permissions."
-      );
-    }
-
-    throw new Error(`eBay Trading API error ${errorCode}: ${decodeXml(message)}`);
-  }
-
-  return xml;
 }
 
 function buildGetMyeBaySellingRequest(pageNumber: number): string {

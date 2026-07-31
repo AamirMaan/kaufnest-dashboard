@@ -16,6 +16,7 @@ import {
   Calculator,
   Package,
   Tag,
+  MessageSquare,
   X,
   ChevronLeft,
   ChevronRight,
@@ -88,6 +89,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Listings",
     href: "/dashboard/listings",
     Icon: Tag,
+    roles: ["super_admin", "admin", "accountant"],
+  },
+  {
+    label: "Messages",
+    href: "/dashboard/messages",
+    Icon: MessageSquare,
     roles: ["super_admin", "admin", "accountant"],
   },
   {
