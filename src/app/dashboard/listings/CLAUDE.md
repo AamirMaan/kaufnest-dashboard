@@ -89,11 +89,13 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
-  (`searchCategories`, `fetchBusinessPolicies`, `publishListing`). Note:
-  `lib/integrations/ebay/listings.ts` (Trading API `fetchActiveListings`) is
-  a pre-existing file used by the Dropshipping feature, not this one — only
-  referenced here in a comment in `generateSku.ts` explaining the SKU
-  charset choice.
+  (`searchCategories`, `fetchBusinessPolicies`, `publishListing`).
+  `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
+  token internally, not the tenant's connection token — see SKILL.md's
+  gotcha. Note: `lib/integrations/ebay/listings.ts` (Trading API
+  `fetchActiveListings`) is a pre-existing file used by the Dropshipping
+  feature, not this one — only referenced here in a comment in
+  `generateSku.ts` explaining the SKU charset choice.
 - Supabase Storage bucket `listing-images` (new — see `supabase/SKILL.md`)
 - `types` (`EbayListingDraft`, `ListingSourceType`, `ListingCondition`,
   `ListingStatus`)

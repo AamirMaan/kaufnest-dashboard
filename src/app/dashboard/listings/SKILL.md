@@ -30,6 +30,23 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 
 ## Gotchas
 
+- **Category search needs an application token, not the seller's user
+  token — fixed.** `searchCategories` (Taxonomy API,
+  `lib/integrations/ebay/publish.ts`) used to be called with the tenant's
+  eBay connection's user access token, which 403s (errorId 1100,
+  "Insufficient permissions") because that token is only authorized with
+  `sell.fulfillment`/`sell.inventory`, not the base
+  `https://api.ebay.com/oauth/api_scope` the Taxonomy API checks for.
+  Category trees are global eBay catalog data, not seller-specific, so the
+  fix was an eBay *application* token (client_credentials grant) via the
+  new `lib/integrations/ebay/appToken.ts` — same pattern already used by
+  `publicKey.ts` for the same reason. The route
+  (`app/api/listings/ebay/categories/route.ts`) still checks the tenant has
+  a connected eBay account first (UX gate — no point letting someone search
+  categories before they've connected eBay), it just no longer needs to
+  refresh/pass that connection's token into `searchCategories` itself.
+  `fetchBusinessPolicies` (Account API) is genuinely seller-specific and
+  correctly still uses the user token — don't "fix" that one the same way.
 - **`AuditEntity` has no `"listing"` value.** `types/index.ts`'s
   `AuditEntity` is `"expense" | "purchase" | "sale" | "user" | "product"` —
   adding a 6th value is a one-line, low-risk change but wasn't done for v1 to

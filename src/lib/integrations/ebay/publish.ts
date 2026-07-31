@@ -1,5 +1,6 @@
 import type { EbayListingDraft } from "@/types";
 import { buildInventoryItemPayload, buildOfferPayload } from "./publishPayloads";
+import { getApplicationToken } from "./appToken";
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -50,10 +51,13 @@ const CATEGORY_TREE_ID = process.env.EBAY_CATEGORY_TREE_ID || "77";
 // required-but-unvalidated eBay fields in this file.
 const MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY || "";
 
-export async function searchCategories(
-  accessToken: string,
-  query: string
-): Promise<CategorySuggestion[]> {
+// Taxonomy API category trees are global eBay catalog data, not scoped to
+// any seller — uses an application token (getApplicationToken()), not the
+// tenant's user token, which lacks the base https://api.ebay.com/oauth/api_scope
+// this endpoint requires (a user token here 403s with errorId 1100
+// "Insufficient permissions").
+export async function searchCategories(query: string): Promise<CategorySuggestion[]> {
+  const accessToken = await getApplicationToken();
   const params = new URLSearchParams({ q: query });
   const res = await ebayFetch(
     `/commerce/taxonomy/v1/category_tree/${CATEGORY_TREE_ID}/get_category_suggestions?${params.toString()}`,

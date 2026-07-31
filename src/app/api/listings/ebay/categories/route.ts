@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
-import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
-import { ebayAdapter } from "@/lib/integrations/ebay";
+import { getConnection } from "@/lib/integrations/tokenStore";
 import { searchCategories } from "@/lib/integrations/ebay/publish";
 
 export async function GET(req: NextRequest) {
@@ -14,6 +13,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing q parameter" }, { status: 400 });
   }
 
+  // Category search uses an eBay application token (see searchCategories),
+  // not this connection's user token — still require a connected eBay
+  // account so category search isn't usable before Integrations is set up.
   const conn = await getConnection(client, "ebay");
   if (!conn || conn.status !== "connected") {
     return NextResponse.json(
@@ -22,18 +24,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  let accessToken: string;
   try {
-    accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to refresh eBay token" },
-      { status: 500 }
-    );
-  }
-
-  try {
-    const categories = await searchCategories(accessToken, query);
+    const categories = await searchCategories(query);
     return NextResponse.json({ categories });
   } catch (err) {
     return NextResponse.json(

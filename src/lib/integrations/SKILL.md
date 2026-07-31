@@ -35,6 +35,14 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
 - `ebay/publicKey.ts`, `ebay/verifyNotificationSignature.ts` — support the
   `/api/notifications/ebay-account-deletion` webhook's signature check, not
   the main OAuth/sync flow — see "eBay account-deletion webhook" below.
+- `ebay/appToken.ts` — `getApplicationToken()`, an eBay *application*
+  access token (client_credentials grant, cached in-process). For calls
+  against global/public eBay data rather than a specific seller's account —
+  currently `publish.ts`'s `searchCategories` (Taxonomy API) and
+  `publicKey.ts` (notification signing key). A per-tenant user token 403s
+  on these (errorId 1100) since it's only authorized with
+  `sell.fulfillment`/`sell.inventory`, not the base
+  `https://api.ebay.com/oauth/api_scope` these endpoints check for.
 - `ebay/tradingApi.ts` — shared eBay Trading API (legacy XML) helper:
   `tradingApiCall()`, `tagText()`/`decodeXml()`/`escapeXml()`. Extracted from
   `ebay/listings.ts` when `ebay/messages.ts` needed the same auth/
