@@ -118,11 +118,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   + delete policies (023), ebay_messages table + trigger + indexes + RLS (026).
 - `migrations/028_notifications.sql` — creates `notifications` and
   `notification_reads` tables in every tenant schema via `run_on_all_tenant_schemas`
-  (one event row per user, visibility resolved per-reader by RLS policy; no
+  (one row per EVENT, visibility resolved per-reader by RLS policy; no
   insert/update/delete policy on `notifications` — only SECURITY DEFINER triggers
-  write there); adds `profiles.notifications_read_through` column; includes 3
-  indexes and grants for `authenticated`. Also baked into `provision_tenant_schema()`
-  for future tenants. Backs the Notifications feature.
+  in the next migration write there); adds `profiles.notifications_read_through`
+  column; includes 3 indexes and explicit revoke of inherited default privileges.
+  Baking into `provision_tenant_schema()` is a separate later task. Backs the
+  Notifications feature.
 
 ## Related code
 

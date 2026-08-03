@@ -5,12 +5,13 @@
 -- resolved per reader by RLS, so the client needs no permission logic at all —
 -- a plain `select` returns exactly what the current user may see.
 --
--- Rows are written ONLY by the triggers in this file, which are SECURITY
--- DEFINER and owned by the schema owner (owners bypass RLS). There is
--- deliberately NO insert policy for `authenticated` — users must never be able
--- to forge a notification.
+-- Rows are written ONLY by the triggers in the following migration (029),
+-- which are SECURITY DEFINER and owned by the schema owner (owners bypass RLS).
+-- There is deliberately NO insert policy for `authenticated` — users must never
+-- be able to forge a notification.
 --
--- Also baked into provision_tenant_schema() (005) — see the 2-places rule.
+-- NOTE: adding this schema to provision_tenant_schema() (005) is a separate
+-- later task, not included in this migration. See the 2-places rule.
 -- ============================================================
 
 select public.run_on_all_tenant_schemas($$
@@ -82,4 +83,9 @@ select public.run_on_all_tenant_schemas($$
   -- fails with 42501 BEFORE RLS is even evaluated.
   grant select on {{schema}}.notifications to authenticated;
   grant select, insert, delete on {{schema}}.notification_reads to authenticated;
+
+  -- Revoke default privileges inherited from ALTER DEFAULT PRIVILEGES: this table
+  -- must never allow insert/update/delete even if default privileges grant them.
+  -- RLS alone is insufficient; privileges must match intent.
+  revoke insert, update, delete on {{schema}}.notifications from authenticated, anon;
 $$);
