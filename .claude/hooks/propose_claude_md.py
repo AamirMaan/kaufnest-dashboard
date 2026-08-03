@@ -1,16 +1,20 @@
-"""Stop hook — the *trigger* half of the self-improving AI Layer.
+"""Stop hook: notice when a turn's changes might have staled a CLAUDE.md/SKILL.md.
 
-After each Claude turn, checks which CLAUDE.md-governed areas were touched by
-`git diff HEAD`, deduplicates via a diff fingerprint, and spawns the reflector
-in the background if something new changed.
+Cheap and deterministic — no LLM call here. It collects the turn's changed
+paths, maps them onto folders that own a CLAUDE.md or SKILL.md, and if any were
+touched, hands off to reflect_claude_md.py (which makes the actual judgment
+call) as a detached background process so this hook returns immediately.
 
-Three guards keep it well-behaved:
-  * Recursion guard — HELPLINE_AILAYER_REFLECT_LOCK makes this no-op when set.
-  * Dedup — fingerprint of `git diff HEAD` skips re-reflecting on a diff
-    already handled this session.
-  * Fallback — if `uv` is missing, exits cleanly without crashing.
+Guards, in the order they fire:
+  * CLAUDE_MD_REFLECT_LOCK — set by this hook on the child; if it is already
+    set, this process *is* the child and must not re-trigger.
+  * Nothing changed — no diff, no untracked files, nothing to review.
+  * Docs-only change — Claude just updated CLAUDE.md/SKILL.md, which is the
+    intended end state, not drift.
+  * Fingerprint file — skips a change set already reviewed.
+  * Missing `uv` — falls back to a static note instead of crashing.
 
-Tested standalone: `uv run python .claude/hooks/propose_claude_md.py`
+Run manually: uv run .claude/hooks/propose_claude_md.py
 """
 import hashlib
 import json
@@ -19,88 +23,88 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
 
-def run(cmd):
-    return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+from _areas import (  # noqa: E402
+    areas_touched_by,
+    changed_paths,
+    governed_areas,
+    is_doc_only,
+    repo_root,
+)
 
-
-def find_claude_md_areas(root: Path) -> list[str]:
-    areas = []
-    for p in root.rglob("CLAUDE.md"):
-        rel = p.parent.relative_to(root)
-        parts = rel.parts
-        if parts and parts[0] == ".claude":
-            continue
-        areas.append(str(rel))
-    return sorted(areas)
-
-
-def map_files_to_areas(files: list[str], areas: list[str]) -> list[str]:
-    touched = set()
-    for f in files:
-        for area in areas:
-            if f == area or f.startswith(area + "/"):
-                touched.add(area)
-    return sorted(touched)
+FINGERPRINT_FILE = ".claude/.claude_md_review_fingerprint"
+REVIEW_FILE = ".claude/claude-md-review.md"
+LOCK_VAR = "CLAUDE_MD_REFLECT_LOCK"
 
 
-def main():
-    # Recursion guard
-    if os.environ.get("HELPLINE_AILAYER_REFLECT_LOCK"):
+def fingerprint_of(diff: str, changed: list[str]) -> str:
+    """Identify this change set by content *and* file list.
+
+    Untracked files contribute no diff text, so hashing the diff alone would
+    treat "added three new components" as identical to "changed nothing".
+    """
+    payload = diff + "\n".join(changed)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def main() -> None:
+    if os.environ.get(LOCK_VAR):
         sys.exit(0)
 
-    # Drain stdin (Claude Code sends session JSON to Stop hooks)
+    # Stop hooks receive session JSON on stdin — read and discard it.
     try:
-        _ = json.load(sys.stdin)
+        json.load(sys.stdin)
     except Exception:
         pass
 
-    root_str = run(["git", "rev-parse", "--show-toplevel"])
-    if not root_str:
-        sys.exit(0)
-    root = Path(root_str)
-
-    diff = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True).stdout
-    if not diff.strip():
+    root = repo_root()
+    if root is None:
         sys.exit(0)
 
-    # Dedup fingerprint
-    fingerprint = hashlib.sha256(diff.encode()).hexdigest()[:16]
-    stamp_file = root / ".claude" / ".last_reflect_hash"
-    if stamp_file.exists() and stamp_file.read_text().strip() == fingerprint:
+    changed = changed_paths(root)
+    if not changed or is_doc_only(changed):
         sys.exit(0)
 
-    # Find CLAUDE.md areas touched by the diff
-    changed_files = run(["git", "diff", "--name-only", "HEAD"]).splitlines()
-    areas = find_claude_md_areas(root)
-    active_areas = map_files_to_areas(changed_files, areas)
-
-    if not active_areas:
+    touched = areas_touched_by(changed, governed_areas(root))
+    if not touched:
         sys.exit(0)
 
-    # Spawn reflector in background
-    env = os.environ.copy()
-    env["HELPLINE_AILAYER_REFLECT_LOCK"] = "1"
-    env["REFLECT_AREAS"] = json.dumps(active_areas)
-    env["REFLECT_FINGERPRINT"] = fingerprint
+    diff = subprocess.run(
+        ["git", "diff", "HEAD"], capture_output=True, text=True, cwd=root
+    ).stdout
+
+    fingerprint = fingerprint_of(diff, changed)
+    stamp = root / FINGERPRINT_FILE
+    if stamp.is_file() and stamp.read_text(errors="replace").strip() == fingerprint:
+        sys.exit(0)
+
+    child_env = os.environ.copy()
+    child_env[LOCK_VAR] = "1"
+    child_env["CLAUDE_MD_REFLECT_AREAS"] = json.dumps(touched)
+    child_env["CLAUDE_MD_REFLECT_FINGERPRINT"] = fingerprint
+    child_env["CLAUDE_MD_REFLECT_CHANGED"] = json.dumps(changed)
 
     reflector = root / ".claude" / "hooks" / "reflect_claude_md.py"
     try:
         subprocess.Popen(
             ["uv", "run", str(reflector)],
-            env=env,
-            cwd=str(root),
+            env=child_env,
+            cwd=root,
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except FileNotFoundError:
-        # uv not on PATH — write a deterministic fallback note
-        output = root / ".claude" / "claude-md-review.md"
-        output.write_text(
-            "# CLAUDE.md Review\n\n"
-            f"*uv not found — re-check these areas manually: {', '.join(active_areas)}*\n"
+        (root / REVIEW_FILE).write_text(
+            "# Doc Drift Review\n\n"
+            "*`uv` not found on PATH — no automated review ran. Re-check the "
+            f"CLAUDE.md/SKILL.md of these areas manually: {', '.join(touched)}*\n",
+            encoding="utf-8",
         )
+        # Stamp anyway: without `uv` the next turn would rewrite this same note
+        # forever, and the message is already on screen for the user.
+        stamp.write_text(fingerprint, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 name: lib-utils
-description: Reference for the shared utility modules in src/lib/utils (audit, currency, date, filters, generateInvoice, permissions) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
+description: Reference for every shared utility module in src/lib/utils (audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, invoiceMath, localeParse, pagedQuery, permissions, planGating, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
 ---
 
 # Shared utilities (`src/lib/utils/`)
@@ -85,6 +85,109 @@ The date-preset + entity-filter logic backing `FilterBar` (see
 - `isDefaultFilters(f)` — drives the `FilterBar`'s "Clear" button visibility
   (`hasActive = !isDefaultFilters(filters)`); uses `"x" in f` narrowing so one
   function works across all three filter shapes.
+
+## csv.ts
+
+Export and import primitives for the CSV round-trip on Sales/Expenses/Purchases.
+
+- `exportToCsv(filename, rows, columns)` — triggers a browser download. Values
+  are quoted/escaped; `null`/`undefined` become empty cells.
+- `detectDelimiter(headerLine) → "," | ";" | "\t"` — counts candidate
+  characters **outside quoted sections** and takes the highest, comma on a tie.
+  This exists because German Excel exports use `;` (comma is the decimal
+  separator in the `de` locale) — do not assume comma anywhere in the pipeline.
+- `parseCsvText(text) → { headers, rows }` — headers are lowercased and
+  trimmed; `rows` is an array of `Record<string, string>`. This is the shape the
+  whole import pipeline (`resolveHeaders` → `canonicalizeRow` →
+  `validateRowForFormat`) consumes.
+
+## excel.ts
+
+`parseExcelBuffer(buffer) → { headers, rows }` — parses `.xlsx`/`.xls` from an
+`ArrayBuffer` via SheetJS.
+
+**Returns exactly the same shape as `parseCsvText`**, which is the entire point:
+the Sales import modal feeds both file types through one unchanged pipeline.
+Preserve that contract if you touch either module.
+
+- First worksheet only.
+- Headers lowercased + trimmed (matching `parseCsvText`).
+- Entirely blank rows dropped.
+- Dates are emitted as `YYYY-MM-DD` strings so `parseFlexibleDate` accepts them.
+
+> `xlsx` is the dependency flagged in `AUDIT_2026-07-24.md` §2.3 (prototype
+> pollution + ReDoS, no npm fix). It only ever parses a file the user picked
+> themselves, but keep the blast radius in mind before reusing it server-side.
+
+## localeParse.ts
+
+Locale-tolerant parsing for CSV/Excel import — German **and** English inputs.
+Pure, fully tested. Both functions return `null` on unparseable input; a `null`
+on a required field is a **row error**, never a silent `0` or today's date.
+
+- `parseLocaleNumber(input) → number | null` — disambiguation rules:
+  - both `.` and `,` present → the **last** one is the decimal separator
+  - only `,` → decimal comma (`"9,99"` → `9.99`)
+  - only `.` → thousands separator *only* for the exact pattern
+    `\d{1,3}(\.\d{3})+` (`"1.234"` → `1234`); otherwise decimal (`"9.99"` → `9.99`)
+- `parseFlexibleDate(input) → string | null` — accepts ISO (`"2024-01-15"`) or
+  DD-first European (`"15.01.2024"`, `"26-03-2026"`, `"26/03/2026"`) and returns
+  ISO `YYYY-MM-DD`. Validates real calendar dates; **two-digit years are
+  rejected** rather than guessed at.
+
+## detectPlatform.ts
+
+Source-URL/SKU helpers for Dropshipping and the eBay listing wizard.
+
+- `detectPlatform(url) → SourcePlatform | null` — identifies the supplier from a
+  product URL.
+- `isAliExpressSku(sku) → sku is string` — type guard; true when the SKU looks
+  like an AliExpress item ID (all digits, plausible length). The seller stores
+  that ID as the eBay SKU / Custom Label, which is what makes the link possible.
+- `aliExpressUrlFromSku(sku)` — rebuilds the product URL from that item ID
+  (`de.aliexpress.com`).
+
+## pagedQuery.ts
+
+The shared contract for the server-side pagination architecture described in
+`AGENTS.md` — every paginated feature uses these rather than its own maths.
+
+- `DEFAULT_PAGE_SIZE = 50` — also the page size `dashboard/layout.tsx` hydrates.
+- `PageRequest` — `{ page, pageSize }`; `page` is **1-indexed**.
+- `rangeFor({ page, pageSize }) → [from, to]` — inclusive bounds for Supabase
+  `.range(from, to)`. `page=1, pageSize=50` → `[0, 49]`.
+
+## planGating.ts
+
+Subscription-plan feature gates, keyed off `TenantPlan`. Pure lookups against
+`PLAN_LIMITS`; no Supabase calls.
+
+- `getPlanLimits(plan) → PlanLimits`
+- `canAddUser(plan, currentUserCount) → boolean` — backs the Users feature's
+  invite gate.
+- `hasPlatformIntegrations(plan) → boolean` — gates `/dashboard/integrations`,
+  `/dashboard/listings` and `/dashboard/messages` (Pro/Business only). Read the
+  plan from `currentUserSlice.tenantPlan`, hydrated by `dashboard/layout.tsx`.
+- `hasAiFeatures(plan) → boolean`
+
+**These are UI gates, not security boundaries.** `plan` itself is owned by the
+Stripe webhook (`AGENTS.md` key rule 4) — never write it from UI. This is the
+one module here with **no colocated test**; add `planGating.test.ts` if you
+extend it.
+
+## validation.ts
+
+Pure field validators for the settings forms. Every function returns `null` when
+valid **or blank** (all fields are optional) and a human-readable string when
+present-but-malformed — so a falsy return means "fine to submit".
+
+- `validateIBAN(value)` — strips spaces; two uppercase letters, two digits, then
+  11–30 alphanumerics.
+- `validateVATId(value)` — strips spaces; two uppercase letters + 2–13
+  alphanumerics. Deliberately permissive across countries.
+- `validateEmail(value)` — standard format check.
+- `validateVATRate(value: number | string)` — coerces, then requires 0–100
+  inclusive.
 
 ## permissions.ts
 
@@ -207,3 +310,20 @@ feature `page.tsx`/`_components/*` files and `_store/*Slice.ts` reducers.
 `filters.ts` pairs specifically with `components/ui/FilterBar.tsx`.
 `generateInvoice.ts` is invoked from `components/modals/InvoiceModal.tsx` and
 `app/dashboard/settings/page.tsx` (preview/test-generate button).
+`csv.ts`/`excel.ts`/`localeParse.ts` are the import/export stack behind the
+`Import*Modal`/`export` buttons on Sales, Expenses and Purchases.
+`pagedQuery.ts` is used by every `fetch*Page` thunk plus
+`dashboard/layout.tsx`'s hydration query. `planGating.ts` is read by the
+Integrations, Listings and Messages pages and by the Users invite flow.
+`validation.ts` backs the Settings company-profile form.
+`detectPlatform.ts` is used by Dropshipping and the listing wizard's Source step.
+
+## Testing
+
+Every module here has a colocated `*.test.ts` **except `generateInvoice.ts`**
+(jsPDF is awkward to assert on — its pure maths lives in `invoiceMath.ts`, which
+*is* tested) and **`planGating.ts`** (no test yet — add one if you extend it).
+
+```bash
+npx jest lib/utils
+```

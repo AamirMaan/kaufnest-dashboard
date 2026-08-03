@@ -35,8 +35,17 @@ not tenant roles.
   `tenant.admin_email`, posts `{ tenantId }` only to `/api/admin/impersonate`
   — the target email is never client-supplied, see that route below —
   redirects to the returned magic link), and a **"Delete" button** (danger
-  variant; two-step inline confirmation → "Yes, delete" + "Cancel"; posts to
-  `DELETE /api/admin/tenants/[tenant.id]`; calls `onRefresh` on success).
+  variant) that opens `DeleteTenantModal`.
+- `_components/DeleteTenantModal.tsx` — destructive-confirmation modal for
+  tenant deletion. Accepts `{ open, tenant, onClose, onDeleted }`. The user must
+  **type the tenant's `schema_name` exactly** before the "Delete tenant" button
+  enables (`confirmed = confirmation === tenant.schema_name`) — deletion drops
+  the entire tenant schema and every associated auth user, so a plain yes/no
+  confirm was judged too easy to fire by accident. Posts to
+  `DELETE /api/admin/tenants/[tenant.id]`, then calls `onDeleted()` (the parent
+  closes and bumps `refreshKey`). Closing is blocked while `deleting` is in
+  flight, and the typed confirmation resets on close so a reopened modal never
+  starts pre-confirmed.
 
 ## API routes (cannot be colocated — Next.js pins routes to `app/api/...`)
 

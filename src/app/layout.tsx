@@ -28,6 +28,7 @@ export default function RootLayout({
       {/* Blocking script: set data-theme before first paint to avoid flash */}
       <head>
         <script
+          // verifier:allow dangerous-html — static literal, no interpolation
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('kaufnest-theme');document.documentElement.setAttribute('data-theme',t||'dark')}catch(e){}})()`,
           }}
