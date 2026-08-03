@@ -14,14 +14,20 @@
 -- All `add column if not exists` — safe to run against the live schema.
 -- ============================================================
 
-alter table tenant_kaufnest.sales
-  add column if not exists shipping_cost    numeric(12,2) check (shipping_cost    >= 0),
-  add column if not exists shipping_charged numeric(12,2) check (shipping_charged >= 0),
-  add column if not exists advertising_fee  numeric(12,2) check (advertising_fee  >= 0);
+-- FIXED 2026-08-03: this block previously hardcoded `tenant_kaufnest`, which is
+-- why tenant_testing never received these columns. It now uses the fan-out
+-- helper, per the rule in AGENTS.md. Re-running is safe (idempotent).
 
-comment on column tenant_kaufnest.sales.shipping_cost    is 'Shipping cost paid by seller. NULL = not recorded.';
-comment on column tenant_kaufnest.sales.shipping_charged is 'Shipping billed to buyer (revenue side, appears on invoice). NULL = not recorded.';
-comment on column tenant_kaufnest.sales.advertising_fee  is 'Per-order ad fee (eBay Promoted Listings / Amazon Ads). NULL = not recorded.';
+select public.run_on_all_tenant_schemas($$
+  alter table {{schema}}.sales
+    add column if not exists shipping_cost    numeric(12,2) check (shipping_cost    >= 0),
+    add column if not exists shipping_charged numeric(12,2) check (shipping_charged >= 0),
+    add column if not exists advertising_fee  numeric(12,2) check (advertising_fee  >= 0);
+
+  comment on column {{schema}}.sales.shipping_cost    is 'Shipping cost paid by seller. NULL = not recorded.';
+  comment on column {{schema}}.sales.shipping_charged is 'Shipping billed to buyer (revenue side, appears on invoice). NULL = not recorded.';
+  comment on column {{schema}}.sales.advertising_fee  is 'Per-order ad fee (eBay Promoted Listings / Amazon Ads). NULL = not recorded.';
+$$);
 
 -- ============================================================
 -- Update provision_tenant_schema() so every FUTURE tenant also
