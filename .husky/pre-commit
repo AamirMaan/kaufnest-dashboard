@@ -1,2 +1,11 @@
 npx tsc --noEmit
 npm run lint
+
+# Project-invariant verifier: tenant isolation, the server/client secret
+# boundary, hardcoded credentials, and the Stripe source-of-truth rule — none of
+# which tsc or eslint know anything about. Exits non-zero only on BLOCK-severity
+# findings; warnings are reported by the Stop hook, not enforced here.
+# Skipped when `uv` isn't installed so a fresh clone can still commit.
+if command -v uv >/dev/null 2>&1; then
+  uv run .claude/verifiers/verify_changes.py --staged --block-only || exit 1
+fi

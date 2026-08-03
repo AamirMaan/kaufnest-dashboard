@@ -46,8 +46,26 @@ next-env.d.ts
 .superpowers/
 
 graphify-out/cost.json        # local only
-# graphify-out/cache/         # optional: commit for speed, skip to keep repo small
+# Content-hashed AST cache. Was optional ("commit for speed") while `graphify
+# update` was run by hand; now that refresh_graphify.py rebuilds on every
+# code-touching turn, committing it would add churn to nearly every diff and
+# grow without bound. graph.json itself stays tracked — that's the artifact
+# worth sharing.
+#
+# NOTE: this only stops *new* cache files. The ones already committed stay
+# tracked (gitignore does not apply to tracked files) and will keep showing up
+# as modified. To finish the job:  git rm -r --cached graphify-out/cache/
+graphify-out/cache/
 
 # Playwright E2E — saved auth state (contains real session tokens)
 e2e/.auth/
 .worktrees/
+
+# Doc-drift hook scratch state — regenerated every session, never shared
+.claude/claude-md-review.md
+.claude/.claude_md_review_fingerprint
+.claude/hooks/__pycache__/
+.claude/verifiers/__pycache__/
+
+# Graphify rebuild lock — per-machine, held only while a rebuild is running
+graphify-out/.refresh.lock

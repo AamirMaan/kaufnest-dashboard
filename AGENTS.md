@@ -147,6 +147,53 @@ Enforced automatically by Husky git hooks (`.husky/pre-commit` and
 `.husky/pre-push`) — no manual steps required. If a hook fails, fix the
 reported errors before retrying the commit or push.
 
+| Gate | Runs | Catches |
+| --- | --- | --- |
+| `.husky/pre-commit` | `tsc --noEmit`, `eslint`, **project verifier** | types, style, invariant violations |
+| `.husky/pre-push` | `jest`, `next build` | behaviour, build breakage |
+
+## Project verifier — the invariants above are enforced, not just documented
+
+The "key rules" in this file (never query `public.*`, never hardcode a schema
+name, control-plane client is server-only, Stripe owns `plan`, tenant DDL goes
+through `run_on_all_tenant_schemas`) are all perfectly valid TypeScript when
+violated. They type-check, they lint, they build, and they ship a data leak. So
+they are also encoded as executable rules in **`.claude/verifiers/`**:
+
+- **`guard_edit.py`** (PreToolUse hook) — *denies* a Write/Edit that would
+  hardcode a credential, query `public.*`, import a server-only module into a
+  `"use client"` file, read a non-`NEXT_PUBLIC_` env var in a Client Component,
+  or create `src/middleware.ts`. The bad code never lands.
+- **`verify_changes.py`** (Stop hook + CLI + pre-commit) — reports the
+  judgement-call findings: `tenants.plan` written outside the Stripe webhook, a
+  raw Postgres error returned to a client, a route handler reaching Supabase
+  with no auth guard, `any`, `@ts-ignore`, stray `console.log`.
+
+```bash
+uv run .claude/verifiers/verify_changes.py          # findings in your diff
+uv run .claude/verifiers/verify_changes.py --all    # whole-repo baseline
+uv run .claude/verifiers/test_rules.py              # the rules' own tests
+```
+
+Suppress a judged exception with `// verifier:allow <rule-id>` (or `--` in SQL)
+on the offending line. **See `.claude/verifiers/README.md`** for the full rule
+table, the current known baseline, and how to add a rule. If you add an
+invariant to this file, add the matching rule there too — a rule that only
+exists as prose is one nobody enforces.
+
+## Keeping the graphify graph current
+
+`graphify update .` now runs **automatically** in the background at the end of
+any turn that changed extractable source, via the `refresh_graphify.py` Stop
+hook (AST-only, no LLM, no API cost). You no longer need to run it by hand.
+
+Two things that are still manual:
+- **Community labels** — the auto-refresh passes `--no-cluster`, so community
+  names go stale after a large refactor. Run `graphify cluster-only .` when
+  they stop making sense.
+- **Anything outside a Claude Code session** (a rebase, a colleague's merge) —
+  the hook only fires on turns, so run `graphify update .` yourself after those.
+
 # Project structure: feature folders
 
 KaufNest Dashboard is a Next.js App Router app (Supabase + Redux Toolkit). To
@@ -193,9 +240,19 @@ Each feature folder follows the same shape (where it has private code):
   page.tsx
   _components/   # feature-only modals/UI
   _store/        # feature-only Redux slice + its colocated test
+  _lib/          # feature-only pure helpers + their colocated tests
   CLAUDE.md      # file map, data-flow pattern, shared deps, test command
   SKILL.md       # agent playbook: minimal file set per change type, gotchas
 ```
+
+`_lib/` is for pure logic a feature owns but that isn't Redux state — the
+maths, validation and grouping a page would otherwise inline. It exists in
+`dashboard/` (`aggregateSales`, `platformBalance`), `messages/`
+(`groupThreads`), `planner/` (`calculations`, `fees`), `listings/`
+(`wizardValidation`) and `users/` (`userStatusGuards`). Extracting into `_lib/`
+is what lets the logic be unit-tested without rendering the page, so **new
+non-trivial page maths belongs here, with a colocated test** — not inline in
+`page.tsx`.
 
 ## Shared vs. feature-private — how the split was decided
 

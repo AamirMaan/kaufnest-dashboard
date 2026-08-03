@@ -77,11 +77,27 @@ broadly when working on a specific feature.**
     the locally-fetched `payouts` state by currency + date range.
   Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
   are passed to recharts props (CSS variables don't render reliably inside SVG).
-  No feature-private code — has no `_components`/`_store` of its own.
+  No `_components`/`_store` of its own — but see `_lib/` below.
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
   `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
   `lib/supabase/client` (`createTenantClient`).
+
+## `_lib/` — pure helpers for the Overview page
+
+`page.tsx` does its aggregation in local `useState`, not Redux, so the maths has
+nowhere to live except here. Both modules are pure (no React/Supabase/Redux) and
+have a colocated test — `npx jest dashboard/_lib`. Keep new Overview maths in
+this shape: extracting it is what makes it testable without rendering the page.
+
+- `aggregateSales.ts` — `aggregateSaleRevenue(sales) → { revenue, fees }`.
+  Filters through `isRevenueSale` first (so returned/cancelled orders are
+  excluded — see `lib/utils/filters.ts`), then sums
+  `total_amount + (shipping_charged ?? 0)` into `revenue` and
+  `(shipping_cost ?? 0) + (advertising_fee ?? 0)` into `fees`.
+- `platformBalance.ts` — `computePending(balance, periodPlatformPayouts) → number`.
+  Subtracts recorded payouts from a **pre-computed** balance; the caller is
+  responsible for filtering payouts by date range and platform first.
 
 ## Feature folders (each documents itself — start there)
 
@@ -110,4 +126,5 @@ title/description/actions row used by every feature page).
 
 `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + the two genuinely shared
 slices `auditLogsSlice`/`currentUserSlice` in `src/store/slices/`. See
-`src/AGENTS.md` → "Project structure" for the full shared-vs-feature-private map.
+`AGENTS.md` (repo root) → "Project structure" for the full
+shared-vs-feature-private map.
