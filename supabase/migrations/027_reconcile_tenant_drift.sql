@@ -120,5 +120,5 @@ select public.run_on_all_tenant_schemas($$
     using ({{schema}}.is_tenant_member() and {{schema}}.current_user_role() in ('admin', 'super_admin'))
     with check ({{schema}}.is_tenant_member() and {{schema}}.current_user_role() in ('admin', 'super_admin'));
 
-  grant select, insert, update, delete on {{schema}}.ebay_messages to authenticated;
+  grant select, insert, update, delete on {{schema}}.ebay_messages to anon, authenticated, service_role;
 $$);

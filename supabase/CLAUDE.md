@@ -110,6 +110,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `provision_tenant_schema()`); admin/super_admin-only RLS, same bar as
   `ebay_listing_drafts`. Backs the Messages feature
   (`src/app/dashboard/messages/`, `src/lib/integrations/ebay/messages.ts`).
+- `migrations/027_reconcile_tenant_drift.sql` — reconciles schema drift across
+  all five live tenant schemas (tenant_kaufnest, tenant_hochkauf, tenant_k2_textil,
+  tenant_testing, tenant_waqasmumtaz); replays missing objects idempotently via
+  `run_on_all_tenant_schemas`. Covers: sales fee columns (010), purchases.sale_id +
+  indexes (015), profiles.permission_overrides + current_user_has_override() function
+  + delete policies (023), ebay_messages table + trigger + indexes + RLS (026).
 
 ## Related code
 
