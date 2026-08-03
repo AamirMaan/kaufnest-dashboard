@@ -18,6 +18,12 @@ export interface Profile {
   // — never a hard delete, since created_by FKs on sales/expenses/purchases/
   // etc. would block deleting any profile that's ever created a record.
   status: UserStatus;
+  /**
+   * Bulk "mark all as read" watermark. Notifications created at or before this
+   * timestamp are read. Individual dismissals after it live in
+   * `notification_reads`. Null = nothing has ever been marked read.
+   */
+  notifications_read_through: string | null;
   created_at: string;
 }
 
@@ -142,6 +148,42 @@ export interface AuditLog {
   entity_id: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────
+
+export type NotificationType =
+  | "sale.created"
+  | "purchase.created"
+  | "product.low_stock"
+  | "message.received";
+
+export type NotificationCategory = "orders" | "purchases" | "inventory" | "messages";
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  category: NotificationCategory;
+  entity_type: string | null;
+  entity_id: string | null;
+  title: string;
+  body: string | null;
+  /** Dashboard-relative deep link, e.g. "/dashboard/sales/<id>". */
+  link: string | null;
+  /** Structured, channel-agnostic data. Email/push templating reads THIS, never title/body. */
+  payload: Record<string, unknown> | null;
+  /** Who caused the event. Null for externally-caused events (e.g. an inbound buyer message). */
+  actor_id: string | null;
+  visible_to_roles: UserRole[];
+  /** Permission-override key that also grants visibility, e.g. "manage_messages". */
+  required_permission: string | null;
+  created_at: string;
+}
+
+export interface NotificationRead {
+  notification_id: string;
+  user_id: string;
+  read_at: string;
 }
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
