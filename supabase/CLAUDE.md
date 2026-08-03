@@ -124,6 +124,15 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   column; includes 3 indexes and explicit revoke of inherited default privileges.
   Baking into `provision_tenant_schema()` is a separate later task. Backs the
   Notifications feature.
+- `migrations/029_notification_triggers.sql` — adds four SECURITY DEFINER trigger
+  functions in every tenant schema via `run_on_all_tenant_schemas`:
+  `notify_sale_created`, `notify_purchase_created`, `notify_low_stock`,
+  `notify_message_received` — write notification rows on insert into
+  `sales`/`purchases`/`ebay_messages` and on product low-stock downward crossing;
+  all functions have pinned `search_path = {{schema}}, public` and explicit
+  'super_admin' in `visible_to_roles` arrays (required by notification RLS policy);
+  all statements idempotent. Does NOT modify `apply_purchase_stock_change`/
+  `apply_sale_stock_change` (002). Backs the Notifications feature.
 
 ## Related code
 
