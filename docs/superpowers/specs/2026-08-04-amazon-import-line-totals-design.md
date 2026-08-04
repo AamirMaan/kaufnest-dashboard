@@ -161,18 +161,17 @@ multi-line order — the exact ambiguity `product_id` was added to prevent).
 Skipping is strictly better than the original design here: nothing is lost,
 because the skip is reported with its reason rather than silently dropped.
 
-**Unmatched returns must NEVER restock, regardless of the per-import toggle.**
-This is a deliberate carve-out. An unmatched return has no corresponding sale in
-the system, so restocking it would create inventory out of nothing — stock for
-goods the system never recorded selling. The toggle applies only to returns that
-matched a real sale. (User decision, 2026-08-04: revisit later if standalone
-rows prove to need it.)
+**The restock toggle applies only to matched returns.** Under the superseded
+design this needed an explicit carve-out, because an unmatched return has no
+corresponding sale and restocking it would have created inventory out of
+nothing. Now that unmatched returns are skipped rather than inserted, the
+carve-out is structural: there is no row to restock.
 
-**Known consequence, accepted by the user:** standalone returned rows carry no
-price data. Revenue is unaffected because the amounts are zero, but order counts
-will include rows that were never recorded as sales. The alternative — blocking
-the import — was rejected because the April file legitimately contains returns
-for orders placed in March.
+**Consequence of skipping:** a return whose order was placed outside the
+imported period — the April file legitimately contains returns for March
+orders — is reported rather than applied. Nothing is silently lost, because the
+skip carries its reason, but the user must import the earlier period first if
+they want those returns to land.
 
 ## Partial-success reporting — new behaviour
 
