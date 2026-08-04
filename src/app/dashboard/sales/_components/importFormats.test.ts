@@ -471,4 +471,37 @@ describe("vat_amount column", () => {
     }, 2);
     expect(row.error).toContain("vat_amount");
   });
+
+  it("parses a German decimal comma in vat_amount", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7,99",
+      total: "9,99",
+      shipping_charged: "2,00",
+      vat_rate: "0,19",
+      vat_amount: "1,60",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(1.6);
+  });
+
+  it("rejects a non-numeric vat_amount rather than silently deriving", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "7.99",
+      vat_rate: "0.19",
+      vat_amount: "abc",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("vat_amount");
+    expect(row.data).toBeNull();
+  });
 });
