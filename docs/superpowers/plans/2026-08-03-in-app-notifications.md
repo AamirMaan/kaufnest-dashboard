@@ -759,7 +759,17 @@ There is deliberately **no insert policy on `notifications`** — only the SECUR
   EXECUTE format('GRANT SELECT, INSERT, DELETE ON %1$I.notification_reads TO authenticated', schema_name);
 ```
 
-- [ ] **Step 6: Add the four trigger functions**
+- [ ] **Step 6: Add the three trigger functions**
+
+**Amended 2026-08-04.** There is no `notify_low_stock` trigger. Low stock is a
+*state*, not an event: `apply_sale_stock_change` reverts-then-reapplies stock on
+a sale UPDATE, which transiently crosses the threshold upward and then back
+down, double-firing a crossing trigger on any sale edit. Low stock is therefore
+evaluated at READ time by the client (Tasks 8–10), not stored.
+
+Each function body below must also wrap its INSERT in
+`exception when others then null;` so a notification failure can never abort the
+parent sale/purchase/message write, then `RETURN new;` on both paths.
 
 ```sql
   EXECUTE format($sql$
@@ -801,29 +811,6 @@ There is deliberately **no insert policy on `notifications`** — only the SECUR
   $sql$, schema_name);
 
   EXECUTE format($sql$
-    CREATE OR REPLACE FUNCTION %1$I.notify_low_stock()
-    RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = %1$I, public
-    AS $fn$
-    BEGIN
-      IF new.reorder_threshold IS NOT NULL
-         AND new.current_stock <= new.reorder_threshold
-         AND (old.reorder_threshold IS NULL OR old.current_stock > old.reorder_threshold) THEN
-        INSERT INTO %1$I.notifications
-          (type, category, entity_type, entity_id, title, body, link, payload, actor_id, visible_to_roles, required_permission)
-        VALUES ('product.low_stock', 'inventory', 'product', new.id,
-          'Low stock: ' || new.name,
-          new.current_stock || ' left (threshold ' || new.reorder_threshold || ')',
-          '/dashboard/inventory',
-          jsonb_build_object('sku', new.sku, 'current_stock', new.current_stock,
-                             'reorder_threshold', new.reorder_threshold),
-          NULL, ARRAY['super_admin','admin','accountant'], NULL);
-      END IF;
-      RETURN new;
-    END;
-    $fn$;
-  $sql$, schema_name);
-
-  EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.notify_message_received()
     RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = %1$I, public
     AS $fn$
@@ -845,7 +832,7 @@ There is deliberately **no insert policy on `notifications`** — only the SECUR
   $sql$, schema_name);
 ```
 
-- [ ] **Step 7: Attach the four triggers**
+- [ ] **Step 7: Attach the three triggers**
 
 ```sql
   EXECUTE format('DROP TRIGGER IF EXISTS notify_sale_created ON %1$I.sales', schema_name);
@@ -853,9 +840,6 @@ There is deliberately **no insert policy on `notifications`** — only the SECUR
 
   EXECUTE format('DROP TRIGGER IF EXISTS notify_purchase_created ON %1$I.purchases', schema_name);
   EXECUTE format('CREATE TRIGGER notify_purchase_created AFTER INSERT ON %1$I.purchases FOR EACH ROW EXECUTE FUNCTION %1$I.notify_purchase_created()', schema_name);
-
-  EXECUTE format('DROP TRIGGER IF EXISTS notify_low_stock ON %1$I.products', schema_name);
-  EXECUTE format('CREATE TRIGGER notify_low_stock AFTER UPDATE ON %1$I.products FOR EACH ROW EXECUTE FUNCTION %1$I.notify_low_stock()', schema_name);
 
   EXECUTE format('DROP TRIGGER IF EXISTS notify_message_received ON %1$I.ebay_messages', schema_name);
   EXECUTE format('CREATE TRIGGER notify_message_received AFTER INSERT ON %1$I.ebay_messages FOR EACH ROW EXECUTE FUNCTION %1$I.notify_message_received()', schema_name);
@@ -893,12 +877,29 @@ These are pure functions with no Supabase or Redux dependency, which is what mak
   - `unreadCount(items: Notification[], opts: UnreadContext): number`
   - `interface UnreadContext { readThrough: string | null; readIds: Set<string>; currentUserId: string }`
   - `NOTIFICATION_LABELS: Record<NotificationType, string>`
+  - `interface LowStockProduct { id: string; name: string; sku: string | null; current_stock: number; reorder_threshold: number }`
+  - `synthesizeLowStock(products: LowStockProduct[]): Notification[]`
+  - `LOW_STOCK_ID_PREFIX = "low-stock:"`
   Consumed by Tasks 9 and 10.
+
+**Amended 2026-08-04 — low stock is synthesized, not stored.** There is no
+`product.low_stock` row in the database. The client fetches products where
+`current_stock <= reorder_threshold` and `synthesizeLowStock` turns them into
+`Notification`-shaped objects so they reuse the same display code.
+
+Rules these synthesized objects must follow, because they are not real rows:
+- `id` is `` `low-stock:${product.id}` `` — stable across polls, and prefixed so
+  it can never collide with a real uuid.
+- `actor_id` is `null`, `created_at` is the time of synthesis.
+- They must NEVER be written to `notification_reads` — that table has a foreign
+  key to `notifications.id`, so a synthetic id would be rejected. Therefore they
+  have no per-item read state: they appear while the condition holds and vanish
+  when stock recovers. `dismissOne` must ignore them.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```typescript
-import { isUnread, unreadCount, NOTIFICATION_LABELS, type UnreadContext } from "./notifications";
+import { isUnread, unreadCount, synthesizeLowStock, NOTIFICATION_LABELS, type UnreadContext } from "./notifications";
 import type { Notification } from "@/types";
 
 function make(overrides: Partial<Notification> = {}): Notification {
@@ -975,6 +976,56 @@ describe("NOTIFICATION_LABELS", () => {
     expect(NOTIFICATION_LABELS["message.received"]).toBe("Messages");
   });
 });
+
+describe("synthesizeLowStock", () => {
+  const product = {
+    id: "p1", name: "Widget", sku: "W-1",
+    current_stock: 2, reorder_threshold: 5,
+  };
+
+  it("builds a notification-shaped object with a prefixed, stable id", () => {
+    const [n] = synthesizeLowStock([product]);
+    expect(n.id).toBe("low-stock:p1");
+    expect(n.type).toBe("product.low_stock");
+    expect(n.category).toBe("inventory");
+    expect(n.entity_id).toBe("p1");
+    expect(n.link).toBe("/dashboard/inventory");
+  });
+
+  it("has a null actor so it is never suppressed as the viewer's own action", () => {
+    const [n] = synthesizeLowStock([product]);
+    expect(n.actor_id).toBeNull();
+    expect(isUnread(n, { ...base, currentUserId: "anyone" })).toBe(true);
+  });
+
+  it("mentions the stock level and threshold in the body", () => {
+    const [n] = synthesizeLowStock([product]);
+    expect(n.body).toContain("2");
+    expect(n.body).toContain("5");
+  });
+
+  it("returns an empty array for no low-stock products", () => {
+    expect(synthesizeLowStock([])).toEqual([]);
+  });
+
+  it("filters out products that are above their threshold", () => {
+    const healthy = { ...product, id: "p2", current_stock: 50 };
+    const result = synthesizeLowStock([product, healthy]);
+    expect(result).toHaveLength(1);
+    expect(result[0].entity_id).toBe("p1");
+  });
+
+  it("includes a product sitting exactly on its threshold", () => {
+    const atThreshold = { ...product, current_stock: 5, reorder_threshold: 5 };
+    expect(synthesizeLowStock([atThreshold])).toHaveLength(1);
+  });
+
+  it("produces the same id across repeated synthesis so polling does not duplicate", () => {
+    const a = synthesizeLowStock([product])[0];
+    const b = synthesizeLowStock([product])[0];
+    expect(a.id).toBe(b.id);
+  });
+});
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
@@ -1028,6 +1079,59 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   "product.low_stock": "Inventory",
   "message.received": "Messages",
 };
+
+/** Prefix marking a synthesized (non-database) notification id. */
+export const LOW_STOCK_ID_PREFIX = "low-stock:";
+
+export interface LowStockProduct {
+  id: string;
+  name: string;
+  sku: string | null;
+  current_stock: number;
+  reorder_threshold: number;
+}
+
+/**
+ * Low stock is a STATE, not an event — it flips back and forth as stock moves,
+ * so it is evaluated on read rather than stored as notification rows. (A stored
+ * crossing trigger double-fires on sale edits, because the stock trigger
+ * reverts-then-reapplies and transiently crosses the threshold upward.)
+ *
+ * These objects are Notification-shaped so they reuse the bell's display code,
+ * but they are NOT database rows: never insert their ids into
+ * `notification_reads`, whose FK to `notifications.id` would reject them.
+ */
+export function synthesizeLowStock(products: LowStockProduct[]): Notification[] {
+  const now = new Date().toISOString();
+  return products
+    // PostgREST cannot compare two columns in a filter, so the slice fetches
+    // every product with a threshold set and the threshold test happens here.
+    .filter((p) => p.reorder_threshold !== null && p.current_stock <= p.reorder_threshold)
+    .map((p) => ({
+    id: `${LOW_STOCK_ID_PREFIX}${p.id}`,
+    type: "product.low_stock" as const,
+    category: "inventory" as const,
+    entity_type: "product",
+    entity_id: p.id,
+    title: `Low stock: ${p.name}`,
+    body: `${p.current_stock} left (threshold ${p.reorder_threshold})`,
+    link: "/dashboard/inventory",
+    payload: {
+      sku: p.sku,
+      current_stock: p.current_stock,
+      reorder_threshold: p.reorder_threshold,
+    },
+    actor_id: null,
+    visible_to_roles: ["super_admin", "admin", "accountant"],
+    required_permission: null,
+    created_at: now,
+  }));
+}
+
+/** True for a synthesized low-stock item, which has no persistent read state. */
+export function isSynthetic(id: string): boolean {
+  return id.startsWith(LOW_STOCK_ID_PREFIX);
+}
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -1154,6 +1258,8 @@ interface NotificationsState {
   readIds: string[];
   /** Bulk "mark all read" watermark. */
   readThrough: string | null;
+  /** Products with a threshold set; low stock is derived from these on read. */
+  lowStock: LowStockProduct[];
   loaded: boolean;
   isFetching: boolean;
 }
@@ -1162,6 +1268,7 @@ const initialState: NotificationsState = {
   items: [],
   readIds: [],
   readThrough: null,
+  lowStock: [],
   loaded: false,
   isFetching: false,
 };
@@ -1180,7 +1287,7 @@ export const fetchNotifications = createAsyncThunk(
   async ({ userId, limit = 30 }: { userId: string; limit?: number }) => {
     const supabase = await createTenantClient();
 
-    const [notifs, reads, profile] = await Promise.all([
+    const [notifs, reads, profile, products] = await Promise.all([
       supabase
         .from("notifications")
         .select("*")
@@ -1192,16 +1299,25 @@ export const fetchNotifications = createAsyncThunk(
         .select("notifications_read_through")
         .eq("id", userId)
         .single(),
+      // Low stock is a STATE, evaluated on read rather than stored. PostgREST
+      // cannot compare two columns, so fetch everything with a threshold set
+      // and let synthesizeLowStock() apply the comparison.
+      supabase
+        .from("products")
+        .select("id, name, sku, current_stock, reorder_threshold")
+        .not("reorder_threshold", "is", null),
     ]);
 
     if (notifs.error) throw notifs.error;
     if (reads.error) throw reads.error;
     if (profile.error) throw profile.error;
+    if (products.error) throw products.error;
 
     return {
       data: (notifs.data ?? []) as Notification[],
       readIds: (reads.data ?? []).map((r) => r.notification_id as string),
       readThrough: (profile.data?.notifications_read_through ?? null) as string | null,
+      lowStock: (products.data ?? []) as LowStockProduct[],
     };
   },
 );
@@ -1226,6 +1342,10 @@ export const notificationsSlice = createSlice({
       state.readIds = [];
     },
     dismissOne: (state, action: PayloadAction<string>) => {
+      // Synthesized low-stock items are not database rows — writing their id to
+      // notification_reads would violate its FK to notifications.id. They clear
+      // when stock recovers, not when dismissed.
+      if (isSynthetic(action.payload)) return;
       if (!state.readIds.includes(action.payload)) state.readIds.push(action.payload);
     },
     setFetching: (state, action: PayloadAction<boolean>) => {
@@ -1296,7 +1416,13 @@ import {
   markAllRead,
   dismissOne,
 } from "@/store/slices/notificationsSlice";
-import { isUnread, unreadCount, NOTIFICATION_LABELS } from "@/lib/utils/notifications";
+import {
+  isUnread,
+  unreadCount,
+  synthesizeLowStock,
+  isSynthetic,
+  NOTIFICATION_LABELS,
+} from "@/lib/utils/notifications";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -1306,9 +1432,13 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
 
-  const { items, readIds, readThrough } = useAppSelector((s) => s.notifications);
+  const { items, readIds, readThrough, lowStock } = useAppSelector((s) => s.notifications);
   const ctx = { readThrough, readIds: new Set(readIds), currentUserId };
-  const count = unreadCount(items, ctx);
+
+  // Stored events first (newest first from the query), then synthesized
+  // low-stock items, which are a live condition rather than a past event.
+  const feed = [...items, ...synthesizeLowStock(lowStock)];
+  const count = unreadCount(feed, ctx);
 
   useEffect(() => {
     dispatch(fetchNotifications({ userId: currentUserId }));
@@ -1339,10 +1469,15 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
 
   async function handleOpenOne(id: string, link: string | null) {
     dispatch(dismissOne(id));
-    const supabase = await createTenantClient();
-    await supabase
-      .from("notification_reads")
-      .insert({ notification_id: id, user_id: currentUserId });
+    // Synthesized low-stock ids are not rows in `notifications`; inserting one
+    // would violate notification_reads' foreign key. They clear when stock
+    // recovers, so there is nothing to persist.
+    if (!isSynthetic(id)) {
+      const supabase = await createTenantClient();
+      await supabase
+        .from("notification_reads")
+        .insert({ notification_id: id, user_id: currentUserId });
+    }
     setOpen(false);
     if (link) router.push(link);
   }
@@ -1373,11 +1508,11 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
             )}
           </div>
 
-          {items.length === 0 && (
+          {feed.length === 0 && (
             <p className="px-3 py-6 text-sm text-center opacity-70">Nothing yet.</p>
           )}
 
-          {items.map((n) => {
+          {feed.map((n) => {
             const unread = isUnread(n, ctx);
             return (
               <button
