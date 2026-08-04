@@ -37,7 +37,22 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 - `migrations/005_tenant_provisioning.sql` — canonical
   `public.provision_tenant_schema(schema_name)` + `public.set_user_tenant()`,
   used by Phase 4 dynamic tenant provisioning
-  (`src/app/api/admin/provision-tenant/route.ts`).
+  (`src/app/api/admin/provision-tenant/route.ts`). `provision_tenant_schema()`
+  now also provisions the notifications stack (028/029) for every new
+  tenant: `notifications`/`notification_reads` tables,
+  `profiles.notifications_read_through`, their RLS policies and indexes, the
+  `authenticated`-only grants plus the `notifications` insert/update/delete
+  revoke, and the three `notify_sale_created`/`notify_purchase_created`/
+  `notify_message_received` SECURITY DEFINER trigger functions + triggers.
+  Its `ebay_messages_all_admin` policy also already includes 030's
+  `OR current_user_has_override('manage_messages')` branch, so newly
+  provisioned tenants don't need 030 replayed separately.
+  The notification-specific grant/revoke is executed after the function's
+  blanket schema-wide `GRANT ... ON ALL TABLES` (section 7) so the revoke
+  isn't immediately undone by it. **⏳ Not yet re-applied to Project B** — the
+  live database still runs the pre-notifications function body; until this
+  file is re-run, any newly provisioned tenant gets no notifications tables,
+  policies, or triggers. See `SKILL.md`'s file map.
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
 - `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
@@ -110,6 +125,46 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `provision_tenant_schema()`); admin/super_admin-only RLS, same bar as
   `ebay_listing_drafts`. Backs the Messages feature
   (`src/app/dashboard/messages/`, `src/lib/integrations/ebay/messages.ts`).
+- `migrations/027_reconcile_tenant_drift.sql` — reconciles schema drift across
+  all five live tenant schemas (tenant_kaufnest, tenant_hochkauf, tenant_k2_textil,
+  tenant_testing, tenant_waqasmumtaz); replays missing objects idempotently via
+  `run_on_all_tenant_schemas`. Covers: sales fee columns (010), purchases.sale_id +
+  indexes (015), profiles.permission_overrides + current_user_has_override() function
+  + delete policies (023), ebay_messages table + trigger + indexes + RLS (026).
+- `migrations/028_notifications.sql` — creates `notifications` and
+  `notification_reads` tables in every tenant schema via `run_on_all_tenant_schemas`
+  (one row per EVENT, visibility resolved per-reader by RLS policy; no
+  insert/update/delete policy on `notifications` — only SECURITY DEFINER triggers
+  in the next migration write there); adds `profiles.notifications_read_through`
+  column; includes 3 indexes and explicit revoke of inherited default privileges.
+  Also baked into `provision_tenant_schema()`. Backs the
+  Notifications feature.
+- `migrations/029_notification_triggers.sql` — adds three SECURITY DEFINER trigger
+  functions in every tenant schema via `run_on_all_tenant_schemas`:
+  `notify_sale_created`, `notify_purchase_created`, `notify_message_received` —
+  write notification rows on insert into `sales`/`purchases`/`ebay_messages`;
+  low stock is a READ-TIME state, not a triggered event (see migration header
+  comment for why — short answer: sale edits via revert-then-reapply falsely
+  fire crossing conditions). All functions have pinned `search_path = {{schema}}, public`,
+  explicit 'super_admin' in `visible_to_roles` arrays (required by notification RLS),
+  and exception-handled inserts so notification failures never block core writes;
+  all statements idempotent. Does NOT modify `apply_purchase_stock_change`/
+  `apply_sale_stock_change` (002). Also baked into `provision_tenant_schema()`.
+  Backs the Notifications feature.
+- `migrations/030_ebay_messages_override.sql` — redefines
+  `ebay_messages_all_admin` in every tenant schema via
+  `run_on_all_tenant_schemas`, adding an
+  `OR current_user_has_override('manage_messages')` branch to both `using`
+  and `with check` (idempotent via `drop policy if exists`). **Requires 027
+  first** (027 is what creates `ebay_messages` and the original policy).
+  Fixes the dead-end click documented in migration 029's header and
+  `src/app/dashboard/messages/SKILL.md`: a user granted the
+  `manage_messages` permission override could see the `message.received`
+  notification (029) but the table's RLS had no override branch, so they
+  couldn't read the row it pointed to. Also baked into
+  `provision_tenant_schema()` (`005_tenant_provisioning.sql`) for new
+  tenants. Backs the Messages feature
+  (`src/app/dashboard/messages/`).
 
 ## Related code
 

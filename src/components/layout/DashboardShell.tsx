@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { Menu, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "./Sidebar";
+import { NotificationBell } from "./NotificationBell";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
 interface Props {
+  userId: string;
   role: UserRole;
   fullName: string;
   email: string;
@@ -17,7 +19,7 @@ interface Props {
   isPlatformAdmin?: boolean;
 }
 
-export function DashboardShell({ role, fullName, email, children, impersonatingTenant, isPlatformAdmin }: Props) {
+export function DashboardShell({ userId, role, fullName, email, children, impersonatingTenant, isPlatformAdmin }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -79,8 +81,10 @@ export function DashboardShell({ role, fullName, email, children, impersonatingT
           </span>
         </div>
 
-        {/* Right: theme toggle + user menu */}
+        {/* Right: notifications + theme toggle + user menu */}
         <div className="flex items-center gap-1">
+          <NotificationBell currentUserId={userId} />
+
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}

@@ -75,3 +75,23 @@ since modal dropdowns use a different state key than the table.
 - The inventory page search is name-only (`ilike`). There is no category
   filter — the `Product` type has no `category` field. Do not add a category
   filter without first adding the column to the DB and the type.
+- **Low stock is NOT a database trigger** — there is no `notify_low_stock`
+  function. It was deliberately removed before shipping: `sales` UPDATEs go
+  through `apply_sale_stock_change`'s revert-then-reapply pattern, which
+  transiently pushes `current_stock` back above `reorder_threshold` before
+  reapplying the edit, so a stored crossing trigger double-fired on every
+  edit to an unrelated field of a sale. Low stock is instead a **state**,
+  evaluated on read: `synthesizeLowStock()` (`src/lib/utils/notifications.ts`)
+  takes the full `products` list (fetched by `notificationsSlice` with
+  `reorder_threshold is not null`, since PostgREST can't compare two columns
+  in a filter) and computes `current_stock <= reorder_threshold` itself,
+  producing synthetic `Notification`-shaped objects with **stable** ids
+  prefixed `low-stock:${product.id}` (a colocated test asserts the same id
+  comes back across repeated calls, so polling doesn't duplicate entries).
+  Those ids are never written to `notification_reads` (its FK to
+  `notifications.id` would reject them) and the feed must never be sorted by
+  `created_at`, since — unlike the id — that field IS regenerated
+  (`new Date().toISOString()`) on every call; sorting by it would churn
+  low-stock items to the top of the feed on every 60s poll. If you change
+  how/when `current_stock` is written, this is still correct as-is — it
+  re-derives from whatever the trigger-driven arithmetic leaves behind.

@@ -86,6 +86,7 @@ BEGIN
       permission_overrides jsonb NOT NULL DEFAULT '[]'::jsonb,
       status     text NOT NULL DEFAULT 'active'
                    CHECK (status IN ('active', 'deactivated')),
+      notifications_read_through timestamptz,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   $sql$, schema_name);
@@ -191,6 +192,39 @@ BEGIN
       entity_id   uuid,
       metadata    jsonb,
       created_at  timestamptz NOT NULL DEFAULT now()
+    )
+  $sql$, schema_name);
+
+  -- notifications: one row per EVENT, not per user. Visibility is a property
+  -- of the row and is resolved per-reader by RLS (see section 5) — the
+  -- client needs no permission logic at all. Rows are written ONLY by the
+  -- SECURITY DEFINER triggers added near the end of this function; there is
+  -- deliberately no insert/update/delete grant/policy for authenticated/anon
+  -- (see the explicit REVOKE after section 7).
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.notifications (
+      id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      type                text NOT NULL,
+      category            text NOT NULL,
+      entity_type         text,
+      entity_id           uuid,
+      title               text NOT NULL,
+      body                text,
+      link                text,
+      payload             jsonb,
+      actor_id            uuid,
+      visible_to_roles    text[] NOT NULL,
+      required_permission text,
+      created_at          timestamptz NOT NULL DEFAULT now()
+    )
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.notification_reads (
+      notification_id uuid NOT NULL REFERENCES %1$I.notifications(id) ON DELETE CASCADE,
+      user_id         uuid NOT NULL REFERENCES %1$I.profiles(id)      ON DELETE CASCADE,
+      read_at         timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (notification_id, user_id)
     )
   $sql$, schema_name);
 
@@ -454,7 +488,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts', 'ebay_messages']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts', 'ebay_messages', 'notifications', 'notification_reads']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -519,8 +553,21 @@ BEGIN
   -- ebay_listing_drafts — admin/super_admin only, all operations (mirrors platform_connections)
   EXECUTE format('CREATE POLICY "ebay_listing_drafts_all_admin" ON %1$I.ebay_listing_drafts FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
-  -- ebay_messages — admin/super_admin only, all operations (mirrors ebay_listing_drafts)
-  EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  -- ebay_messages — admin/super_admin, or a user granted the manage_messages
+  -- override (030 — without this branch, a user granted the override can see
+  -- the message.received notification (029) but not the row it points to).
+  EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages''))) WITH CHECK (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages'')))', schema_name);
+
+  -- notifications — read-only: tenant members see rows their role allows,
+  -- plus rows unlocked by an additive per-user permission override. There is
+  -- deliberately no insert/update/delete policy — only the SECURITY DEFINER
+  -- triggers write here.
+  EXECUTE format('CREATE POLICY "notifications_select" ON %1$I.notifications FOR SELECT USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() = ANY(visible_to_roles) OR (required_permission IS NOT NULL AND %1$I.current_user_has_override(required_permission))))', schema_name);
+
+  -- notification_reads — each user manages only their own read receipts.
+  EXECUTE format('CREATE POLICY "notification_reads_select" ON %1$I.notification_reads FOR SELECT USING (%1$I.is_tenant_member() AND user_id = auth.uid())', schema_name);
+  EXECUTE format('CREATE POLICY "notification_reads_insert" ON %1$I.notification_reads FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND user_id = auth.uid())', schema_name);
+  EXECUTE format('CREATE POLICY "notification_reads_delete" ON %1$I.notification_reads FOR DELETE USING (%1$I.is_tenant_member() AND user_id = auth.uid())', schema_name);
 
   -- ── 6. Indexes ──────────────────────────────────────────────
   -- Same set as public (see 002_inventory_and_vat.sql, 003_add_order_status.sql,
@@ -565,6 +612,10 @@ BEGIN
   EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_ebay_messages_external_id ON %1$I.ebay_messages (external_message_id) WHERE external_message_id IS NOT NULL', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_messages_thread ON %1$I.ebay_messages (buyer_username, item_id, ebay_created_at)', schema_name);
 
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_notifications_created ON %1$I.notifications (created_at DESC)', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_notifications_category ON %1$I.notifications (category)', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON %1$I.notification_reads (user_id)', schema_name);
+
   -- ── 7. Grants ───────────────────────────────────────────────
   -- create schema does NOT grant anything by default — without this every
   -- PostgREST request against the new schema fails with "permission denied
@@ -575,6 +626,117 @@ BEGIN
   EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA %I TO anon, authenticated, service_role', schema_name);
   EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role', schema_name);
   EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role', schema_name);
+
+  -- notifications privileges: the blanket "ALL TABLES" grant above (and the
+  -- ALTER DEFAULT PRIVILEGES it sets for future tables) would otherwise leave
+  -- insert/update/delete on notifications open to anon/authenticated. This
+  -- must run AFTER the blanket grant so the REVOKE below actually sticks —
+  -- RLS alone is insufficient; privileges must match intent. Mirrors
+  -- 028_notifications.sql exactly.
+  EXECUTE format('GRANT SELECT ON %1$I.notifications TO authenticated', schema_name);
+  EXECUTE format('GRANT SELECT, INSERT, DELETE ON %1$I.notification_reads TO authenticated', schema_name);
+  EXECUTE format('REVOKE INSERT, UPDATE, DELETE ON %1$I.notifications FROM authenticated, anon', schema_name);
+
+  -- ── 8. Notification triggers ───────────────────────────────
+  -- Three SECURITY DEFINER triggers (sale/purchase/message created). No
+  -- low-stock trigger — low stock is a READ-TIME state evaluated by the
+  -- client, not a stored event (see 029_notification_triggers.sql header for
+  -- why a stored crossing trigger double-fires on sale edits). search_path is
+  -- pinned on every function, and each insert is exception-wrapped so a
+  -- notification failure can never abort the parent sale/purchase/message
+  -- write. Mirrors 029_notification_triggers.sql exactly.
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.notify_sale_created()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I, public
+    AS $func$
+    BEGIN
+      BEGIN
+        INSERT INTO %1$I.notifications
+          (type, category, entity_type, entity_id, title, body, link, payload, actor_id, visible_to_roles, required_permission)
+        VALUES ('sale.created', 'orders', 'sale', NEW.id,
+          'New order: ' || NEW.product_name,
+          NEW.quantity || ' × ' || NEW.product_name || ' — ' || NEW.total_amount || ' ' || NEW.currency,
+          '/dashboard/sales/' || NEW.id,
+          jsonb_build_object('platform', NEW.platform, 'quantity', NEW.quantity,
+                             'total_amount', NEW.total_amount, 'currency', NEW.currency),
+          NEW.created_by, ARRAY['super_admin','admin','accountant'], NULL);
+      EXCEPTION
+        WHEN OTHERS THEN
+          NULL; -- notifications must never block a core write
+      END;
+      RETURN NEW;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.notify_purchase_created()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I, public
+    AS $func$
+    BEGIN
+      BEGIN
+        INSERT INTO %1$I.notifications
+          (type, category, entity_type, entity_id, title, body, link, payload, actor_id, visible_to_roles, required_permission)
+        VALUES ('purchase.created', 'purchases', 'purchase', NEW.id,
+          'New purchase: ' || NEW.product_name,
+          NEW.quantity || ' × ' || NEW.product_name || ' — ' || NEW.total_amount || ' ' || NEW.currency,
+          '/dashboard/purchases',
+          jsonb_build_object('quantity', NEW.quantity, 'total_amount', NEW.total_amount,
+                             'currency', NEW.currency, 'vendor', NEW.vendor),
+          NEW.created_by, ARRAY['super_admin','admin','accountant'], NULL);
+      EXCEPTION
+        WHEN OTHERS THEN
+          NULL; -- notifications must never block a core write
+      END;
+      RETURN NEW;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.notify_message_received()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I, public
+    AS $func$
+    BEGIN
+      IF NEW.direction = 'inbound' THEN
+        BEGIN
+          INSERT INTO %1$I.notifications
+            (type, category, entity_type, entity_id, title, body, link, payload, actor_id, visible_to_roles, required_permission)
+          VALUES ('message.received', 'messages', 'message', NEW.id,
+            'New message from ' || NEW.buyer_username,
+            coalesce(NEW.subject, left(NEW.body, 120)),
+            '/dashboard/messages',
+            jsonb_build_object('buyer_username', NEW.buyer_username, 'item_id', NEW.item_id,
+                               'subject', NEW.subject),
+            NULL, ARRAY['super_admin','admin'], 'manage_messages');
+        EXCEPTION
+          WHEN OTHERS THEN
+            NULL; -- notifications must never block a core write
+        END;
+      END IF;
+      RETURN NEW;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('DROP TRIGGER IF EXISTS notify_sale_created ON %1$I.sales', schema_name);
+  EXECUTE format('CREATE TRIGGER notify_sale_created AFTER INSERT ON %1$I.sales FOR EACH ROW EXECUTE FUNCTION %1$I.notify_sale_created()', schema_name);
+
+  EXECUTE format('DROP TRIGGER IF EXISTS notify_purchase_created ON %1$I.purchases', schema_name);
+  EXECUTE format('CREATE TRIGGER notify_purchase_created AFTER INSERT ON %1$I.purchases FOR EACH ROW EXECUTE FUNCTION %1$I.notify_purchase_created()', schema_name);
+
+  EXECUTE format('DROP TRIGGER IF EXISTS notify_message_received ON %1$I.ebay_messages', schema_name);
+  EXECUTE format('CREATE TRIGGER notify_message_received AFTER INSERT ON %1$I.ebay_messages FOR EACH ROW EXECUTE FUNCTION %1$I.notify_message_received()', schema_name);
 
 END;
 $$;

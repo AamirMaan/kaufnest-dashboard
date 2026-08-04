@@ -8,6 +8,7 @@ const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
   role: "admin",
   permission_overrides: [],
   status: "active",
+  notifications_read_through: null,
   created_at: "2026-06-01T10:00:00.000Z",
   ...overrides,
 });

@@ -55,6 +55,19 @@ New shared code from the migration:
   and in `.env.local.example`'s `CRON_SECRET`, but neither the route nor a
   `vercel.json` crons entry was ever implemented; removed as of the
   2026-07-24 audit rather than left as a dead reference)
+- **`src/app/api/notifications/` is NOT the in-app notifications feature** —
+  it's the pre-existing eBay Marketplace Account Deletion webhook
+  (`src/app/api/notifications/ebay-account-deletion/route.ts`). The naming
+  is an unfortunate collision. In-app notifications (bell, unread state, the
+  `notifications`/`notification_reads` tables) have no API routes at all —
+  the client reads/writes `notifications`/`notification_reads`/
+  `profiles.notifications_read_through` directly via `createTenantClient()`,
+  gated entirely by RLS (see `src/lib/utils/notifications.ts`,
+  `src/store/slices/notificationsSlice.ts`,
+  `src/components/layout/NotificationBell.tsx`). Do not add new routes under
+  `src/app/api/notifications/` for the bell feature — put anything
+  server-side notifications need elsewhere and cross-reference it from
+  `src/app/dashboard/CLAUDE.md` instead.
 - **Pagination architecture (Phase 3):** All main data tables use server-side
   pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
   row count via `.select("*", { count: "exact" }).range(0,
