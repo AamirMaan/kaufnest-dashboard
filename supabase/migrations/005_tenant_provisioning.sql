@@ -553,8 +553,10 @@ BEGIN
   -- ebay_listing_drafts — admin/super_admin only, all operations (mirrors platform_connections)
   EXECUTE format('CREATE POLICY "ebay_listing_drafts_all_admin" ON %1$I.ebay_listing_drafts FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
 
-  -- ebay_messages — admin/super_admin only, all operations (mirrors ebay_listing_drafts)
-  EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin'')) WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  -- ebay_messages — admin/super_admin, or a user granted the manage_messages
+  -- override (030 — without this branch, a user granted the override can see
+  -- the message.received notification (029) but not the row it points to).
+  EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages''))) WITH CHECK (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages'')))', schema_name);
 
   -- notifications — read-only: tenant members see rows their role allows,
   -- plus rows unlocked by an additive per-user permission override. There is

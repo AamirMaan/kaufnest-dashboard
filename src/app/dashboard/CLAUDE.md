@@ -141,6 +141,10 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 only by `NotificationBell` — it isn't hydrated by `dashboard/layout.tsx`
 like the paginated collections above; `NotificationBell` fetches it itself
 on mount via `fetchNotifications` (see `src/lib/utils/notifications.ts` for
-the pure `isUnread`/`unreadCount`/`synthesizeLowStock` helpers it uses). See
+the pure `isUnread`/`unreadCount`/`synthesizeLowStock`/`buildFeed`/
+`latestStoredTimestamp` helpers it uses — `buildFeed` is the only place the
+stored/synthetic merge happens, and `unreadCount` deliberately excludes
+synthetic items from the badge count since their timestamp is regenerated
+on every read). See
 `AGENTS.md` (repo root) → "Project structure" for the full
 shared-vs-feature-private map.

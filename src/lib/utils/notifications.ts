@@ -27,8 +27,43 @@ export function isUnread(n: Notification, ctx: UnreadContext): boolean {
   return true;
 }
 
+/**
+ * Count of unread STORED events only — synthetic low-stock items (see
+ * `isSynthetic`) are deliberately excluded from the aggregate count, even
+ * though `isUnread` still classifies them (used per-row, for the "unread"
+ * style in the feed). A low-stock item is a live condition, not an unseen
+ * event: `synthesizeLowStock` restamps its `created_at` to "now" on every
+ * call, so if it counted here, "mark all read" would set the watermark to
+ * that same instant and the very next render would restamp it past the new
+ * watermark — unread again. Counting it would produce a badge that can
+ * never reach zero.
+ */
 export function unreadCount(items: Notification[], ctx: UnreadContext): number {
-  return items.reduce((total, n) => (isUnread(n, ctx) ? total + 1 : total), 0);
+  return items.reduce(
+    (total, n) => (!isSynthetic(n.id) && isUnread(n, ctx) ? total + 1 : total),
+    0,
+  );
+}
+
+/**
+ * Newest `created_at` among STORED notifications only — never synthetic
+ * items, whose timestamp is stamped client-side at render time rather than
+ * by Postgres. Used to derive the "mark all read" watermark from
+ * server-generated data instead of the local clock (see `NotificationBell`'s
+ * `handleMarkAllRead`): the local clock could be skewed relative to
+ * Postgres, and a fast client clock would push the watermark ahead of the
+ * server, silently hiding notifications created in the skew window.
+ *
+ * Returns null when `items` is empty — the caller should fall back to the
+ * local clock only in that case, since there is nothing server-generated to
+ * derive a watermark from.
+ */
+export function latestStoredTimestamp(items: Notification[]): string | null {
+  if (items.length === 0) return null;
+  return items.reduce(
+    (latest, n) => (n.created_at > latest ? n.created_at : latest),
+    items[0].created_at,
+  );
 }
 
 /** Grouping label shown in the bell dropdown. */
@@ -90,4 +125,23 @@ export function synthesizeLowStock(products: LowStockProduct[]): Notification[] 
 /** True for a synthesized low-stock item, which has no persistent read state. */
 export function isSynthetic(id: string): boolean {
   return id.startsWith(LOW_STOCK_ID_PREFIX);
+}
+
+/**
+ * Merge stored notification rows with synthesized low-stock items into the
+ * single feed the bell renders.
+ *
+ * Do NOT sort this result by `created_at`. `synthesizeLowStock` regenerates
+ * that timestamp on every call (it is "now" at render time, not a stored
+ * value), so a sort would churn low-stock items to the top of the feed on
+ * every 60-second poll even though nothing about them changed. Their *id* is
+ * stable across calls — it is only the timestamp that is volatile — so the
+ * feed instead keeps a fixed order: stored events first (already
+ * newest-first from the query), synthesized low-stock items after.
+ */
+export function buildFeed(
+  stored: Notification[],
+  lowStockProducts: LowStockProduct[],
+): Notification[] {
+  return [...stored, ...synthesizeLowStock(lowStockProducts)];
 }

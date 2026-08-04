@@ -14,7 +14,8 @@ import {
 import {
   isUnread,
   unreadCount,
-  synthesizeLowStock,
+  buildFeed,
+  latestStoredTimestamp,
   isSynthetic,
   NOTIFICATION_LABELS,
 } from "@/lib/utils/notifications";
@@ -31,9 +32,10 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
   const { items, readIds, readThrough, lowStock } = useAppSelector((s) => s.notifications);
   const ctx = { readThrough, readIds: new Set(readIds), currentUserId };
 
-  // Stored events first (newest first from the query), then synthesized
-  // low-stock items, which are a live condition rather than a past event.
-  const feed = [...items, ...synthesizeLowStock(lowStock)];
+  // See buildFeed's doc comment: stored events first (newest first from the
+  // query), then synthesized low-stock items — and never sorted by
+  // created_at, since that timestamp is regenerated on every call.
+  const feed = buildFeed(items, lowStock);
   const count = unreadCount(feed, ctx);
 
   useEffect(() => {
@@ -54,15 +56,25 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
   }, []);
 
   async function handleMarkAllRead() {
-    const now = new Date().toISOString();
+    // The watermark must come from server-generated data, not this machine's
+    // clock: `notifications.created_at` is set by Postgres, but the client
+    // clock could be skewed relative to it. A client clock running fast
+    // would push the watermark ahead of the server and silently hide
+    // notifications created in the skew window. Compute it once from the
+    // stored items already in state (never the merged feed — synthetic
+    // low-stock items carry a client-stamped timestamp) and reuse the same
+    // value for both the optimistic dispatch and the Supabase write so they
+    // cannot diverge. Falls back to the local clock only when there are no
+    // stored notifications yet to derive a watermark from.
+    const readThrough = latestStoredTimestamp(items) ?? new Date().toISOString();
     // Optimistic — no rollback on failure. The next 60s poll re-fetches
     // authoritative state from the server and corrects the UI on its own.
-    dispatch(markAllRead(now));
+    dispatch(markAllRead(readThrough));
     try {
       const supabase = await createTenantClient();
       const { error: dbError } = await supabase
         .from("profiles")
-        .update({ notifications_read_through: now })
+        .update({ notifications_read_through: readThrough })
         .eq("id", currentUserId);
       if (dbError) toastError("Couldn't mark notifications as read");
     } catch {

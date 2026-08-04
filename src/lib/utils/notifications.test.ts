@@ -1,4 +1,4 @@
-import { isUnread, unreadCount, synthesizeLowStock, NOTIFICATION_LABELS, isSynthetic, LOW_STOCK_ID_PREFIX, type UnreadContext } from "./notifications";
+import { isUnread, unreadCount, synthesizeLowStock, NOTIFICATION_LABELS, isSynthetic, LOW_STOCK_ID_PREFIX, buildFeed, latestStoredTimestamp, type UnreadContext } from "./notifications";
 import type { Notification } from "@/types";
 
 function make(overrides: Partial<Notification> = {}): Notification {
@@ -64,6 +64,68 @@ describe("unreadCount", () => {
 
   it("returns zero for an empty list", () => {
     expect(unreadCount([], base)).toBe(0);
+  });
+
+  it("excludes synthetic low-stock items from the count even though they are unread", () => {
+    const stored = [make({ id: "a" }), make({ id: "b", actor_id: "me" })];
+    const synthetic = synthesizeLowStock([
+      { id: "p1", name: "Widget", sku: "W-1", current_stock: 1, reorder_threshold: 5 },
+    ]);
+    // "a" is the only unread stored item; "b" is the viewer's own action;
+    // the synthetic item would also read as unread but must not be counted.
+    expect(unreadCount([...stored, ...synthetic], base)).toBe(1);
+  });
+
+  it("returns zero for a feed of only synthetic items", () => {
+    const synthetic = synthesizeLowStock([
+      { id: "p1", name: "Widget", sku: "W-1", current_stock: 1, reorder_threshold: 5 },
+      { id: "p2", name: "Gadget", sku: "G-1", current_stock: 0, reorder_threshold: 3 },
+    ]);
+    expect(unreadCount(synthetic, base)).toBe(0);
+  });
+});
+
+describe("latestStoredTimestamp", () => {
+  it("returns the newest created_at among several items, regardless of order", () => {
+    const items = [
+      make({ id: "a", created_at: "2026-08-01T00:00:00Z" }),
+      make({ id: "b", created_at: "2026-08-03T00:00:00Z" }),
+      make({ id: "c", created_at: "2026-08-02T00:00:00Z" }),
+    ];
+    expect(latestStoredTimestamp(items)).toBe("2026-08-03T00:00:00Z");
+  });
+
+  it("returns null for an empty list", () => {
+    expect(latestStoredTimestamp([])).toBeNull();
+  });
+
+  it("returns that item's own timestamp for a single-item list", () => {
+    const items = [make({ id: "a", created_at: "2026-08-01T00:00:00Z" })];
+    expect(latestStoredTimestamp(items)).toBe("2026-08-01T00:00:00Z");
+  });
+});
+
+describe("buildFeed", () => {
+  const product = { id: "p1", name: "Widget", sku: "W-1", current_stock: 1, reorder_threshold: 5 };
+
+  it("places stored items first and synthesized low-stock items after", () => {
+    const stored = [make({ id: "a" }), make({ id: "b" })];
+    const feed = buildFeed(stored, [product]);
+    expect(feed.map((n) => n.id)).toEqual(["a", "b", "low-stock:p1"]);
+  });
+
+  it("returns just the stored items when there is no low stock", () => {
+    const stored = [make({ id: "a" }), make({ id: "b" })];
+    expect(buildFeed(stored, [])).toEqual(stored);
+  });
+
+  it("pins a fixed order so a future sort-by-created_at would fail this test", () => {
+    // The stored item's created_at is deliberately far OLDER than the
+    // synthetic item's stamp (always "now"). If buildFeed ever sorted by
+    // created_at, this stored item would land after the synthetic one.
+    const stored = [make({ id: "old", created_at: "2000-01-01T00:00:00Z" })];
+    const feed = buildFeed(stored, [product]);
+    expect(feed.map((n) => n.id)).toEqual(["old", "low-stock:p1"]);
   });
 });
 

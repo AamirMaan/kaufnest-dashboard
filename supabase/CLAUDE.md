@@ -44,6 +44,9 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `authenticated`-only grants plus the `notifications` insert/update/delete
   revoke, and the three `notify_sale_created`/`notify_purchase_created`/
   `notify_message_received` SECURITY DEFINER trigger functions + triggers.
+  Its `ebay_messages_all_admin` policy also already includes 030's
+  `OR current_user_has_override('manage_messages')` branch, so newly
+  provisioned tenants don't need 030 replayed separately.
   The notification-specific grant/revoke is executed after the function's
   blanket schema-wide `GRANT ... ON ALL TABLES` (section 7) so the revoke
   isn't immediately undone by it. **⏳ Not yet re-applied to Project B** — the
@@ -148,6 +151,20 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   all statements idempotent. Does NOT modify `apply_purchase_stock_change`/
   `apply_sale_stock_change` (002). Also baked into `provision_tenant_schema()`.
   Backs the Notifications feature.
+- `migrations/030_ebay_messages_override.sql` — redefines
+  `ebay_messages_all_admin` in every tenant schema via
+  `run_on_all_tenant_schemas`, adding an
+  `OR current_user_has_override('manage_messages')` branch to both `using`
+  and `with check` (idempotent via `drop policy if exists`). **Requires 027
+  first** (027 is what creates `ebay_messages` and the original policy).
+  Fixes the dead-end click documented in migration 029's header and
+  `src/app/dashboard/messages/SKILL.md`: a user granted the
+  `manage_messages` permission override could see the `message.received`
+  notification (029) but the table's RLS had no override branch, so they
+  couldn't read the row it pointed to. Also baked into
+  `provision_tenant_schema()` (`005_tenant_provisioning.sql`) for new
+  tenants. Backs the Messages feature
+  (`src/app/dashboard/messages/`).
 
 ## Related code
 
