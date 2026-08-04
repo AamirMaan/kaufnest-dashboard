@@ -78,9 +78,21 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   `isUnread()` (`src/lib/utils/notifications.ts`) treats a null `actor_id`
   as never matching the "caused by me" suppression rule, so these
   notifications are always eligible to be unread (subject to the normal
-  watermark/dismissal checks). Visibility is admin/super_admin by role, or
-  anyone with the `manage_messages` override — same bar as the rest of this
-  feature's RLS.
+  watermark/dismissal checks).
+- **Notification visibility is WIDER than the underlying table's RLS — a
+  known dead-end click, not a doc typo.** `notify_message_received`
+  (migration 029) inserts the `message.received` row with
+  `visible_to_roles = ['super_admin','admin']` AND
+  `required_permission = 'manage_messages'`, so migration 028's
+  `notifications_select` policy lets it through for a non-admin who has been
+  granted the `manage_messages` override. But `ebay_messages_all_admin`
+  (migrations 026/027) is `current_user_role() IN ('admin','super_admin')`
+  with **no override branch at all** — a non-admin can never read
+  `ebay_messages` rows, override or not. Net effect: a user granted
+  `manage_messages` sees the bell entry and can click it, but lands on a
+  page that can't show them the message (`/dashboard/messages`'s RLS-backed
+  fetch returns nothing for their role). If you touch either policy, check
+  the other side stays consistent — right now they've drifted.
 
 ## Tests
 

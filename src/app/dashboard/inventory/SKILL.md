@@ -85,9 +85,13 @@ since modal dropdowns use a different state key than the table.
   takes the full `products` list (fetched by `notificationsSlice` with
   `reorder_threshold is not null`, since PostgREST can't compare two columns
   in a filter) and computes `current_stock <= reorder_threshold` itself,
-  producing synthetic `Notification`-shaped objects with ids prefixed
-  `low-stock:`. Those ids are never written to `notification_reads` (its FK
-  to `notifications.id` would reject them) and must never be sorted into the
-  feed by `created_at`, since the id is restamped on every call. If you
-  change how/when `current_stock` is written, this is still correct as-is —
-  it re-derives from whatever the trigger-driven arithmetic leaves behind.
+  producing synthetic `Notification`-shaped objects with **stable** ids
+  prefixed `low-stock:${product.id}` (a colocated test asserts the same id
+  comes back across repeated calls, so polling doesn't duplicate entries).
+  Those ids are never written to `notification_reads` (its FK to
+  `notifications.id` would reject them) and the feed must never be sorted by
+  `created_at`, since — unlike the id — that field IS regenerated
+  (`new Date().toISOString()`) on every call; sorting by it would churn
+  low-stock items to the top of the feed on every 60s poll. If you change
+  how/when `current_stock` is written, this is still correct as-is — it
+  re-derives from whatever the trigger-driven arithmetic leaves behind.

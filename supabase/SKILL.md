@@ -13,7 +13,7 @@ Two Supabase projects:
 - **Project B** ("data plane") — `supabase/migrations/`. Hosts the original
   `public` schema (one company) plus one `tenant_<slug>` schema per tenant.
   Live tenants: `tenant_kaufnest`, `tenant_waqasmumtaz`, `tenant_hochkauf`,
-  `tenant_k2_textil`, `tenant_token`.
+  `tenant_k2_textil`, `tenant_testing`.
 
 ## File map + apply status
 
@@ -27,7 +27,7 @@ Two Supabase projects:
 | `migrations/006_bootstrap_tenant_kaufnest.sql` | `tenant_kaufnest` | ✅ applied — **do not re-run**, historical record only |
 | `migrations/007_company_profile_invoice_fields.sql` | `tenant_kaufnest.company_profile` | ⏳ **apply now** — adds `tax_id`/`phone`/`email`/`vat_rate`/`bank_name`/`iban`/`bic`/`invoice_prefix`/`payment_terms`/`footer_notes` columns (folds the old localStorage invoice settings into `company_profile`) |
 | `migrations/008_platform_integrations.sql` | `tenant_kaufnest` | ⏳ **apply now** — adds `platform_connections` table (+ RLS, admin/super_admin-only including SELECT) and `sales.external_order_id` + unique `(platform, external_order_id)` index, for the Integrations feature (`src/lib/integrations/`) |
-| `migrations/010_order_fees.sql` | `tenant_kaufnest.sales` | ⏳ **pending** (apply in Supabase SQL editor — Project B) — adds `shipping_cost`, `shipping_charged`, `advertising_fee` nullable `numeric(12,2)` columns with `>= 0` CHECKs; also baked into `provision_tenant_schema()` for future tenants |
+| `migrations/010_order_fees.sql` | `tenant_kaufnest.sales` | ⏳ **pending** (apply in Supabase SQL editor — Project B) — adds `shipping_cost`, `shipping_charged`, `advertising_fee` nullable `numeric(12,2)` columns with `>= 0` CHECKs; also baked into `provision_tenant_schema()` for future tenants. **Fixed 2026-08-03**: this file previously hardcoded `ALTER TABLE tenant_kaufnest.sales` instead of fanning out via `run_on_all_tenant_schemas` — the root cause of `tenant_testing` never getting these three columns. It now uses the fan-out helper (idempotent, safe to re-run) per the rule in `AGENTS.md`. |
 | `migrations/011_pagination_indexes.sql` | `tenant_kaufnest.*` | ⏳ **pending** — 4 new indexes: `audit_logs (created_at desc, action, user_id)` and `products (name asc)` for efficient pagination range queries and filter queries |
 | `migrations/012_tenant_migration_helper.sql` | `public` | ⏳ **apply first** — installs `public.run_on_all_tenant_schemas(sql text)` helper; **must be applied before any migration that uses it** |
 | `migrations/013_backfill_all_tenants.sql` | all `tenant_%` schemas | ⏳ **apply second** — backfills migrations 004/007/008/010/011 to every live tenant using the helper; replaces the per-tenant ALTERs those files previously required |
@@ -48,6 +48,15 @@ Two Supabase projects:
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
 | `control-plane/004_admin_audit_log.sql` | `control` (Project A) | ⏳ **pending** — creates `control.admin_audit_log`, written to by `/api/admin/impersonate` on every impersonation |
+
+**`dropship_listings` is still missing from four of the five tenant
+schemas** (`tenant_hochkauf`, `tenant_k2_textil`, `tenant_testing`,
+`tenant_waqasmumtaz` — only `tenant_kaufnest` has it, via 019/020/024's
+documented KaufNest-only exception to the 2-places rule). This is
+**deliberately out of scope for the notifications branch** — reconciling it
+would mean deciding whether dropshipping becomes a normal multi-tenant
+feature or stays KaufNest-only, which risks the dropshipping feature itself
+and needs its own task, not a drive-by fix here.
 
 `tenant_kaufnest` already exists in Project B with all data migrated, RLS +
 grants in place, and Phase 3 client routing verified (see
@@ -222,3 +231,24 @@ once `select("*")` over the full table stops being viable:
 - **`set_tenant_search_path` was removed** — never used by app code (every
   client passes `db.schema`/`.schema()` instead, see
   `src/lib/supabase/SKILL.md`). Don't recreate it.
+- **`notifications_select` (028) has NO automatic super_admin bypass.**
+  Unlike some other tables in this schema, the policy is a flat
+  `current_user_role() = any(visible_to_roles) OR (required_permission ...
+  has_override)` — there is no `OR current_user_role() = 'super_admin'`
+  fallback. Every trigger that inserts into `notifications` (029) must list
+  `'super_admin'` in its own `visible_to_roles` array explicitly, or a
+  platform owner sees nothing for that notification type. All three current
+  triggers (`notify_sale_created`, `notify_purchase_created`,
+  `notify_message_received`) do this correctly — check it again if you add a
+  fourth.
+- **Notification trigger inserts swallow ALL errors, silently.** Every
+  function in `029_notification_triggers.sql` wraps its `insert into
+  notifications` in `exception when others then null;`. This is deliberate —
+  a broken notification write must never abort the `sales`/`purchases`/
+  `ebay_messages` insert that triggered it — but it also means a
+  misconfigured trigger (bad column, RLS regression, etc.) fails completely
+  invisibly: no error in the client, no row in `notifications`, nothing in
+  Postgres logs beyond what `get_logs` would show if you went looking. If
+  notifications mysteriously stop appearing for one event type, check the
+  trigger function directly (e.g. via `supabase-data`'s `get_logs`) rather
+  than assuming the client-side code is at fault.
