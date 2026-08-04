@@ -281,19 +281,33 @@ In `validateRowForFormat`, replace the whole `if (totalRaw) { … } else { … }
     // Amazon: `unit_price` is the item LINE total (VAT incl) and `total` is
     // items + shipping. `total_amount` must hold items only — aggregateSales
     // computes revenue as total_amount + shipping_charged.
-    const itemTotal = unitPriceRaw ? parseLocaleNumber(unitPriceRaw) : null;
+    // `unit_price` is OPTIONAL on this format. When it is absent the item
+    // total must be BACKED OUT of the sheet total — `total` includes shipping,
+    // so using it raw would store a shipping-inclusive figure in total_amount
+    // and double-count shipping in revenue.
+    const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
+    const sheetTotal = totalRaw ? parseLocaleNumber(totalRaw) : null;
+    if (totalRaw && (sheetTotal === null || sheetTotal <= 0)) {
+      return fail(`"total" must be a positive number`);
+    }
+
+    let itemTotal: number | null;
+    if (unitPriceRaw) {
+      itemTotal = parseLocaleNumber(unitPriceRaw);
+    } else if (sheetTotal !== null) {
+      itemTotal = round2(sheetTotal - ship);
+    } else {
+      itemTotal = null;
+    }
     if (itemTotal === null || itemTotal <= 0) {
-      return fail(`"unit_price" (item line total) must be a positive number`);
+      return fail(`"unit_price" (item line total) or "total" must be a positive number`);
     }
     totalAmount = round2(itemTotal);
     unitPrice = round2(itemTotal / quantity);
 
-    if (totalRaw) {
-      const sheetTotal = parseLocaleNumber(totalRaw);
-      if (sheetTotal === null || sheetTotal <= 0) {
-        return fail(`"total" must be a positive number`);
-      }
-      const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
+    // Reconcile only when BOTH were supplied. When the item total was derived
+    // from the sheet total the identity holds by construction.
+    if (unitPriceRaw && sheetTotal !== null) {
       if (Math.abs(totalAmount + ship - sheetTotal) > 0.02) {
         return fail(
           `"total" (${round2(sheetTotal)}) does not reconcile with item total + shipping (${round2(totalAmount + ship)})`,
