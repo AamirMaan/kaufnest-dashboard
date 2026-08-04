@@ -270,13 +270,40 @@ export function validateRowForFormat(
   }
   const quantity = quantityNum;
 
-  // I4: `total` wins when present; unit_price derived when blank; both present
-  // and inconsistent (> 0.02) → row error.
   const totalRaw = raw.total?.trim();
   const unitPriceRaw = raw.unit_price?.trim();
+  const shippingChargedRaw = raw.shipping_charged?.trim();
   let totalAmount: number;
   let unitPrice: number;
-  if (totalRaw) {
+
+  if (format.priceColumnsAreLineTotals) {
+    // Amazon: `unit_price` is the item LINE total (VAT incl) and `total` is
+    // items + shipping. `total_amount` must hold items only — aggregateSales
+    // computes revenue as total_amount + shipping_charged.
+    // If unit_price is missing but total is present, use total as the item line total.
+    const itemTotal = unitPriceRaw ? parseLocaleNumber(unitPriceRaw) : (totalRaw ? parseLocaleNumber(totalRaw) : null);
+    if (itemTotal === null || itemTotal <= 0) {
+      return fail(`"unit_price" (item line total) must be a positive number`);
+    }
+    totalAmount = round2(itemTotal);
+    unitPrice = round2(itemTotal / quantity);
+
+    if (totalRaw && unitPriceRaw) {
+      // Both provided: reconcile total (items + shipping) with unit_price (item total) + shipping
+      const sheetTotal = parseLocaleNumber(totalRaw);
+      if (sheetTotal === null || sheetTotal <= 0) {
+        return fail(`"total" must be a positive number`);
+      }
+      const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
+      if (Math.abs(totalAmount + ship - sheetTotal) > 0.02) {
+        return fail(
+          `"total" (${round2(sheetTotal)}) does not reconcile with item total + shipping (${round2(totalAmount + ship)})`,
+        );
+      }
+    }
+  } else if (totalRaw) {
+    // I4: `total` wins when present; unit_price derived when blank; both
+    // present and inconsistent (> 0.02) → row error.
     const total = parseLocaleNumber(totalRaw);
     if (total === null || total <= 0) {
       return fail(`"total" must be a positive number`);

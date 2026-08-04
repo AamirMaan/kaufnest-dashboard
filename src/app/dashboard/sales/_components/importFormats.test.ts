@@ -117,15 +117,15 @@ describe("validateRowForFormat — amazon/ebay", () => {
     expect(r.data).toBeNull();
   });
 
-  it("total + consistent unit_price → both kept", () => {
-    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, unit_price: "9,99" }, 2);
+  it("total + consistent unit_price → both kept (eBay, I4 rule)", () => {
+    const r = validateRowForFormat(EBAY, { ...AMAZON_BASE, unit_price: "9,99" }, 2);
     expect(r.error).toBeNull();
     expect(r.data?.unit_price).toBe(9.99);
     expect(r.data?.total_amount).toBe(19.98);
   });
 
-  it("total disagreeing with qty × unit_price by > 0.02 → row error (I4)", () => {
-    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, unit_price: "8,00" }, 2);
+  it("total disagreeing with qty × unit_price by > 0.02 → row error (eBay, I4)", () => {
+    const r = validateRowForFormat(EBAY, { ...AMAZON_BASE, unit_price: "8,00" }, 2);
     expect(r.error).toMatch(/disagrees/);
   });
 
@@ -336,5 +336,70 @@ describe("amazon vat_rate is a fraction", () => {
     }, 2);
     expect(row.error).toBeNull();
     expect(row.data?.vat_rate).toBe(100);
+  });
+});
+
+describe("amazon line totals", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 028-4502196-4511533 from the April 2026 report.
+  it("derives a per-unit price from a line total at quantity 2", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-4502196-4511533",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "2",
+      unit_price: "16.10",
+      total: "16.10",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.unit_price).toBe(8.05);
+    expect(row.data?.total_amount).toBe(16.10);
+  });
+
+  // Order 028-7135526-5060303: items 7.99 + shipping 2.00 = total 9.99.
+  it("accepts a total that includes shipping, and stores items only", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "9.99",
+      shipping_charged: "2.00",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.unit_price).toBe(7.99);
+    // CRITICAL: 7.99, not 9.99. aggregateSales adds shipping_charged on top,
+    // so storing 9.99 here would report 11.99 revenue for a 9.99 order.
+    expect(row.data?.total_amount).toBe(7.99);
+    expect(row.data?.shipping_charged).toBe(2);
+  });
+
+  it("errors when total does not reconcile with items + shipping", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "50.00",
+      shipping_charged: "2.00",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("does not reconcile");
+  });
+
+  it("still enforces quantity x unit_price for the generic format", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.generic, {
+      date: "2026-04-30",
+      product_name: "Widget",
+      quantity: "2",
+      unit_price: "16.10",
+      total: "16.10",
+    }, 2);
+    expect(row.error).toContain("disagrees with quantity");
   });
 });
