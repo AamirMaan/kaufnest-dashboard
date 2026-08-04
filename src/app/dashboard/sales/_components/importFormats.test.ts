@@ -5,6 +5,7 @@ import {
   normalizeStatus,
   normalizePlatform,
   validateRowForFormat,
+  classifySkip,
 } from "./importFormats";
 
 const GENERIC = IMPORT_FORMATS.generic;
@@ -503,5 +504,61 @@ describe("vat_amount column", () => {
     }, 2);
     expect(row.error).toContain("vat_amount");
     expect(row.data).toBeNull();
+  });
+});
+
+describe("classifySkip", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+  const sale = {
+    order_id: "X", date: "30-04-2026", product_name: "W",
+    quantity: "1", unit_price: "7.99", total: "7.99",
+    currency: "EUR", status: "SALE",
+  };
+
+  it("passes a SALE row through", () => {
+    expect(classifySkip(amazon, sale)).toBeNull();
+  });
+
+  it("skips a wholly blank row", () => {
+    expect(classifySkip(amazon, { order_id: "", date: "", product_name: "", quantity: "" }))
+      .toBe("blank row");
+  });
+
+  // The real file's trailing row puts "Total" in the FIRST column
+  // (UNIQUE_ACCOUNT_IDENTIFIER), which is not mapped to any canonical key, and
+  // scatters two stray numbers across unmapped columns. So it is NOT blank and
+  // its order_id IS empty — detect it by the required fields all being empty.
+  it("skips the trailing Total summary row", () => {
+    expect(classifySkip(amazon, {
+      order_id: "", date: "", product_name: "", quantity: "", total: "4.46",
+    })).toBe("summary row");
+  });
+
+  it("does not mistake a real row missing only its date for a summary row", () => {
+    expect(classifySkip(amazon, { ...sale, date: "" })).toBeNull();
+  });
+
+  it.each(["REFUND", "FC_TRANSFER"])("skips %s rows", (status) => {
+    expect(classifySkip(amazon, { ...sale, status })).toBe("not a sale");
+  });
+
+  it("does NOT skip RETURN rows — they are handled as returns", () => {
+    expect(classifySkip(amazon, { ...sale, status: "RETURN" })).toBeNull();
+  });
+
+  it("skips an unsupported currency", () => {
+    expect(classifySkip(amazon, { ...sale, currency: "SEK" })).toBe("unsupported currency");
+  });
+
+  it("never skips rows for the generic format", () => {
+    expect(classifySkip(IMPORT_FORMATS.generic, { ...sale, status: "REFUND" })).toBeNull();
+    expect(classifySkip(IMPORT_FORMATS.generic, { ...sale, currency: "SEK" })).toBeNull();
+  });
+
+  it("marks the row skipped rather than errored via validateRowForFormat", () => {
+    const row = validateRowForFormat(amazon, { ...sale, currency: "SEK" }, 7);
+    expect(row.error).toBeNull();
+    expect(row.data).toBeNull();
+    expect(row.skipped).toBe("unsupported currency");
   });
 });

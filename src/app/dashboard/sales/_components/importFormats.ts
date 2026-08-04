@@ -231,6 +231,49 @@ export function normalizeStatus(raw: string | undefined): string {
   return STATUS_SYNONYMS[s.toLowerCase()] ?? s;
 }
 
+// ─── Skip classification ──────────────────────────────────────────────────
+
+export type SkipReason = "blank row" | "summary row" | "not a sale" | "unsupported currency";
+
+/** Amazon row types that are not sales and carry no importable order. */
+const NON_SALE_STATUSES = new Set(["refund", "fc_transfer"]);
+
+/**
+ * Classify a row that should be skipped rather than errored. Only applies to
+ * formats whose sheets contain non-sale rows (currently `amazon`) — a real
+ * Amazon VAT report is mostly returns, refunds, warehouse transfers, blank
+ * filler rows and a trailing `Total` summary row. Erroring on those would make
+ * the file impossible to import, since validation is all-or-nothing.
+ *
+ * RETURN is deliberately NOT skipped: it is handled as a return (Task 5).
+ */
+export function classifySkip(format: ImportFormat, raw: Record<string, string>): SkipReason | null {
+  const values = Object.values(raw).map((v) => v?.trim() ?? "");
+  if (values.every((v) => v === "")) return "blank row";
+
+  // Only the amazon sheet carries non-sale rows; other formats keep their
+  // existing all-or-nothing behaviour.
+  if (!format.priceColumnsAreLineTotals) return null;
+
+  // The trailing "Total" row puts its label in a column we do not map, and
+  // scatters a couple of stray sums across unmapped columns — so it is neither
+  // blank nor identifiable by order_id. Detect it structurally: every field a
+  // real row must have is empty.
+  const hasNoIdentity =
+    !raw.date?.trim() && !raw.product_name?.trim() && !raw.quantity?.trim();
+  if (hasNoIdentity) return "summary row";
+
+  const status = raw.status?.trim().toLowerCase() ?? "";
+  if (NON_SALE_STATUSES.has(status)) return "not a sale";
+
+  const currency = raw.currency?.trim().toUpperCase();
+  if (currency && !VALID_CURRENCIES.includes(currency as Currency)) {
+    return "unsupported currency";
+  }
+
+  return null;
+}
+
 // ─── Row validation ───────────────────────────────────────────────────────────
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -245,6 +288,11 @@ export function validateRowForFormat(
   rowNum: number,
 ): ParsedRow {
   const fail = (error: string): ParsedRow => ({ rowNum, data: null, error: `Row ${rowNum}: ${error}` });
+
+  const skipReason = classifySkip(format, raw);
+  if (skipReason) {
+    return { rowNum, data: null, error: null, skipped: skipReason };
+  }
 
   const date = parseFlexibleDate(raw.date);
   if (!date) {
