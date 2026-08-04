@@ -198,6 +198,7 @@ export default async function DashboardLayout({
     >
       <ToastProvider>
         <DashboardShell
+          userId={profile.id}
           role={profile.role}
           fullName={profile.full_name}
           email={profile.email}
