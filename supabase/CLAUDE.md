@@ -37,7 +37,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 - `migrations/005_tenant_provisioning.sql` — canonical
   `public.provision_tenant_schema(schema_name)` + `public.set_user_tenant()`,
   used by Phase 4 dynamic tenant provisioning
-  (`src/app/api/admin/provision-tenant/route.ts`).
+  (`src/app/api/admin/provision-tenant/route.ts`). `provision_tenant_schema()`
+  now also provisions the notifications stack (028/029) for every new
+  tenant: `notifications`/`notification_reads` tables,
+  `profiles.notifications_read_through`, their RLS policies and indexes, the
+  `authenticated`-only grants plus the `notifications` insert/update/delete
+  revoke, and the three `notify_sale_created`/`notify_purchase_created`/
+  `notify_message_received` SECURITY DEFINER trigger functions + triggers.
+  The notification-specific grant/revoke is executed after the function's
+  blanket schema-wide `GRANT ... ON ALL TABLES` (section 7) so the revoke
+  isn't immediately undone by it.
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
 - `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
@@ -122,7 +131,7 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   insert/update/delete policy on `notifications` — only SECURITY DEFINER triggers
   in the next migration write there); adds `profiles.notifications_read_through`
   column; includes 3 indexes and explicit revoke of inherited default privileges.
-  Baking into `provision_tenant_schema()` is a separate later task. Backs the
+  Also baked into `provision_tenant_schema()`. Backs the
   Notifications feature.
 - `migrations/029_notification_triggers.sql` — adds three SECURITY DEFINER trigger
   functions in every tenant schema via `run_on_all_tenant_schemas`:
@@ -134,8 +143,8 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   explicit 'super_admin' in `visible_to_roles` arrays (required by notification RLS),
   and exception-handled inserts so notification failures never block core writes;
   all statements idempotent. Does NOT modify `apply_purchase_stock_change`/
-  `apply_sale_stock_change` (002). Baking into `provision_tenant_schema()` is
-  a separate later task. Backs the Notifications feature.
+  `apply_sale_stock_change` (002). Also baked into `provision_tenant_schema()`.
+  Backs the Notifications feature.
 
 ## Related code
 
