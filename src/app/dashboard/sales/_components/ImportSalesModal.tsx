@@ -72,6 +72,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [checking, setChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // Amazon's report never says whether returned goods are resellable, so this
+  // is a per-import choice. It applies ONLY to returns that matched an
+  // existing sale — never to standalone unmatched returns.
+  const [restockReturns, setRestockReturns] = useState(false);
 
   // Case-insensitive SKU → product ID lookup built from the hydrated inventory.
   const skuToProductId = useMemo(() => {
@@ -240,10 +244,59 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const payload = importable.map((r) => {
+    const returnRows = importable.filter((r) => r.isReturn);
+    const insertRows = importable.filter((r) => !r.isReturn);
+
+    // Match each return on external_order_id + the product resolved from SKU.
+    // Order ids are NOT unique in an Amazon sheet — a multi-line order such as
+    // 028-6107376-1547566 appears once per SKU — so the product must be part
+    // of the key or the wrong line gets flipped.
+    const unmatchedReturns: typeof returnRows = [];
+    for (const r of returnRows) {
+      const orderId = r.data!.external_order_id;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-      return { ...r.data!, created_by: user.id, product_id: productId };
-    });
+      if (!orderId || !productId) {
+        unmatchedReturns.push(r);
+        continue;
+      }
+      const { data: match, error: matchErr } = await supabase
+        .from("sales")
+        .select("id")
+        .eq("external_order_id", orderId)
+        .eq("product_id", productId)
+        .limit(1);
+      if (matchErr) {
+        setImportError("Could not check existing orders for returns. Please try again.");
+        setLoading(false);
+        return;
+      }
+      if (!match || match.length === 0) {
+        unmatchedReturns.push(r);
+        continue;
+      }
+      const { error: updErr } = await supabase
+        .from("sales")
+        .update({ status: "returned", restock: restockReturns })
+        .eq("id", match[0].id);
+      if (updErr) {
+        setImportError("Could not update a returned order. Please try again.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    const payload = [
+      ...insertRows.map((r) => {
+        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
+        return { ...r.data!, created_by: user.id, product_id: productId };
+      }),
+      ...unmatchedReturns.map((r) => {
+        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
+        // restock stays false: there is no matching sale, so returning this to
+        // stock would create inventory the system never sold.
+        return { ...r.data!, created_by: user.id, product_id: productId, restock: false };
+      }),
+    ];
     const { data: inserted, error } = await supabase.from("sales").insert(payload).select();
     if (error) {
       setImportError(error.message);
@@ -258,7 +311,15 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       userEmail: user.email ?? "",
       action: "create",
       entityType: "sale",
-      metadata: { bulk_import: true, count: inserted.length, format: formatId, skipped: skipped.length },
+      metadata: {
+        bulk_import: true,
+        count: inserted.length,
+        format: formatId,
+        skipped: skipped.length,
+        returns_matched: returnRows.length - unmatchedReturns.length,
+        returns_unmatched: unmatchedReturns.length,
+        restock_returns: restockReturns,
+      },
     });
     if (log) dispatch(addAuditLog(log));
 
@@ -293,6 +354,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
             ))}
           </Select>
         </Field>
+
+        {parsed.some((r) => r.isReturn) && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={restockReturns}
+              onChange={(e) => setRestockReturns(e.target.checked)}
+            />
+            Return stock to inventory for matched returns
+          </label>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-muted)]">
