@@ -10,8 +10,11 @@
 -- There is deliberately NO insert policy for `authenticated` — users must never
 -- be able to forge a notification.
 --
--- NOTE: adding this schema to provision_tenant_schema() (005) is a separate
--- later task, not included in this migration. See the 2-places rule.
+-- NOTE: provision_tenant_schema() (005) has since been updated to also
+-- create this schema for new tenants (Task 7 of the notifications feature) —
+-- but 005 must be RE-APPLIED to Project B for that to take effect; until
+-- then, newly provisioned tenants still get no notifications. See the
+-- 2-places rule.
 -- ============================================================
 
 select public.run_on_all_tenant_schemas($$
