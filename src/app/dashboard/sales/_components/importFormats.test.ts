@@ -555,6 +555,18 @@ describe("classifySkip", () => {
     expect(classifySkip(IMPORT_FORMATS.generic, { ...sale, currency: "SEK" })).toBeNull();
   });
 
+  it("never skips a blank row for the generic format", () => {
+    expect(classifySkip(IMPORT_FORMATS.generic, {
+      date: "", product_name: "", quantity: "", unit_price: "",
+    })).toBeNull();
+  });
+
+  it("still skips a blank row for the amazon format", () => {
+    expect(classifySkip(IMPORT_FORMATS.amazon, {
+      date: "", product_name: "", quantity: "", unit_price: "",
+    })).toBe("blank row");
+  });
+
   it("marks the row skipped rather than errored via validateRowForFormat", () => {
     const row = validateRowForFormat(amazon, { ...sale, currency: "SEK" }, 7);
     expect(row.error).toBeNull();

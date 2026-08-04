@@ -248,12 +248,15 @@ const NON_SALE_STATUSES = new Set(["refund", "fc_transfer"]);
  * RETURN is deliberately NOT skipped: it is handled as a return (Task 5).
  */
 export function classifySkip(format: ImportFormat, raw: Record<string, string>): SkipReason | null {
+  // The format guard MUST come first. Every skip reason below — including the
+  // blank-row one — applies only to sheets that carry non-sale rows. Putting
+  // the blank check above this line would make `generic` and `ebay` silently
+  // skip blank rows instead of erroring, changing the behaviour of two formats
+  // this task must leave exactly as they are.
+  if (!format.priceColumnsAreLineTotals) return null;
+
   const values = Object.values(raw).map((v) => v?.trim() ?? "");
   if (values.every((v) => v === "")) return "blank row";
-
-  // Only the amazon sheet carries non-sale rows; other formats keep their
-  // existing all-or-nothing behaviour.
-  if (!format.priceColumnsAreLineTotals) return null;
 
   // The trailing "Total" row puts its label in a column we do not map, and
   // scatters a couple of stray sums across unmapped columns — so it is neither
