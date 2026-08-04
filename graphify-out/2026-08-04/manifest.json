@@ -385,7 +385,7 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/layout.tsx": {
-    "mtime": 1785835307.7830727,
+    "mtime": 1785830080.331566,
     "ast_hash": "80ca0c308dd5469514acc696391b5df8",
     "semantic_hash": ""
   },
@@ -555,7 +555,7 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/users/_store/usersSlice.test.ts": {
-    "mtime": 1785835307.7835674,
+    "mtime": 1785788440.8045993,
     "ast_hash": "38769a999d5d48aaf0a20e76419eb05f",
     "semantic_hash": ""
   },
@@ -585,7 +585,7 @@
     "semantic_hash": ""
   },
   "src/components/layout/DashboardShell.tsx": {
-    "mtime": 1785835307.7838016,
+    "mtime": 1785830073.0963743,
     "ast_hash": "bff9ed3f2b7da52a223dc1e0cda2dc31",
     "semantic_hash": ""
   },
@@ -915,7 +915,7 @@
     "semantic_hash": ""
   },
   "src/store/slices/currentUserSlice.test.ts": {
-    "mtime": 1785835307.784601,
+    "mtime": 1785788442.9298368,
     "ast_hash": "1354f7dd069a465d201925264df8f191",
     "semantic_hash": ""
   },
@@ -925,12 +925,12 @@
     "semantic_hash": ""
   },
   "src/store/store.ts": {
-    "mtime": 1785835307.7852943,
+    "mtime": 1785829550.7315526,
     "ast_hash": "064bde9bd0dabbc1f6d1e6470e717b17",
     "semantic_hash": ""
   },
   "src/types/index.ts": {
-    "mtime": 1785835307.785514,
+    "mtime": 1785788380.4405994,
     "ast_hash": "86bf435b98d613433efe0092adcaf74d",
     "semantic_hash": ""
   },
@@ -970,8 +970,8 @@
     "semantic_hash": ""
   },
   "supabase/migrations/005_tenant_provisioning.sql": {
-    "mtime": 1785835307.7863693,
-    "ast_hash": "3923963758b0409de36494c7274259a9",
+    "mtime": 1785828201.8764315,
+    "ast_hash": "e06768ff75bc448108568b2bb539e06a",
     "semantic_hash": ""
   },
   "supabase/migrations/006_bootstrap_tenant_kaufnest.sql": {
@@ -995,7 +995,7 @@
     "semantic_hash": ""
   },
   "supabase/migrations/010_order_fees.sql": {
-    "mtime": 1785835307.786644,
+    "mtime": 1785785055.87101,
     "ast_hash": "28140f833d3bffc18050a48e0e5ece00",
     "semantic_hash": ""
   },
@@ -1045,8 +1045,8 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1785835307.7812133,
-    "ast_hash": "7fe0cc2f18f8644de077e1f115b99334",
+    "mtime": 1785747600.215984,
+    "ast_hash": "c7926f656025496679428fc14f947b32",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -1170,8 +1170,8 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/CLAUDE.md": {
-    "mtime": 1785835307.7825787,
-    "ast_hash": "813c23fc19bec1b3e751c882757dd273",
+    "mtime": 1785747600.2216208,
+    "ast_hash": "c0ac8dfdfacd8797d28f89f6ba99a302",
     "semantic_hash": ""
   },
   "src/app/dashboard/SKILL.md": {
@@ -1225,8 +1225,8 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/inventory/SKILL.md": {
-    "mtime": 1785835307.782839,
-    "ast_hash": "1856d6da696b674cc466b214f7e5ae6a",
+    "mtime": 1784305625.604097,
+    "ast_hash": "1f633bd377ba6f23138ea1fd66f38501",
     "semantic_hash": ""
   },
   "src/app/dashboard/planner/CLAUDE.md": {
@@ -1300,13 +1300,13 @@
     "semantic_hash": ""
   },
   "supabase/CLAUDE.md": {
-    "mtime": 1785835307.7857835,
-    "ast_hash": "3f9ce689a4d5fcc43123b023fd6a0285",
+    "mtime": 1785828734.2075808,
+    "ast_hash": "00e6c34543a6affc1acbee5b3ffd9844",
     "semantic_hash": ""
   },
   "supabase/SKILL.md": {
-    "mtime": 1785835307.7860687,
-    "ast_hash": "ffae8521fa7ab06dc0bb3f260284b243",
+    "mtime": 1785828722.0866177,
+    "ast_hash": "0342b452e398f810a5ccd44b62435ac2",
     "semantic_hash": ""
   },
   "src/app/admin/_components/DeleteTenantModal.tsx": {
@@ -1795,8 +1795,8 @@
     "semantic_hash": ""
   },
   "src/app/dashboard/messages/SKILL.md": {
-    "mtime": 1785835307.7833076,
-    "ast_hash": "933538530ac7b51b101ad45586492ba6",
+    "mtime": 1785501417.5562522,
+    "ast_hash": "67114bcfc5022c877bc9b55a8f3207b1",
     "semantic_hash": ""
   },
   ".claude/hooks/_areas.py": {
@@ -1840,63 +1840,58 @@
     "semantic_hash": ""
   },
   "supabase/migrations/027_reconcile_tenant_drift.sql": {
-    "mtime": 1785835307.7868629,
+    "mtime": 1785786770.2238376,
     "ast_hash": "a99eaa00ba06587110d97ef031f79de6",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-08-03-in-app-notifications.md": {
-    "mtime": 1785835307.781652,
+    "mtime": 1785829740.0294285,
     "ast_hash": "45a850b71fd19a1772d999dd66afd492",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-03-in-app-notifications-design.md": {
-    "mtime": 1785835307.7820582,
+    "mtime": 1785773583.5498092,
     "ast_hash": "234a2ee3150b2ecfb8787f422d8c59f0",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-08-03-inventory-batch-fields-design.md": {
-    "mtime": 1785835307.7823117,
+    "mtime": 1785771614.0990746,
     "ast_hash": "01925b89e2a5703b057a980577b57d52",
     "semantic_hash": ""
   },
   "supabase/migrations/028_notifications.sql": {
-    "mtime": 1785835307.787156,
+    "mtime": 1785828742.0796893,
     "ast_hash": "d801cedb845bc2ed2eb2e2151edc11d4",
     "semantic_hash": ""
   },
   "src/lib/utils/notifications.test.ts": {
-    "mtime": 1785835307.7842095,
-    "ast_hash": "c2d3c6b5d8a35fe117567344060359eb",
+    "mtime": 1785829298.5674946,
+    "ast_hash": "71e36bf9ea1e1f4f750531c73feb22c8",
     "semantic_hash": ""
   },
   "src/lib/utils/notifications.ts": {
-    "mtime": 1785835307.784365,
-    "ast_hash": "820cea1854655f58f2507f21f749d5fe",
+    "mtime": 1785829318.8078609,
+    "ast_hash": "3ca3157c4547bef1d838a6b383eb859b",
     "semantic_hash": ""
   },
   "supabase/migrations/029_notification_triggers.sql": {
-    "mtime": 1785835307.7873816,
+    "mtime": 1785827732.9945464,
     "ast_hash": "40daff5b9044c749c7e35662a8682b1d",
     "semantic_hash": ""
   },
   "src/store/slices/notificationsSlice.test.ts": {
-    "mtime": 1785835307.7847965,
+    "mtime": 1785829818.8328295,
     "ast_hash": "51960c1c5246dbd5a11481e2cca95efe",
     "semantic_hash": ""
   },
   "src/store/slices/notificationsSlice.ts": {
-    "mtime": 1785835307.7849998,
+    "mtime": 1785829797.4934092,
     "ast_hash": "4022abb025488856d656033d5fbf5a7e",
     "semantic_hash": ""
   },
   "src/components/layout/NotificationBell.tsx": {
-    "mtime": 1785835307.7840028,
-    "ast_hash": "451f3edce8929250f92580e712448ae1",
-    "semantic_hash": ""
-  },
-  "supabase/migrations/030_ebay_messages_override.sql": {
-    "mtime": 1785835307.7876205,
-    "ast_hash": "b137686ea429ad48271af7221591b5ee",
+    "mtime": 1785830336.161338,
+    "ast_hash": "5eae1fce4624a6b3eadc6d68f55db14a",
     "semantic_hash": ""
   }
 }
