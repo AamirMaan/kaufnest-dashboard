@@ -129,11 +129,37 @@ depended on it revisited.
 ## RETURN handling
 
 1. Resolve the row's SKU to a product.
-2. Look for a sale with matching `external_order_id` **and** that product.
-3. **Matched** → set `status = 'returned'` and apply the per-import restock
-   choice.
-4. **Unmatched** → insert a standalone sale already marked `returned`, with zero
-   amounts (Amazon leaves every amount blank on RETURN rows).
+2. Look for a sale with matching `platform`, `external_order_id` **and** that
+   product.
+3. **Matched** → set `status = 'returned'`, apply the per-import restock choice,
+   dispatch `updateSale` so the Orders page reflects it without a refetch, and
+   write a per-sale audit entry.
+4. **Unmatched** → **skip the row**, reported as `return: no matching order`
+   through the Task 6 skip-reason UI. Nothing is inserted.
+
+**RETURN rows must be exempted from the duplicate pre-check** — both the
+in-file pass and the database pass. They carry an `external_order_id` by
+definition, so without a carve-out every return whose original sale exists is
+marked "order already exists" and dropped before matching can run, making the
+entire feature unreachable.
+
+### Superseded decision — standalone returned rows (2026-08-04)
+
+The original design inserted a standalone `returned` sale when a return could
+not be matched. **That is not implementable.** `idx_sales_platform_external_order_id`
+is a NON-partial unique index on `(platform, external_order_id)`, verified live
+in all five tenant schemas. A standalone row for an order id that already exists
+raises a unique violation, fails the whole batch, and surfaces the raw Postgres
+error to the user. It would fire whenever a return's SKU is not in inventory, or
+when a multi-line order has two unmatched lines.
+
+Rejected alternatives: making the index partial (needs a migration on five live
+tenants and weakens the dedup guarantee that prevents double-importing orders),
+and falling back to matching on order id alone (flips an arbitrary line of a
+multi-line order — the exact ambiguity `product_id` was added to prevent).
+
+Skipping is strictly better than the original design here: nothing is lost,
+because the skip is reported with its reason rather than silently dropped.
 
 **Unmatched returns must NEVER restock, regardless of the per-import toggle.**
 This is a deliberate carve-out. An unmatched return has no corresponding sale in

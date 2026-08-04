@@ -14,7 +14,8 @@
 
 - **`total_amount` stores the ITEM line total only — never the sheet's `total` column.** `src/app/dashboard/_lib/aggregateSales.ts:25` computes `revenue = total_amount + shipping_charged`; writing the shipping-inclusive total there double-counts shipping.
 - The sheet's `total` column is used **only** to validate `total ≈ total_amount + shipping_charged`, then discarded.
-- **Unmatched returns must NEVER restock**, regardless of the per-import toggle. Restocking a sale the system never recorded creates inventory from nothing.
+- **Unmatched returns are SKIPPED, never inserted** (amended 2026-08-04). `idx_sales_platform_external_order_id` is a NON-partial unique index on `(platform, external_order_id)`, verified live in all 5 tenants, so a standalone returned row for an existing order id raises a unique violation and fails the whole batch. They are reported as `return: no matching order` through the Task 6 skip UI. The restock toggle therefore applies only to matched returns.
+- **RETURN rows must be exempt from BOTH duplicate pre-check passes.** They carry an `external_order_id` by definition; without the carve-out every return whose original sale exists is marked "order already exists" and dropped before matching runs, making the feature unreachable.
 - `importFormats.ts` is a **pure module** — no React, Supabase or Redux imports. It is tested in `importFormats.test.ts`.
 - The `generic` and `ebay` formats must keep their current behaviour **exactly**. Only `amazon` changes.
 - German tolerance applies to all formats (decimal commas, `15.01.2024` dates) via `lib/utils/localeParse` — do not bypass `parseLocaleNumber` / `parseFlexibleDate`.
@@ -867,140 +868,124 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 7: Modal — return matching, update path and restock toggle
 
+**AMENDED 2026-08-04 after review.** Two Criticals reshaped this task:
+1. `markDuplicates` consumed RETURN rows before matching could run, making the
+   feature unreachable. Returns must be exempted from BOTH dedup passes.
+2. `idx_sales_platform_external_order_id` is a NON-partial unique index on
+   `(platform, external_order_id)` — verified live in all 5 tenants. Standalone
+   returned rows are therefore unrepresentable. **Unmatched returns are now
+   SKIPPED, not inserted.**
+
 **Files:**
 - Modify: `src/app/dashboard/sales/_components/ImportSalesModal.tsx`
 
 **Interfaces:**
-- Consumes: `ParsedRow.isReturn` and `ParsedRow.sku` (Task 5); the modal's existing `skuToProductId` map (around line 77).
+- Consumes: `ParsedRow.isReturn` and `ParsedRow.sku`; the existing
+  `skuToProductId` map; the Task 6 `skipReasonCounts` grouping.
 
-- [ ] **Step 1: Add the restock toggle state**
+- [ ] **Step 1: Exempt returns from both dedup passes**
 
-Alongside the modal's other `useState` declarations:
-
-```typescript
-  // Amazon's report never says whether returned goods are resellable, so this
-  // is a per-import choice. It applies ONLY to returns that matched an
-  // existing sale — never to standalone unmatched returns.
-  const [restockReturns, setRestockReturns] = useState(false);
-```
-
-- [ ] **Step 2: Render the toggle**
-
-Place it next to the format selector, visible only when the parsed file contains returns:
-
-```tsx
-            {parsed.some((r) => r.isReturn) && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={restockReturns}
-                  onChange={(e) => setRestockReturns(e.target.checked)}
-                />
-                Return stock to inventory for matched returns
-              </label>
-            )}
-```
-
-- [ ] **Step 3: Split returns from inserts in the submit handler**
-
-In the handler that currently builds `payload` and calls `.insert(payload)` (around line 232), split the importable rows first:
+In `markDuplicates`, skip RETURN rows entirely — they are not new orders and
+must reach the matching path:
 
 ```typescript
-    const returnRows = importable.filter((r) => r.isReturn);
-    const insertRows = importable.filter((r) => !r.isReturn);
+      // RETURN rows are not new orders. They carry the external_order_id of an
+      // EXISTING sale by definition, so the dedup passes would mark every one
+      // "order already exists" and drop it before matching could run.
+      if (r.isReturn) return r;
 ```
 
-- [ ] **Step 4: Resolve and apply matched returns**
+Place this guard at the top of BOTH the in-file pass and the
+already-exists pass, before either inspects `external_order_id`.
 
-Before the insert, add:
+- [ ] **Step 2: Include platform in the match query**
+
+Order ids are unique per `(platform, external_order_id)`, not globally. Add the
+platform predicate so an eBay sale sharing an order id cannot be flipped:
 
 ```typescript
-    // Match each return on external_order_id + the product resolved from SKU.
-    // Order ids are NOT unique in an Amazon sheet — a multi-line order such as
-    // 028-6107376-1547566 appears once per SKU — so the product must be part
-    // of the key or the wrong line gets flipped.
-    const unmatchedReturns: typeof returnRows = [];
-    for (const r of returnRows) {
-      const orderId = r.data!.external_order_id;
-      const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-      if (!orderId || !productId) {
-        unmatchedReturns.push(r);
-        continue;
-      }
       const { data: match, error: matchErr } = await supabase
         .from("sales")
-        .select("id")
+        .select("*")
+        .eq("platform", r.data!.platform)
         .eq("external_order_id", orderId)
         .eq("product_id", productId)
         .limit(1);
-      if (matchErr) {
-        setError("Could not check existing orders for returns. Please try again.");
-        return;
-      }
-      if (!match || match.length === 0) {
+```
+
+Note `select("*")` rather than `select("id")` — the Redux dispatch in Step 4
+needs the full row.
+
+- [ ] **Step 3: Skip unmatched returns instead of inserting them**
+
+Replace the `unmatchedReturns` insert path. An unmatched return is marked
+skipped with a reason, which the Task 6 UI already renders:
+
+```typescript
+      if (!orderId || !productId || !match || match.length === 0) {
         unmatchedReturns.push(r);
         continue;
       }
-      const { error: updErr } = await supabase
+```
+
+and after the loop, surface them through the same skip mechanism rather than
+building an insert payload for them. They must NOT appear in `payload`.
+
+- [ ] **Step 4: Dispatch updateSale and write a per-sale audit entry**
+
+After a successful update, keep Redux and the audit trail in step:
+
+```typescript
+      const { data: updated, error: updErr } = await supabase
         .from("sales")
         .update({ status: "returned", restock: restockReturns })
-        .eq("id", match[0].id);
-      if (matchErr || updErr) {
-        setError("Could not update a returned order. Please try again.");
+        .eq("id", match[0].id)
+        .select()
+        .single();
+      if (updErr) {
+        setImportError("Could not update a returned order. Please try again.");
         return;
       }
-    }
+      dispatch(updateSale(updated as Sale));
+      await writeAuditLog({
+        action: "status_change",
+        entityType: "sale",
+        entityId: match[0].id,
+        metadata: {
+          from: match[0].status,
+          to: "returned",
+          restock: restockReturns,
+          source: "amazon_import",
+        },
+      });
 ```
 
-- [ ] **Step 5: Insert unmatched returns standalone, with restock forced false**
+Match the exact `writeAuditLog` signature already used elsewhere in this file —
+read it first rather than copying this shape blindly.
 
-Build the insert payload from `insertRows` plus `unmatchedReturns`, forcing `restock: false` on the latter:
+- [ ] **Step 5: Clear the toggle on reset, and hide it when no return is actionable**
+
+Add `setRestockReturns(false)` to the modal's `reset()`, and gate the toggle on
+a return that is not skipped:
 
 ```typescript
-    const payload = [
-      ...insertRows.map((r) => {
-        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-        return { ...r.data!, created_by: user.id, product_id: productId };
-      }),
-      ...unmatchedReturns.map((r) => {
-        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-        // restock stays false: there is no matching sale, so returning this to
-        // stock would create inventory the system never sold.
-        return { ...r.data!, created_by: user.id, product_id: productId, restock: false };
-      }),
-    ];
+{parsed.some((r) => r.isReturn && !r.skipped) && ( … )}
 ```
 
-- [ ] **Step 6: Record it in the audit metadata**
+- [ ] **Step 6: Ask the user to verify in the browser**
 
-Extend the existing `writeAuditLog` metadata object (around line 249) with:
+Do not start a dev server. Ask the user to import the April sheet and confirm:
+matched returns flip an existing order to *returned* and the Orders page updates
+without a refresh; unmatched returns appear in the skip summary as
+`return: no matching order`; with the toggle ON, inventory rises only for
+matched returns; and the return against `K2T-PFM-024` does not flip the
+`100-CNC-3842-5P` line of order `028-6107376-1547566`.
 
-```typescript
-        returns_matched: returnRows.length - unmatchedReturns.length,
-        returns_unmatched: unmatchedReturns.length,
-        restock_returns: restockReturns,
-```
-
-- [ ] **Step 7: Ask the user to verify in the browser**
-
-Do not start a dev server. Ask the user to import the April sheet and confirm: matched returns flip an existing order to *returned*; unmatched returns appear as new zero-value returned orders; and with the toggle ON, inventory rises only for matched returns.
-
-**Note on a spec test case that cannot be a unit test.** The spec asks for a
-test proving a multi-line order (`028-6107376-1547566`, two SKUs) matches the
-correct line rather than the first one sharing the order id. That logic lives in
-this modal and needs Supabase, so it is not testable in the pure module. It is
-covered by the `.eq("external_order_id", …).eq("product_id", …)` compound key in
-Step 4 and must be confirmed in the browser here — import the April sheet and
-check that the return against `K2T-PFM-024` does not flip the
-`100-CNC-3842-5P` line of the same order.
-
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/dashboard/sales/_components/ImportSalesModal.tsx
-git commit -m "feat(sales-import): match Amazon returns to existing sales
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+git commit -m "feat(sales-import): match Amazon returns to existing sales"
 ```
 
 ---
