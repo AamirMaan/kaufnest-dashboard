@@ -140,17 +140,5 @@
   "138": "@types/node",
   "139": "@types/react",
   "140": "typescript",
-  "141": "page.tsx",
-  "142": "@types/react",
-  "143": "typescript",
-  "144": "postcss.config.mjs",
-  "145": "page.tsx",
-  "146": "page.tsx",
-  "147": "layout.tsx",
-  "148": "page.tsx",
-  "149": "feedback_shadcn_ui.md",
-  "150": "auth.spec.ts",
-  "151": "invoice.spec.ts",
-  "152": "order-detail.spec.ts",
-  "153": "playwright.config.ts"
+  "141": "page.tsx"
 }
