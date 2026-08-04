@@ -91,6 +91,18 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const importable = parsed.filter((r) => r.data !== null && !r.skipped);
   const canImport = parsed.length > 0 && errors.length === 0 && importable.length > 0 && !checking;
 
+  // Group skipped rows by reason (duplicate, blank row, summary row, not a
+  // sale, unsupported currency, …) so the summary/all-skipped messages below
+  // can name the real reasons instead of assuming everything is a duplicate.
+  const skipReasonCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of parsed) {
+      if (!r.skipped) continue;
+      counts.set(r.skipped, (counts.get(r.skipped) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [parsed]);
+
   const skuMatchCount = importable.filter(
     (r) => r.sku && skuToProductId.has(r.sku.toLowerCase()),
   ).length;
@@ -324,13 +336,19 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
                   <span className="text-[var(--color-text-muted)]"> · {skuMatchCount} linked to inventory via SKU</span>
                 )}
                 {skipped.length > 0 && (
-                  <span className="text-[var(--color-text-muted)]"> · {skipped.length} skipped (order already exists)</span>
+                  <span className="text-[var(--color-text-muted)]">
+                    {" · "}{skipped.length} skipped
+                    {" ("}
+                    {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}
+                    {")"}
+                  </span>
                 )}
               </p>
             )}
             {!checking && errors.length === 0 && importable.length === 0 && skipped.length > 0 && (
               <p className="text-sm text-[var(--color-text-muted)]">
-                All {skipped.length} row{skipped.length !== 1 ? "s" : ""} skipped — these orders already exist.
+                All {skipped.length} row{skipped.length !== 1 ? "s" : ""} skipped —{" "}
+                {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}.
               </p>
             )}
             {errors.length > 0 && (
