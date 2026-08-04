@@ -28,10 +28,10 @@ const initialState: NotificationsState = {
  * RLS does the filtering — this deliberately has no role/permission logic.
  * Whatever Postgres returns is exactly what this user is allowed to see.
  *
- * All THREE pieces of read state must be fetched together. Fetching only the
- * notifications would leave `readThrough`/`readIds` empty, so every poll would
- * re-count read items as unread and silently undo "mark all read".
- * `notification_reads` is already scoped to the current user by RLS.
+ * All FOUR pieces of state must be fetched and written together. Fetching only
+ * notifications/reads/watermark without lowStock, or omitting any write to state,
+ * causes stale data on the next poll. `notification_reads` is already scoped to
+ * the current user by RLS.
  */
 export const fetchNotifications = createAsyncThunk(
   "notifications/fetch",
@@ -73,19 +73,52 @@ export const fetchNotifications = createAsyncThunk(
   },
 );
 
+// ─── Shared hydration helper ────────────────────────────────────────────────────
+
+/**
+ * Apply all four fetched fields to state. Both entry points (hydrateNotifications
+ * and fetchNotifications.fulfilled) must write items, readIds, readThrough, and
+ * lowStock together, else one path will omit a field and cause stale data on
+ * the next poll.
+ */
+function applyHydrate(
+  state: NotificationsState,
+  payload: {
+    data: Notification[];
+    readIds: string[];
+    readThrough: string | null;
+    lowStock: LowStockProduct[];
+  }
+) {
+  state.items = payload.data;
+  state.readIds = payload.readIds;
+  state.readThrough = payload.readThrough;
+  state.lowStock = payload.lowStock;
+  state.loaded = true;
+  state.isFetching = false;
+}
+
+// ─── Slice ─────────────────────────────────────────────────────────────────────
+
 export const notificationsSlice = createSlice({
   name: "notifications",
   initialState,
   reducers: {
     hydrateNotifications: (
       state,
-      action: PayloadAction<{ data: Notification[]; readThrough: string | null; readIds: string[] }>,
+      action: PayloadAction<{
+        data: Notification[];
+        readThrough: string | null;
+        readIds: string[];
+        lowStock?: LowStockProduct[];
+      }>,
     ) => {
-      state.items = action.payload.data;
-      state.readThrough = action.payload.readThrough;
-      state.readIds = action.payload.readIds;
-      state.loaded = true;
-      state.isFetching = false;
+      applyHydrate(state, {
+        data: action.payload.data,
+        readIds: action.payload.readIds,
+        readThrough: action.payload.readThrough,
+        lowStock: action.payload.lowStock ?? [],
+      });
     },
     markAllRead: (state, action: PayloadAction<string>) => {
       state.readThrough = action.payload;
@@ -105,15 +138,15 @@ export const notificationsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchNotifications.pending, (state) => { state.isFetching = true; })
-      .addCase(fetchNotifications.fulfilled, (state, action) => {
-        state.items = action.payload.data;
-        state.readIds = action.payload.readIds;
-        state.readThrough = action.payload.readThrough;
-        state.loaded = true;
-        state.isFetching = false;
+      .addCase(fetchNotifications.pending, (state) => {
+        state.isFetching = true;
       })
-      .addCase(fetchNotifications.rejected, (state) => { state.isFetching = false; });
+      .addCase(fetchNotifications.fulfilled, (state, action) => {
+        applyHydrate(state, action.payload);
+      })
+      .addCase(fetchNotifications.rejected, (state) => {
+        state.isFetching = false;
+      });
   },
 });
 
