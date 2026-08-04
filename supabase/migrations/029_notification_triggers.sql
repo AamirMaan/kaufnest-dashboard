@@ -7,13 +7,25 @@
 -- writeAuditLog() would miss all three, and the symptom would look like
 -- "notifications randomly don't fire for eBay orders".
 --
+-- Low stock is deliberately NOT a trigger here. It is a STATE (not an EVENT) and
+-- is evaluated on read by the client instead of stored as notification rows.
+-- Reason: apply_sale_stock_change (002) edits an existing sale via a
+-- revert-then-reapply pattern (two UPDATEs). The revert temporarily lifts stock
+-- above the threshold, which falsely fires the crossing condition and produces
+-- a spurious duplicate low-stock notification. A stored crossing event cannot
+-- distinguish between a genuine downward cross and a revert-side-effect upward
+-- cross, so low stock instead flips at READ time.
+--
 -- These are NEW, SEPARATE triggers. They do NOT modify
 -- apply_purchase_stock_change / apply_sale_stock_change (002), which own all
 -- stock arithmetic and are the riskiest code in the schema.
 --
 -- All functions are SECURITY DEFINER so they can insert into `notifications`,
 -- which has no insert policy for `authenticated` — users must never be able to
--- forge a notification. search_path is pinned on every one.
+-- forge a notification. search_path is pinned on every one. Notification inserts
+-- are wrapped in exception handlers so they never block a core business write
+-- (e.g. a failed notifications insert must not abort the sale INSERT that fired
+-- the trigger).
 -- ============================================================
 
 select public.run_on_all_tenant_schemas($$
@@ -23,25 +35,31 @@ select public.run_on_all_tenant_schemas($$
   set search_path = {{schema}}, public
   as $fn$
   begin
-    insert into {{schema}}.notifications
-      (type, category, entity_type, entity_id, title, body, link,
-       payload, actor_id, visible_to_roles, required_permission)
-    values (
-      'sale.created', 'orders', 'sale', new.id,
-      'New order: ' || new.product_name,
-      new.quantity || ' × ' || new.product_name || ' — '
-        || new.total_amount || ' ' || new.currency,
-      '/dashboard/sales/' || new.id,
-      jsonb_build_object(
-        'platform',     new.platform,
-        'quantity',     new.quantity,
-        'total_amount', new.total_amount,
-        'currency',     new.currency
-      ),
-      new.created_by,
-      array['super_admin','admin','accountant'],
-      null
-    );
+    -- Notifications must never block a core business write.
+    begin
+      insert into {{schema}}.notifications
+        (type, category, entity_type, entity_id, title, body, link,
+         payload, actor_id, visible_to_roles, required_permission)
+      values (
+        'sale.created', 'orders', 'sale', new.id,
+        'New order: ' || new.product_name,
+        new.quantity || ' × ' || new.product_name || ' — '
+          || new.total_amount || ' ' || new.currency,
+        '/dashboard/sales/' || new.id,
+        jsonb_build_object(
+          'platform',     new.platform,
+          'quantity',     new.quantity,
+          'total_amount', new.total_amount,
+          'currency',     new.currency
+        ),
+        new.created_by,
+        array['super_admin','admin','accountant'],
+        null
+      );
+    exception
+      when others then
+        null;  -- notifications must never block a core write
+    end;
     return new;
   end;
   $fn$;
@@ -57,25 +75,31 @@ select public.run_on_all_tenant_schemas($$
   set search_path = {{schema}}, public
   as $fn$
   begin
-    insert into {{schema}}.notifications
-      (type, category, entity_type, entity_id, title, body, link,
-       payload, actor_id, visible_to_roles, required_permission)
-    values (
-      'purchase.created', 'purchases', 'purchase', new.id,
-      'New purchase: ' || new.product_name,
-      new.quantity || ' × ' || new.product_name || ' — '
-        || new.total_amount || ' ' || new.currency,
-      '/dashboard/purchases',
-      jsonb_build_object(
-        'quantity',     new.quantity,
-        'total_amount', new.total_amount,
-        'currency',     new.currency,
-        'vendor',       new.vendor
-      ),
-      new.created_by,
-      array['super_admin','admin','accountant'],
-      null
-    );
+    -- Notifications must never block a core business write.
+    begin
+      insert into {{schema}}.notifications
+        (type, category, entity_type, entity_id, title, body, link,
+         payload, actor_id, visible_to_roles, required_permission)
+      values (
+        'purchase.created', 'purchases', 'purchase', new.id,
+        'New purchase: ' || new.product_name,
+        new.quantity || ' × ' || new.product_name || ' — '
+          || new.total_amount || ' ' || new.currency,
+        '/dashboard/purchases',
+        jsonb_build_object(
+          'quantity',     new.quantity,
+          'total_amount', new.total_amount,
+          'currency',     new.currency,
+          'vendor',       new.vendor
+        ),
+        new.created_by,
+        array['super_admin','admin','accountant'],
+        null
+      );
+    exception
+      when others then
+        null;  -- notifications must never block a core write
+    end;
     return new;
   end;
   $fn$;
@@ -84,46 +108,6 @@ select public.run_on_all_tenant_schemas($$
   create trigger notify_purchase_created
     after insert on {{schema}}.purchases
     for each row execute function {{schema}}.notify_purchase_created();
-
-  -- ── product.low_stock ─────────────────────────────────────
-  -- Fires ONLY on the downward crossing. Selling ten more units below the
-  -- threshold produces nothing further, and the condition re-arms by itself
-  -- when a purchase lifts stock back above the threshold. No state column.
-  create or replace function {{schema}}.notify_low_stock()
-  returns trigger language plpgsql security definer
-  set search_path = {{schema}}, public
-  as $fn$
-  begin
-    if new.reorder_threshold is not null
-       and new.current_stock <= new.reorder_threshold
-       and (old.reorder_threshold is null
-            or old.current_stock > old.reorder_threshold) then
-      insert into {{schema}}.notifications
-        (type, category, entity_type, entity_id, title, body, link,
-         payload, actor_id, visible_to_roles, required_permission)
-      values (
-        'product.low_stock', 'inventory', 'product', new.id,
-        'Low stock: ' || new.name,
-        new.current_stock || ' left (threshold ' || new.reorder_threshold || ')',
-        '/dashboard/inventory',
-        jsonb_build_object(
-          'sku',               new.sku,
-          'current_stock',     new.current_stock,
-          'reorder_threshold', new.reorder_threshold
-        ),
-        null,
-        array['super_admin','admin','accountant'],
-        null
-      );
-    end if;
-    return new;
-  end;
-  $fn$;
-
-  drop trigger if exists notify_low_stock on {{schema}}.products;
-  create trigger notify_low_stock
-    after update on {{schema}}.products
-    for each row execute function {{schema}}.notify_low_stock();
 
   -- ── message.received ──────────────────────────────────────
   -- Inbound only. actor_id is null: the actor is an external buyer, not a
@@ -135,23 +119,29 @@ select public.run_on_all_tenant_schemas($$
   as $fn$
   begin
     if new.direction = 'inbound' then
-      insert into {{schema}}.notifications
-        (type, category, entity_type, entity_id, title, body, link,
-         payload, actor_id, visible_to_roles, required_permission)
-      values (
-        'message.received', 'messages', 'message', new.id,
-        'New message from ' || new.buyer_username,
-        coalesce(new.subject, left(new.body, 120)),
-        '/dashboard/messages',
-        jsonb_build_object(
-          'buyer_username', new.buyer_username,
-          'item_id',        new.item_id,
-          'subject',        new.subject
-        ),
-        null,
-        array['super_admin','admin'],
-        'manage_messages'
-      );
+      -- Notifications must never block a core business write.
+      begin
+        insert into {{schema}}.notifications
+          (type, category, entity_type, entity_id, title, body, link,
+           payload, actor_id, visible_to_roles, required_permission)
+        values (
+          'message.received', 'messages', 'message', new.id,
+          'New message from ' || new.buyer_username,
+          coalesce(new.subject, left(new.body, 120)),
+          '/dashboard/messages',
+          jsonb_build_object(
+            'buyer_username', new.buyer_username,
+            'item_id',        new.item_id,
+            'subject',        new.subject
+          ),
+          null,
+          array['super_admin','admin'],
+          'manage_messages'
+        );
+      exception
+        when others then
+          null;  -- notifications must never block a core write
+      end;
     end if;
     return new;
   end;
