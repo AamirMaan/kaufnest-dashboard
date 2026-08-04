@@ -37,9 +37,14 @@ export interface ParsedRow {
   sku?: string | null;
   /**
    * Amazon RETURN row. The modal matches it to an existing sale by
-   * external_order_id + resolved product and flips that sale's status;
-   * when unmatched it inserts this row standalone. Amounts are all zero
-   * because Amazon leaves every money column blank on RETURN rows.
+   * platform + external_order_id + resolved product and flips that sale's
+   * status; when unmatched it is SKIPPED (`return: no matching order`),
+   * never inserted standalone — `idx_sales_platform_external_order_id` is a
+   * non-partial unique index on (platform, external_order_id), so a
+   * standalone insert for an order id that's already taken (or was never a
+   * real order) would raise a unique violation and fail the whole batch.
+   * `unit_price`/`total_amount` are zeroed because Amazon leaves every money
+   * column blank on RETURN rows.
    */
   isReturn?: boolean;
 }
@@ -339,8 +344,10 @@ export function validateRowForFormat(
 
   if (isReturnRow) {
     // Amazon RETURN rows carry no money columns at all, so the normal amount
-    // validation cannot run. Zero the amounts; the modal either flips an
-    // existing sale's status or inserts this standalone.
+    // validation cannot run. Zero the amounts; the modal matches this row
+    // against an existing sale and flips its status, or skips it as
+    // `return: no matching order` when no match is found — it is never
+    // inserted standalone.
     // `date`, `productName`, `platform` and `quantity` are already validated
     // above — do not re-parse them.
     const returnOrderId = raw.order_id?.trim() || null;

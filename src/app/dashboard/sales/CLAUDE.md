@@ -341,8 +341,10 @@ first statement in the function — putting the blank-row check above it would
 make `generic` and `ebay` silently skip blank rows instead of erroring them.
 
 **Amazon RETURN rows:** `validateRowForFormat` parses these into a row with
-all money fields zeroed, `status: "returned"`, `restock: false`, and
-`isReturn: true` — Amazon leaves every money column blank on a RETURN line.
+`unit_price`/`total_amount` zeroed (`vat_rate`, `vat_amount`,
+`shipping_cost`, `shipping_charged`, and `advertising_fee` are `null`, not
+`0`), `status: "returned"`, `restock: false`, and `isReturn: true` — Amazon
+leaves every money column blank on a RETURN line.
 `ImportSalesModal.handleImport` then tries to match each one to an existing
 sale on **platform + `external_order_id` + resolved `product_id`** (from
 `sku`) — Amazon order ids are not unique within a sheet, a multi-line order
