@@ -55,10 +55,19 @@ function isExcelFile(name: string) {
   return name.endsWith(".xlsx") || name.endsWith(".xls");
 }
 
+/** Outcome summary passed to `onSuccess` — a returns-only import can insert
+ * zero rows and still have done real work (matched returns, or skipped ones
+ * with no matching order), so a bare inserted-count would silently hide that. */
+export interface ImportSummary {
+  inserted: number;
+  returnsMatched: number;
+  returnsSkipped: number;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSuccess: (count: number) => void;
+  onSuccess: (summary: ImportSummary) => void;
 }
 
 export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
@@ -368,7 +377,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
     setLoading(false);
     reset();
-    onSuccess(inserted.length);
+    onSuccess({
+      inserted: inserted.length,
+      returnsMatched: returnRows.length - unmatchedReturns.length,
+      returnsSkipped: unmatchedReturns.length,
+    });
     onClose();
   }
 
