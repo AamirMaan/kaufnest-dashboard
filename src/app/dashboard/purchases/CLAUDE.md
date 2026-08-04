@@ -91,8 +91,9 @@ editable fields.
   per-record (e.g. reduced 7% rate on some goods); the amount is extracted from
   the gross total via
   `vatAmountFromGross` (`lib/utils/currency`). Both stay `null` when the toggle
-  is off — `total_amount` (generated column) remains the gross/paid figure
-  either way.
+  is off — `total_amount` (a plain writable `numeric(12,2) NOT NULL` column,
+  not a generated one — verified live: `is_generated = NEVER`) remains the
+  gross/paid figure either way.
 
 ## Sale link (`sale_id`)
 

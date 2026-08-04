@@ -94,6 +94,47 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `lib/utils/csv.ts`) — affects the purchases/expenses imports too, since they
   share `parseCsvText`.
 
+## Gotchas — Amazon VAT-report import (`priceColumnsAreLineTotals`/`vatRateIsFraction`)
+
+- **`total_amount` stores the ITEM line total, never the sheet's `total`.**
+  `app/dashboard/_lib/aggregateSales.ts:25` computes revenue as `total_amount
+  + shipping_charged`, so storing the shipping-inclusive sheet total there
+  double-counts shipping. `total` is used only to validate `total ≈
+  total_amount + shipping_charged`, then discarded.
+- **Amazon's `unit_price` column is optional; when it's absent, back the item
+  total OUT of the sheet total** (`sheetTotal - shippingCharged`) — using the
+  sheet total raw reopens the same double-count as above. See
+  `validateRowForFormat`'s `priceColumnsAreLineTotals` branch in
+  `importFormats.ts`.
+- **Amazon writes VAT rates as fractions (`0.19`), not percentages.** Scaling
+  is driven by the `vatRateIsFraction` format flag, never by the value's
+  magnitude — an `if (rate < 1)` check would silently mishandle a genuine
+  100% rate.
+- **In `classifySkip` the format guard (`if
+  (!format.priceColumnsAreLineTotals) return null`) must be the FIRST
+  statement.** Putting the blank-row check above it makes `generic` and
+  `ebay` silently skip blank rows instead of erroring them — those two
+  formats must keep their pre-existing all-or-nothing validation behaviour.
+- **RETURN rows must be exempt from BOTH duplicate pre-check passes**
+  (file-level dupes and the DB `.in()` check in `markDuplicates`) — they
+  carry the `external_order_id` of an existing order by definition, so
+  without the carve-out every return is dropped as "order already exists"
+  and the matching path in `handleImport` never runs.
+- **Amazon order ids are NOT unique** — a multi-line order (one line per SKU)
+  repeats the same `order_id`. Return matching keys on platform +
+  `external_order_id` + resolved `product_id`, never `external_order_id`
+  alone, or the wrong line gets flipped.
+- **Unmatched returns are skipped, not inserted.** A non-partial UNIQUE index
+  on `(platform, external_order_id)` exists in every tenant schema (verified
+  live) — a standalone insert for an order id with no matching line (or a
+  second line of an already-matched order) raises a unique violation and
+  fails the *whole* batch, not just that row. `handleImport` marks these
+  `skipped: "return: no matching order"` instead.
+- **The `ParsedRow.isReturn` JSDoc in `importFormats.ts` is stale** — it says
+  an unmatched return "inserts this row standalone", which was the original
+  design but is no longer what the code does (see the point above). Don't
+  trust that comment; the modal's `handleImport` is the source of truth.
+
 ## Gotchas — server-side pagination
 
 - **Do not call `filterSales()` in `page.tsx`** — filters are pushed to Supabase
