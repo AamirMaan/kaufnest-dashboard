@@ -422,3 +422,53 @@ describe("amazon line totals", () => {
     expect(row.data?.shipping_charged).toBe(4.99);
   });
 });
+
+describe("vat_amount column", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 028-7135526-5060303: item VAT 1.28 + shipping VAT 0.32 = 1.60.
+  it("prefers the CSV vat_amount over deriving it", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "9.99",
+      shipping_charged: "2.00",
+      vat_rate: "0.19",
+      vat_amount: "1.60",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(1.6);
+  });
+
+  it("still derives vat_amount when the column is absent", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "11.90",
+      total: "11.90",
+      vat_rate: "0.19",
+      currency: "EUR",
+    }, 2);
+    expect(row.data?.vat_amount).toBeCloseTo(1.9, 1);
+  });
+
+  it("rejects a negative vat_amount", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "7.99",
+      vat_amount: "-1",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("vat_amount");
+  });
+});

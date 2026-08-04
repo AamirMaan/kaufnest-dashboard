@@ -78,6 +78,7 @@ const ALIASES: Record<string, string[]> = {
   total: ["total", "total_amount", "gesamt", "gesamtbetrag", "gesamtpreis", "brutto", "verkaufsbetrag", "summe"],
   currency: ["currency", "währung", "waehrung"],
   vat_rate: ["vat_rate", "vat", "mwst", "mwst-satz", "mwst.", "ust", "ust-satz", "steuersatz"],
+  vat_amount: ["vat_amount", "vat_betrag", "mwst_betrag", "mwstbetrag", "steuerbetrag"],
   status: ["status", "bestellstatus"],
   description: ["description", "beschreibung", "bemerkung", "notiz", "kommentar"],
   shipping_charged: ["shipping_charged", "shipping", "versand", "versandkosten"],
@@ -102,6 +103,7 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("unit_price", false),
   col("currency", false),
   col("vat_rate", false),
+  col("vat_amount", false),
   col("shipping_charged", false),
   col("shipping_cost", false),
   col("advertising_fee", false),
@@ -110,7 +112,7 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("sku", false),
 ];
 
-const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "shipping_charged", "shipping_cost", "advertising_fee", "status", "description", "sku"];
+const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "vat_amount", "shipping_charged", "shipping_cost", "advertising_fee", "status", "description", "sku"];
 
 export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
   generic: {
@@ -144,7 +146,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
-    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "4,99", "3,20", "1,50", "shipped", "", "WIDGET-BLU"],
+    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "shipped", "", "WIDGET-BLU"],
     vatRateIsFraction: true,
     priceColumnsAreLineTotals: true,
   },
@@ -154,7 +156,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     forcedPlatform: "ebay",
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
-    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "5,99", "4,10", "0,80", "shipped", "Promoted Listings fee in advertising_fee", "WIDGET-BLU"],
+    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "4,75", "5,99", "4,10", "0,80", "shipped", "Promoted Listings fee in advertising_fee", "WIDGET-BLU"],
   },
 };
 
@@ -358,7 +360,21 @@ export function validateRowForFormat(
   if (vatRateRaw && (vatRate === null || vatRate < 0 || vatRate > 100)) {
     return fail(`"vat_rate" must be between 0 and 100`);
   }
-  const vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
+
+  // Amazon supplies the COMBINED item + shipping VAT. Deriving from a single
+  // rate is wrong when the shipping VAT rate differs from the item rate —
+  // which it does on the Swedish rows (25 %).
+  const vatAmountRaw = raw.vat_amount?.trim();
+  let vatAmount: number | null;
+  if (vatAmountRaw) {
+    const parsed = parseLocaleNumber(vatAmountRaw);
+    if (parsed === null || parsed < 0) {
+      return fail(`"vat_amount" must be a non-negative number`);
+    }
+    vatAmount = round2(parsed);
+  } else {
+    vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
+  }
 
   const fee = (key: "shipping_cost" | "shipping_charged" | "advertising_fee"): { value: number | null; error?: string } => {
     const s = raw[key]?.trim();
