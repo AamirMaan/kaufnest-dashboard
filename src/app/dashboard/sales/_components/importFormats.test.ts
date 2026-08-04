@@ -132,7 +132,7 @@ describe("validateRowForFormat — amazon/ebay", () => {
   it("vat + fees parse with decimal commas", () => {
     const r = validateRowForFormat(
       AMAZON,
-      { ...AMAZON_BASE, vat_rate: "19", shipping_charged: "4,99", shipping_cost: "3,20", advertising_fee: "1,50" },
+      { ...AMAZON_BASE, vat_rate: "0,19", shipping_charged: "4,99", shipping_cost: "3,20", advertising_fee: "1,50" },
       2,
     );
     expect(r.error).toBeNull();
@@ -321,5 +321,20 @@ describe("amazon vat_rate is a fraction", () => {
       vat_rate: "19",
     }, 2);
     expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("scales the edge case 1 (100%) to 100", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "506-5555555-5555555",
+      date: "01-01-2026",
+      product_name: "Edge Case",
+      quantity: "1",
+      total: "100.00",
+      unit_price: "100.00",
+      currency: "EUR",
+      vat_rate: "1",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(100);
   });
 });

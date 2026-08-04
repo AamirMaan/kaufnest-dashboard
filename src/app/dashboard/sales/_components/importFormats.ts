@@ -313,7 +313,7 @@ export function validateRowForFormat(
   // Amazon writes fractions (0.19). Scale BEFORE range-checking, so 0.19
   // becomes 19 rather than silently importing as a 0.19 % rate.
   const vatRate =
-    parsedVatRate !== null && format.vatRateIsFraction && parsedVatRate < 1
+    parsedVatRate !== null && format.vatRateIsFraction
       ? round2(parsedVatRate * 100)
       : parsedVatRate;
   if (vatRateRaw && (vatRate === null || vatRate < 0 || vatRate > 100)) {
