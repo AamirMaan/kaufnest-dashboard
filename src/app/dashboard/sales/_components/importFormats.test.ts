@@ -273,3 +273,53 @@ describe("resolveHeaders — sku aliases", () => {
     }
   });
 });
+
+describe("amazon vat_rate is a fraction", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  it("declares the fraction flag", () => {
+    expect(amazon.vatRateIsFraction).toBe(true);
+    expect(IMPORT_FORMATS.generic.vatRateIsFraction).toBeFalsy();
+    expect(IMPORT_FORMATS.ebay.vatRateIsFraction).toBeFalsy();
+  });
+
+  it("scales 0.19 to 19", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "306-4103530-5332345",
+      date: "30-04-2026",
+      product_name: "Baumwolltasche",
+      quantity: "1",
+      total: "9.89",
+      unit_price: "9.89",
+      currency: "EUR",
+      vat_rate: "0.19",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("scales the Swedish 0.25 to 25", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "406-4012512-5663517",
+      date: "08-04-2026",
+      product_name: "Textilpennor",
+      quantity: "1",
+      total: "73.99",
+      unit_price: "73.99",
+      currency: "EUR",
+      vat_rate: "0.25",
+    }, 2);
+    expect(row.data?.vat_rate).toBe(25);
+  });
+
+  it("leaves the generic format's 19 alone", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.generic, {
+      date: "2026-04-30",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "9.89",
+      vat_rate: "19",
+    }, 2);
+    expect(row.data?.vat_rate).toBe(19);
+  });
+});

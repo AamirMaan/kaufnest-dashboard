@@ -53,6 +53,17 @@ export interface ImportFormat {
   columns: ColumnSpec[];
   templateHeaders: string[];
   templateExample: string[];
+  /**
+   * Amazon reports VAT rates as fractions (0.19), not percentages (19).
+   * Without scaling, 0.19 passes the 0–100 check and is stored as 0.19 %.
+   */
+  vatRateIsFraction?: boolean;
+  /**
+   * Amazon has NO per-unit price column. Its `unit_price` column is really
+   * TOTAL_PRICE_OF_ITEMS_AMT_VAT_INCL — the whole line — and its `total` is
+   * items + shipping. See Task 2.
+   */
+  priceColumnsAreLineTotals?: boolean;
 }
 
 // ─── Header aliases (all lowercase — parseCsvText lowercases headers) ────────
@@ -134,6 +145,8 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
     templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "4,99", "3,20", "1,50", "shipped", "", "WIDGET-BLU"],
+    vatRateIsFraction: true,
+    priceColumnsAreLineTotals: true,
   },
   ebay: {
     id: "ebay",
@@ -296,7 +309,13 @@ export function validateRowForFormat(
   }
 
   const vatRateRaw = raw.vat_rate?.trim();
-  const vatRate = vatRateRaw ? parseLocaleNumber(vatRateRaw) : null;
+  const parsedVatRate = vatRateRaw ? parseLocaleNumber(vatRateRaw) : null;
+  // Amazon writes fractions (0.19). Scale BEFORE range-checking, so 0.19
+  // becomes 19 rather than silently importing as a 0.19 % rate.
+  const vatRate =
+    parsedVatRate !== null && format.vatRateIsFraction && parsedVatRate < 1
+      ? round2(parsedVatRate * 100)
+      : parsedVatRate;
   if (vatRateRaw && (vatRate === null || vatRate < 0 || vatRate > 100)) {
     return fail(`"vat_rate" must be between 0 and 100`);
   }
