@@ -1,4 +1,4 @@
-import { isUnread, unreadCount, synthesizeLowStock, NOTIFICATION_LABELS, type UnreadContext } from "./notifications";
+import { isUnread, unreadCount, synthesizeLowStock, NOTIFICATION_LABELS, isSynthetic, LOW_STOCK_ID_PREFIX, type UnreadContext } from "./notifications";
 import type { Notification } from "@/types";
 
 function make(overrides: Partial<Notification> = {}): Notification {
@@ -99,8 +99,7 @@ describe("synthesizeLowStock", () => {
 
   it("mentions the stock level and threshold in the body", () => {
     const [n] = synthesizeLowStock([product]);
-    expect(n.body).toContain("2");
-    expect(n.body).toContain("5");
+    expect(n.body).toBe("2 left (threshold 5)");
   });
 
   it("returns an empty array for no low-stock products", () => {
@@ -123,5 +122,35 @@ describe("synthesizeLowStock", () => {
     const a = synthesizeLowStock([product])[0];
     const b = synthesizeLowStock([product])[0];
     expect(a.id).toBe(b.id);
+
+    // Also verify uniqueness: different products have different ids
+    const other = { ...product, id: "p2", current_stock: 1 };
+    const c = synthesizeLowStock([other])[0];
+    expect(c.id).not.toBe(a.id);
+  });
+});
+
+describe("isSynthetic", () => {
+  it("returns true for an id built by synthesizeLowStock", () => {
+    const [n] = synthesizeLowStock([
+      { id: "p1", name: "Widget", sku: "W-1", current_stock: 2, reorder_threshold: 5 },
+    ]);
+    expect(isSynthetic(n.id)).toBe(true);
+  });
+
+  it("returns true for a string starting with the prefix", () => {
+    expect(isSynthetic(`${LOW_STOCK_ID_PREFIX}anything`)).toBe(true);
+  });
+
+  it("returns false for a realistic uuid", () => {
+    expect(isSynthetic("3f2504e0-4f89-11d3-9a0c-0305e82c3301")).toBe(false);
+  });
+
+  it("returns false for the empty string", () => {
+    expect(isSynthetic("")).toBe(false);
+  });
+
+  it("returns false for a string that merely contains the prefix rather than starting with it", () => {
+    expect(isSynthetic("x-low-stock:p1")).toBe(false);
   });
 });

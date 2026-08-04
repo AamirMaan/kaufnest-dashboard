@@ -15,8 +15,10 @@ export interface UnreadContext {
  *   2. it was created strictly after the bulk watermark
  *   3. it has not been individually dismissed
  *
- * `actor_id` is null for externally-caused events (an inbound buyer message),
- * which are always unread — nobody in the tenant caused them.
+ * `actor_id` is null for externally-caused events (an inbound buyer message).
+ * Such events cannot be suppressed by the own-action rule because nobody in
+ * the tenant caused them, though they still fall through watermark and
+ * dismissal checks.
  */
 export function isUnread(n: Notification, ctx: UnreadContext): boolean {
   if (n.actor_id !== null && n.actor_id === ctx.currentUserId) return false;
@@ -65,24 +67,24 @@ export function synthesizeLowStock(products: LowStockProduct[]): Notification[] 
     // every product with a threshold set and the threshold test happens here.
     .filter((p) => p.reorder_threshold !== null && p.current_stock <= p.reorder_threshold)
     .map((p) => ({
-    id: `${LOW_STOCK_ID_PREFIX}${p.id}`,
-    type: "product.low_stock" as const,
-    category: "inventory" as const,
-    entity_type: "product",
-    entity_id: p.id,
-    title: `Low stock: ${p.name}`,
-    body: `${p.current_stock} left (threshold ${p.reorder_threshold})`,
-    link: "/dashboard/inventory",
-    payload: {
-      sku: p.sku,
-      current_stock: p.current_stock,
-      reorder_threshold: p.reorder_threshold,
-    },
-    actor_id: null,
-    visible_to_roles: ["super_admin", "admin", "accountant"],
-    required_permission: null,
-    created_at: now,
-  }));
+      id: `${LOW_STOCK_ID_PREFIX}${p.id}`,
+      type: "product.low_stock" as const,
+      category: "inventory" as const,
+      entity_type: "product",
+      entity_id: p.id,
+      title: `Low stock: ${p.name}`,
+      body: `${p.current_stock} left (threshold ${p.reorder_threshold})`,
+      link: "/dashboard/inventory",
+      payload: {
+        sku: p.sku,
+        current_stock: p.current_stock,
+        reorder_threshold: p.reorder_threshold,
+      },
+      actor_id: null,
+      visible_to_roles: ["super_admin", "admin", "accountant"],
+      required_permission: null,
+      created_at: now,
+    }));
 }
 
 /** True for a synthesized low-stock item, which has no persistent read state. */
