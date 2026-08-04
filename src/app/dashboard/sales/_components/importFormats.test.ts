@@ -574,3 +574,58 @@ describe("classifySkip", () => {
     expect(row.skipped).toBe("unsupported currency");
   });
 });
+
+describe("RETURN rows", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 304-7592975-1775530 from the April 2026 report — all amounts blank.
+  const ret = {
+    order_id: "304-7592975-1775530",
+    date: "24-04-2026",
+    product_name: "Textilstifte",
+    quantity: "1",
+    sku: "K2T-PFM-024",
+    status: "RETURN",
+    unit_price: "",
+    total: "",
+    currency: "",
+  };
+
+  it("parses despite every amount being blank", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.error).toBeNull();
+    expect(row.isReturn).toBe(true);
+  });
+
+  it("zeroes the amounts and marks the sale returned", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.data?.status).toBe("returned");
+    expect(row.data?.total_amount).toBe(0);
+    expect(row.data?.unit_price).toBe(0);
+    expect(row.data?.restock).toBe(false);
+  });
+
+  it("keeps the order id and sku for matching", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.data?.external_order_id).toBe("304-7592975-1775530");
+    expect(row.sku).toBe("K2T-PFM-024");
+  });
+
+  it("does not mark ordinary SALE rows as returns", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X", date: "30-04-2026", product_name: "W",
+      quantity: "1", unit_price: "7.99", total: "7.99",
+      currency: "EUR", status: "SALE",
+    }, 2);
+    expect(row.isReturn).toBeFalsy();
+    expect(row.data?.status).not.toBe("returned");
+  });
+});
+
+describe("normalizeStatus with SALE mapping", () => {
+  it("SALE → delivered (Amazon VAT report is completed transactions only)", () => {
+    expect(normalizeStatus("SALE")).toBe("delivered");
+    expect(normalizeStatus("sale")).toBe("delivered");
+    expect(normalizeStatus("Sale")).toBe("delivered");
+  });
+});

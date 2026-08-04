@@ -35,6 +35,13 @@ export interface ParsedRow {
   skipped?: string | null;
   /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
   sku?: string | null;
+  /**
+   * Amazon RETURN row. The modal matches it to an existing sale by
+   * external_order_id + resolved product and flips that sale's status;
+   * when unmatched it inserts this row standalone. Amounts are all zero
+   * because Amazon leaves every money column blank on RETURN rows.
+   */
+  isReturn?: boolean;
 }
 
 interface ColumnSpec {
@@ -223,6 +230,10 @@ const STATUS_SYNONYMS: Record<string, string> = {
   "zurückgegeben": "returned",
   "rücksendung": "returned",
   storniert: "cancelled",
+  // Amazon's status column is a row TYPE (SALE/RETURN/REFUND/FC_TRANSFER)
+  // rather than a fulfilment state. Its VAT report contains only completed
+  // transactions, so SALE rows map to delivered.
+  sale: "delivered",
 };
 
 export function normalizeStatus(raw: string | undefined): string {
@@ -297,6 +308,9 @@ export function validateRowForFormat(
     return { rowNum, data: null, error: null, skipped: skipReason };
   }
 
+  const isReturnRow =
+    !!format.priceColumnsAreLineTotals && raw.status?.trim().toLowerCase() === "return";
+
   const date = parseFlexibleDate(raw.date);
   if (!date) {
     return fail(`invalid or missing "date" (expected YYYY-MM-DD, DD.MM.YYYY, or DD-MM-YYYY)`);
@@ -322,6 +336,43 @@ export function validateRowForFormat(
     return fail(`"quantity" must be a positive integer`);
   }
   const quantity = quantityNum;
+
+  if (isReturnRow) {
+    // Amazon RETURN rows carry no money columns at all, so the normal amount
+    // validation cannot run. Zero the amounts; the modal either flips an
+    // existing sale's status or inserts this standalone.
+    // `date`, `productName`, `platform` and `quantity` are already validated
+    // above — do not re-parse them.
+    const returnOrderId = raw.order_id?.trim() || null;
+    if (!returnOrderId) return fail(`missing "order_id"`);
+    return {
+      rowNum,
+      isReturn: true,
+      sku: raw.sku?.trim() || null,
+      error: null,
+      data: {
+        platform,
+        product_name: productName,
+        quantity,
+        unit_price: 0,
+        total_amount: 0,
+        currency: "EUR",
+        description: raw.description?.trim() || null,
+        date,
+        vat_rate: null,
+        vat_amount: null,
+        shipping_cost: null,
+        shipping_charged: null,
+        advertising_fee: null,
+        status: "returned",
+        // NEVER true here. An unmatched return has no corresponding sale, so
+        // restocking it would create inventory from nothing. Task 7 applies
+        // the per-import toggle only to returns that matched a real sale.
+        restock: false,
+        external_order_id: returnOrderId,
+      },
+    };
+  }
 
   const totalRaw = raw.total?.trim();
   const unitPriceRaw = raw.unit_price?.trim();
