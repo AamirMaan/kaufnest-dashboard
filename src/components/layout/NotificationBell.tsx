@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { createTenantClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/Toast";
 import {
   fetchNotifications,
   markAllRead,
@@ -25,6 +26,7 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const { error: toastError } = useToast();
 
   const { items, readIds, readThrough, lowStock } = useAppSelector((s) => s.notifications);
   const ctx = { readThrough, readIds: new Set(readIds), currentUserId };
@@ -53,25 +55,42 @@ export function NotificationBell({ currentUserId }: { currentUserId: string }) {
 
   async function handleMarkAllRead() {
     const now = new Date().toISOString();
+    // Optimistic — no rollback on failure. The next 60s poll re-fetches
+    // authoritative state from the server and corrects the UI on its own.
     dispatch(markAllRead(now));
-    const supabase = await createTenantClient();
-    await supabase
-      .from("profiles")
-      .update({ notifications_read_through: now })
-      .eq("id", currentUserId);
+    try {
+      const supabase = await createTenantClient();
+      const { error: dbError } = await supabase
+        .from("profiles")
+        .update({ notifications_read_through: now })
+        .eq("id", currentUserId);
+      if (dbError) toastError("Couldn't mark notifications as read");
+    } catch {
+      toastError("Couldn't mark notifications as read");
+    }
   }
 
   async function handleOpenOne(id: string, link: string | null) {
+    // Optimistic — no rollback on failure. The next 60s poll re-fetches
+    // authoritative state from the server and corrects the UI on its own.
     dispatch(dismissOne(id));
     // Synthesized low-stock ids are not rows in `notifications`; inserting one
     // would violate notification_reads' foreign key. They clear when stock
     // recovers, so there is nothing to persist.
     if (!isSynthetic(id)) {
-      const supabase = await createTenantClient();
-      await supabase
-        .from("notification_reads")
-        .insert({ notification_id: id, user_id: currentUserId });
+      try {
+        const supabase = await createTenantClient();
+        const { error: dbError } = await supabase
+          .from("notification_reads")
+          .insert({ notification_id: id, user_id: currentUserId });
+        if (dbError) toastError("Couldn't update notification");
+      } catch {
+        toastError("Couldn't update notification");
+      }
     }
+    // Navigation happens regardless of whether the read-state write above
+    // succeeded — a failed bookkeeping write should not block the user from
+    // reaching the page they clicked.
     setOpen(false);
     if (link) router.push(link);
   }
