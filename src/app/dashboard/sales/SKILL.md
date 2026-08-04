@@ -130,10 +130,35 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   second line of an already-matched order) raises a unique violation and
   fails the *whole* batch, not just that row. `handleImport` marks these
   `skipped: "return: no matching order"` instead.
-- **The `ParsedRow.isReturn` JSDoc in `importFormats.ts` is stale** — it says
-  an unmatched return "inserts this row standalone", which was the original
-  design but is no longer what the code does (see the point above). Don't
-  trust that comment; the modal's `handleImport` is the source of truth.
+- **Return matching requires a non-null `product_id`** — it's part of the
+  match key (see above). Every integrations-synced Amazon order has
+  `product_id: null` by design (see `src/lib/integrations/`'s SKILL.md), and
+  so does any CSV row whose SKU isn't in inventory. In a tenant that uses the
+  eBay/Amazon platform sync, this means **100% of RETURN rows in a CSV import
+  skip** as "no matching order" — not a bug, just a consequence of the match
+  key, but it reads to a user as "returns don't work" if you don't know this.
+- **The insert runs BEFORE the returns loop, not after.** An Amazon monthly
+  report routinely contains both the SALE and its RETURN in the same file
+  (sold 3 April, returned 24 April). `handleImport` inserts `insertRows`
+  first so a same-file return can match a row that was just committed —
+  matching returns first would silently skip same-period returns as "no
+  matching order" since the query would run before the SALE existed.
+- **A return whose matched sale already has `status === "returned"` is
+  skipped as a no-op (`returnsAlreadyApplied`), never re-updated.** This
+  guards a re-import of the same file: the stock trigger
+  (`apply_sale_stock_change()`, `003_add_order_status.sql:53-63`) computes
+  its delta from OLD vs NEW `restock`, so blindly re-running
+  `update({ restock: restockReturns })` on an already-applied return would
+  flip a previously-restocked row's delta from `0` to `-quantity` whenever
+  the toggle defaults back to `false` — silently dropping stock a second
+  time with no error. Don't remove this guard when touching the returns loop.
+- **The returns loop has no transaction.** It runs after the insert, so by
+  the time it starts the insert has already committed. A mid-loop Supabase
+  failure (the `matchErr`/`updErr` branches) leaves earlier returns in the
+  *same* loop already committed too — their status flips and stock
+  movements applied — but the function returns before reaching the batch
+  audit-log write, so the visible state is "insert + some returns applied,
+  no batch audit row for any of it." Known limitation, not handled.
 
 ## Gotchas — server-side pagination
 

@@ -54,13 +54,16 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   (Generic / Amazon sheet / eBay sheet): parses + validates a user-uploaded CSV
   (German-tolerant — see "CSV import/export" below), runs a duplicate pre-check
   on `external_order_id`, shows per-row errors/skips grouped by reason,
-  matches Amazon RETURN rows against existing sales and flips their status
-  (see "Amazon RETURN rows" below), batch-inserts the remaining importable
-  rows via Supabase, dispatches `addSale`/`updateSale` accordingly, writes
-  audit log entries (one per matched return + one for the insert batch), and
-  reports the outcome via an `ImportSummary` passed to `onSuccess` — `page.tsx`
-  turns that into a single toast (`inserted` / `returnsMatched` /
-  `returnsSkipped` counts).
+  batch-inserts the importable rows via Supabase, and **then** matches Amazon
+  RETURN rows against existing sales and flips their status (see "Amazon RETURN
+  rows" below). **The insert must stay before the returns loop** — a monthly
+  Amazon report routinely contains a SALE and its RETURN for the same order, so
+  matching first would query `sales` before that SALE row exists and silently
+  drop the return. Dispatches `addSale`/`updateSale` accordingly, writes audit
+  log entries (one per matched return + one for the insert batch), and reports
+  the outcome via an `ImportSummary` passed to `onSuccess` — `page.tsx` turns
+  that into a single toast (`inserted` / `returnsMatched` / `returnsSkipped` /
+  `returnsAlreadyApplied` counts).
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
   registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
   (`resolveHeaders`/`canonicalizeRow`), German status synonyms
@@ -349,7 +352,11 @@ leaves every money column blank on a RETURN line.
 sale on **platform + `external_order_id` + resolved `product_id`** (from
 `sku`) — Amazon order ids are not unique within a sheet, a multi-line order
 appears once per SKU, so the product must be part of the match key or the
-wrong line gets flipped. A match's `status`/`restock` are updated via
+wrong line gets flipped. **A match already at `status === "returned"` is a
+no-op** — counted as `returnsAlreadyApplied`, never re-updated. Without that
+guard, re-importing the same file with the restock toggle back at its default
+`false` would flip `restock` true→false and `apply_sale_stock_change` would
+drop stock by the full quantity, silently. A match's `status`/`restock` are updated via
 `updateSale` (restock only when the user checked "Return stock to inventory
 for matched returns" — a per-import toggle, off by default, that applies only
 to matched returns) and a per-sale audit entry is written

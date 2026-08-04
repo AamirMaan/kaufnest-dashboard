@@ -57,11 +57,17 @@ function isExcelFile(name: string) {
 
 /** Outcome summary passed to `onSuccess` — a returns-only import can insert
  * zero rows and still have done real work (matched returns, or skipped ones
- * with no matching order), so a bare inserted-count would silently hide that. */
+ * with no matching order), so a bare inserted-count would silently hide that.
+ * `returnsAlreadyApplied` counts returns that matched a sale already in
+ * `status === "returned"` (typically a re-import of the same file) — these
+ * are deliberately left untouched (see the stock-trigger comment in
+ * `handleImport`), so surfacing them separately tells the user the re-import
+ * was a no-op rather than looking like nothing happened. */
 export interface ImportSummary {
   inserted: number;
   returnsMatched: number;
   returnsSkipped: number;
+  returnsAlreadyApplied: number;
 }
 
 interface Props {
@@ -265,6 +271,38 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const returnRows = importable.filter((r) => r.isReturn);
     const insertRows = importable.filter((r) => !r.isReturn);
 
+    // Insert the non-return rows FIRST, and match/apply returns AFTER.
+    // An Amazon monthly report routinely contains both the SALE and the
+    // RETURN for one order (sold 3 April, returned 24 April — same
+    // period, same file). If returns were matched before the insert, the
+    // return's query against `sales` would run before its own SALE row
+    // existed, find nothing, and be skipped as "no matching order" even
+    // though the order is sitting right there in `payload`. Running the
+    // insert first means a same-file return can match a row that was
+    // just committed moments earlier.
+    //
+    // The insert is built from `insertRows` only — a return never enters
+    // `payload`; returns are applied via `update`, not `insert`, below.
+    const payload = insertRows.map((r) => {
+      const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
+      return { ...r.data!, created_by: user.id, product_id: productId };
+    });
+
+    let inserted: Sale[] = [];
+    if (payload.length > 0) {
+      const { data, error } = await supabase.from("sales").insert(payload).select();
+      if (error) {
+        // Insert failed — do not run the returns loop at all. Otherwise a
+        // return could be matched/applied (with real stock side effects)
+        // against a batch whose sale rows never made it into the table.
+        setImportError(error.message);
+        setLoading(false);
+        return;
+      }
+      inserted = data as Sale[];
+      for (const sale of inserted) dispatch(addSale(sale));
+    }
+
     // Match each return on platform + external_order_id + the product resolved
     // from SKU. Order ids are unique only within a platform (an eBay sale could
     // share an id with an unrelated Amazon one), and NOT unique within an
@@ -278,6 +316,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // line (or a second unmatched line of an already-matched multi-line
     // order) would raise a unique violation and fail the whole batch.
     const unmatchedReturns: ParsedRow[] = [];
+    const alreadyAppliedReturns: ParsedRow[] = [];
     for (const r of returnRows) {
       const orderId = r.data!.external_order_id;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
@@ -300,6 +339,20 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       const previous = match?.[0] as Sale | undefined;
       if (!previous) {
         unmatchedReturns.push({ ...r, skipped: "return: no matching order" });
+        continue;
+      }
+      // Already applied (e.g. this file — or an overlapping one — was
+      // imported before). The stock trigger (apply_sale_stock_change(),
+      // 003_add_order_status.sql:53-63) computes its delta from OLD vs NEW
+      // restock, so blindly re-running `update({ restock: restockReturns })`
+      // here would flip an already-restocked row's delta from 0 to
+      // -quantity whenever the toggle defaults back to false on re-import —
+      // silently dropping stock a second time with no error. Treat it as a
+      // no-op: don't update, don't touch stock, just count it separately so
+      // the summary shows the re-import did nothing rather than nothing at
+      // all.
+      if (previous.status === "returned") {
+        alreadyAppliedReturns.push({ ...r, skipped: "return already applied" });
         continue;
       }
       const { data: updated, error: updErr } = await supabase
@@ -332,31 +385,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       if (returnLog) dispatch(addAuditLog(returnLog));
     }
 
-    // Reflect the newly-discovered skip reason back into `parsed` so the
-    // Task 6 grouping UI (and a retry after a later error below) shows it —
-    // matching only happens here, mid-import, so `parsed` doesn't know yet.
-    if (unmatchedReturns.length > 0) {
+    // Reflect the newly-discovered skip reasons back into `parsed` so the
+    // Task 6 grouping UI shows them — matching only happens here, mid-import,
+    // so `parsed` doesn't know yet.
+    if (unmatchedReturns.length > 0 || alreadyAppliedReturns.length > 0) {
+      const reflected = [...unmatchedReturns, ...alreadyAppliedReturns];
       setParsed((prev) =>
-        prev.map((row) => unmatchedReturns.find((u) => u.rowNum === row.rowNum) ?? row),
+        prev.map((row) => reflected.find((u) => u.rowNum === row.rowNum) ?? row),
       );
     }
 
-    const payload = insertRows.map((r) => {
-      const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-      return { ...r.data!, created_by: user.id, product_id: productId };
-    });
-
-    let inserted: Sale[] = [];
-    if (payload.length > 0) {
-      const { data, error } = await supabase.from("sales").insert(payload).select();
-      if (error) {
-        setImportError(error.message);
-        setLoading(false);
-        return;
-      }
-      inserted = data as Sale[];
-      for (const sale of inserted) dispatch(addSale(sale));
-    }
+    const returnsMatched = returnRows.length - unmatchedReturns.length - alreadyAppliedReturns.length;
 
     const log = await writeAuditLog(supabase, {
       userId: user.id,
@@ -367,9 +406,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         bulk_import: true,
         count: inserted.length,
         format: formatId,
-        skipped: skipped.length + unmatchedReturns.length,
-        returns_matched: returnRows.length - unmatchedReturns.length,
+        skipped: skipped.length + unmatchedReturns.length + alreadyAppliedReturns.length,
+        returns_matched: returnsMatched,
         returns_unmatched: unmatchedReturns.length,
+        returns_already_applied: alreadyAppliedReturns.length,
         restock_returns: restockReturns,
       },
     });
@@ -379,8 +419,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     reset();
     onSuccess({
       inserted: inserted.length,
-      returnsMatched: returnRows.length - unmatchedReturns.length,
+      returnsMatched,
       returnsSkipped: unmatchedReturns.length,
+      returnsAlreadyApplied: alreadyAppliedReturns.length,
     });
     onClose();
   }

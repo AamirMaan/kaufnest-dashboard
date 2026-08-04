@@ -219,7 +219,11 @@ real values from the report:
 - SEK row → skipped, counted, not an error
 - blank filler row and trailing `Total` row → skipped silently
 - `RETURN` matched → status flip, restock follows the toggle
-- `RETURN` unmatched → standalone row, restock **false** even when toggle is on
+- `RETURN` unmatched → SKIPPED (`skipped: "return: no matching order"`), never
+  inserted standalone — a non-partial UNIQUE index on
+  `(platform, external_order_id)` exists in every tenant schema, so a
+  standalone insert for an order id with no matching line would raise a
+  unique violation and fail the whole batch
 - multi-line order (`028-6107376-1547566`, two SKUs) → return matches the
   correct line, not the first one sharing the order id
 
@@ -241,7 +245,7 @@ real values from the report:
 | VAT rate | Per-format fraction flag | Auto-detecting `< 1` silently breaks a genuine 0.5 % rate |
 | VAT amount | Map Amazon's combined figure | Deriving is wrong when shipping VAT rate differs |
 | Non-sale rows | Skip, counted | — |
-| Unmatched returns | Standalone returned row | Blocking rejects legitimate cross-period files |
+| Unmatched returns | Skip (`return: no matching order`), never inserted standalone | A standalone insert would collide with the non-partial UNIQUE index on `(platform, external_order_id)` and fail the whole batch |
 | Unmatched restock | Always false | Would create stock from nothing |
 | SEK | Skip for now | Adding the currency is a separate, wider change |
 | Restock | Per-import toggle | Amazon does not say whether goods are resellable |

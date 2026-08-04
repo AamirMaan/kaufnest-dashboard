@@ -482,6 +482,15 @@ export function validateRowForFormat(
     }
     vatAmount = round2(parsed);
   } else {
+    // Fallback only — this basis does NOT match the mapped column above.
+    // `vatAmountFromGross` derives VAT on the ITEM total alone (single
+    // rate × totalAmount); the mapped `raw.vat_amount` column, when
+    // present, is Amazon's COMBINED item + shipping VAT. Same `vat_amount`
+    // field on `Sale`, two different bases, both feeding the Overview VAT
+    // Position. In practice Amazon always supplies the column, so this
+    // branch is a safety net for files that omit it (or non-Amazon
+    // formats), not the normal Amazon path — do not "fix" the mismatch by
+    // changing this computation, several tests pin its current behaviour.
     vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
   }
 
