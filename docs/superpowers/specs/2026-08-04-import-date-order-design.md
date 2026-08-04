@@ -102,14 +102,23 @@ not silently honoured: that date has no valid month-first reading.
 
 ```ts
 export type DateOrder = "dmy" | "mdy";
-export type DateOrderDetection =
-  | { order: DateOrder; confident: true }
-  | { order: "dmy"; confident: false; reason: "ambiguous" }
-  | { order: null; confident: false; reason: "conflict"; samples: string[] };
+
+export interface DateOrderDetection {
+  /** The order to parse with. ALWAYS usable — falls back to "dmy" when undecidable. */
+  order: DateOrder;
+  /** True when the file contained hard evidence for this order. */
+  confident: boolean;
+  /** Present ONLY when the file has evidence for BOTH orders. Refuse the import. */
+  conflict?: { dayFirstSample: string; monthFirstSample: string };
+}
 
 export function detectDateOrder(values: string[]): DateOrderDetection;
 export function parseFlexibleDate(input: string | undefined, order?: DateOrder): string | null;
 ```
+
+`order` is deliberately never `null`, even on conflict — every consumer would
+otherwise need null-handling for a case where it must refuse the import anyway.
+Callers check `conflict` first and only then read `order`.
 
 `order` defaults to `"dmy"`, so every existing call site and test keeps its
 current behaviour untouched. Only the import path passes a detected value.
