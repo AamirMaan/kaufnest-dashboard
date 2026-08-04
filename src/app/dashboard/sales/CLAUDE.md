@@ -53,14 +53,30 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/ImportSalesModal.tsx` — bulk CSV import with a **format dropdown**
   (Generic / Amazon sheet / eBay sheet): parses + validates a user-uploaded CSV
   (German-tolerant — see "CSV import/export" below), runs a duplicate pre-check
-  on `external_order_id`, shows per-row errors/skips, batch-inserts importable
-  rows via Supabase, dispatches `addSale` for each, writes one audit log entry
-  for the batch.
+  on `external_order_id`, shows per-row errors/skips grouped by reason,
+  batch-inserts the importable rows via Supabase, and **then** matches Amazon
+  RETURN rows against existing sales and flips their status (see "Amazon RETURN
+  rows" below). **The insert must stay before the returns loop** — a monthly
+  Amazon report routinely contains a SALE and its RETURN for the same order, so
+  matching first would query `sales` before that SALE row exists and silently
+  drop the return. Dispatches `addSale`/`updateSale` accordingly, writes audit
+  log entries (one per matched return + one for the insert batch), and reports
+  the outcome via an `ImportSummary` passed to `onSuccess` — `page.tsx` turns
+  that into a single toast (`inserted` / `returnsMatched` / `returnsSkipped` /
+  `returnsAlreadyApplied` counts).
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
   registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
   (`resolveHeaders`/`canonicalizeRow`), German status synonyms
-  (`normalizeStatus`), and per-row validation (`validateRowForFormat`). **All
-  import-format/validation changes go here**, not in the modal.
+  (`normalizeStatus` — includes Amazon's `sale` → `delivered`, since Amazon's
+  `status` column is a row *type*, not a fulfilment state), skip
+  classification for non-sale rows (`classifySkip`/`SkipReason` — amazon
+  format only), and per-row validation (`validateRowForFormat`, which also
+  parses Amazon RETURN rows into zeroed, `isReturn: true` rows). The `amazon`
+  format sets two optional `ImportFormat` flags no other format uses:
+  `vatRateIsFraction` (Amazon writes `0.19`, not `19`) and
+  `priceColumnsAreLineTotals` (Amazon's `unit_price` column is the item LINE
+  total, not a per-unit price — see "Amazon price/VAT semantics" below).
+  **All import-format/validation changes go here**, not in the modal.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -151,7 +167,8 @@ editable fields.
   `store/slices/companyProfileSlice`, falls back to `19`) but is editable
   per-record; the amount is extracted from the gross total via
   `vatAmountFromGross` (`lib/utils/currency`).
-  Both stay `null` when the toggle is off — `total_amount` (generated column)
+  Both stay `null` when the toggle is off — `total_amount` (a plain writable
+  `numeric(12,2) NOT NULL` column, not a generated one — verified live)
   remains the gross/paid figure either way.
 
 ## Order status + returns (additive fields on `Sale`)
@@ -260,13 +277,15 @@ advertising_fee`. Export button is disabled when no rows match the filter.
 | Format | Required columns | Platform | Notes |
 |---|---|---|---|
 | `generic` | `date, product_name, quantity, unit_price` | per-row `platform` column (default `other`) | the original template; now also accepts optional `total` and `order_id` |
-| `amazon` | `order_id, date, product_name, quantity, total` | forced `amazon` | `order_id` → `external_order_id` |
+| `amazon` | `order_id, date, product_name, quantity, total` | forced `amazon` | `order_id` → `external_order_id`; `unit_price`/`vat_rate` are semantically different from the other two formats — see "Amazon price/VAT semantics" below |
 | `ebay` | same as amazon | forced `ebay` | `advertising_fee` = Promoted Listings fee |
 
-Optional in all formats: `unit_price`/`total` (see rule below), `currency`
-(default EUR), `vat_rate` (0–100), `status` (German synonyms normalized via
-`normalizeStatus` — `versandt`→`shipped`, `storniert`→`cancelled`, etc.; other
-custom strings pass through; default `"pending"`), `description`,
+Optional in all formats: `unit_price`/`total` (see rule below for
+generic/ebay — amazon has its own rule, below), `currency` (default EUR),
+`vat_rate` (0–100 for generic/ebay; amazon writes fractions, see below),
+`status` (German synonyms normalized via `normalizeStatus` —
+`versandt`→`shipped`, `storniert`→`cancelled`, Amazon's `sale`→`delivered`,
+etc.; other custom strings pass through; default `"pending"`), `description`,
 `shipping_cost`, `shipping_charged`, `advertising_fee` (blank → `null`,
 non-numeric or negative → row error), **`sku`** (German aliases: `artikel-nr`,
 `artikelnr`, `artikelnummer`; blank/absent → no link). When `sku` matches a
@@ -287,26 +306,95 @@ German **header aliases** (`Datum`, `Artikelname`, `Menge`, `Preis`, `MwSt`,
 UTF-8 decoding are re-read as `windows-1252` (German Excel default). Unknown
 columns are ignored; missing required columns are a file-level error.
 
-**`total` vs `unit_price` rule (I4):** if `total` is present it wins —
-`total_amount = total`, and `unit_price` is derived (`round(total/qty, 2)`)
-when blank. If both are present and `qty × unit_price` differs from `total` by
-more than 0.02 → row error. If only `unit_price` is given, `total_amount =
-qty × unit_price` as before.
+**`total` vs `unit_price` rule (I4, generic/ebay only):** if `total` is
+present it wins — `total_amount = total`, and `unit_price` is derived
+(`round(total/qty, 2)`) when blank. If both are present and `qty ×
+unit_price` differs from `total` by more than 0.02 → row error. If only
+`unit_price` is given, `total_amount = qty × unit_price` as before.
+
+**Amazon price/VAT semantics (`priceColumnsAreLineTotals` /
+`vatRateIsFraction`, amazon format only):** Amazon's VAT-transactions report
+has no per-unit price column — its `unit_price` column is really the item
+**line total** (VAT incl.), and its `total` is items + shipping combined.
+`validateRowForFormat` derives the item total from `unit_price` when present;
+when it's blank, the item total is backed out of the sheet `total` as
+`sheetTotal - shippingCharged` (never the raw sheet total — that would be
+shipping-inclusive). The row's `unit_price` is then stored as `itemTotal /
+quantity`, and `total_amount` stores the **item total only** — the sheet
+`total` itself is used only to validate `total ≈ total_amount +
+shipping_charged` (when both were supplied) and is otherwise discarded, never
+persisted. VAT rates are fractions on Amazon (`0.19`, not `19`) — scaled by
+the `vatRateIsFraction` flag before range-checking, never inferred from the
+value's magnitude (a genuine 100% rate would falsely trip an `if (rate < 1)`
+check). `vat_amount` is itself a mapped column (`ALIASES.vat_amount`) and,
+when present in the file, wins over the value `vatAmountFromGross` would
+otherwise derive from `vat_rate` — Amazon supplies the combined item+shipping
+VAT, which a single-rate derivation gets wrong when shipping's VAT rate
+differs from the item's (e.g. the Swedish rows, 25%).
+
+**`classifySkip` (amazon format only):** a real Amazon VAT report is mostly
+non-sale rows — blank filler rows, a trailing "Total" summary row (detected
+structurally: no `date`/`product_name`/`quantity`), `REFUND`/`FC_TRANSFER`
+status rows, and unsupported currencies. These are marked `skipped` with a
+reason rather than errored, since validation is all-or-nothing and erroring
+on them would make a real export impossible to import. `RETURN` rows are
+deliberately NOT skipped here — see "Amazon RETURN rows" below. The format
+guard (`if (!format.priceColumnsAreLineTotals) return null`) must stay the
+first statement in the function — putting the blank-row check above it would
+make `generic` and `ebay` silently skip blank rows instead of erroring them.
+
+**Amazon RETURN rows:** `validateRowForFormat` parses these into a row with
+`unit_price`/`total_amount` zeroed (`vat_rate`, `vat_amount`,
+`shipping_cost`, `shipping_charged`, and `advertising_fee` are `null`, not
+`0`), `status: "returned"`, `restock: false`, and `isReturn: true` — Amazon
+leaves every money column blank on a RETURN line.
+`ImportSalesModal.handleImport` then tries to match each one to an existing
+sale on **platform + `external_order_id` + resolved `product_id`** (from
+`sku`) — Amazon order ids are not unique within a sheet, a multi-line order
+appears once per SKU, so the product must be part of the match key or the
+wrong line gets flipped. **A match already at `status === "returned"` is a
+no-op** — counted as `returnsAlreadyApplied`, never re-updated. Without that
+guard, re-importing the same file with the restock toggle back at its default
+`false` would flip `restock` true→false and `apply_sale_stock_change` would
+drop stock by the full quantity, silently. A match's `status`/`restock` are updated via
+`updateSale` (restock only when the user checked "Return stock to inventory
+for matched returns" — a per-import toggle, off by default, that applies only
+to matched returns) and a per-sale audit entry is written
+(`reason: "bulk import: matched return"`). **Unmatched returns are skipped**
+(`skipped: "return: no matching order"`), not inserted standalone — a
+non-partial unique index on `(platform, external_order_id)` exists in every
+tenant schema (verified live), so inserting a row for an order id that
+already exists (or a second unmatched line of an already-matched multi-line
+order) would raise a unique violation and fail the whole batch.
 
 **Duplicate pre-check (I3):** rows carrying an `external_order_id` are checked
 against existing `sales` rows per `(platform, external_order_id)` (chunked
 `.in()` queries, 200 ids per chunk) and against duplicates within the file.
-Matches are marked **skipped** — shown as "N skipped (order already exists)" —
-and are never overwritten (same protection as the integrations re-sync merge
-rule). Skips don't block importing the remaining rows; validation errors still do.
+Matches are marked **skipped** and are never overwritten (same protection as
+the integrations re-sync merge rule). RETURN rows are exempt from both dedup
+passes (file-level and DB-level) — they carry the `external_order_id` of an
+*existing* sale by definition, so without the carve-out every return would be
+marked "order already exists" and dropped before the matching path above ever
+runs. Skips don't block importing the remaining rows; validation errors still
+do. The modal groups all skip reasons (duplicate, blank row, summary row, not
+a sale, unsupported currency, no matching order, …) via `skipReasonCounts`
+and names each one in the summary text — it no longer assumes every skip is
+"order already exists".
 
 `product_id` is resolved automatically when the row carries a `sku` that matches
 an inventory product (see `sku` above); otherwise it is `null` — user can link
 via Edit afterward. `vat_amount` is computed via `vatAmountFromGross`
-over `total_amount`. `restock` is always `false` for imported rows (not
-importable — edit the record afterward to mark it returned/restockable).
-Audit log: one entry for the whole batch with `{ bulk_import, count, format,
-skipped }` (omit `entityId` — it's `string | undefined`, not nullable).
+over `total_amount`, unless the file supplies a `vat_amount` column directly
+(amazon/ebay only), which wins. `restock` is always `false` for newly
+**inserted** rows (not importable — edit the record afterward to mark it
+returned/restockable); a matched Amazon return instead **updates** an
+existing sale's `restock` via the per-import toggle (see "Amazon RETURN rows"
+above) — that's a different code path, not an inserted row. Audit log: one
+entry for the whole batch with `{ bulk_import, count, format, skipped,
+returns_matched, returns_unmatched, restock_returns }` (omit `entityId` —
+it's `string | undefined`, not nullable), plus one additional per-sale audit
+entry for each matched return (`action: "update"`, before/after status/restock
+diff).
 
 ## Tests
 

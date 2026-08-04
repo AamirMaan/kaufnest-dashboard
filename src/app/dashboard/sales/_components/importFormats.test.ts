@@ -5,6 +5,7 @@ import {
   normalizeStatus,
   normalizePlatform,
   validateRowForFormat,
+  classifySkip,
 } from "./importFormats";
 
 const GENERIC = IMPORT_FORMATS.generic;
@@ -117,27 +118,28 @@ describe("validateRowForFormat — amazon/ebay", () => {
     expect(r.data).toBeNull();
   });
 
-  it("total + consistent unit_price → both kept", () => {
-    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, unit_price: "9,99" }, 2);
+  it("total + consistent unit_price → both kept (eBay, I4 rule)", () => {
+    const r = validateRowForFormat(EBAY, { ...AMAZON_BASE, unit_price: "9,99" }, 2);
     expect(r.error).toBeNull();
     expect(r.data?.unit_price).toBe(9.99);
     expect(r.data?.total_amount).toBe(19.98);
   });
 
-  it("total disagreeing with qty × unit_price by > 0.02 → row error (I4)", () => {
-    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, unit_price: "8,00" }, 2);
+  it("total disagreeing with qty × unit_price by > 0.02 → row error (eBay, I4)", () => {
+    const r = validateRowForFormat(EBAY, { ...AMAZON_BASE, unit_price: "8,00" }, 2);
     expect(r.error).toMatch(/disagrees/);
   });
 
   it("vat + fees parse with decimal commas", () => {
     const r = validateRowForFormat(
       AMAZON,
-      { ...AMAZON_BASE, vat_rate: "19", shipping_charged: "4,99", shipping_cost: "3,20", advertising_fee: "1,50" },
+      { ...AMAZON_BASE, vat_rate: "0,19", shipping_charged: "4,99", shipping_cost: "3,20", advertising_fee: "1,50" },
       2,
     );
     expect(r.error).toBeNull();
+    expect(r.data?.total_amount).toBe(14.99); // 19.98 total - 4.99 shipping = 14.99 items
     expect(r.data?.vat_rate).toBe(19);
-    expect(r.data?.vat_amount).toBe(3.19); // 19.98 × 19/119, rounded
+    expect(r.data?.vat_amount).toBe(2.39); // 14.99 × 19/119, rounded
     expect(r.data?.shipping_charged).toBe(4.99);
     expect(r.data?.shipping_cost).toBe(3.2);
     expect(r.data?.advertising_fee).toBe(1.5);
@@ -271,5 +273,359 @@ describe("resolveHeaders — sku aliases", () => {
       const { mapping } = resolveHeaders(["sku"], fmt);
       expect(mapping.get("sku")).toBe("sku");
     }
+  });
+});
+
+describe("amazon vat_rate is a fraction", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  it("declares the fraction flag", () => {
+    expect(amazon.vatRateIsFraction).toBe(true);
+    expect(IMPORT_FORMATS.generic.vatRateIsFraction).toBeFalsy();
+    expect(IMPORT_FORMATS.ebay.vatRateIsFraction).toBeFalsy();
+  });
+
+  it("scales 0.19 to 19", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "306-4103530-5332345",
+      date: "30-04-2026",
+      product_name: "Baumwolltasche",
+      quantity: "1",
+      total: "9.89",
+      unit_price: "9.89",
+      currency: "EUR",
+      vat_rate: "0.19",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("scales the Swedish 0.25 to 25", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "406-4012512-5663517",
+      date: "08-04-2026",
+      product_name: "Textilpennor",
+      quantity: "1",
+      total: "73.99",
+      unit_price: "73.99",
+      currency: "EUR",
+      vat_rate: "0.25",
+    }, 2);
+    expect(row.data?.vat_rate).toBe(25);
+  });
+
+  it("leaves the generic format's 19 alone", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.generic, {
+      date: "2026-04-30",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "9.89",
+      vat_rate: "19",
+    }, 2);
+    expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("scales the edge case 1 (100%) to 100", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "506-5555555-5555555",
+      date: "01-01-2026",
+      product_name: "Edge Case",
+      quantity: "1",
+      total: "100.00",
+      unit_price: "100.00",
+      currency: "EUR",
+      vat_rate: "1",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(100);
+  });
+});
+
+describe("amazon line totals", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 028-4502196-4511533 from the April 2026 report.
+  it("derives a per-unit price from a line total at quantity 2", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-4502196-4511533",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "2",
+      unit_price: "16.10",
+      total: "16.10",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.unit_price).toBe(8.05);
+    expect(row.data?.total_amount).toBe(16.10);
+  });
+
+  // Order 028-7135526-5060303: items 7.99 + shipping 2.00 = total 9.99.
+  it("accepts a total that includes shipping, and stores items only", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "9.99",
+      shipping_charged: "2.00",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.unit_price).toBe(7.99);
+    // CRITICAL: 7.99, not 9.99. aggregateSales adds shipping_charged on top,
+    // so storing 9.99 here would report 11.99 revenue for a 9.99 order.
+    expect(row.data?.total_amount).toBe(7.99);
+    expect(row.data?.shipping_charged).toBe(2);
+  });
+
+  it("errors when total does not reconcile with items + shipping", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "50.00",
+      shipping_charged: "2.00",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("does not reconcile");
+  });
+
+  it("still enforces quantity x unit_price for the generic format", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.generic, {
+      date: "2026-04-30",
+      product_name: "Widget",
+      quantity: "2",
+      unit_price: "16.10",
+      total: "16.10",
+    }, 2);
+    expect(row.error).toContain("disagrees with quantity");
+  });
+
+  it("backs the item total out of the sheet total when unit_price is absent", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      total: "19,98",
+      shipping_charged: "4,99",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    // 19.98 total - 4.99 shipping = 14.99 items. Storing 19.98 here would make
+    // aggregateSales report 24.97 revenue for a 19.98 order.
+    expect(row.data?.total_amount).toBe(14.99);
+    expect(row.data?.unit_price).toBe(14.99);
+    expect(row.data?.shipping_charged).toBe(4.99);
+  });
+});
+
+describe("vat_amount column", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 028-7135526-5060303: item VAT 1.28 + shipping VAT 0.32 = 1.60.
+  it("prefers the CSV vat_amount over deriving it", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "9.99",
+      shipping_charged: "2.00",
+      vat_rate: "0.19",
+      vat_amount: "1.60",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(1.6);
+  });
+
+  it("still derives vat_amount when the column is absent", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "11.90",
+      total: "11.90",
+      vat_rate: "0.19",
+      currency: "EUR",
+    }, 2);
+    expect(row.data?.vat_amount).toBeCloseTo(1.9, 1);
+  });
+
+  it("rejects a negative vat_amount", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "7.99",
+      vat_amount: "-1",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("vat_amount");
+  });
+
+  it("parses a German decimal comma in vat_amount", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "028-7135526-5060303",
+      date: "30-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      unit_price: "7,99",
+      total: "9,99",
+      shipping_charged: "2,00",
+      vat_rate: "0,19",
+      vat_amount: "1,60",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(1.6);
+  });
+
+  it("rejects a non-numeric vat_amount rather than silently deriving", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "7.99",
+      total: "7.99",
+      vat_rate: "0.19",
+      vat_amount: "abc",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toContain("vat_amount");
+    expect(row.data).toBeNull();
+  });
+});
+
+describe("classifySkip", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+  const sale = {
+    order_id: "X", date: "30-04-2026", product_name: "W",
+    quantity: "1", unit_price: "7.99", total: "7.99",
+    currency: "EUR", status: "SALE",
+  };
+
+  it("passes a SALE row through", () => {
+    expect(classifySkip(amazon, sale)).toBeNull();
+  });
+
+  it("skips a wholly blank row", () => {
+    expect(classifySkip(amazon, { order_id: "", date: "", product_name: "", quantity: "" }))
+      .toBe("blank row");
+  });
+
+  // The real file's trailing row puts "Total" in the FIRST column
+  // (UNIQUE_ACCOUNT_IDENTIFIER), which is not mapped to any canonical key, and
+  // scatters two stray numbers across unmapped columns. So it is NOT blank and
+  // its order_id IS empty — detect it by the required fields all being empty.
+  it("skips the trailing Total summary row", () => {
+    expect(classifySkip(amazon, {
+      order_id: "", date: "", product_name: "", quantity: "", total: "4.46",
+    })).toBe("summary row");
+  });
+
+  it("does not mistake a real row missing only its date for a summary row", () => {
+    expect(classifySkip(amazon, { ...sale, date: "" })).toBeNull();
+  });
+
+  it.each(["REFUND", "FC_TRANSFER"])("skips %s rows", (status) => {
+    expect(classifySkip(amazon, { ...sale, status })).toBe("not a sale");
+  });
+
+  it("does NOT skip RETURN rows — they are handled as returns", () => {
+    expect(classifySkip(amazon, { ...sale, status: "RETURN" })).toBeNull();
+  });
+
+  it("skips an unsupported currency", () => {
+    expect(classifySkip(amazon, { ...sale, currency: "SEK" })).toBe("unsupported currency");
+  });
+
+  it("never skips rows for the generic format", () => {
+    expect(classifySkip(IMPORT_FORMATS.generic, { ...sale, status: "REFUND" })).toBeNull();
+    expect(classifySkip(IMPORT_FORMATS.generic, { ...sale, currency: "SEK" })).toBeNull();
+  });
+
+  it("never skips a blank row for the generic format", () => {
+    expect(classifySkip(IMPORT_FORMATS.generic, {
+      date: "", product_name: "", quantity: "", unit_price: "",
+    })).toBeNull();
+  });
+
+  it("still skips a blank row for the amazon format", () => {
+    expect(classifySkip(IMPORT_FORMATS.amazon, {
+      date: "", product_name: "", quantity: "", unit_price: "",
+    })).toBe("blank row");
+  });
+
+  it("marks the row skipped rather than errored via validateRowForFormat", () => {
+    const row = validateRowForFormat(amazon, { ...sale, currency: "SEK" }, 7);
+    expect(row.error).toBeNull();
+    expect(row.data).toBeNull();
+    expect(row.skipped).toBe("unsupported currency");
+  });
+});
+
+describe("RETURN rows", () => {
+  const amazon = IMPORT_FORMATS.amazon;
+
+  // Order 304-7592975-1775530 from the April 2026 report — all amounts blank.
+  const ret = {
+    order_id: "304-7592975-1775530",
+    date: "24-04-2026",
+    product_name: "Textilstifte",
+    quantity: "1",
+    sku: "K2T-PFM-024",
+    status: "RETURN",
+    unit_price: "",
+    total: "",
+    currency: "",
+  };
+
+  it("parses despite every amount being blank", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.error).toBeNull();
+    expect(row.isReturn).toBe(true);
+  });
+
+  it("zeroes the amounts and marks the sale returned", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.data?.status).toBe("returned");
+    expect(row.data?.total_amount).toBe(0);
+    expect(row.data?.unit_price).toBe(0);
+    expect(row.data?.restock).toBe(false);
+  });
+
+  it("keeps the order id and sku for matching", () => {
+    const row = validateRowForFormat(amazon, ret, 3);
+    expect(row.data?.external_order_id).toBe("304-7592975-1775530");
+    expect(row.sku).toBe("K2T-PFM-024");
+  });
+
+  it("does not mark ordinary SALE rows as returns", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "X", date: "30-04-2026", product_name: "W",
+      quantity: "1", unit_price: "7.99", total: "7.99",
+      currency: "EUR", status: "SALE",
+    }, 2);
+    expect(row.isReturn).toBeFalsy();
+    expect(row.data?.status).not.toBe("returned");
+  });
+});
+
+describe("normalizeStatus with SALE mapping", () => {
+  it("SALE → delivered (Amazon VAT report is completed transactions only)", () => {
+    expect(normalizeStatus("SALE")).toBe("delivered");
+    expect(normalizeStatus("sale")).toBe("delivered");
+    expect(normalizeStatus("Sale")).toBe("delivered");
   });
 });

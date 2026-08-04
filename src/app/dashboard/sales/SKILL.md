@@ -94,6 +94,72 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `lib/utils/csv.ts`) — affects the purchases/expenses imports too, since they
   share `parseCsvText`.
 
+## Gotchas — Amazon VAT-report import (`priceColumnsAreLineTotals`/`vatRateIsFraction`)
+
+- **`total_amount` stores the ITEM line total, never the sheet's `total`.**
+  `app/dashboard/_lib/aggregateSales.ts:25` computes revenue as `total_amount
+  + shipping_charged`, so storing the shipping-inclusive sheet total there
+  double-counts shipping. `total` is used only to validate `total ≈
+  total_amount + shipping_charged`, then discarded.
+- **Amazon's `unit_price` column is optional; when it's absent, back the item
+  total OUT of the sheet total** (`sheetTotal - shippingCharged`) — using the
+  sheet total raw reopens the same double-count as above. See
+  `validateRowForFormat`'s `priceColumnsAreLineTotals` branch in
+  `importFormats.ts`.
+- **Amazon writes VAT rates as fractions (`0.19`), not percentages.** Scaling
+  is driven by the `vatRateIsFraction` format flag, never by the value's
+  magnitude — an `if (rate < 1)` check would silently mishandle a genuine
+  100% rate.
+- **In `classifySkip` the format guard (`if
+  (!format.priceColumnsAreLineTotals) return null`) must be the FIRST
+  statement.** Putting the blank-row check above it makes `generic` and
+  `ebay` silently skip blank rows instead of erroring them — those two
+  formats must keep their pre-existing all-or-nothing validation behaviour.
+- **RETURN rows must be exempt from BOTH duplicate pre-check passes**
+  (file-level dupes and the DB `.in()` check in `markDuplicates`) — they
+  carry the `external_order_id` of an existing order by definition, so
+  without the carve-out every return is dropped as "order already exists"
+  and the matching path in `handleImport` never runs.
+- **Amazon order ids are NOT unique** — a multi-line order (one line per SKU)
+  repeats the same `order_id`. Return matching keys on platform +
+  `external_order_id` + resolved `product_id`, never `external_order_id`
+  alone, or the wrong line gets flipped.
+- **Unmatched returns are skipped, not inserted.** A non-partial UNIQUE index
+  on `(platform, external_order_id)` exists in every tenant schema (verified
+  live) — a standalone insert for an order id with no matching line (or a
+  second line of an already-matched order) raises a unique violation and
+  fails the *whole* batch, not just that row. `handleImport` marks these
+  `skipped: "return: no matching order"` instead.
+- **Return matching requires a non-null `product_id`** — it's part of the
+  match key (see above). Every integrations-synced Amazon order has
+  `product_id: null` by design (see `src/lib/integrations/`'s SKILL.md), and
+  so does any CSV row whose SKU isn't in inventory. In a tenant that uses the
+  eBay/Amazon platform sync, this means **100% of RETURN rows in a CSV import
+  skip** as "no matching order" — not a bug, just a consequence of the match
+  key, but it reads to a user as "returns don't work" if you don't know this.
+- **The insert runs BEFORE the returns loop, not after.** An Amazon monthly
+  report routinely contains both the SALE and its RETURN in the same file
+  (sold 3 April, returned 24 April). `handleImport` inserts `insertRows`
+  first so a same-file return can match a row that was just committed —
+  matching returns first would silently skip same-period returns as "no
+  matching order" since the query would run before the SALE existed.
+- **A return whose matched sale already has `status === "returned"` is
+  skipped as a no-op (`returnsAlreadyApplied`), never re-updated.** This
+  guards a re-import of the same file: the stock trigger
+  (`apply_sale_stock_change()`, `003_add_order_status.sql:53-63`) computes
+  its delta from OLD vs NEW `restock`, so blindly re-running
+  `update({ restock: restockReturns })` on an already-applied return would
+  flip a previously-restocked row's delta from `0` to `-quantity` whenever
+  the toggle defaults back to `false` — silently dropping stock a second
+  time with no error. Don't remove this guard when touching the returns loop.
+- **The returns loop has no transaction.** It runs after the insert, so by
+  the time it starts the insert has already committed. A mid-loop Supabase
+  failure (the `matchErr`/`updErr` branches) leaves earlier returns in the
+  *same* loop already committed too — their status flips and stock
+  movements applied — but the function returns before reaching the batch
+  audit-log write, so the visible state is "insert + some returns applied,
+  no batch audit row for any of it." Known limitation, not handled.
+
 ## Gotchas — server-side pagination
 
 - **Do not call `filterSales()` in `page.tsx`** — filters are pushed to Supabase
