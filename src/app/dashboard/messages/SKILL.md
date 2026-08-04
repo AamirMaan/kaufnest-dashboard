@@ -70,6 +70,17 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   user-supplied free text that could contain `&`/`<`/`>`. The read side
   (`parseExchangeBlock`) only ever calls `decodeXml()`, never needs escaping
   since it's not building a request.
+- **Inbound messages fire a notification; outbound replies do not.**
+  `notify_message_received` (migration 029, on `ebay_messages`) only inserts
+  when `NEW.direction = 'inbound'` — a tenant sending a reply through
+  `ReplyBox` never notifies anyone, by design. Its `actor_id` is always
+  `NULL` because the actor is an external eBay buyer, not a tenant user;
+  `isUnread()` (`src/lib/utils/notifications.ts`) treats a null `actor_id`
+  as never matching the "caused by me" suppression rule, so these
+  notifications are always eligible to be unread (subject to the normal
+  watermark/dismissal checks). Visibility is admin/super_admin by role, or
+  anyone with the `manage_messages` override — same bar as the rest of this
+  feature's RLS.
 
 ## Tests
 

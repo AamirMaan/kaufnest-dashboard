@@ -117,14 +117,30 @@ this shape: extracting it is what makes it testable without rendering the page.
 ## Shared shell components (live outside, in `src/components/layout/`)
 
 `DashboardShell` (header, user menu, theme toggle, impersonation banner —
-forwards `isPlatformAdmin` to `Sidebar`), `Sidebar` (nav + role-based links +
-collapse; renders an "Admin Panel" link to `/admin` when
-`role === "super_admin" && isPlatformAdmin`), `PageHeader` (page
-title/description/actions row used by every feature page).
+forwards `isPlatformAdmin` to `Sidebar`; now takes a `userId` prop, sourced
+from `layout.tsx`'s `profile.id`, that it forwards to `NotificationBell`),
+`Sidebar` (nav + role-based links + collapse; renders an "Admin Panel" link
+to `/admin` when `role === "super_admin" && isPlatformAdmin`), `PageHeader`
+(page title/description/actions row used by every feature page),
+`NotificationBell` (the bell icon in the header — client component, not a
+route/feature of its own; polls `fetchNotifications({ userId })` every 60s
+via `setInterval`, no push/realtime). **Visibility is decided entirely by
+the `notifications_select` RLS policy** (migration 028) — the client has no
+role/permission filtering logic for notifications, unlike every other
+feature's row-level checks, specifically so the rule can't drift between two
+copies. Low-stock entries are not database rows: `synthesizeLowStock()`
+(`src/lib/utils/notifications.ts`) computes them at read time from the
+`products` table and merges them into the feed client-side — see
+`inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
 
 ## Cross-cutting state & infra
 
-`src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + the two genuinely shared
-slices `auditLogsSlice`/`currentUserSlice` in `src/store/slices/`. See
+`src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + the shared slices
+`auditLogsSlice`/`currentUserSlice`/`notificationsSlice` in
+`src/store/slices/`. `notificationsSlice` (`state.notifications`) is read
+only by `NotificationBell` — it isn't hydrated by `dashboard/layout.tsx`
+like the paginated collections above; `NotificationBell` fetches it itself
+on mount via `fetchNotifications` (see `src/lib/utils/notifications.ts` for
+the pure `isUnread`/`unreadCount`/`synthesizeLowStock` helpers it uses). See
 `AGENTS.md` (repo root) → "Project structure" for the full
 shared-vs-feature-private map.
