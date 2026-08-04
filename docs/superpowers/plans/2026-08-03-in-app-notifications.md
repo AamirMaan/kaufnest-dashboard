@@ -1356,9 +1356,12 @@ export const notificationsSlice = createSlice({
     builder
       .addCase(fetchNotifications.pending, (state) => { state.isFetching = true; })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
+        // All FOUR fetched fields must be written. Dropping any one of them
+        // means it is re-fetched every poll and silently discarded.
         state.items = action.payload.data;
         state.readIds = action.payload.readIds;
         state.readThrough = action.payload.readThrough;
+        state.lowStock = action.payload.lowStock;
         state.loaded = true;
         state.isFetching = false;
       })
