@@ -136,8 +136,9 @@ describe("validateRowForFormat — amazon/ebay", () => {
       2,
     );
     expect(r.error).toBeNull();
+    expect(r.data?.total_amount).toBe(14.99); // 19.98 total - 4.99 shipping = 14.99 items
     expect(r.data?.vat_rate).toBe(19);
-    expect(r.data?.vat_amount).toBe(3.19); // 19.98 × 19/119, rounded
+    expect(r.data?.vat_amount).toBe(2.39); // 14.99 × 19/119, rounded
     expect(r.data?.shipping_charged).toBe(4.99);
     expect(r.data?.shipping_cost).toBe(3.2);
     expect(r.data?.advertising_fee).toBe(1.5);
@@ -401,5 +402,23 @@ describe("amazon line totals", () => {
       total: "16.10",
     }, 2);
     expect(row.error).toContain("disagrees with quantity");
+  });
+
+  it("backs the item total out of the sheet total when unit_price is absent", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "X",
+      date: "30-04-2026",
+      product_name: "Widget",
+      quantity: "1",
+      total: "19,98",
+      shipping_charged: "4,99",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    // 19.98 total - 4.99 shipping = 14.99 items. Storing 19.98 here would make
+    // aggregateSales report 24.97 revenue for a 19.98 order.
+    expect(row.data?.total_amount).toBe(14.99);
+    expect(row.data?.unit_price).toBe(14.99);
+    expect(row.data?.shipping_charged).toBe(4.99);
   });
 });
