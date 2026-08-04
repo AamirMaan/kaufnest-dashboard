@@ -2,7 +2,7 @@
 
 import { useRef, useState, useMemo } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { addSale } from "../_store/salesSlice";
+import { addSale, updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -116,6 +116,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setParsedSource(null);
     setFileName("");
     setImportError(null);
+    setRestockReturns(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -134,6 +135,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   async function markDuplicates(rows: ParsedRow[]): Promise<ParsedRow[]> {
     const seen = new Set<string>();
     const withFileDupes = rows.map((r) => {
+      // RETURN rows are not new orders. They carry the external_order_id of an
+      // EXISTING sale by definition, so the dedup passes would mark every one
+      // "order already exists" and drop it before matching could run.
+      if (r.isReturn) return r;
       if (!r.data?.external_order_id) return r;
       const key = `${r.data.platform}:${r.data.external_order_id}`;
       if (seen.has(key)) return { ...r, skipped: "duplicate in file" };
@@ -143,7 +148,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
     const byPlatform = new Map<Platform, string[]>();
     for (const r of withFileDupes) {
-      if (r.data?.external_order_id && !r.skipped) {
+      if (!r.isReturn && r.data?.external_order_id && !r.skipped) {
         const list = byPlatform.get(r.data.platform) ?? [];
         list.push(r.data.external_order_id);
         byPlatform.set(r.data.platform, list);
@@ -169,11 +174,15 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           }
         }
       }
-      return withFileDupes.map((r) =>
-        r.data?.external_order_id && !r.skipped && existing.has(`${r.data.platform}:${r.data.external_order_id}`)
+      return withFileDupes.map((r) => {
+        // RETURN rows are not new orders. They carry the external_order_id of an
+        // EXISTING sale by definition, so the dedup passes would mark every one
+        // "order already exists" and drop it before matching could run.
+        if (r.isReturn) return r;
+        return r.data?.external_order_id && !r.skipped && existing.has(`${r.data.platform}:${r.data.external_order_id}`)
           ? { ...r, skipped: "order already exists" }
-          : r,
-      );
+          : r;
+      });
     } finally {
       setChecking(false);
     }
@@ -247,21 +256,30 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const returnRows = importable.filter((r) => r.isReturn);
     const insertRows = importable.filter((r) => !r.isReturn);
 
-    // Match each return on external_order_id + the product resolved from SKU.
-    // Order ids are NOT unique in an Amazon sheet — a multi-line order such as
-    // 028-6107376-1547566 appears once per SKU — so the product must be part
-    // of the key or the wrong line gets flipped.
-    const unmatchedReturns: typeof returnRows = [];
+    // Match each return on platform + external_order_id + the product resolved
+    // from SKU. Order ids are unique only within a platform (an eBay sale could
+    // share an id with an unrelated Amazon one), and NOT unique within an
+    // Amazon sheet — a multi-line order such as 028-6107376-1547566 appears
+    // once per SKU — so platform and product must both be part of the key or
+    // the wrong line gets flipped.
+    //
+    // Unmatched returns are SKIPPED, not inserted standalone: a non-partial
+    // UNIQUE index on (platform, external_order_id) exists in every tenant
+    // schema, so inserting a return whose order id already has no matching
+    // line (or a second unmatched line of an already-matched multi-line
+    // order) would raise a unique violation and fail the whole batch.
+    const unmatchedReturns: ParsedRow[] = [];
     for (const r of returnRows) {
       const orderId = r.data!.external_order_id;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       if (!orderId || !productId) {
-        unmatchedReturns.push(r);
+        unmatchedReturns.push({ ...r, skipped: "return: no matching order" });
         continue;
       }
       const { data: match, error: matchErr } = await supabase
         .from("sales")
-        .select("id")
+        .select("*")
+        .eq("platform", r.data!.platform)
         .eq("external_order_id", orderId)
         .eq("product_id", productId)
         .limit(1);
@@ -270,41 +288,66 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         setLoading(false);
         return;
       }
-      if (!match || match.length === 0) {
-        unmatchedReturns.push(r);
+      const previous = match?.[0] as Sale | undefined;
+      if (!previous) {
+        unmatchedReturns.push({ ...r, skipped: "return: no matching order" });
         continue;
       }
-      const { error: updErr } = await supabase
+      const { data: updated, error: updErr } = await supabase
         .from("sales")
         .update({ status: "returned", restock: restockReturns })
-        .eq("id", match[0].id);
-      if (updErr) {
+        .eq("id", previous.id)
+        .select()
+        .single<Sale>();
+      if (updErr || !updated) {
         setImportError("Could not update a returned order. Please try again.");
         setLoading(false);
         return;
       }
+      dispatch(updateSale(updated));
+
+      const returnLog = await writeAuditLog(supabase, {
+        userId: user.id,
+        userEmail: user.email ?? "",
+        action: "update",
+        entityType: "sale",
+        entityId: previous.id,
+        metadata: {
+          before: { status: previous.status, restock: previous.restock },
+          after: { status: updated.status, restock: updated.restock },
+          reason: "bulk import: matched return",
+          bulk_import: true,
+          external_order_id: orderId,
+        },
+      });
+      if (returnLog) dispatch(addAuditLog(returnLog));
     }
 
-    const payload = [
-      ...insertRows.map((r) => {
-        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-        return { ...r.data!, created_by: user.id, product_id: productId };
-      }),
-      ...unmatchedReturns.map((r) => {
-        const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-        // restock stays false: there is no matching sale, so returning this to
-        // stock would create inventory the system never sold.
-        return { ...r.data!, created_by: user.id, product_id: productId, restock: false };
-      }),
-    ];
-    const { data: inserted, error } = await supabase.from("sales").insert(payload).select();
-    if (error) {
-      setImportError(error.message);
-      setLoading(false);
-      return;
+    // Reflect the newly-discovered skip reason back into `parsed` so the
+    // Task 6 grouping UI (and a retry after a later error below) shows it —
+    // matching only happens here, mid-import, so `parsed` doesn't know yet.
+    if (unmatchedReturns.length > 0) {
+      setParsed((prev) =>
+        prev.map((row) => unmatchedReturns.find((u) => u.rowNum === row.rowNum) ?? row),
+      );
     }
 
-    for (const sale of (inserted as Sale[])) dispatch(addSale(sale));
+    const payload = insertRows.map((r) => {
+      const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
+      return { ...r.data!, created_by: user.id, product_id: productId };
+    });
+
+    let inserted: Sale[] = [];
+    if (payload.length > 0) {
+      const { data, error } = await supabase.from("sales").insert(payload).select();
+      if (error) {
+        setImportError(error.message);
+        setLoading(false);
+        return;
+      }
+      inserted = data as Sale[];
+      for (const sale of inserted) dispatch(addSale(sale));
+    }
 
     const log = await writeAuditLog(supabase, {
       userId: user.id,
@@ -315,7 +358,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         bulk_import: true,
         count: inserted.length,
         format: formatId,
-        skipped: skipped.length,
+        skipped: skipped.length + unmatchedReturns.length,
         returns_matched: returnRows.length - unmatchedReturns.length,
         returns_unmatched: unmatchedReturns.length,
         restock_returns: restockReturns,
@@ -355,7 +398,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           </Select>
         </Field>
 
-        {parsed.some((r) => r.isReturn) && (
+        {parsed.some((r) => r.isReturn && !r.skipped) && (
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
