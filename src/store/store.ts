@@ -12,6 +12,7 @@ import { dropshippingSlice } from "@/app/dashboard/dropshipping/_store/dropshipp
 import { platformPayoutsSlice } from "./slices/platformPayoutsSlice";
 import { listingsSlice } from "@/app/dashboard/listings/_store/listingsSlice";
 import { messagesSlice } from "@/app/dashboard/messages/_store/messagesSlice";
+import { notificationsSlice } from "./slices/notificationsSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -29,6 +30,7 @@ export const makeStore = () =>
       platformPayouts: platformPayoutsSlice.reducer,
       listings: listingsSlice.reducer,
       messages: messagesSlice.reducer,
+      notifications: notificationsSlice.reducer,
     },
   });
 
