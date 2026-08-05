@@ -22,6 +22,7 @@
 - `generic` and `ebay` must keep their behaviour exactly. Only `amazon` changes.
 - Tenant DDL goes through `SELECT public.run_on_all_tenant_schemas($$ … {{schema}} … $$)`, must be idempotent, and must be mirrored into `provision_tenant_schema()` in `005_tenant_provisioning.sql` (the 2-places rule).
 - **Never commit to `main`.** Work happens on `feat/amazon-refunds` (already created off `main` @ `90a7734`).
+- **Every commit must leave the tree type-clean.** `.husky/pre-commit` runs `tsc --noEmit`, `eslint` and the project verifier, so a commit that depends on a later task to compile is simply rejected. This is why Task 2 leaves `ParsedRow.isReturn` in place and Task 3 removes it together with its consumer. Do not `--no-verify`.
 - Do **not** run `npm test`, `npx tsc --noEmit`, `npm run lint`, or a dev server. You MAY run `npx jest src/app/dashboard/sales`. The user runs the full gates.
 - Do **not** apply migrations. The Supabase MCP servers are `read_only=true`; the user applies them.
 - Docs ship in the **same commit** as the code (AGENTS.md).
@@ -115,6 +116,18 @@ export type SaleImportData = Omit<
 ```
 
 Without this every `SaleImportData` literal in the file fails to compile.
+
+`refunded_amount` is required-and-nullable, matching how every other nullable column on `Sale` is typed (`vat_rate: number | null`, `product_id: string | null`). That is deliberate and consistent — but it means **every full `Sale` object literal in the repo must now supply it**, and `.husky/pre-commit` runs `tsc --noEmit`, so missing one blocks the commit. Add `refunded_amount: null` to the `Sale` literals in:
+
+- `src/app/dashboard/sales/_store/salesSlice.test.ts` (the `makeSale` defaults)
+- `src/app/dashboard/_lib/aggregateSales.test.ts` (`const defaults: Sale`)
+- `src/lib/utils/filters.test.ts` (`makeSale`)
+- `src/lib/integrations/mergeImportedSale.test.ts` (`existingSale` and `incomingSale`)
+- `src/app/dashboard/sales/_components/orderMath.test.ts` (`makeSale`)
+
+Then search the non-test sources for any remaining full `Sale` literal — `src/lib/integrations/mapToSale.ts` and `mergeImportedSale.ts` are the likely ones — and add it there too. Files using `Partial<Sale>` with a cast (e.g. `src/lib/utils/invoiceMath.test.ts`) need no change.
+
+Do not "fix" this by making the field optional. Optional would let a real code path forget to read it and silently skip the idempotency guard.
 
 - [ ] **Step 4: Add the badge variant**
 
@@ -317,7 +330,7 @@ const NON_SALE_STATUSES = new Set(["return", "fc_transfer"]);
 
 - [ ] **Step 4: Replace the return branch with a refund branch**
 
-Delete the `isReturn` field from `ParsedRow` and its JSDoc, and add:
+Add the following to `ParsedRow`, **alongside the existing `isReturn` field — do not delete that one yet.** Its only consumer is `ImportSalesModal.tsx`, which Task 3 rewrites; deleting the field here would break that file, and `.husky/pre-commit` runs `tsc --noEmit`, so this task's commit would be rejected. Task 3 removes the field and its consumer together.
 
 ```typescript
   /**
@@ -336,7 +349,9 @@ Delete the `isReturn` field from `ParsedRow` and its JSDoc, and add:
   };
 ```
 
-Then replace the `isReturnRow` const and the whole `if (isReturnRow) { … }` block. The refund check must sit **before** the date parse, because REFUND rows have an empty `date`:
+Then delete the `isReturnRow` const and the whole `if (isReturnRow) { … }` block — with `return` now in `NON_SALE_STATUSES`, that branch is unreachable. Nothing outside this file reads it, so removing it keeps the tree type-clean.
+
+In its place, add the refund branch. It must sit **before** the date parse, because REFUND rows have an empty `date`:
 
 ```typescript
   const isRefundRow =
@@ -398,6 +413,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `src/app/dashboard/sales/_components/ImportSalesModal.tsx`
+- Modify: `src/app/dashboard/sales/_components/importFormats.ts` (drop the orphaned `isReturn` field only)
 - Modify: `src/app/dashboard/sales/page.tsx`
 
 **Interfaces:**
@@ -406,7 +422,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Remove the return machinery**
 
-Delete, in `ImportSalesModal.tsx`: the `restockReturns` state and its checkbox, the `returnRows`/`unmatchedReturns`/`alreadyAppliedReturns` locals and the whole return loop, the `returns_*` audit fields, and the `returnsMatched`/`returnsSkipped`/`returnsAlreadyApplied` summary fields. Replace the `ImportSummary` interface with:
+First delete the now-orphaned `isReturn?: boolean` field and its JSDoc from `ParsedRow` in `_components/importFormats.ts`. Task 2 left it in place only so the modal would keep compiling; nothing writes it any more. It must come out in the same commit as its consumers below, or `tsc` fails either way round.
+
+Then delete, in `ImportSalesModal.tsx`: the `restockReturns` state and its checkbox, the `returnRows`/`unmatchedReturns`/`alreadyAppliedReturns` locals and the whole return loop, the `returns_*` audit fields, and the `returnsMatched`/`returnsSkipped`/`returnsAlreadyApplied` summary fields. Replace the `ImportSummary` interface with:
 
 ```typescript
 /**
@@ -577,7 +595,7 @@ Do not start a dev server. Ask the user to import the April Amazon sheet and con
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/app/dashboard/sales/_components/ImportSalesModal.tsx src/app/dashboard/sales/page.tsx
+git add src/app/dashboard/sales/_components/ImportSalesModal.tsx src/app/dashboard/sales/_components/importFormats.ts src/app/dashboard/sales/page.tsx
 git commit -m "feat(sales-import): deduct Amazon refunds from their matched sale
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
