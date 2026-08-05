@@ -173,50 +173,115 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   statement.** Putting the blank-row check above it makes `generic` and
   `ebay` silently skip blank rows instead of erroring them — those two
   formats must keep their pre-existing all-or-nothing validation behaviour.
-- **RETURN rows must be exempt from BOTH duplicate pre-check passes**
+- **`RETURN`/`FC_TRANSFER` are skipped as noise BEFORE field validation**,
+  because they legitimately have an EMPTY `date` column (and every other
+  required field) — Amazon leaves them blank on those row types. Moving the
+  `classifySkip` call after date parsing reintroduces a `Row N: invalid or
+  missing "date"` failure on every one of them.
+- **`REFUND` rows are exempt from BOTH duplicate pre-check passes**
   (file-level dupes and the DB `.in()` check in `markDuplicates`) — they
-  carry the `external_order_id` of an existing order by definition, so
-  without the carve-out every return is dropped as "order already exists"
-  and the matching path in `handleImport` never runs.
+  carry the `external_order_id` of an existing sale by definition, so
+  without the carve-out every refund is dropped as "order already exists"
+  and the matching path in `handleImport` never runs, making the whole
+  feature unreachable.
+- **`REFUND` rows have an EMPTY `date` column, exactly like `RETURN` rows
+  do** (confirmed against a real April 2026 report row, see
+  `importFormats.test.ts`'s "Amazon REFUND rows" describe block). The refund
+  parse branch in `validateRowForFormat` therefore runs BEFORE the date
+  parse — neither the date parse nor the amazon price branch could run on a
+  refund row anyway. Moving the refund check after the date parse
+  reintroduces a `Row N: invalid or missing "date"` failure on every REFUND
+  line.
+- **A refund never becomes a row — it deducts from its matched sale.**
+  `data: null` on a `ParsedRow` with `isRefund: true`; two DB constraints
+  make a standalone negative row impossible anyway:
+  `sales_unit_price_check (unit_price >= 0)` and a non-partial UNIQUE index
+  on `(platform, external_order_id)` (every refund shares its order id with
+  its own sale).
+- **A refund is split across two columns because a SALE's `total_amount`
+  holds the item total only** (shipping lives in `shipping_charged`). The
+  parsed `refund` carries `amount` (full), `itemAmount`, and
+  `shippingAmount`; `itemAmount` is deducted from `total_amount`,
+  `shippingAmount` from `shipping_charged`. When `unit_price` is blank on the
+  sheet, `itemAmount` is backed out of `amount` using the row's
+  `shipping_charged`, mirroring the SALE branch. A row whose parts don't sum
+  to the whole (`itemAmount < 0 || itemAmount > amount`) is a row error, not
+  reconciled — writing a mismatched deduction would make `refunded_amount`
+  unauditable against what was actually subtracted.
 - **Amazon order ids are NOT unique** — a multi-line order (one line per SKU)
-  repeats the same `order_id`. Return matching keys on platform +
+  repeats the same `order_id`. Refund matching keys on platform +
   `external_order_id` + resolved `product_id`, never `external_order_id`
-  alone, or the wrong line gets flipped.
-- **Unmatched returns are skipped, not inserted.** A non-partial UNIQUE index
+  alone, or the wrong line gets deducted.
+- **Unmatched refunds are skipped, not inserted.** A non-partial UNIQUE index
   on `(platform, external_order_id)` exists in every tenant schema (verified
-  live) — a standalone insert for an order id with no matching line (or a
-  second line of an already-matched order) raises a unique violation and
-  fails the *whole* batch, not just that row. `handleImport` marks these
-  `skipped: "return: no matching order"` instead.
-- **Return matching requires a non-null `product_id`** — it's part of the
+  live) — a standalone insert for an order id with no matching line raises a
+  unique violation and fails the *whole* batch, not just that row. Unlike
+  the file-level skip reasons, this is NOT surfaced as a `ParsedRow.skipped`
+  reason in the pre-import preview — matching happens only inside
+  `handleImport`, and the outcome (`refundsSkipped`) is reported post-import
+  via `ImportSummary`/the toast in `page.tsx`.
+- **Refund matching requires a non-null `product_id`** — it's part of the
   match key (see above). Every integrations-synced Amazon order has
   `product_id: null` by design (see `src/lib/integrations/`'s SKILL.md), and
   so does any CSV row whose SKU isn't in inventory. In a tenant that uses the
-  eBay/Amazon platform sync, this means **100% of RETURN rows in a CSV import
-  skip** as "no matching order" — not a bug, just a consequence of the match
-  key, but it reads to a user as "returns don't work" if you don't know this.
-- **The insert runs BEFORE the returns loop, not after.** An Amazon monthly
-  report routinely contains both the SALE and its RETURN in the same file
-  (sold 3 April, returned 24 April). `handleImport` inserts `insertRows`
-  first so a same-file return can match a row that was just committed —
-  matching returns first would silently skip same-period returns as "no
-  matching order" since the query would run before the SALE existed.
-- **A return whose matched sale already has `status === "returned"` is
-  skipped as a no-op (`returnsAlreadyApplied`), never re-updated.** This
-  guards a re-import of the same file: the stock trigger
-  (`apply_sale_stock_change()`, `003_add_order_status.sql:53-63`) computes
-  its delta from OLD vs NEW `restock`, so blindly re-running
-  `update({ restock: restockReturns })` on an already-applied return would
-  flip a previously-restocked row's delta from `0` to `-quantity` whenever
-  the toggle defaults back to `false` — silently dropping stock a second
-  time with no error. Don't remove this guard when touching the returns loop.
-- **The returns loop has no transaction.** It runs after the insert, so by
+  eBay/Amazon platform sync, this means **100% of REFUND rows in a CSV
+  import skip** as unmatched — not a bug, just a consequence of the match
+  key, but it reads to a user as "refunds don't work" if you don't know this.
+- **The insert runs BEFORE the refund loop, not after.** An Amazon monthly
+  report routinely contains both the SALE and its REFUND in the same file
+  (sold 3 April, refunded 24 April). `handleImport` inserts `insertRows`
+  first so a same-file refund can match a row that was just committed —
+  matching refunds first would silently skip same-period refunds as
+  unmatched, since the query would run before the SALE existed.
+- **`refunded_amount` is the re-import idempotency marker** — see the
+  dedicated gotcha below for what that implies for a second refund on the
+  same order.
+- **The already-refunded check is a LOOSE `!= null`, not `!==`, on
+  purpose.** Migration `031_sales_refunded_amount.sql` is not yet applied to
+  any tenant schema — until it is, `previous.refunded_amount` reads as
+  `undefined`, and `undefined !== null` is `true`. A strict check would
+  silently classify EVERY refund as already-applied and deduct nothing while
+  the import still reports success. The loose check falls through to the
+  `update` instead, which Supabase rejects for the missing column, surfacing
+  a real error on the `updErr` path. **Do not "tighten" this** — it looks
+  like a bug fix and is actually the thing preventing a silent no-op.
+- **The already-refunded check runs BEFORE the over-refund check.** A fully
+  refunded order has `total_amount = 0`; checking the over-refund condition
+  first would misreport a harmless re-import as "exceeds the order" instead
+  of the correct "already applied".
+- **Over-refund is a per-row skip (`refundsExceeded`), not an import abort**,
+  using the same `0.02` tolerance the SALE branch reconciles
+  `total ≈ items + shipping` with. `total_amount`/`shipping_charged`/
+  `vat_amount` are floored at `0` on the write, so a within-tolerance
+  overshoot can leave `refunded_amount` up to 2c above what was actually
+  deducted — a deliberate, bounded trade against ever writing a negative
+  total, which would corrupt every revenue aggregate.
+- **On `matchErr`/`updErr` the modal calls `blockRetry()`, clearing
+  `parsed`** so the Import button cannot be re-clicked — a retry would
+  re-insert the SALE rows already committed earlier in the same run and trip
+  the unique index.
+- **A refunds-only file is importable.** A REFUND row's `data` is `null`, so
+  it's never in `importable` — `canImport` and the Import button's row count
+  add `refundCount` (rows with `isRefund && !skipped`) to `importable.length`
+  so a refunds-only file doesn't read as "Import 0 rows".
+- **The refund loop has no transaction.** It runs after the insert, so by
   the time it starts the insert has already committed. A mid-loop Supabase
-  failure (the `matchErr`/`updErr` branches) leaves earlier returns in the
-  *same* loop already committed too — their status flips and stock
-  movements applied — but the function returns before reaching the batch
-  audit-log write, so the visible state is "insert + some returns applied,
-  no batch audit row for any of it." Known limitation, not handled.
+  failure (the `matchErr`/`updErr` branches) leaves earlier refunds in the
+  *same* loop already committed too, but bails via `blockRetry()` before
+  reaching the second batch audit-log write — so the visible state is
+  "insert + some refunds applied, no refund-outcomes audit row for any of
+  it." Known limitation, not handled.
+
+## Gotchas — `refunded_amount` idempotency
+
+- `refunded_amount` doubles as both the audit figure (what was refunded) and
+  the guard that prevents re-deducting it — there is no separate "already
+  processed" flag. This means **one refund per order** is a hard limit, not
+  a v1 shortcut to relax later without a schema change: a second, genuinely
+  separate refund against the same sale (e.g. two partial Amazon refunds)
+  cannot be represented and is silently skipped as `refundsAlreadyApplied`.
+  If partial/multiple refunds per order are ever needed, this needs a
+  separate ledger table, not a second column on `sales`.
 
 ## Gotchas — server-side pagination
 
@@ -244,10 +309,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - **CSV export** runs a separate Supabase query without `.range()` — it does
   NOT use the Redux items. This ensures the export always covers all matching
   records (up to the 5 000-row safety cap), even when the user is on page 3.
-- **`returnedCount` is page-scoped** — it counts returned orders within
-  `state.sales.items` (the current page), not across all matching rows. The UI
-  note "N returned order(s) excluded from totals" is therefore page-local; it
-  is not labelled "(this page)" in the UI, but that is what it reflects.
+- **`excludedCount` is page-scoped** — it counts non-revenue orders
+  (`!isRevenueSale`, i.e. `returned` or `cancelled`) within `state.sales.items`
+  (the current page), not across all matching rows. The UI note "N
+  returned/cancelled order(s) excluded from totals" is therefore page-local;
+  it is not labelled "(this page)" in the UI, but that is what it reflects.
+  `refunded` orders are NOT counted here — they still count toward revenue,
+  see `sales/CLAUDE.md` → "Order status + returns".
 - **Invoice modal falls back to current page only when nothing is selected** —
   `InvoiceModal` receives the `selected` rows array. When `selected` is empty,
   it has no records to render; the Generate Invoice button is disabled until at
