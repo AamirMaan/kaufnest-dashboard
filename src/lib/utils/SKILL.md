@@ -130,10 +130,25 @@ on a required field is a **row error**, never a silent `0` or today's date.
   - only `,` → decimal comma (`"9,99"` → `9.99`)
   - only `.` → thousands separator *only* for the exact pattern
     `\d{1,3}(\.\d{3})+` (`"1.234"` → `1234`); otherwise decimal (`"9.99"` → `9.99`)
-- `parseFlexibleDate(input) → string | null` — accepts ISO (`"2024-01-15"`) or
-  DD-first European (`"15.01.2024"`, `"26-03-2026"`, `"26/03/2026"`) and returns
-  ISO `YYYY-MM-DD`. Validates real calendar dates; **two-digit years are
-  rejected** rather than guessed at.
+- `parseFlexibleDate(input, order?) → string | null` — accepts ISO
+  (`"2024-01-15"`) or separated (`"15.01.2024"`, `"26-03-2026"`, `"26/03/2026"`)
+  dates and returns ISO `YYYY-MM-DD`. `order` (`DateOrder = "dmy" | "mdy"`)
+  defaults to `"dmy"`, so every pre-existing caller is unchanged; pass `"mdy"`
+  to read `/`- or `-`-separated dates month-first. **Dot-separated dates are
+  always day-first regardless of `order`** — `DD.MM.YYYY` is the German
+  convention and `MM.DD.YYYY` does not occur. Validates real calendar dates;
+  **two-digit years are rejected** rather than guessed at.
+- `detectDateOrder(values: string[]) → DateOrderDetection` — decides day-first
+  vs month-first for a whole file from evidence rather than assumption:
+  `{ order: DateOrder; confident: boolean; conflict?: { dayFirstSample,
+  monthFirstSample } }`. `order` always has a usable value (falls back to
+  `"dmy"` when undecidable); `confident` is true only when the file contained
+  a `/`- or `-`-separated date whose other reading isn't a valid month (e.g.
+  `30-04-2026`, which can only be day-first); `conflict` is set only when the
+  file has hard evidence for BOTH orders — callers must refuse the import in
+  that case, never pick one arbitrarily. Dot-separated dates carry no evidence
+  either way. Used by `ImportSalesModal` — see `sales/CLAUDE.md` →
+  "Date-order detection".
 
 ## detectPlatform.ts
 

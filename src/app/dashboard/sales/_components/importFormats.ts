@@ -17,7 +17,7 @@
 
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
-import { parseLocaleNumber, parseFlexibleDate } from "@/lib/utils/localeParse";
+import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
 
 export const VALID_PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 export const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -305,6 +305,7 @@ export function validateRowForFormat(
   format: ImportFormat,
   raw: Record<string, string>,
   rowNum: number,
+  dateOrder: DateOrder = "dmy",
 ): ParsedRow {
   const fail = (error: string): ParsedRow => ({ rowNum, data: null, error: `Row ${rowNum}: ${error}` });
 
@@ -316,7 +317,7 @@ export function validateRowForFormat(
   const isReturnRow =
     !!format.priceColumnsAreLineTotals && raw.status?.trim().toLowerCase() === "return";
 
-  const date = parseFlexibleDate(raw.date);
+  const date = parseFlexibleDate(raw.date, dateOrder);
   if (!date) {
     return fail(`invalid or missing "date" (expected YYYY-MM-DD, DD.MM.YYYY, or DD-MM-YYYY)`);
   }
