@@ -447,14 +447,14 @@ export default function SalesPage() {
       <ImportSalesModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onSuccess={({ inserted, returnsMatched, returnsSkipped, returnsAlreadyApplied }) => {
+        onSuccess={({ inserted, refundsApplied, refundsSkipped, refundsAlreadyApplied }) => {
           const parts: string[] = [];
           if (inserted > 0) parts.push(`${inserted} order${inserted !== 1 ? "s" : ""} imported successfully.`);
-          if (returnsMatched > 0) parts.push(`${returnsMatched} return${returnsMatched !== 1 ? "s" : ""} matched and marked returned.`);
-          if (returnsSkipped > 0) parts.push(`${returnsSkipped} return${returnsSkipped !== 1 ? "s" : ""} skipped — no matching order found.`);
-          if (returnsAlreadyApplied > 0) parts.push(`${returnsAlreadyApplied} return${returnsAlreadyApplied !== 1 ? "s" : ""} already applied — no change.`);
+          if (refundsApplied > 0) parts.push(`${refundsApplied} refund${refundsApplied !== 1 ? "s" : ""} applied.`);
+          if (refundsSkipped > 0) parts.push(`${refundsSkipped} refund${refundsSkipped !== 1 ? "s" : ""} skipped — no matching order found.`);
+          if (refundsAlreadyApplied > 0) parts.push(`${refundsAlreadyApplied} refund${refundsAlreadyApplied !== 1 ? "s" : ""} already applied — no change.`);
           const description = parts.length > 0 ? parts.join(" ") : "Nothing to import.";
-          if (inserted === 0 && returnsMatched === 0) {
+          if (inserted === 0 && refundsApplied === 0) {
             warning("No orders imported", description);
           } else {
             success("Import complete", description);

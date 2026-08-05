@@ -76,19 +76,15 @@ function formatIsoHuman(iso: string): string {
   return `${d} ${MONTH_NAMES[m - 1]} ${y}`;
 }
 
-/** Outcome summary passed to `onSuccess` — a returns-only import can insert
- * zero rows and still have done real work (matched returns, or skipped ones
- * with no matching order), so a bare inserted-count would silently hide that.
- * `returnsAlreadyApplied` counts returns that matched a sale already in
- * `status === "returned"` (typically a re-import of the same file) — these
- * are deliberately left untouched (see the stock-trigger comment in
- * `handleImport`), so surfacing them separately tells the user the re-import
- * was a no-op rather than looking like nothing happened. */
+/**
+ * `refundsAlreadyApplied` counts refunds whose sale already had a
+ * refunded_amount — deducting again on a re-import would halve the order.
+ */
 export interface ImportSummary {
   inserted: number;
-  returnsMatched: number;
-  returnsSkipped: number;
-  returnsAlreadyApplied: number;
+  refundsApplied: number;
+  refundsSkipped: number;
+  refundsAlreadyApplied: number;
 }
 
 interface Props {
@@ -108,10 +104,6 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [checking, setChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-  // Amazon's report never says whether returned goods are resellable, so this
-  // is a per-import choice. It applies ONLY to returns that matched an
-  // existing sale — never to standalone unmatched returns.
-  const [restockReturns, setRestockReturns] = useState(false);
   // null = trust detection. A non-null value is the user forcing an order,
   // which is only honoured when the file has no hard evidence to the contrary.
   const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
@@ -146,7 +138,16 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const errors = parsed.filter((r) => r.error !== null);
   const skipped = parsed.filter((r) => r.skipped);
   const importable = parsed.filter((r) => r.data !== null && !r.skipped);
-  const canImport = parsed.length > 0 && errors.length === 0 && importable.length > 0 && !checking;
+  // A REFUND row has `data: null`, so it can never be in `importable` — but it
+  // is still real work (it deducts from an existing sale). Count it separately
+  // or a refunds-only file reads as "Import 0 rows" and cannot be imported.
+  const refundCount = parsed.filter((r) => r.isRefund && !r.skipped).length;
+  const actionableCount = importable.length + refundCount;
+  const canImport =
+    parsed.length > 0 &&
+    errors.length === 0 &&
+    (importable.length > 0 || refundCount > 0) &&
+    !checking;
 
   // Group skipped rows by reason (duplicate, blank row, summary row, not a
   // sale, unsupported currency, …) so the summary/all-skipped messages below
@@ -181,7 +182,6 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setParsedSource(null);
     setFileName("");
     setImportError(null);
-    setRestockReturns(false);
     setDateOrderOverride(null);
     setDateDetection(null);
     setDateSample(undefined);
@@ -204,10 +204,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   async function markDuplicates(rows: ParsedRow[], requestId: number): Promise<ParsedRow[]> {
     const seen = new Set<string>();
     const withFileDupes = rows.map((r) => {
-      // RETURN rows are not new orders. They carry the external_order_id of an
+      // REFUND rows are not new orders. They carry the external_order_id of an
       // EXISTING sale by definition, so the dedup passes would mark every one
       // "order already exists" and drop it before matching could run.
-      if (r.isReturn) return r;
+      if (r.isRefund) return r;
       if (!r.data?.external_order_id) return r;
       const key = `${r.data.platform}:${r.data.external_order_id}`;
       if (seen.has(key)) return { ...r, skipped: "duplicate in file" };
@@ -217,7 +217,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
     const byPlatform = new Map<Platform, string[]>();
     for (const r of withFileDupes) {
-      if (!r.isReturn && r.data?.external_order_id && !r.skipped) {
+      if (!r.isRefund && r.data?.external_order_id && !r.skipped) {
         const list = byPlatform.get(r.data.platform) ?? [];
         list.push(r.data.external_order_id);
         byPlatform.set(r.data.platform, list);
@@ -247,10 +247,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         }
       }
       return withFileDupes.map((r) => {
-        // RETURN rows are not new orders. They carry the external_order_id of an
+        // REFUND rows are not new orders. They carry the external_order_id of an
         // EXISTING sale by definition, so the dedup passes would mark every one
         // "order already exists" and drop it before matching could run.
-        if (r.isReturn) return r;
+        if (r.isRefund) return r;
         return r.data?.external_order_id && !r.skipped && existing.has(`${r.data.platform}:${r.data.external_order_id}`)
           ? { ...r, skipped: "order already exists" }
           : r;
@@ -383,21 +383,24 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const returnRows = importable.filter((r) => r.isReturn);
-    const insertRows = importable.filter((r) => !r.isReturn);
+    // A REFUND row parses to `data: null`, so it is excluded from `importable`
+    // by construction — collect it from `parsed` directly. That also keeps it
+    // out of `payload` for free.
+    const refundRows = parsed.filter((r) => r.isRefund && !r.skipped);
+    const insertRows = importable.filter((r) => !r.isRefund);
 
-    // Insert the non-return rows FIRST, and match/apply returns AFTER.
+    // Insert the sale rows FIRST, and match/apply refunds AFTER.
     // An Amazon monthly report routinely contains both the SALE and the
-    // RETURN for one order (sold 3 April, returned 24 April — same
-    // period, same file). If returns were matched before the insert, the
-    // return's query against `sales` would run before its own SALE row
+    // REFUND for one order (sold 3 April, refunded 24 April — same
+    // period, same file). If refunds were matched before the insert, the
+    // refund's query against `sales` would run before its own SALE row
     // existed, find nothing, and be skipped as "no matching order" even
     // though the order is sitting right there in `payload`. Running the
-    // insert first means a same-file return can match a row that was
+    // insert first means a same-file refund can match a row that was
     // just committed moments earlier.
     //
-    // The insert is built from `insertRows` only — a return never enters
-    // `payload`; returns are applied via `update`, not `insert`, below.
+    // The insert is built from `insertRows` only — a refund never enters
+    // `payload`; refunds are applied via `update`, not `insert`, below.
     const payload = insertRows.map((r) => {
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       return { ...r.data!, created_by: user.id, product_id: productId };
@@ -407,9 +410,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     if (payload.length > 0) {
       const { data, error } = await supabase.from("sales").insert(payload).select();
       if (error) {
-        // Insert failed — do not run the returns loop at all. Otherwise a
-        // return could be matched/applied (with real stock side effects)
-        // against a batch whose sale rows never made it into the table.
+        // Insert failed — do not run the refunds loop at all. Otherwise a
+        // refund could be deducted from a batch whose sale rows never made
+        // it into the table.
         setImportError(error.message);
         setLoading(false);
         return;
@@ -418,99 +421,125 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       for (const sale of inserted) dispatch(addSale(sale));
     }
 
-    // Match each return on platform + external_order_id + the product resolved
+    // Match each refund on platform + external_order_id + the product resolved
     // from SKU. Order ids are unique only within a platform (an eBay sale could
     // share an id with an unrelated Amazon one), and NOT unique within an
     // Amazon sheet — a multi-line order such as 028-6107376-1547566 appears
     // once per SKU — so platform and product must both be part of the key or
-    // the wrong line gets flipped.
-    //
-    // Unmatched returns are SKIPPED, not inserted standalone: a non-partial
-    // UNIQUE index on (platform, external_order_id) exists in every tenant
-    // schema, so inserting a return whose order id already has no matching
-    // line (or a second unmatched line of an already-matched multi-line
-    // order) would raise a unique violation and fail the whole batch.
-    const unmatchedReturns: ParsedRow[] = [];
-    const alreadyAppliedReturns: ParsedRow[] = [];
-    for (const r of returnRows) {
-      const orderId = r.data!.external_order_id;
+    // the wrong line gets deducted.
+    const unmatchedRefunds: ParsedRow[] = [];
+    const alreadyRefunded: ParsedRow[] = [];
+    for (const [i, r] of refundRows.entries()) {
+      const target = r.refund!;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-      if (!orderId || !productId) {
-        unmatchedReturns.push({ ...r, skipped: "return: no matching order" });
+      if (!productId) {
+        unmatchedRefunds.push({ ...r, skipped: "refund: no matching order" });
         continue;
       }
       const { data: match, error: matchErr } = await supabase
         .from("sales")
         .select("*")
-        .eq("platform", r.data!.platform)
-        .eq("external_order_id", orderId)
+        .eq("platform", target.platform)
+        .eq("external_order_id", target.externalOrderId)
         .eq("product_id", productId)
         .limit(1);
       if (matchErr) {
-        setImportError("Could not check existing orders for returns. Please try again.");
+        setImportError("Could not check existing orders for refunds. Please try again.");
         setLoading(false);
         return;
       }
-      const previous = match?.[0] as Sale | undefined;
-      if (!previous) {
-        unmatchedReturns.push({ ...r, skipped: "return: no matching order" });
+      if (!match || match.length === 0) {
+        unmatchedRefunds.push({ ...r, skipped: "refund: no matching order" });
         continue;
       }
-      // Already applied (e.g. this file — or an overlapping one — was
-      // imported before). The stock trigger (apply_sale_stock_change(),
-      // 003_add_order_status.sql:53-63) computes its delta from OLD vs NEW
-      // restock, so blindly re-running `update({ restock: restockReturns })`
-      // here would flip an already-restocked row's delta from 0 to
-      // -quantity whenever the toggle defaults back to false on re-import —
-      // silently dropping stock a second time with no error. Treat it as a
-      // no-op: don't update, don't touch stock, just count it separately so
-      // the summary shows the re-import did nothing rather than nothing at
-      // all.
-      if (previous.status === "returned") {
-        alreadyAppliedReturns.push({ ...r, skipped: "return already applied" });
+      const previous = match[0] as Sale;
+
+      // Already refunded → no-op. Deducting again would halve the order.
+      if (previous.refunded_amount !== null) {
+        alreadyRefunded.push({ ...r, skipped: "refund already applied" });
         continue;
       }
+
+      if (target.amount > previous.total_amount) {
+        // Every refund before this one has ALREADY been written to Supabase and
+        // dispatched — the abort stops the loop, it does not roll them back. So
+        // the message must report the partial result truthfully. Derive the
+        // count from the loop's own progress: `i` rows have been processed, of
+        // which the two skip buckets were not applied.
+        const applied = i - unmatchedRefunds.length - alreadyRefunded.length;
+        const kept =
+          applied === 0
+            ? "No refunds had been applied yet."
+            : `${applied} earlier refund${applied !== 1 ? "s" : ""} had already been applied and ${applied === 1 ? "was" : "were"} kept.`;
+        setImportError(
+          `Refund of ${target.amount} exceeds order ${target.externalOrderId} (${previous.total_amount}). Import stopped. ${kept}`,
+        );
+        setLoading(false);
+        return;
+      }
+
+      const nextVat =
+        previous.vat_amount === null || target.vatAmount === null
+          ? previous.vat_amount
+          : Math.round((previous.vat_amount - target.vatAmount) * 100) / 100;
+
       const { data: updated, error: updErr } = await supabase
         .from("sales")
-        .update({ status: "returned", restock: restockReturns })
+        .update({
+          total_amount: Math.round((previous.total_amount - target.amount) * 100) / 100,
+          vat_amount: nextVat,
+          status: "refunded",
+          refunded_amount: target.amount,
+        })
         .eq("id", previous.id)
         .select()
         .single<Sale>();
       if (updErr || !updated) {
-        setImportError("Could not update a returned order. Please try again.");
+        setImportError("Could not apply a refund. Please try again.");
         setLoading(false);
         return;
       }
       dispatch(updateSale(updated));
 
-      const returnLog = await writeAuditLog(supabase, {
+      const refundLog = await writeAuditLog(supabase, {
         userId: user.id,
         userEmail: user.email ?? "",
         action: "update",
         entityType: "sale",
         entityId: previous.id,
         metadata: {
-          before: { status: previous.status, restock: previous.restock },
-          after: { status: updated.status, restock: updated.restock },
-          reason: "bulk import: matched return",
+          before: {
+            status: previous.status,
+            total_amount: previous.total_amount,
+            vat_amount: previous.vat_amount,
+            refunded_amount: previous.refunded_amount,
+          },
+          after: {
+            status: updated.status,
+            total_amount: updated.total_amount,
+            vat_amount: updated.vat_amount,
+            refunded_amount: updated.refunded_amount,
+          },
+          reason: "bulk import: applied refund",
           bulk_import: true,
-          external_order_id: orderId,
+          external_order_id: target.externalOrderId,
         },
       });
-      if (returnLog) dispatch(addAuditLog(returnLog));
+      if (refundLog) dispatch(addAuditLog(refundLog));
     }
 
     // Reflect the newly-discovered skip reasons back into `parsed` so the
-    // Task 6 grouping UI shows them — matching only happens here, mid-import,
-    // so `parsed` doesn't know yet.
-    if (unmatchedReturns.length > 0 || alreadyAppliedReturns.length > 0) {
-      const reflected = [...unmatchedReturns, ...alreadyAppliedReturns];
+    // grouping UI shows them — matching only happens here, mid-import, so
+    // `parsed` doesn't know yet.
+    if (unmatchedRefunds.length > 0 || alreadyRefunded.length > 0) {
+      const reflected = [...unmatchedRefunds, ...alreadyRefunded];
       setParsed((prev) =>
         prev.map((row) => reflected.find((u) => u.rowNum === row.rowNum) ?? row),
       );
     }
 
-    const returnsMatched = returnRows.length - unmatchedReturns.length - alreadyAppliedReturns.length;
+    const refundsApplied =
+      refundRows.length - unmatchedRefunds.length - alreadyRefunded.length;
 
     const log = await writeAuditLog(supabase, {
       userId: user.id,
@@ -521,11 +550,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         bulk_import: true,
         count: inserted.length,
         format: formatId,
-        skipped: skipped.length + unmatchedReturns.length + alreadyAppliedReturns.length,
-        returns_matched: returnsMatched,
-        returns_unmatched: unmatchedReturns.length,
-        returns_already_applied: alreadyAppliedReturns.length,
-        restock_returns: restockReturns,
+        skipped: skipped.length + unmatchedRefunds.length + alreadyRefunded.length,
+        refunds_applied: refundsApplied,
+        refunds_unmatched: unmatchedRefunds.length,
+        refunds_already_applied: alreadyRefunded.length,
       },
     });
     if (log) dispatch(addAuditLog(log));
@@ -534,9 +562,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     reset();
     onSuccess({
       inserted: inserted.length,
-      returnsMatched,
-      returnsSkipped: unmatchedReturns.length,
-      returnsAlreadyApplied: alreadyAppliedReturns.length,
+      refundsApplied,
+      refundsSkipped: unmatchedRefunds.length,
+      refundsAlreadyApplied: alreadyRefunded.length,
     });
     onClose();
   }
@@ -550,7 +578,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         <>
           <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
           <Button onClick={handleImport} disabled={!canImport || loading}>
-            {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${importable.length} row${importable.length !== 1 ? "s" : ""}` : "Import"}
+            {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
           </Button>
         </>
       }
@@ -606,17 +634,6 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           </p>
         )}
 
-        {parsed.some((r) => r.isReturn && !r.skipped) && (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={restockReturns}
-              onChange={(e) => setRestockReturns(e.target.checked)}
-            />
-            Return stock to inventory for matched returns
-          </label>
-        )}
-
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-muted)]">
             Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{requiredColumns.join(", ")}</code>
@@ -652,9 +669,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
             {checking && (
               <p className="text-sm text-[var(--color-text-muted)]">Checking for existing orders…</p>
             )}
-            {!checking && errors.length === 0 && importable.length > 0 && (
+            {!checking && errors.length === 0 && actionableCount > 0 && (
               <p className="text-sm text-[var(--color-success)]">
-                ✓ {importable.length} row{importable.length !== 1 ? "s" : ""} ready to import
+                ✓ {actionableCount} row{actionableCount !== 1 ? "s" : ""} ready to import
                 {skuMatchCount > 0 && (
                   <span className="text-[var(--color-text-muted)]"> · {skuMatchCount} linked to inventory via SKU</span>
                 )}
@@ -668,7 +685,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
                 )}
               </p>
             )}
-            {!checking && errors.length === 0 && importable.length === 0 && skipped.length > 0 && (
+            {!checking && errors.length === 0 && actionableCount === 0 && skipped.length > 0 && (
               <p className="text-sm text-[var(--color-text-muted)]">
                 All {skipped.length} row{skipped.length !== 1 ? "s" : ""} skipped —{" "}
                 {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}.

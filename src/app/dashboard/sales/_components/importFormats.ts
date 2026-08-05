@@ -39,18 +39,6 @@ export interface ParsedRow {
   /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
   sku?: string | null;
   /**
-   * Amazon RETURN row. The modal matches it to an existing sale by
-   * platform + external_order_id + resolved product and flips that sale's
-   * status; when unmatched it is SKIPPED (`return: no matching order`),
-   * never inserted standalone — `idx_sales_platform_external_order_id` is a
-   * non-partial unique index on (platform, external_order_id), so a
-   * standalone insert for an order id that's already taken (or was never a
-   * real order) would raise a unique violation and fail the whole batch.
-   * `unit_price`/`total_amount` are zeroed because Amazon leaves every money
-   * column blank on RETURN rows.
-   */
-  isReturn?: boolean;
-  /**
    * Amazon REFUND row. Never inserted — the modal matches it to an existing
    * sale and deducts `refund.amount` from that sale's `total_amount`. `data`
    * is null because there is no row to create.
