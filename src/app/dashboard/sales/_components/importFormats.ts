@@ -40,15 +40,26 @@ export interface ParsedRow {
   sku?: string | null;
   /**
    * Amazon REFUND row. Never inserted — the modal matches it to an existing
-   * sale and deducts `refund.amount` from that sale's `total_amount`. `data`
-   * is null because there is no row to create.
+   * sale and deducts the refund from that sale. `data` is null because there
+   * is no row to create.
+   *
+   * The refund is split into an item and a shipping portion because a SALE's
+   * `total_amount` holds the ITEM total only (shipping lives in
+   * `shipping_charged`), while the sheet's `total` column
+   * (TOTAL_ACTIVITY_VALUE_AMT_VAT_INCL) is items + shipping. Deducting the
+   * whole activity value from `total_amount` would over-deduct by the
+   * shipping amount on every order that carried shipping.
    */
   isRefund?: boolean;
   refund?: {
     platform: Platform;
     externalOrderId: string;
-    /** Positive magnitude. Amazon writes refunds negative; abs() at the boundary. */
+    /** Full refund, items + shipping. Positive. Stored as `refunded_amount`. */
     amount: number;
+    /** Item portion, positive. Deducted from the sale's `total_amount`. */
+    itemAmount: number;
+    /** Shipping portion, positive. Deducted from the sale's `shipping_charged`. */
+    shippingAmount: number;
     /** Positive magnitude, or null when the sheet has no vat_amount column. */
     vatAmount: number | null;
   };
@@ -335,11 +346,28 @@ export function validateRowForFormat(
     const refundOrderId = raw.order_id?.trim() || null;
     if (!refundOrderId) return fail(`missing "order_id"`);
 
-    const amountRaw = raw.total?.trim() || raw.unit_price?.trim();
-    const parsedAmount = amountRaw ? parseLocaleNumber(amountRaw) : null;
-    if (parsedAmount === null || parsedAmount === 0) {
+    // `total` is TOTAL_ACTIVITY_VALUE_AMT_VAT_INCL — items + shipping.
+    // `unit_price` is TOTAL_PRICE_OF_ITEMS_AMT_VAT_INCL — the item portion.
+    // An order with no shipping has the two equal, so either can stand in for
+    // the other when only one column is populated.
+    const activityRaw = raw.total?.trim();
+    const itemRaw = raw.unit_price?.trim();
+    const parsedActivity = activityRaw ? parseLocaleNumber(activityRaw) : null;
+    const parsedItem = itemRaw ? parseLocaleNumber(itemRaw) : null;
+    const activity = parsedActivity === null ? null : Math.abs(round2(parsedActivity));
+    const item = parsedItem === null ? null : Math.abs(round2(parsedItem));
+
+    const amount = activity ?? item;
+    if (amount === null || amount === 0) {
       return fail(`"total" must be a non-zero number on a REFUND row`);
     }
+    const itemAmount = item ?? amount;
+    // Never negative: a sheet where the item portion somehow exceeds the
+    // activity value yields no shipping rather than a negative credit. The
+    // resulting over-large `itemAmount` is caught by the modal's
+    // exceeds-the-order check — deliberately NOT clamped here, since clamping
+    // would silently write a wrong number instead of skipping a bad row.
+    const shippingAmount = Math.max(0, round2(amount - itemAmount));
 
     const vatRaw = raw.vat_amount?.trim();
     const parsedVat = vatRaw ? parseLocaleNumber(vatRaw) : null;
@@ -357,7 +385,9 @@ export function validateRowForFormat(
         // this branch must run before the date parse.
         platform: format.forcedPlatform as Platform,
         externalOrderId: refundOrderId,
-        amount: Math.abs(round2(parsedAmount)),
+        amount,
+        itemAmount,
+        shippingAmount,
         vatAmount: parsedVat === null ? null : Math.abs(round2(parsedVat)),
       },
     };

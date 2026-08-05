@@ -76,14 +76,22 @@ function formatIsoHuman(iso: string): string {
   return `${d} ${MONTH_NAMES[m - 1]} ${y}`;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /**
  * `refundsAlreadyApplied` counts refunds whose sale already had a
  * refunded_amount — deducting again on a re-import would halve the order.
+ * `refundsExceeded` is kept separate from `refundsSkipped` because folding
+ * the two together would report "no matching order found" for a refund that
+ * matched perfectly well and was only rejected for being too large.
  */
 export interface ImportSummary {
   inserted: number;
   refundsApplied: number;
+  /** No matching order. */
   refundsSkipped: number;
+  /** Refund larger than the matched order — that order was left unchanged. */
+  refundsExceeded: number;
   refundsAlreadyApplied: number;
 }
 
@@ -186,6 +194,23 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setDateDetection(null);
     setDateSample(undefined);
     setOrderSensitiveDates(true);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  /**
+   * Abort mid-import, after rows have already been committed. The sales are
+   * in the table, so the file must NOT stay importable: a second click would
+   * re-insert them and the unique index on (platform, external_order_id)
+   * would surface a raw Postgres error to the user. Clearing the parsed rows
+   * disables the Import button, and clearing the file input means selecting
+   * the SAME file again still fires `change` (a browser suppresses it
+   * otherwise). `importError` is deliberately left alone — the caller sets it
+   * and it must survive this.
+   */
+  function blockRetry() {
+    setParsed([]);
+    setParsedSource(null);
+    setFileName("");
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -421,6 +446,26 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       for (const sale of inserted) dispatch(addSale(sale));
     }
 
+    // Batch entry for the INSERT, written as soon as the insert succeeds and
+    // before the refund loop can bail. Writing it after the loop meant an
+    // abort lost the `bulk_import` record for rows that really did land,
+    // while the per-refund entries written earlier in the same run survived —
+    // an internally inconsistent trail. Refund outcomes are audited per sale
+    // inside the loop; skips change no data and so are not audited.
+    const log = await writeAuditLog(supabase, {
+      userId: user.id,
+      userEmail: user.email ?? "",
+      action: "create",
+      entityType: "sale",
+      metadata: {
+        bulk_import: true,
+        count: inserted.length,
+        format: formatId,
+        skipped: skipped.length,
+      },
+    });
+    if (log) dispatch(addAuditLog(log));
+
     // Match each refund on platform + external_order_id + the product resolved
     // from SKU. Order ids are unique only within a platform (an eBay sale could
     // share an id with an unrelated Amazon one), and NOT unique within an
@@ -429,7 +474,18 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // the wrong line gets deducted.
     const unmatchedRefunds: ParsedRow[] = [];
     const alreadyRefunded: ParsedRow[] = [];
-    for (const [i, r] of refundRows.entries()) {
+    const exceededRefunds: ParsedRow[] = [];
+    // Counted as they happen rather than derived at the end, because the two
+    // error bails below have to report how many were applied before the abort.
+    let appliedRefunds = 0;
+    // Both bails leave committed work in place, so the message must say what
+    // survived instead of implying a clean retry is available.
+    const abortNotice = (lead: string) =>
+      `${lead} ${inserted.length} order${inserted.length !== 1 ? "s" : ""} and ` +
+      `${appliedRefunds} refund${appliedRefunds !== 1 ? "s" : ""} were already saved and have been kept. ` +
+      `Re-select the file to continue.`;
+
+    for (const r of refundRows) {
       const target = r.refund!;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       if (!productId) {
@@ -444,7 +500,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         .eq("product_id", productId)
         .limit(1);
       if (matchErr) {
-        setImportError("Could not check existing orders for refunds. Please try again.");
+        setImportError(abortNotice("Could not check existing orders for refunds."));
+        blockRetry();
         setLoading(false);
         return;
       }
@@ -460,33 +517,39 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         continue;
       }
 
-      if (target.amount > previous.total_amount) {
-        // Every refund before this one has ALREADY been written to Supabase and
-        // dispatched — the abort stops the loop, it does not roll them back. So
-        // the message must report the partial result truthfully. Derive the
-        // count from the loop's own progress: `i` rows have been processed, of
-        // which the two skip buckets were not applied.
-        const applied = i - unmatchedRefunds.length - alreadyRefunded.length;
-        const kept =
-          applied === 0
-            ? "No refunds had been applied yet."
-            : `${applied} earlier refund${applied !== 1 ? "s" : ""} had already been applied and ${applied === 1 ? "was" : "were"} kept.`;
-        setImportError(
-          `Refund of ${target.amount} exceeds order ${target.externalOrderId} (${previous.total_amount}). Import stopped. ${kept}`,
-        );
-        setLoading(false);
-        return;
+      // A refund bigger than what the order actually holds means the match is
+      // wrong or the sheet is malformed — skip the ROW and carry on, rather
+      // than writing a negative total or aborting the whole import. Each
+      // portion is checked against its own column: a single combined check
+      // would pass a refund that fits overall but over-deducts one side.
+      if (
+        target.itemAmount > previous.total_amount ||
+        target.shippingAmount > (previous.shipping_charged ?? 0)
+      ) {
+        exceededRefunds.push({ ...r, skipped: "refund exceeds the matched order" });
+        continue;
       }
 
+      // Clamped at zero: `vat_amount` has no CHECK constraint, and a negative
+      // would corrupt the Overview page's VAT-Position aggregate silently.
       const nextVat =
         previous.vat_amount === null || target.vatAmount === null
           ? previous.vat_amount
-          : Math.round((previous.vat_amount - target.vatAmount) * 100) / 100;
+          : Math.max(0, round2(previous.vat_amount - target.vatAmount));
 
       const { data: updated, error: updErr } = await supabase
         .from("sales")
         .update({
-          total_amount: Math.round((previous.total_amount - target.amount) * 100) / 100,
+          // total_amount holds the ITEM total only; shipping is its own
+          // column. Deducting the full activity value from total_amount
+          // would over-deduct by the shipping portion on every shipped order.
+          total_amount: round2(previous.total_amount - target.itemAmount),
+          // Left exactly as-is when there is no shipping portion — including
+          // when it is null, which must not become 0.
+          shipping_charged:
+            target.shippingAmount > 0
+              ? round2((previous.shipping_charged ?? 0) - target.shippingAmount)
+              : previous.shipping_charged,
           vat_amount: nextVat,
           status: "refunded",
           refunded_amount: target.amount,
@@ -495,11 +558,13 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         .select()
         .single<Sale>();
       if (updErr || !updated) {
-        setImportError("Could not apply a refund. Please try again.");
+        setImportError(abortNotice("Could not apply a refund."));
+        blockRetry();
         setLoading(false);
         return;
       }
       dispatch(updateSale(updated));
+      appliedRefunds += 1;
 
       const refundLog = await writeAuditLog(supabase, {
         userId: user.id,
@@ -511,12 +576,14 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           before: {
             status: previous.status,
             total_amount: previous.total_amount,
+            shipping_charged: previous.shipping_charged,
             vat_amount: previous.vat_amount,
             refunded_amount: previous.refunded_amount,
           },
           after: {
             status: updated.status,
             total_amount: updated.total_amount,
+            shipping_charged: updated.shipping_charged,
             vat_amount: updated.vat_amount,
             refunded_amount: updated.refunded_amount,
           },
@@ -528,42 +595,13 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       if (refundLog) dispatch(addAuditLog(refundLog));
     }
 
-    // Reflect the newly-discovered skip reasons back into `parsed` so the
-    // grouping UI shows them — matching only happens here, mid-import, so
-    // `parsed` doesn't know yet.
-    if (unmatchedRefunds.length > 0 || alreadyRefunded.length > 0) {
-      const reflected = [...unmatchedRefunds, ...alreadyRefunded];
-      setParsed((prev) =>
-        prev.map((row) => reflected.find((u) => u.rowNum === row.rowNum) ?? row),
-      );
-    }
-
-    const refundsApplied =
-      refundRows.length - unmatchedRefunds.length - alreadyRefunded.length;
-
-    const log = await writeAuditLog(supabase, {
-      userId: user.id,
-      userEmail: user.email ?? "",
-      action: "create",
-      entityType: "sale",
-      metadata: {
-        bulk_import: true,
-        count: inserted.length,
-        format: formatId,
-        skipped: skipped.length + unmatchedRefunds.length + alreadyRefunded.length,
-        refunds_applied: refundsApplied,
-        refunds_unmatched: unmatchedRefunds.length,
-        refunds_already_applied: alreadyRefunded.length,
-      },
-    });
-    if (log) dispatch(addAuditLog(log));
-
     setLoading(false);
     reset();
     onSuccess({
       inserted: inserted.length,
-      refundsApplied,
+      refundsApplied: appliedRefunds,
       refundsSkipped: unmatchedRefunds.length,
+      refundsExceeded: exceededRefunds.length,
       refundsAlreadyApplied: alreadyRefunded.length,
     });
     onClose();
@@ -706,10 +744,15 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
                 </div>
               </>
             )}
-            {importError && (
-              <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
-            )}
           </div>
+        )}
+
+        {/* Outside the `parsed.length > 0` block on purpose: the mid-import
+            bails call `blockRetry()`, which clears `parsed` so the import
+            cannot be re-run. Nested here, the explanation would vanish with
+            it and the modal would look like nothing had happened. */}
+        {importError && (
+          <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
         )}
       </div>
     </Modal>

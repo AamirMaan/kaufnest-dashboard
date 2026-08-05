@@ -634,6 +634,77 @@ describe("Amazon REFUND rows", () => {
     const row = validateRowForFormat(IMPORT_FORMATS.amazon, noVat, 2);
     expect(row.refund?.vatAmount).toBeNull();
   });
+
+  // A SALE's total_amount holds the ITEM total only — shipping lives in
+  // shipping_charged. The sheet's `total` is items + shipping, so the refund
+  // must be split or every shipped order is over-deducted. 39 of 525 Amazon
+  // rows in tenant_k2_textil carry shipping, up to €9.24.
+  describe("item / shipping split", () => {
+    it("splits a refund that includes shipping", () => {
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, unit_price: "-20.00", total: "-24.99" },
+        2,
+      );
+      expect(row.refund?.amount).toBe(24.99);
+      expect(row.refund?.itemAmount).toBe(20.0);
+      expect(row.refund?.shippingAmount).toBe(4.99);
+    });
+
+    it("reports no shipping portion when the two columns agree", () => {
+      const row = validateRowForFormat(IMPORT_FORMATS.amazon, refundRow, 2);
+      expect(row.refund?.amount).toBe(7.99);
+      expect(row.refund?.itemAmount).toBe(7.99);
+      expect(row.refund?.shippingAmount).toBe(0);
+    });
+
+    // A blank column and an absent one take the identical path — both are
+    // falsy after `?.trim()`.
+    it("falls back to `total` for the item portion when unit_price is blank", () => {
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, unit_price: "" },
+        2,
+      );
+      expect(row.refund?.amount).toBe(7.99);
+      expect(row.refund?.itemAmount).toBe(7.99);
+      expect(row.refund?.shippingAmount).toBe(0);
+    });
+
+    it("falls back to `unit_price` for the full amount when total is blank", () => {
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, total: "" },
+        2,
+      );
+      expect(row.refund?.amount).toBe(7.99);
+      expect(row.refund?.itemAmount).toBe(7.99);
+      expect(row.refund?.shippingAmount).toBe(0);
+    });
+
+    it("never derives a negative shipping portion", () => {
+      // Malformed: the item portion exceeds the activity value. The excess is
+      // left on itemAmount for the modal's exceeds-the-order check to reject —
+      // it is not clamped into a wrong-but-plausible number here.
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, unit_price: "-24.99", total: "-20.00" },
+        2,
+      );
+      expect(row.refund?.shippingAmount).toBe(0);
+      expect(row.refund?.itemAmount).toBe(24.99);
+    });
+
+    it("handles German decimal commas on both columns", () => {
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, unit_price: "-20,00", total: "-24,99" },
+        2,
+      );
+      expect(row.refund?.itemAmount).toBe(20.0);
+      expect(row.refund?.shippingAmount).toBe(4.99);
+    });
+  });
 });
 
 describe("RETURN and FC_TRANSFER are now noise", () => {
