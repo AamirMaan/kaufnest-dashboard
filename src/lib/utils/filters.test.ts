@@ -81,6 +81,7 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     advertising_fee: null,
     status: "pending",
     restock: false,
+    refunded_amount: null,
     external_order_id: null,
     ...overrides,
   };

@@ -165,6 +165,24 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `provision_tenant_schema()` (`005_tenant_provisioning.sql`) for new
   tenants. Backs the Messages feature
   (`src/app/dashboard/messages/`).
+- `migrations/031_sales_refunded_amount.sql` — adds nullable
+  `sales.refunded_amount numeric(12,2)` (`>= 0` CHECK) to every tenant schema
+  via `run_on_all_tenant_schemas`; **also baked into
+  `provision_tenant_schema()` (`005_tenant_provisioning.sql`) in the same
+  commit**. This is the idempotency marker for the upcoming Amazon REFUND
+  import rework: a sale whose `refunded_amount` is already set is skipped on
+  re-import rather than deducted a second time. REFUND rows deduct from the
+  sale they belong to instead of becoming their own row, because
+  `sales_unit_price_check` rejects a negative `unit_price` and
+  `idx_sales_platform_external_order_id` is a non-partial unique index on
+  `(platform, external_order_id)` that every refund shares with its own
+  sale. `Sale.refunded_amount` and the `SaleImportData` exclusion live in
+  `src/types/index.ts` / `src/app/dashboard/sales/_components/importFormats.ts`;
+  `"refunded"` was also added to `ORDER_STATUSES`
+  (`src/app/dashboard/sales/_components/orderStatus.ts`) and to the
+  `StatusBadge` variant map (`src/components/ui/Badge.tsx`, `warning` — it
+  still counts as revenue at its reduced value, unlike `returned`). Backs
+  the Sales feature (`src/app/dashboard/sales/`).
 
 ## Related code
 

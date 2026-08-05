@@ -25,7 +25,10 @@ export const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 export type ImportFormatId = "generic" | "amazon" | "ebay";
 
 /** What an imported row becomes — same shape the modal has always inserted. */
-export type SaleImportData = Omit<Sale, "id" | "created_by" | "created_at" | "product_id">;
+export type SaleImportData = Omit<
+  Sale,
+  "id" | "created_by" | "created_at" | "product_id" | "refunded_amount"
+>;
 
 export interface ParsedRow {
   rowNum: number;

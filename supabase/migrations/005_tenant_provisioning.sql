@@ -141,6 +141,7 @@ BEGIN
       updated_at   timestamptz NOT NULL DEFAULT now(),
       vat_rate     numeric(5,2),
       vat_amount   numeric(12,2),
+      refunded_amount   numeric(12,2) CHECK (refunded_amount >= 0),
       status       text NOT NULL DEFAULT 'pending',
       restock      boolean NOT NULL DEFAULT false,
       external_order_id text

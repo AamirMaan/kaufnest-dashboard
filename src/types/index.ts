@@ -109,6 +109,13 @@ export interface Sale {
   advertising_fee: number | null;
   status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | custom
   restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
+  /**
+   * Total refunded against this order, set by the Amazon REFUND import path.
+   * Non-null means a refund has already been deducted from `total_amount` —
+   * the importer treats such a sale as a no-op so a re-import cannot deduct
+   * twice. Null means no refund has been applied.
+   */
+  refunded_amount: number | null;
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
 }
 

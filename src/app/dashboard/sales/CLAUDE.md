@@ -175,12 +175,21 @@ editable fields.
 
 - `status: string` — defaults to `"pending"`. Both modals render a `Select`
   populated from `ORDER_STATUSES` (`pending`, `processing`, `shipped`,
-  `delivered`, `returned`, `cancelled`) plus an `"Other…"` option that reveals
-  a free-text "Custom Status" `Input`. `EditSaleModal.saleToForm()` uses
-  `isPresetStatus()` to decide whether to show the preset or fall into
+  `delivered`, `returned`, `cancelled`, `refunded`) plus an `"Other…"` option
+  that reveals a free-text "Custom Status" `Input`. `EditSaleModal.saleToForm()`
+  uses `isPresetStatus()` to decide whether to show the preset or fall into
   "Other" with the existing custom value prefilled. `page.tsx` renders it via
-  `StatusBadge` (`components/ui/Badge.tsx`) and exposes a Status filter
-  (`ORDER_STATUSES` ∪ any custom values currently in `sales`, via `statusOptions`).
+  `StatusBadge` (`components/ui/Badge.tsx`, `refunded` → `warning` — unlike
+  `returned` it still counts as revenue at its reduced value) and exposes a
+  Status filter (`ORDER_STATUSES` ∪ any custom values currently in `sales`,
+  via `statusOptions`).
+- `refunded_amount: number | null` — schema/type groundwork added alongside
+  `refunded` (migration `031_sales_refunded_amount.sql`, see
+  `supabase/CLAUDE.md`); no UI or importer path sets it yet — the Amazon
+  REFUND import rework that deducts it from `total_amount` and sets
+  `status: "refunded"` lands in a later task. `SaleImportData`
+  (`_components/importFormats.ts`) explicitly excludes it so the import path
+  can't set it prematurely.
 - `restock: boolean` — only meaningful when `status === "returned"`; both
   modals show a "Item can be resold (restock inventory)" `Checkbox` only in
   that case, and force `restock = false` for every other status before

@@ -10,6 +10,7 @@ export const ORDER_STATUSES = [
   "delivered",
   "returned",
   "cancelled",
+  "refunded",
 ] as const;
 
 export type PresetOrderStatus = (typeof ORDER_STATUSES)[number];
