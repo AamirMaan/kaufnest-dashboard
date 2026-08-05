@@ -291,6 +291,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     if (!file) return;
     setFileName(file.name);
     setImportError(null);
+    setDateOrderOverride(null);
 
     const loadAndParse = isExcelFile(file.name)
       ? readFileBuffer(file).then((buf) => parseExcelBuffer(buf))
@@ -299,7 +300,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     loadAndParse
       .then((source) => {
         setParsedSource(source);
-        return parseAndValidate(source, formatId, dateOrderOverride);
+        return parseAndValidate(source, formatId, null);
       })
       .catch(() => {
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
@@ -509,9 +510,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
               className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1"
             >
               <option value="auto">
-                {dateDetection.confident
-                  ? `Auto — detected ${dateDetection.order === "dmy" ? "DD-MM-YYYY" : "MM-DD-YYYY"}`
-                  : "Auto — could not tell, assuming DD-MM-YYYY"}
+                {dateDetection.conflict
+                  ? "Mixed formats — cannot import"
+                  : dateDetection.confident
+                    ? `Auto — detected ${dateDetection.order === "dmy" ? "DD-MM-YYYY" : "MM-DD-YYYY"}`
+                    : "Auto — could not tell, assuming DD-MM-YYYY"}
               </option>
               <option value="dmy">Day first (DD-MM-YYYY)</option>
               <option value="mdy">Month first (MM-DD-YYYY)</option>
