@@ -246,8 +246,11 @@ All three are `number | null` on `Sale`. They surface in:
 - `ImportSalesModal` — optional CSV columns `shipping_cost`, `shipping_charged`,
   `advertising_fee` in every import format. Blank/missing → `null`. Non-numeric or
   negative → row error. Validated in `validateRowForFormat()`
-  (`_components/importFormats.ts`). Tests in `ImportSalesModal.test.ts` +
-  `importFormats.test.ts`.
+  (`_components/importFormats.ts`). **Despite its name, `ImportSalesModal.test.ts`
+  has zero modal tests** — it only exercises `validateRowForFormat` against the
+  `generic` format (fee-field cases). The modal component itself
+  (`ImportSalesModal.tsx`) is untested; don't cite this file as modal coverage.
+  Fee-field validation is also covered in `importFormats.test.ts`.
 - `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
   (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
 
@@ -316,27 +319,48 @@ validating any row, `ImportSalesModal` canonicalises the whole file and calls
 column: a `/`- or `-`-separated date where one side is >12 and the other ≤12
 is hard evidence for that order (`30-04-2026` can only be day-first). Dot
 separated dates (`15.01.2024`) carry no evidence — they're always read
-day-first regardless. Three outcomes:
+day-first regardless. Outcomes:
 
 - **Confident, single order** — all evidence in the file agrees; that order
   is used for every row. The Date format dropdown shows "Auto — detected
   DD-MM-YYYY" (or MM-DD-YYYY).
 - **No evidence either way** — every date reads the same both ways, or the
   file has none of the ambiguous separated form. The dropdown shows "Auto —
-  could not tell, assuming DD-MM-YYYY" and a note below it prompts the user
-  to check the preview before importing.
-- **Conflict** — the file contains hard evidence for BOTH orders (a genuinely
-  mixed file). The import is refused outright with a file-level error naming
-  the two conflicting sample dates; there is no partial import of a
-  conflicting file.
+  could not tell, assuming DD-MM-YYYY" and a note below it shows a concrete
+  "`<real date from the file>` will be imported as `<D Month YYYY>`" preview
+  (`firstAmbiguousDate` + `parseFlexibleDate` in `ImportSalesModal.tsx`) —
+  **not** a "check the preview" pointer, since the modal has no row preview
+  to check.
+- **Evidence conflict** — the file contains hard evidence for BOTH orders (a
+  genuinely mixed file, e.g. both `30-04-2026` and `04-30-2026`). The import
+  is refused outright with a file-level error naming the two conflicting
+  sample dates.
+- **Separator conflict** — the date column mixes `/` and `-` separators
+  (e.g. `30-04-2026` alongside `04/09/2026`). This is refused even when no
+  single value proves both orders — it's the signature of a spreadsheet tool
+  (Excel) silently rewriting the cells it could read as a date while leaving
+  the rest as text, which is exactly the corruption that motivated this
+  feature (see "Gotchas — date-order detection" in `SKILL.md`) and which
+  per-value evidence alone cannot see, because the rewritten cells have both
+  fields ≤ 12 by construction. `detectDateOrder`'s `conflict.kind` field
+  (`"evidence" | "separator"`) distinguishes the two; there is no partial
+  import of a conflicting file either way.
+- **Dot-only file** — when every date in the file is dot-separated, `order`
+  has no effect at all (dot dates are always day-first — see below), so the
+  Day-first/Month-first selector is disabled with a one-line explanation
+  instead of silently doing nothing.
 
 The user can override the detected/assumed order via the "Date format"
-dropdown next to the format dropdown (Auto / Day first / Month first). If the
+dropdown next to the format dropdown (Auto / Day first / Month first) —
+disabled when the file has no order-sensitive dates (dot-only, above). If the
 file has confident single-order evidence, picking the opposite order is also
 refused ("This file can only be read day first (DD-MM-YYYY) — it contains a
 date whose other reading is not a real month. Set the date format back to
 Auto.") — that reading would produce dates that don't exist. Re-parsing
-re-runs (`parseAndValidate`) on every format or date-order change.
+re-runs (`parseAndValidate`) on every format or date-order change; a run-id
+guard in `ImportSalesModal.tsx` discards the result of a call superseded by a
+newer one before it resolves (see "Gotchas — date-order detection" in
+`SKILL.md`).
 
 **`total` vs `unit_price` rule (I4, generic/ebay only):** if `total` is
 present it wins — `total_amount = total`, and `unit_price` is derived

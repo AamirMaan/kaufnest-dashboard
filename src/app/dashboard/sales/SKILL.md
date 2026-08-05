@@ -101,10 +101,52 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   day was 1–12 wrongly, with no error. That mis-dated 145 live orders in
   `tenant_k2_textil` — they landed on the 4th of twelve different months.
   `detectDateOrder` now decides from file evidence instead.
+- **The 145-row incident was a PARTIAL rewrite, and per-value evidence alone
+  cannot catch it.** Excel converted the cells it could read as US dates (both
+  fields ≤ 12) to `04/09/2026` and left the rest as `30-04-2026` text. The
+  flipped cells have both fields ≤ 12 by construction, so they never produce
+  month-first evidence — `detectDateOrder`'s evidence-only conflict check is
+  structurally blind to this shape of corruption. The tell is that the
+  surviving and flipped cells use **different separators**. `detectDateOrder`
+  therefore also refuses the file outright when the date column mixes `/` and
+  `-` (`conflict.kind === "separator"`), independent of what the per-value
+  evidence says. Don't remove or weaken this check thinking the evidence
+  conflict already covers it — it doesn't, that's the whole reason it exists.
+- `conflict` is now `{ kind: "evidence" | "separator"; sampleA: string;
+  sampleB: string }` (was `{ dayFirstSample, monthFirstSample }`). For
+  `"evidence"`, `sampleA`/`sampleB` are the day-first/month-first samples
+  respectively (same meaning as before, renamed). For `"separator"`, they're
+  just two real values using the two different separators found.
+  `ImportSalesModal.tsx` builds a different error message per `kind` — the
+  separator one explicitly says a spreadsheet tool likely rewrote part of the
+  file. Both callers of `detectDateOrder().conflict` were audited (grep
+  confirms `ImportSalesModal.tsx` is the only one outside the module) when
+  this shape changed.
 - A dot-separated date (`15.01.2024`) is ALWAYS day-first, even when the
   detected order is `mdy`. `DD.MM.YYYY` is the German convention and
   `MM.DD.YYYY` does not occur, so `parseFlexibleDate` deliberately ignores
-  `order` for them.
+  `order` for them. Because of this, `hasOrderSensitiveDate` (`localeParse.ts`)
+  returns `false` for a file whose dates are ALL dot-separated — in that case
+  `ImportSalesModal` disables the whole Date-format `<select>` (rather than
+  leave "Month first" as a silent no-op) and shows a one-line explanation.
+- **The ambiguous-case hint shows a real, parsed example, not a "check the
+  preview" pointer** — the modal has no row preview to check. `firstAmbiguousDate`
+  (`localeParse.ts`) returns the first file value that is genuinely
+  order-ambiguous; the modal parses it with whatever order will actually be
+  applied and renders `"<value>" will be imported as <D Month YYYY>.` If you
+  add a real preview table to the modal later, this hint can point at it
+  instead, but don't reintroduce a pointer to a UI element that doesn't exist.
+- **`parseAndValidate` is guarded against races with a run-id ref**
+  (`requestIdRef` in `ImportSalesModal.tsx`). Two rapid format/date-order
+  changes each call `parseAndValidate`, and the two results differ ONLY in
+  date interpretation — a naive `await` chain can let the slower (now stale)
+  call's `setParsed`/`setChecking(false)` land last, silently importing rows
+  under the wrong date order while the dropdown shows the newer one. Every
+  `setParsed` call after an `await`, and both `setChecking` calls inside
+  `markDuplicates` (which now takes the caller's `requestId`), check
+  `requestIdRef.current === requestId` first. Keep this guard if you touch
+  either function — it's easy to "simplify" away and silently reintroduce the
+  race.
 - Importing the `.xlsx` directly sidesteps ambiguity entirely **when the
   sheet's date column holds real dates** — `excel.ts` converts those to ISO
   before parsing. It does not help when the cells hold date-formatted text,

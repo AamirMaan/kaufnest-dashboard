@@ -11,7 +11,14 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
-import { detectDateOrder, type DateOrder, type DateOrderDetection } from "@/lib/utils/localeParse";
+import {
+  detectDateOrder,
+  firstAmbiguousDate,
+  hasOrderSensitiveDate,
+  parseFlexibleDate,
+  type DateOrder,
+  type DateOrderDetection,
+} from "@/lib/utils/localeParse";
 import {
   IMPORT_FORMATS,
   IMPORT_FORMAT_IDS,
@@ -56,6 +63,19 @@ function isExcelFile(name: string) {
   return name.endsWith(".xlsx") || name.endsWith(".xls");
 }
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** Format an ISO `YYYY-MM-DD` string as "10 April 2026" without going
+ * through `Date`/`toLocaleDateString` — those apply the viewer's timezone,
+ * which can shift the displayed day for a plain calendar date. */
+function formatIsoHuman(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTH_NAMES[m - 1]} ${y}`;
+}
+
 /** Outcome summary passed to `onSuccess` — a returns-only import can insert
  * zero rows and still have done real work (matched returns, or skipped ones
  * with no matching order), so a bare inserted-count would silently hide that.
@@ -96,6 +116,19 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   // which is only honoured when the file has no hard evidence to the contrary.
   const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
   const [dateDetection, setDateDetection] = useState<DateOrderDetection | null>(null);
+  // A real ambiguous date from the file, for the "will be imported as…" hint —
+  // undefined when the file has none (e.g. all ISO/dot-separated).
+  const [dateSample, setDateSample] = useState<string | undefined>(undefined);
+  // False when every date in the file is dot-separated — `order` is then a
+  // no-op (parseFlexibleDate always reads dot dates day-first), so the
+  // explicit Day/Month-first choice is disabled rather than silently ignored.
+  const [orderSensitiveDates, setOrderSensitiveDates] = useState(true);
+  // Guards against a stale parseAndValidate() call (from a fast double
+  // format/date-order change) overwriting a newer one's result — both
+  // results differ only in interpretation, so a stale write is silent and
+  // hard to notice. Incremented on every call; a result is applied only if
+  // its captured id is still current when it resolves.
+  const requestIdRef = useRef(0);
 
   // Case-insensitive SKU → product ID lookup built from the hydrated inventory.
   const skuToProductId = useMemo(() => {
@@ -131,6 +164,18 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     (r) => r.sku && skuToProductId.has(r.sku.toLowerCase()),
   ).length;
 
+  // Concrete "this date will be read as X" hint for the ambiguous-detection
+  // case — replaces a generic "check the preview" pointer to a preview the
+  // modal doesn't have. Uses a real sample from the file, parsed with
+  // whatever order will actually be applied (override, or the detected one).
+  const ambiguousDateHint = useMemo(() => {
+    if (!dateSample || !dateDetection) return null;
+    const order = dateOrderOverride ?? dateDetection.order;
+    const iso = parseFlexibleDate(dateSample, order);
+    if (!iso) return null;
+    return `"${dateSample}" will be imported as ${formatIsoHuman(iso)}. Set the date format explicitly if that is wrong.`;
+  }, [dateSample, dateDetection, dateOrderOverride]);
+
   function reset() {
     setParsed([]);
     setParsedSource(null);
@@ -139,6 +184,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setRestockReturns(false);
     setDateOrderOverride(null);
     setDateDetection(null);
+    setDateSample(undefined);
+    setOrderSensitiveDates(true);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -154,7 +201,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
    * file — are marked skipped, never overwritten. Errors elsewhere still
    * block the import; skips don't.
    */
-  async function markDuplicates(rows: ParsedRow[]): Promise<ParsedRow[]> {
+  async function markDuplicates(rows: ParsedRow[], requestId: number): Promise<ParsedRow[]> {
     const seen = new Set<string>();
     const withFileDupes = rows.map((r) => {
       // RETURN rows are not new orders. They carry the external_order_id of an
@@ -178,7 +225,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     }
     if (byPlatform.size === 0) return withFileDupes;
 
-    setChecking(true);
+    // Guard: don't flip `checking` on behalf of a call that's already stale
+    // by the time we reach the network round-trip — a newer parseAndValidate
+    // invocation may already be running with its own checking state.
+    if (requestId === requestIdRef.current) setChecking(true);
     try {
       const supabase = await createTenantClient();
       const existing = new Set<string>();
@@ -206,7 +256,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           : r;
       });
     } finally {
-      setChecking(false);
+      // Only the CURRENT request may clear `checking` — a stale one clearing
+      // it would unblock the Import button while a newer check is in flight.
+      if (requestId === requestIdRef.current) setChecking(false);
     }
   }
 
@@ -215,6 +267,13 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     fmtId: ImportFormatId,
     override: DateOrder | null,
   ) {
+    // Run-id guard (see the comment on requestIdRef): two rapid format/date-order
+    // changes each call this function; only the LAST one's result should ever
+    // land in state. `requestId` is captured now and re-checked before every
+    // state write that follows an `await`.
+    const requestId = ++requestIdRef.current;
+    const isCurrent = () => requestIdRef.current === requestId;
+
     const fmt = IMPORT_FORMATS[fmtId];
     const { headers, rows } = source;
     if (rows.length === 0) {
@@ -234,15 +293,20 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // order from the whole file BEFORE validating any row. Guessing per-row is
     // what mis-dated 145 live orders.
     const canonical = rows.map((row) => canonicalizeRow(row, mapping));
-    const detection = detectDateOrder(canonical.map((r) => r.date ?? ""));
+    const dateValues = canonical.map((r) => r.date ?? "");
+    const detection = detectDateOrder(dateValues);
+    const orderSensitive = hasOrderSensitiveDate(dateValues);
     setDateDetection(detection);
+    setDateSample(firstAmbiguousDate(dateValues));
+    setOrderSensitiveDates(orderSensitive);
 
     if (detection.conflict) {
-      setParsed([{
-        rowNum: 0,
-        data: null,
-        error: `This file mixes date formats — it contains "${detection.conflict.dayFirstSample}" (day first) and "${detection.conflict.monthFirstSample}" (month first). No single rule can read both correctly. Fix the file before importing.`,
-      }]);
+      const { kind, sampleA, sampleB } = detection.conflict;
+      const error =
+        kind === "separator"
+          ? `This file mixes date separators — it contains "${sampleA}" and "${sampleB}". That usually means a spreadsheet tool (e.g. Excel) silently rewrote some date cells while leaving others as text, so the column can no longer be trusted. Re-export the file with one consistent date format before importing.`
+          : `This file mixes date formats — it contains "${sampleA}" (day first) and "${sampleB}" (month first). No single rule can read both correctly. Fix the file before importing.`;
+      setParsed([{ rowNum: 0, data: null, error }]);
       return;
     }
 
@@ -260,10 +324,14 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const validated = canonical.map((row, i) =>
       validateRowForFormat(fmt, row, i + 2, dateOrder),
     );
+    if (!isCurrent()) return; // a newer format/date-order change has already superseded this run
     setParsed(validated); // show validation results immediately…
     try {
-      setParsed(await markDuplicates(validated)); // …then refine with the dedup check
+      const deduped = await markDuplicates(validated, requestId); // …then refine with the dedup check
+      if (!isCurrent()) return; // superseded while the dedup query was in flight
+      setParsed(deduped);
     } catch (err) {
+      if (!isCurrent()) return;
       setImportError(err instanceof Error ? err.message : "Duplicate check failed");
     }
   }
@@ -507,24 +575,34 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
               onChange={(e) =>
                 handleDateOrderChange(e.target.value === "auto" ? null : (e.target.value as DateOrder))
               }
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1"
+              disabled={!orderSensitiveDates}
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 disabled:opacity-60"
             >
               <option value="auto">
                 {dateDetection.conflict
                   ? "Mixed formats — cannot import"
-                  : dateDetection.confident
-                    ? `Auto — detected ${dateDetection.order === "dmy" ? "DD-MM-YYYY" : "MM-DD-YYYY"}`
-                    : "Auto — could not tell, assuming DD-MM-YYYY"}
+                  : !orderSensitiveDates
+                    ? "Fixed — DD.MM.YYYY (dot dates)"
+                    : dateDetection.confident
+                      ? `Auto — detected ${dateDetection.order === "dmy" ? "DD-MM-YYYY" : "MM-DD-YYYY"}`
+                      : "Auto — could not tell, assuming DD-MM-YYYY"}
               </option>
               <option value="dmy">Day first (DD-MM-YYYY)</option>
               <option value="mdy">Month first (MM-DD-YYYY)</option>
             </select>
           </label>
         )}
-        {dateDetection && !dateDetection.confident && !dateDetection.conflict && (
+        {dateDetection && !orderSensitiveDates && !dateDetection.conflict && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Every date in this file uses dots (e.g. DD.MM.YYYY) — that format is always read
+            day-first, so the Day/Month-first choice has no effect here.
+          </p>
+        )}
+        {dateDetection && orderSensitiveDates && !dateDetection.confident && !dateDetection.conflict && (
           <p className="text-xs text-[var(--color-text-muted)]">
             Every date in this file reads the same either way, so the format could not be
-            detected. Check a few dates in the preview before importing.
+            detected.{" "}
+            {ambiguousDateHint ?? "Set the date format explicitly if the assumed reading is wrong."}
           </p>
         )}
 

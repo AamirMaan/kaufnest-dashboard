@@ -1,4 +1,10 @@
-import { parseLocaleNumber, parseFlexibleDate, detectDateOrder } from "./localeParse";
+import {
+  parseLocaleNumber,
+  parseFlexibleDate,
+  detectDateOrder,
+  firstAmbiguousDate,
+  hasOrderSensitiveDate,
+} from "./localeParse";
 
 describe("parseLocaleNumber", () => {
   it.each<[string, number]>([
@@ -90,13 +96,43 @@ describe("detectDateOrder", () => {
     expect(d.conflict).toBeUndefined();
   });
 
-  it("reports a conflict when the file proves both", () => {
-    const d = detectDateOrder(["30-04-2026", "04/30/2026"]);
+  it("reports an evidence conflict when the file proves both (same separator)", () => {
+    const d = detectDateOrder(["30-04-2026", "04-30-2026"]);
     expect(d.confident).toBe(false);
     expect(d.conflict).toEqual({
-      dayFirstSample: "30-04-2026",
-      monthFirstSample: "04/30/2026",
+      kind: "evidence",
+      sampleA: "30-04-2026",
+      sampleB: "04-30-2026",
     });
+  });
+
+  it("reports a separator conflict when the file mixes / and -, even with no per-value evidence conflict", () => {
+    // This is the shape of the real incident file: Excel silently rewrote
+    // the cells it could read as US dates (both fields ≤ 12) to "/", and
+    // left the rest as "-" text. "04/09/2026" alone sets NO evidence (9 and
+    // 4 are both valid as day or month), so an evidence-only check can never
+    // catch it — the mismatched separators are the only signal.
+    const d = detectDateOrder(["30-04-2026", "04/09/2026"]);
+    expect(d.confident).toBe(false);
+    expect(d.conflict).toEqual({
+      kind: "separator",
+      sampleA: "30-04-2026",
+      sampleB: "04/09/2026",
+    });
+  });
+
+  it("does not conflict when the separator is consistent and evidence agrees (dmy)", () => {
+    const d = detectDateOrder(["30-04-2026", "10-04-2026"]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(true);
+    expect(d.conflict).toBeUndefined();
+  });
+
+  it("does not conflict when the separator is consistent and evidence agrees (mdy)", () => {
+    const d = detectDateOrder(["04/30/2026", "04/09/2026"]);
+    expect(d.order).toBe("mdy");
+    expect(d.confident).toBe(true);
+    expect(d.conflict).toBeUndefined();
   });
 
   it("ignores ISO dates entirely — they never cause a conflict", () => {
@@ -121,6 +157,34 @@ describe("detectDateOrder", () => {
     const d = detectDateOrder([]);
     expect(d.order).toBe("dmy");
     expect(d.confident).toBe(false);
+  });
+});
+
+describe("firstAmbiguousDate", () => {
+  it("returns the first separated date where neither field proves an order", () => {
+    expect(firstAmbiguousDate(["2026-04-30", "10-04-2026", "30-04-2026"])).toBe("10-04-2026");
+  });
+
+  it("returns undefined when every value has evidence, is ISO, or is dot-separated", () => {
+    expect(firstAmbiguousDate(["30-04-2026", "2026-04-10", "15.01.2024"])).toBeUndefined();
+  });
+
+  it("returns undefined for an empty list", () => {
+    expect(firstAmbiguousDate([])).toBeUndefined();
+  });
+});
+
+describe("hasOrderSensitiveDate", () => {
+  it("is true when a /- or --separated date is present", () => {
+    expect(hasOrderSensitiveDate(["15.01.2024", "10-04-2026"])).toBe(true);
+  });
+
+  it("is false when every date is dot-separated or ISO", () => {
+    expect(hasOrderSensitiveDate(["15.01.2024", "30.01.2024", "2026-04-10"])).toBe(false);
+  });
+
+  it("is false for an empty list", () => {
+    expect(hasOrderSensitiveDate([])).toBe(false);
   });
 });
 

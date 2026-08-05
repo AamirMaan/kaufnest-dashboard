@@ -73,13 +73,24 @@ export interface DateOrderDetection {
   order: DateOrder;
   /** True when the file contained hard evidence for this order. */
   confident: boolean;
-  /** Present ONLY when the file contains evidence for BOTH orders. Refuse the import. */
-  conflict?: { dayFirstSample: string; monthFirstSample: string };
+  /**
+   * Present when the file cannot be trusted to read with a single rule.
+   * Refuse the import in either case.
+   * - `"evidence"`: the file proves BOTH orders (hard evidence for each).
+   * - `"separator"`: the date column mixes `/` and `-` separators, which
+   *   means a spreadsheet tool silently rewrote some cells (the ones it
+   *   could read as dates) and left others as text — a partial, undetectable
+   *   corruption that per-value evidence alone cannot see. `sampleA`/`sampleB`
+   *   are two real values from the file demonstrating the mismatch; for
+   *   `"evidence"` they are the day-first and month-first samples respectively.
+   */
+  conflict?: { kind: "evidence" | "separator"; sampleA: string; sampleB: string };
 }
 
 // Matching separators only: "10-04/2026" is malformed, not evidence.
 // Dot-separated dates are deliberately excluded — DD.MM.YYYY is the German
-// convention and MM.DD.YYYY does not occur, so they carry no evidence.
+// convention and MM.DD.YYYY does not occur, so they carry no evidence, and
+// cannot participate in the separator-mixing check below either.
 const SEPARATED_DATE = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})$/;
 
 /**
@@ -87,29 +98,84 @@ const SEPARATED_DATE = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})$/;
  * rather than assumption. `10-04-2026` is genuinely ambiguous; `30-04-2026`
  * is not, because 30 cannot be a month.
  *
- * Silently guessing is what mis-dated 145 live orders — see the spec.
+ * Silently guessing is what mis-dated 145 live orders — see the spec. That
+ * incident file was only PARTIALLY rewritten by Excel: cells it could read
+ * as a date (both fields ≤ 12) got flipped to `04/09/2026`, cells it
+ * couldn't (a field > 12) survived as `30-04-2026` text. Per-value evidence
+ * can never see this — the flipped cells have both fields ≤ 12 by
+ * construction, so they never produce month-first evidence. The tell is
+ * that the surviving and flipped cells use different separators, so a file
+ * whose date column mixes `/` and `-` is refused outright, regardless of
+ * what the per-value evidence says.
  */
 export function detectDateOrder(values: string[]): DateOrderDetection {
   let dayFirstSample: string | undefined;
   let monthFirstSample: string | undefined;
+  const separatorSamples = new Map<string, string>(); // separator → first value seen using it
 
   for (const raw of values) {
     const s = raw?.trim();
     if (!s) continue;
     const m = SEPARATED_DATE.exec(s);
     if (!m) continue; // ISO, dot-separated or malformed — no evidence either way
+    const sep = m[2];
+    if (!separatorSamples.has(sep)) separatorSamples.set(sep, s);
     const first = Number(m[1]);
     const second = Number(m[3]);
     if (first > 12 && second <= 12) dayFirstSample ??= s;
     else if (second > 12 && first <= 12) monthFirstSample ??= s;
   }
 
+  if (separatorSamples.size > 1) {
+    const [[, sampleA], [, sampleB]] = separatorSamples;
+    return { order: "dmy", confident: false, conflict: { kind: "separator", sampleA, sampleB } };
+  }
+
   if (dayFirstSample && monthFirstSample) {
-    return { order: "dmy", confident: false, conflict: { dayFirstSample, monthFirstSample } };
+    return {
+      order: "dmy",
+      confident: false,
+      conflict: { kind: "evidence", sampleA: dayFirstSample, sampleB: monthFirstSample },
+    };
   }
   if (dayFirstSample) return { order: "dmy", confident: true };
   if (monthFirstSample) return { order: "mdy", confident: true };
   return { order: "dmy", confident: false };
+}
+
+/**
+ * First value that is genuinely date-order-ambiguous — a `/`- or
+ * `-`-separated date where neither field proves day-first or month-first
+ * (e.g. `10-04-2026`). Used by the UI to show a concrete "this date will be
+ * read as X" example instead of a generic hint. Returns `undefined` when the
+ * file has no such value (e.g. every date is ISO or dot-separated).
+ */
+export function firstAmbiguousDate(values: string[]): string | undefined {
+  for (const raw of values) {
+    const s = raw?.trim();
+    if (!s) continue;
+    const m = SEPARATED_DATE.exec(s);
+    if (!m) continue;
+    const first = Number(m[1]);
+    const second = Number(m[3]);
+    if (first <= 12 && second <= 12) return s;
+  }
+  return undefined;
+}
+
+/**
+ * True when the file has at least one date whose `order` actually matters —
+ * a `/`- or `-`-separated date. Dot-separated dates always parse day-first
+ * regardless of `order` (see `parseFlexibleDate`), so a file containing only
+ * those makes the explicit Day-first/Month-first choice a silent no-op.
+ */
+export function hasOrderSensitiveDate(values: string[]): boolean {
+  for (const raw of values) {
+    const s = raw?.trim();
+    if (!s) continue;
+    if (SEPARATED_DATE.test(s)) return true;
+  }
+  return false;
 }
 
 /**

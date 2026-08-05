@@ -24,14 +24,15 @@ imported at `2026-08-04 16:24:47`, producing 525 sales:
 | Feb 2026 | 8 | **all on the 4th** |
 | Mar 2026 | 1 | **all on the 4th** |
 | **Apr 2026** | **380** | spread 4th–30th ✓ |
-| May–Dec 2026 | 129 | **all on the 4th** |
+| May–Dec 2026 | 109 | **all on the 4th** |
 
 Every month outside April contains orders on exactly one day — the 4th. That is
 `DD-04-2026` read as month `DD`, day `04`: `09-04-2026` (9 April) became
 4 September, `12-04-2026` became 4 December. Days 13–30 cannot be months, so
 they survived — those are the 380 correct April rows.
 
-**145 orders are mis-dated**, all from that single import batch.
+**145 orders are mis-dated** (36 = Jan + Feb + Mar, plus 109 = May–Dec), all
+from that single import batch.
 
 ## Root cause
 
@@ -67,21 +68,60 @@ Before validating any row, scan every date cell in the file:
   detection — `DD.MM.YYYY` is the German convention and `MM.DD` effectively
   does not occur
 
-Four outcomes:
+Five outcomes:
 
 | Outcome | Meaning | Behaviour |
 |---|---|---|
 | `dmy` | at least one first field > 12, none in second | use day-first |
 | `mdy` | at least one second field > 12, none in first | use month-first |
 | `ambiguous` | every date could be read either way | fall back to the override, default day-first, and say so prominently |
-| `conflict` | evidence for both | error, import nothing |
+| `conflict` (evidence) | evidence for both | error, import nothing |
+| `conflict` (separator) | the date column mixes `/` and `-` | error, import nothing — see below |
+
+### Mixed-separator detection
+
+Added after the initial design shipped, in response to Finding 1 of the
+2026-08-05 whole-branch review (see the post-implementation correction above):
+evidence-only detection cannot see a partial rewrite where the flipped cells
+happen to have both fields ≤ 12. Before checking evidence, `detectDateOrder`
+scans every `/`-or-`-`-separated date for its separator character. If more
+than one distinct separator appears in the file, it refuses immediately —
+`conflict.kind = "separator"` — carrying the first sample seen for each of
+the two separators, independent of whatever day/month evidence those samples
+do or don't carry. This check runs *before*, and takes priority over, the
+evidence conflict check, since a file that both mixes separators and proves
+both orders is still fundamentally a mixed/rewritten file.
+
+Dot-separated dates are excluded from this check entirely, same as from
+evidence collection — `DD.MM.YYYY` is the only convention in use for them, so
+a `.` can never indicate a rewrite the way a `/`-vs-`-` mismatch does.
 
 The April file contains `30-04-2026`, so detection locks it to `dmy`
-immediately. A US-exported copy contains `04/30/2026` and locks to `mdy`. Either
-way the 145 rows would have landed correctly with no spreadsheet editing.
+immediately. A US-exported copy, uniformly `04/30/2026`, would lock to `mdy`.
+Either of those *uniform* files would have landed correctly.
 
-`conflict` means the file mixes formats and cannot be trusted — importing any of
-it would be guessing.
+**Post-implementation correction (see the 2026-08-05 whole-branch review):**
+the real incident file was neither of those — it was not uniformly
+reformatted. Excel converted only the cells it could read as a valid US date
+(both fields ≤ 12) to `04/09/2026`, and left the rest as `30-04-2026` text.
+That is exactly why 380 April rows survived correctly (days 13–30 can't be a
+month, so Excel couldn't touch them) while 145 others were silently flipped.
+Evidence-only detection, as designed above, **cannot catch this shape of
+corruption**: the flipped cells have both fields ≤ 12 by construction, so
+they never produce month-first evidence, and the surviving day-first cells
+confidently "prove" `dmy` — the file passes detection and imports clean,
+mis-dating the same 145 rows a second time. Re-importing this file today,
+after the fix below, would NOT have landed correctly on evidence alone.
+
+The signal evidence-based detection misses is that the flipped cells and the
+surviving cells use **different separators** (`/` vs `-`) — a spreadsheet
+tool rewrote some cells and not others. `detectDateOrder` therefore also
+refuses a file whose date column mixes separators, regardless of what the
+per-value evidence says. See "Mixed-separator detection" below.
+
+`conflict` means the file cannot be trusted — either because it has evidence
+for both orders, or because its date column mixes separators — and importing
+any of it would be guessing.
 
 ### Manual override in the modal
 
@@ -108,8 +148,15 @@ export interface DateOrderDetection {
   order: DateOrder;
   /** True when the file contained hard evidence for this order. */
   confident: boolean;
-  /** Present ONLY when the file has evidence for BOTH orders. Refuse the import. */
-  conflict?: { dayFirstSample: string; monthFirstSample: string };
+  /**
+   * Present when the file cannot be trusted to read with a single rule.
+   * `"evidence"`: hard evidence for BOTH orders. `"separator"`: the date
+   * column mixes `/` and `-` (see "Mixed-separator detection" above) — added
+   * post-implementation, after Finding 1 of the 2026-08-05 whole-branch
+   * review showed evidence-only detection misses a partial-rewrite file.
+   * Refuse the import either way.
+   */
+  conflict?: { kind: "evidence" | "separator"; sampleA: string; sampleB: string };
 }
 
 export function detectDateOrder(values: string[]): DateOrderDetection;
@@ -193,7 +240,15 @@ Per AGENTS.md: no dev server, no `curl`, and the agent does not run
 - `detectDateOrder(["30-04-2026", "10-04-2026"])` → `dmy`, confident
 - `detectDateOrder(["04/30/2026", "04/10/2026"])` → `mdy`, confident
 - `detectDateOrder(["10-04-2026", "05-06-2026"])` → ambiguous, defaults `dmy`
-- `detectDateOrder(["30-04-2026", "04/30/2026"])` → conflict, with samples
+- `detectDateOrder(["30-04-2026", "04-30-2026"])` → evidence conflict (same
+  separator, both orders proven), with samples
+- `detectDateOrder(["30-04-2026", "04/09/2026"])` → separator conflict — the
+  real incident shape: the second value alone proves neither order, but the
+  mixed `/`/`-` still refuses the file
+- `detectDateOrder(["30-04-2026", "10-04-2026"])` → confident `dmy`, no
+  conflict (consistent `-` separator)
+- `detectDateOrder(["04/30/2026", "04/09/2026"])` → confident `mdy`, no
+  conflict (consistent `/` separator)
 - ISO values contribute no evidence and never cause a conflict
 - dot-separated values are day-first and contribute no evidence
 - blank and malformed values are ignored rather than throwing
