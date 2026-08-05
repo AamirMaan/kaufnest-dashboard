@@ -78,6 +78,11 @@ function formatIsoHuman(iso: string): string {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Rounding drift allowed when comparing two independently-rounded money
+ * figures. Same value the SALE branch of `validateRowForFormat` uses to
+ * reconcile `total ≈ item total + shipping`. */
+const MONEY_TOLERANCE = 0.02;
+
 /**
  * `refundsAlreadyApplied` counts refunds whose sale already had a
  * refunded_amount — deducting again on a re-import would halve the order.
@@ -211,6 +216,13 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setParsed([]);
     setParsedSource(null);
     setFileName("");
+    // The date-format UI is driven by the aborted file's detection. Left
+    // behind, the dropdown keeps showing "Auto — detected DD-MM-YYYY" with no
+    // file loaded, and changing it is a silent no-op.
+    setDateOrderOverride(null);
+    setDateDetection(null);
+    setDateSample(undefined);
+    setOrderSensitiveDates(true);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -472,9 +484,12 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // Amazon sheet — a multi-line order such as 028-6107376-1547566 appears
     // once per SKU — so platform and product must both be part of the key or
     // the wrong line gets deducted.
-    const unmatchedRefunds: ParsedRow[] = [];
-    const alreadyRefunded: ParsedRow[] = [];
-    const exceededRefunds: ParsedRow[] = [];
+    // External order ids, not rows: only `.length` was ever read off these,
+    // and the ids are what makes the post-loop audit entry worth having —
+    // "8 refunds unmatched" is not actionable without knowing which.
+    const unmatchedRefunds: string[] = [];
+    const alreadyRefunded: string[] = [];
+    const exceededRefunds: string[] = [];
     // Counted as they happen rather than derived at the end, because the two
     // error bails below have to report how many were applied before the abort.
     let appliedRefunds = 0;
@@ -489,7 +504,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       const target = r.refund!;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       if (!productId) {
-        unmatchedRefunds.push({ ...r, skipped: "refund: no matching order" });
+        unmatchedRefunds.push(target.externalOrderId);
         continue;
       }
       const { data: match, error: matchErr } = await supabase
@@ -506,7 +521,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         return;
       }
       if (!match || match.length === 0) {
-        unmatchedRefunds.push({ ...r, skipped: "refund: no matching order" });
+        unmatchedRefunds.push(target.externalOrderId);
         continue;
       }
       const previous = match[0] as Sale;
@@ -522,7 +537,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       // for the missing column, surfacing on the `updErr` path as a visible
       // error. Do not "tighten" this.
       if (previous.refunded_amount != null) {
-        alreadyRefunded.push({ ...r, skipped: "refund already applied" });
+        alreadyRefunded.push(target.externalOrderId);
         continue;
       }
 
@@ -531,11 +546,16 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       // than writing a negative total or aborting the whole import. Each
       // portion is checked against its own column: a single combined check
       // would pass a refund that fits overall but over-deducts one side.
+      //
+      // The same 0.02 tolerance the SALE branch uses when reconciling
+      // `total ≈ items + shipping` applies here, so the two sides agree —
+      // without it a derived 5.00 against a stored 4.99 would reject an
+      // otherwise valid refund over a single cent of rounding drift.
       if (
-        target.itemAmount > previous.total_amount ||
-        target.shippingAmount > (previous.shipping_charged ?? 0)
+        target.itemAmount - previous.total_amount > MONEY_TOLERANCE ||
+        target.shippingAmount - (previous.shipping_charged ?? 0) > MONEY_TOLERANCE
       ) {
-        exceededRefunds.push({ ...r, skipped: "refund exceeds the matched order" });
+        exceededRefunds.push(target.externalOrderId);
         continue;
       }
 
@@ -552,12 +572,18 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           // total_amount holds the ITEM total only; shipping is its own
           // column. Deducting the full activity value from total_amount
           // would over-deduct by the shipping portion on every shipped order.
-          total_amount: round2(previous.total_amount - target.itemAmount),
+          //
+          // Floored at zero for the same reason vat_amount is: the check
+          // above admits up to MONEY_TOLERANCE of drift, so an exactly-full
+          // refund can land a cent past the stored figure. A visible negative
+          // total would corrupt every revenue aggregate downstream; being a
+          // cent off `refunded_amount` is the lesser and bounded error.
+          total_amount: Math.max(0, round2(previous.total_amount - target.itemAmount)),
           // Left exactly as-is when there is no shipping portion — including
           // when it is null, which must not become 0.
           shipping_charged:
             target.shippingAmount > 0
-              ? round2((previous.shipping_charged ?? 0) - target.shippingAmount)
+              ? Math.max(0, round2((previous.shipping_charged ?? 0) - target.shippingAmount))
               : previous.shipping_charged,
           vat_amount: nextVat,
           status: "refunded",
@@ -602,6 +628,32 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         },
       });
       if (refundLog) dispatch(addAuditLog(refundLog));
+    }
+
+    // Second batch entry, for the refund pass. The insert entry above stays
+    // where it is so it survives an abort; these counts cannot exist until
+    // the loop has finished. Without this, an import where 8 refunds went
+    // unmatched and 2 exceeded their order left no trace at all once the
+    // toast was dismissed — only the applied refunds were ever audited.
+    if (refundRows.length > 0) {
+      const refundBatchLog = await writeAuditLog(supabase, {
+        userId: user.id,
+        userEmail: user.email ?? "",
+        action: "update",
+        entityType: "sale",
+        metadata: {
+          bulk_import: true,
+          format: formatId,
+          refunds_applied: appliedRefunds,
+          refunds_unmatched: unmatchedRefunds.length,
+          refunds_already_applied: alreadyRefunded.length,
+          refunds_exceeded: exceededRefunds.length,
+          unmatched_order_ids: unmatchedRefunds,
+          already_applied_order_ids: alreadyRefunded,
+          exceeded_order_ids: exceededRefunds,
+        },
+      });
+      if (refundBatchLog) dispatch(addAuditLog(refundBatchLog));
     }
 
     setLoading(false);

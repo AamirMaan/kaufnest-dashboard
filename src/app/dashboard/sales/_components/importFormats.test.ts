@@ -682,17 +682,61 @@ describe("Amazon REFUND rows", () => {
       expect(row.refund?.shippingAmount).toBe(0);
     });
 
-    it("never derives a negative shipping portion", () => {
-      // Malformed: the item portion exceeds the activity value. The excess is
-      // left on itemAmount for the modal's exceeds-the-order check to reject —
-      // it is not clamped into a wrong-but-plausible number here.
+    // The fixture above has no shipping at all, which is why the blank-column
+    // cases below need their own: with `shipping_charged` absent, backing the
+    // item portion out of the activity value is indistinguishable from using
+    // it raw.
+    const withShipping = {
+      ...refundRow,
+      unit_price: "-20.00",
+      total: "-24.99",
+      shipping_charged: "-4.99",
+    };
+
+    it("backs the item portion out of `total` using shipping_charged when unit_price is blank", () => {
+      // Reading `total` raw here would yield itemAmount 24.99 against a sale
+      // whose total_amount is 20.00, and the refund would be wrongly rejected
+      // as larger than its order.
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...withShipping, unit_price: "" },
+        2,
+      );
+      expect(row.error).toBeNull();
+      expect(row.refund?.amount).toBe(24.99);
+      expect(row.refund?.itemAmount).toBe(20.0);
+      expect(row.refund?.shippingAmount).toBe(4.99);
+    });
+
+    it("fails a row whose item portion exceeds the refund total", () => {
+      // Previously passed both checks and wrote total_amount −24.99 while
+      // recording refunded_amount 20.00 — a deduction that disagreed with its
+      // own audit record.
       const row = validateRowForFormat(
         IMPORT_FORMATS.amazon,
         { ...refundRow, unit_price: "-24.99", total: "-20.00" },
         2,
       );
-      expect(row.refund?.shippingAmount).toBe(0);
-      expect(row.refund?.itemAmount).toBe(24.99);
+      expect(row.error).toContain("item portion");
+      expect(row.refund).toBeUndefined();
+    });
+
+    it("fails a row whose shipping portion exceeds the refund total", () => {
+      // Backing out would give a negative item portion, which as a deduction
+      // would INCREASE the order's total_amount.
+      const row = validateRowForFormat(
+        IMPORT_FORMATS.amazon,
+        { ...refundRow, unit_price: "", total: "-20.00", shipping_charged: "-24.99" },
+        2,
+      );
+      expect(row.error).toContain("item portion");
+      expect(row.refund).toBeUndefined();
+    });
+
+    it("prefers an explicit unit_price over backing out of shipping_charged", () => {
+      const row = validateRowForFormat(IMPORT_FORMATS.amazon, withShipping, 2);
+      expect(row.refund?.itemAmount).toBe(20.0);
+      expect(row.refund?.shippingAmount).toBe(4.99);
     });
 
     it("handles German decimal commas on both columns", () => {

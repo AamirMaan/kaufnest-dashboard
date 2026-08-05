@@ -352,22 +352,36 @@ export function validateRowForFormat(
     // the other when only one column is populated.
     const activityRaw = raw.total?.trim();
     const itemRaw = raw.unit_price?.trim();
+    const shipRaw = raw.shipping_charged?.trim();
     const parsedActivity = activityRaw ? parseLocaleNumber(activityRaw) : null;
     const parsedItem = itemRaw ? parseLocaleNumber(itemRaw) : null;
+    const parsedShip = shipRaw ? parseLocaleNumber(shipRaw) : null;
     const activity = parsedActivity === null ? null : Math.abs(round2(parsedActivity));
     const item = parsedItem === null ? null : Math.abs(round2(parsedItem));
+    const ship = parsedShip === null ? null : Math.abs(round2(parsedShip));
 
     const amount = activity ?? item;
     if (amount === null || amount === 0) {
       return fail(`"total" must be a non-zero number on a REFUND row`);
     }
-    const itemAmount = item ?? amount;
-    // Never negative: a sheet where the item portion somehow exceeds the
-    // activity value yields no shipping rather than a negative credit. The
-    // resulting over-large `itemAmount` is caught by the modal's
-    // exceeds-the-order check — deliberately NOT clamped here, since clamping
-    // would silently write a wrong number instead of skipping a bad row.
-    const shippingAmount = Math.max(0, round2(amount - itemAmount));
+    // Mirrors the SALE branch (`itemTotal = round2(sheetTotal - ship)`): when
+    // the item column is blank, the item portion is BACKED OUT of the activity
+    // value using the mapped shipping column. Reading the activity value raw
+    // instead would carry shipping into `itemAmount` and reject the refund as
+    // larger than an order whose `total_amount` holds items only.
+    const itemAmount = item ?? (ship !== null ? round2(amount - ship) : amount);
+
+    // The parts must sum to the whole. `refunded_amount` records `amount`
+    // while the deduction uses `itemAmount`/`shippingAmount`, so a row whose
+    // split contradicts its total would write financial data that disagrees
+    // with its own audit record. Fail the row rather than reconcile it —
+    // there is no reading of such a sheet that is safe to guess at.
+    if (itemAmount < 0 || itemAmount > amount) {
+      return fail(
+        `refund item portion (${itemAmount}) must be between 0 and the refund total (${amount}) — check "unit_price", "total" and "shipping_charged"`,
+      );
+    }
+    const shippingAmount = round2(amount - itemAmount);
 
     const vatRaw = raw.vat_amount?.trim();
     const parsedVat = vatRaw ? parseLocaleNumber(vatRaw) : null;
