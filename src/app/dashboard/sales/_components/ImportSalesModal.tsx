@@ -512,7 +512,16 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       const previous = match[0] as Sale;
 
       // Already refunded → no-op. Deducting again would halve the order.
-      if (previous.refunded_amount !== null) {
+      //
+      // Deliberately `!=` and not `!==`: until migration 031 is applied, the
+      // column does not exist in the tenant schema and this reads `undefined`,
+      // not `null`. A strict check would treat EVERY refund as already
+      // applied, deduct nothing, and still report success — a silent no-op
+      // with a reassuring toast, the worst failure available here. The loose
+      // check falls through to the `update` instead, which Supabase rejects
+      // for the missing column, surfacing on the `updErr` path as a visible
+      // error. Do not "tighten" this.
+      if (previous.refunded_amount != null) {
         alreadyRefunded.push({ ...r, skipped: "refund already applied" });
         continue;
       }
