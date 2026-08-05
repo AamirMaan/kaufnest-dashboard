@@ -66,13 +66,64 @@ export function parseLocaleNumber(input: string | undefined): number | null {
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DE_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
 
+export type DateOrder = "dmy" | "mdy";
+
+export interface DateOrderDetection {
+  /** The order to parse with. Always usable — falls back to "dmy" when undecidable. */
+  order: DateOrder;
+  /** True when the file contained hard evidence for this order. */
+  confident: boolean;
+  /** Present ONLY when the file contains evidence for BOTH orders. Refuse the import. */
+  conflict?: { dayFirstSample: string; monthFirstSample: string };
+}
+
+// Matching separators only: "10-04/2026" is malformed, not evidence.
+// Dot-separated dates are deliberately excluded — DD.MM.YYYY is the German
+// convention and MM.DD.YYYY does not occur, so they carry no evidence.
+const SEPARATED_DATE = /^(\d{1,2})([/-])(\d{1,2})\2(\d{4})$/;
+
+/**
+ * Decide whether a file's dates are day-first or month-first from evidence
+ * rather than assumption. `10-04-2026` is genuinely ambiguous; `30-04-2026`
+ * is not, because 30 cannot be a month.
+ *
+ * Silently guessing is what mis-dated 145 live orders — see the spec.
+ */
+export function detectDateOrder(values: string[]): DateOrderDetection {
+  let dayFirstSample: string | undefined;
+  let monthFirstSample: string | undefined;
+
+  for (const raw of values) {
+    const s = raw?.trim();
+    if (!s) continue;
+    const m = SEPARATED_DATE.exec(s);
+    if (!m) continue; // ISO, dot-separated or malformed — no evidence either way
+    const first = Number(m[1]);
+    const second = Number(m[3]);
+    if (first > 12 && second <= 12) dayFirstSample ??= s;
+    else if (second > 12 && first <= 12) monthFirstSample ??= s;
+  }
+
+  if (dayFirstSample && monthFirstSample) {
+    return { order: "dmy", confident: false, conflict: { dayFirstSample, monthFirstSample } };
+  }
+  if (dayFirstSample) return { order: "dmy", confident: true };
+  if (monthFirstSample) return { order: "mdy", confident: true };
+  return { order: "dmy", confident: false };
+}
+
 /**
  * Parse a date that is either ISO ("2024-01-15") or German/European
  * DD-first format ("15.01.2024", "26-03-2026", "26/03/2026") and return
- * ISO `YYYY-MM-DD`. Accepts `.`, `/`, or `-` as DD-first separators.
+ * ISO `YYYY-MM-DD`. Accepts `.`, `/`, or `-` as separators.
  * Validates real calendar dates. Two-digit years are rejected → returns `null`.
+ *
+ * The `order` parameter defaults to "dmy" (day-first) but can be set to "mdy"
+ * (month-first) for regions that use MM-DD-YYYY format. Note that dot-separated
+ * dates (e.g., "15.01.2024") are always parsed as DD.MM.YYYY regardless of the
+ * order parameter, as this is the German convention.
  */
-export function parseFlexibleDate(input: string | undefined): string | null {
+export function parseFlexibleDate(input: string | undefined, order: DateOrder = "dmy"): string | null {
   const s = input?.trim();
   if (!s) return null;
 
@@ -82,7 +133,16 @@ export function parseFlexibleDate(input: string | undefined): string | null {
   if (iso) {
     year = Number(iso[1]); month = Number(iso[2]); day = Number(iso[3]);
   } else if (de) {
-    day = Number(de[1]); month = Number(de[2]); year = Number(de[3]);
+    const first = Number(de[1]);
+    const second = Number(de[2]);
+    year = Number(de[3]);
+    // A dot-separated date is always day-first: DD.MM.YYYY is the German
+    // convention and MM.DD.YYYY does not occur, so `order` must not flip it.
+    if (order === "mdy" && !s.includes(".")) {
+      month = first; day = second;
+    } else {
+      day = first; month = second;
+    }
   } else {
     return null;
   }

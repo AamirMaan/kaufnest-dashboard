@@ -1,4 +1,4 @@
-import { parseLocaleNumber, parseFlexibleDate } from "./localeParse";
+import { parseLocaleNumber, parseFlexibleDate, detectDateOrder } from "./localeParse";
 
 describe("parseLocaleNumber", () => {
   it.each<[string, number]>([
@@ -65,5 +65,85 @@ describe("parseFlexibleDate", () => {
 
   it("undefined → null", () => {
     expect(parseFlexibleDate(undefined)).toBeNull();
+  });
+});
+
+describe("detectDateOrder", () => {
+  it("proves day-first from a first field over 12", () => {
+    // 30-04-2026 is real: it is in the April Amazon report.
+    const d = detectDateOrder(["30-04-2026", "10-04-2026"]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(true);
+    expect(d.conflict).toBeUndefined();
+  });
+
+  it("proves month-first from a second field over 12", () => {
+    const d = detectDateOrder(["04/30/2026", "04/10/2026"]);
+    expect(d.order).toBe("mdy");
+    expect(d.confident).toBe(true);
+  });
+
+  it("reports ambiguity when every date reads both ways, defaulting to dmy", () => {
+    const d = detectDateOrder(["10-04-2026", "05-06-2026"]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(false);
+    expect(d.conflict).toBeUndefined();
+  });
+
+  it("reports a conflict when the file proves both", () => {
+    const d = detectDateOrder(["30-04-2026", "04/30/2026"]);
+    expect(d.confident).toBe(false);
+    expect(d.conflict).toEqual({
+      dayFirstSample: "30-04-2026",
+      monthFirstSample: "04/30/2026",
+    });
+  });
+
+  it("ignores ISO dates entirely — they never cause a conflict", () => {
+    const d = detectDateOrder(["2026-04-30", "2026-04-10", "30-04-2026"]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(true);
+    expect(d.conflict).toBeUndefined();
+  });
+
+  it("ignores dot-separated dates — they are day-first by convention", () => {
+    const d = detectDateOrder(["15.01.2024", "30.01.2024"]);
+    expect(d.confident).toBe(false);
+  });
+
+  it("ignores blank and malformed values without throwing", () => {
+    const d = detectDateOrder(["", "   ", "not a date", "10-4-26", "30-04-2026"]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(true);
+  });
+
+  it("returns ambiguous for an empty list", () => {
+    const d = detectDateOrder([]);
+    expect(d.order).toBe("dmy");
+    expect(d.confident).toBe(false);
+  });
+});
+
+describe("parseFlexibleDate with an explicit order", () => {
+  it("defaults to day-first when no order is given", () => {
+    expect(parseFlexibleDate("10-04-2026")).toBe("2026-04-10");
+  });
+
+  it("reads month-first when told to", () => {
+    expect(parseFlexibleDate("10-04-2026", "mdy")).toBe("2026-10-04");
+  });
+
+  it("rejects an impossible month-first reading", () => {
+    // 30 is not a month, so mdy has no valid interpretation.
+    expect(parseFlexibleDate("30-04-2026", "mdy")).toBeNull();
+  });
+
+  it("keeps dot-separated dates day-first even under mdy", () => {
+    expect(parseFlexibleDate("15.01.2024", "mdy")).toBe("2024-01-15");
+  });
+
+  it("leaves ISO untouched under either order", () => {
+    expect(parseFlexibleDate("2026-04-10", "mdy")).toBe("2026-04-10");
+    expect(parseFlexibleDate("2026-04-10", "dmy")).toBe("2026-04-10");
   });
 });
