@@ -50,6 +50,20 @@ export interface ParsedRow {
    * column blank on RETURN rows.
    */
   isReturn?: boolean;
+  /**
+   * Amazon REFUND row. Never inserted — the modal matches it to an existing
+   * sale and deducts `refund.amount` from that sale's `total_amount`. `data`
+   * is null because there is no row to create.
+   */
+  isRefund?: boolean;
+  refund?: {
+    platform: Platform;
+    externalOrderId: string;
+    /** Positive magnitude. Amazon writes refunds negative; abs() at the boundary. */
+    amount: number;
+    /** Positive magnitude, or null when the sheet has no vat_amount column. */
+    vatAmount: number | null;
+  };
 }
 
 interface ColumnSpec {
@@ -254,8 +268,13 @@ export function normalizeStatus(raw: string | undefined): string {
 
 export type SkipReason = "blank row" | "summary row" | "not a sale" | "unsupported currency";
 
-/** Amazon row types that are not sales and carry no importable order. */
-const NON_SALE_STATUSES = new Set(["refund", "fc_transfer"]);
+/**
+ * Amazon row types that carry no importable money. REFUND is deliberately NOT
+ * here — its negative amounts are deducted from the sale they belong to. RETURN
+ * is pure logistics: it duplicates a refund that already appears separately, and
+ * its rows have no `date` at all.
+ */
+const NON_SALE_STATUSES = new Set(["return", "fc_transfer"]);
 
 /**
  * Classify a row that should be skipped rather than errored. Only applies to
@@ -264,7 +283,8 @@ const NON_SALE_STATUSES = new Set(["refund", "fc_transfer"]);
  * filler rows and a trailing `Total` summary row. Erroring on those would make
  * the file impossible to import, since validation is all-or-nothing.
  *
- * RETURN is deliberately NOT skipped: it is handled as a return (Task 5).
+ * REFUND is deliberately NOT skipped here: it is parsed into a `refund`
+ * adjustment in `validateRowForFormat` instead (see below).
  */
 export function classifySkip(format: ImportFormat, raw: Record<string, string>): SkipReason | null {
   // The format guard MUST come first. Every skip reason below — including the
@@ -317,8 +337,43 @@ export function validateRowForFormat(
     return { rowNum, data: null, error: null, skipped: skipReason };
   }
 
-  const isReturnRow =
-    !!format.priceColumnsAreLineTotals && raw.status?.trim().toLowerCase() === "return";
+  const isRefundRow =
+    !!format.priceColumnsAreLineTotals && raw.status?.trim().toLowerCase() === "refund";
+
+  if (isRefundRow) {
+    // REFUND rows have an EMPTY `date` column and negative money, so neither
+    // the date parse nor the amazon price branch can run on them. They adjust
+    // an existing sale rather than becoming one.
+    const refundOrderId = raw.order_id?.trim() || null;
+    if (!refundOrderId) return fail(`missing "order_id"`);
+
+    const amountRaw = raw.total?.trim() || raw.unit_price?.trim();
+    const parsedAmount = amountRaw ? parseLocaleNumber(amountRaw) : null;
+    if (parsedAmount === null || parsedAmount === 0) {
+      return fail(`"total" must be a non-zero number on a REFUND row`);
+    }
+
+    const vatRaw = raw.vat_amount?.trim();
+    const parsedVat = vatRaw ? parseLocaleNumber(vatRaw) : null;
+
+    return {
+      rowNum,
+      isRefund: true,
+      sku: raw.sku?.trim() || null,
+      error: null,
+      data: null,
+      refund: {
+        // Only the amazon format sets `priceColumnsAreLineTotals`, and amazon
+        // always forces its platform — `platform`/`productName`/`quantity`
+        // (below) aren't resolved yet at this point in the function, since
+        // this branch must run before the date parse.
+        platform: format.forcedPlatform as Platform,
+        externalOrderId: refundOrderId,
+        amount: Math.abs(round2(parsedAmount)),
+        vatAmount: parsedVat === null ? null : Math.abs(round2(parsedVat)),
+      },
+    };
+  }
 
   const date = parseFlexibleDate(raw.date, dateOrder);
   if (!date) {
@@ -345,45 +400,6 @@ export function validateRowForFormat(
     return fail(`"quantity" must be a positive integer`);
   }
   const quantity = quantityNum;
-
-  if (isReturnRow) {
-    // Amazon RETURN rows carry no money columns at all, so the normal amount
-    // validation cannot run. Zero the amounts; the modal matches this row
-    // against an existing sale and flips its status, or skips it as
-    // `return: no matching order` when no match is found — it is never
-    // inserted standalone.
-    // `date`, `productName`, `platform` and `quantity` are already validated
-    // above — do not re-parse them.
-    const returnOrderId = raw.order_id?.trim() || null;
-    if (!returnOrderId) return fail(`missing "order_id"`);
-    return {
-      rowNum,
-      isReturn: true,
-      sku: raw.sku?.trim() || null,
-      error: null,
-      data: {
-        platform,
-        product_name: productName,
-        quantity,
-        unit_price: 0,
-        total_amount: 0,
-        currency: "EUR",
-        description: raw.description?.trim() || null,
-        date,
-        vat_rate: null,
-        vat_amount: null,
-        shipping_cost: null,
-        shipping_charged: null,
-        advertising_fee: null,
-        status: "returned",
-        // NEVER true here. An unmatched return has no corresponding sale, so
-        // restocking it would create inventory from nothing. Task 7 applies
-        // the per-import toggle only to returns that matched a real sale.
-        restock: false,
-        external_order_id: returnOrderId,
-      },
-    };
-  }
 
   const totalRaw = raw.total?.trim();
   const unitPriceRaw = raw.unit_price?.trim();

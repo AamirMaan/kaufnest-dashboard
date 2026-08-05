@@ -538,12 +538,8 @@ describe("classifySkip", () => {
     expect(classifySkip(amazon, { ...sale, date: "" })).toBeNull();
   });
 
-  it.each(["REFUND", "FC_TRANSFER"])("skips %s rows", (status) => {
+  it.each(["RETURN", "FC_TRANSFER"])("skips %s rows", (status) => {
     expect(classifySkip(amazon, { ...sale, status })).toBe("not a sale");
-  });
-
-  it("does NOT skip RETURN rows — they are handled as returns", () => {
-    expect(classifySkip(amazon, { ...sale, status: "RETURN" })).toBeNull();
   });
 
   it("skips an unsupported currency", () => {
@@ -575,50 +571,126 @@ describe("classifySkip", () => {
   });
 });
 
-describe("RETURN rows", () => {
-  const amazon = IMPORT_FORMATS.amazon;
-
-  // Order 304-7592975-1775530 from the April 2026 report — all amounts blank.
-  const ret = {
-    order_id: "304-7592975-1775530",
-    date: "24-04-2026",
+describe("Amazon REFUND rows", () => {
+  // Order 304-8612000-9060321 from the April 2026 report. Note `date` is EMPTY
+  // on a REFUND row, exactly as on a RETURN row.
+  const refundRow = {
+    order_id: "304-8612000-9060321",
+    date: "",
     product_name: "Textilstifte",
     quantity: "1",
     sku: "K2T-PFM-024",
-    status: "RETURN",
-    unit_price: "",
-    total: "",
-    currency: "",
+    status: "REFUND",
+    unit_price: "-7.99",
+    total: "-7.99",
+    vat_amount: "0",
+    currency: "EUR",
   };
 
-  it("parses despite every amount being blank", () => {
-    const row = validateRowForFormat(amazon, ret, 3);
+  it("parses despite an empty date and negative amounts", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, refundRow, 2);
     expect(row.error).toBeNull();
-    expect(row.isReturn).toBe(true);
+    expect(row.isRefund).toBe(true);
   });
 
-  it("zeroes the amounts and marks the sale returned", () => {
-    const row = validateRowForFormat(amazon, ret, 3);
-    expect(row.data?.status).toBe("returned");
-    expect(row.data?.total_amount).toBe(0);
-    expect(row.data?.unit_price).toBe(0);
-    expect(row.data?.restock).toBe(false);
+  it("carries a POSITIVE magnitude, not the negative sheet value", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, refundRow, 2);
+    expect(row.refund?.amount).toBe(7.99);
+    expect(row.refund?.vatAmount).toBe(0);
   });
 
-  it("keeps the order id and sku for matching", () => {
-    const row = validateRowForFormat(amazon, ret, 3);
-    expect(row.data?.external_order_id).toBe("304-7592975-1775530");
+  it("carries the match target and sku", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, refundRow, 2);
+    expect(row.refund?.externalOrderId).toBe("304-8612000-9060321");
+    expect(row.refund?.platform).toBe("amazon");
     expect(row.sku).toBe("K2T-PFM-024");
   });
 
-  it("does not mark ordinary SALE rows as returns", () => {
-    const row = validateRowForFormat(amazon, {
-      order_id: "X", date: "30-04-2026", product_name: "W",
-      quantity: "1", unit_price: "7.99", total: "7.99",
-      currency: "EUR", status: "SALE",
+  it("produces no insertable data — a refund never becomes a row", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, refundRow, 2);
+    expect(row.data).toBeNull();
+  });
+
+  it("errors when the order_id is missing", () => {
+    const row = validateRowForFormat(
+      IMPORT_FORMATS.amazon,
+      { ...refundRow, order_id: "" },
+      2,
+    );
+    expect(row.error).toContain("order_id");
+  });
+
+  it("errors on a zero refund amount", () => {
+    const row = validateRowForFormat(
+      IMPORT_FORMATS.amazon,
+      { ...refundRow, total: "0", unit_price: "0" },
+      2,
+    );
+    expect(row.error).toContain("total");
+  });
+
+  it("leaves vatAmount null when the column is absent", () => {
+    const { vat_amount, ...noVat } = refundRow;
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, noVat, 2);
+    expect(row.refund?.vatAmount).toBeNull();
+  });
+});
+
+describe("RETURN and FC_TRANSFER are now noise", () => {
+  it("skips a RETURN row with an empty date instead of erroring", () => {
+    // This is the exact `Row 21: invalid or missing "date"` failure.
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "306-2809374-5735538",
+      date: "",
+      product_name: "Baumwolltasche",
+      quantity: "1",
+      sku: "100-CNC-2832-10P",
+      status: "RETURN",
+    }, 21);
+    expect(row.error).toBeNull();
+    expect(row.skipped).toBe("not a sale");
+    expect(row.data).toBeNull();
+  });
+
+  it("still skips FC_TRANSFER", () => {
+    expect(classifySkip(IMPORT_FORMATS.amazon, {
+      order_id: "x", date: "28-04-2026", product_name: "W",
+      quantity: "10", status: "FC_TRANSFER",
+    })).toBe("not a sale");
+  });
+
+  it("no longer skips REFUND", () => {
+    expect(classifySkip(IMPORT_FORMATS.amazon, {
+      order_id: "x", date: "", product_name: "W",
+      quantity: "1", status: "REFUND",
+    })).toBeNull();
+  });
+
+  it("leaves a SALE row completely unaffected", () => {
+    // The 20 Apr sale that the refund above belongs to. Regression guard: the
+    // new branch sits in the middle of validateRowForFormat, so it must not
+    // intercept anything that is not a REFUND.
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, {
+      order_id: "304-8612000-9060321",
+      date: "20-04-2026",
+      product_name: "Textilstifte",
+      quantity: "1",
+      sku: "K2T-PFM-024",
+      status: "SALE",
+      unit_price: "8.05",
+      total: "8.05",
     }, 2);
-    expect(row.isReturn).toBeFalsy();
-    expect(row.data?.status).not.toBe("returned");
+    expect(row.error).toBeNull();
+    expect(row.isRefund).toBeUndefined();
+    expect(row.data?.total_amount).toBe(8.05);
+    expect(row.data?.date).toBe("2026-04-20");
+  });
+
+  it("still skips nothing for the generic format", () => {
+    expect(classifySkip(IMPORT_FORMATS.generic, {
+      order_id: "x", date: "", product_name: "W",
+      quantity: "1", status: "RETURN",
+    })).toBeNull();
   });
 });
 
