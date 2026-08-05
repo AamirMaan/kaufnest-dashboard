@@ -300,11 +300,21 @@ export function classifySkip(format: ImportFormat, raw: Record<string, string>):
   // scatters a couple of stray sums across unmapped columns — so it is neither
   // blank nor identifiable by order_id. Detect it structurally: every field a
   // real row must have is empty.
-  const hasNoIdentity =
-    !raw.date?.trim() && !raw.product_name?.trim() && !raw.quantity?.trim();
-  if (hasNoIdentity) return "summary row";
-
   const status = raw.status?.trim().toLowerCase() ?? "";
+
+  // The summary-row heuristic MUST NOT see a REFUND row. A refund has no
+  // `date` by design, so an export that also left product_name and quantity
+  // blank on refund lines would have every one of them classified "summary
+  // row" and never reach the refund branch — refunds would silently stop
+  // working, under a skip reason with nothing to do with refunds. Scoped to
+  // this one check rather than an early `return null`, so a refund is still
+  // subject to the currency guard below.
+  if (status !== "refund") {
+    const hasNoIdentity =
+      !raw.date?.trim() && !raw.product_name?.trim() && !raw.quantity?.trim();
+    if (hasNoIdentity) return "summary row";
+  }
+
   if (NON_SALE_STATUSES.has(status)) return "not a sale";
 
   const currency = raw.currency?.trim().toUpperCase();

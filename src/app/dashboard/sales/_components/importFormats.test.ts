@@ -629,6 +629,24 @@ describe("Amazon REFUND rows", () => {
     expect(row.error).toContain("total");
   });
 
+  it("is never classified as a summary row, even with product_name and quantity blank", () => {
+    // A REFUND has no `date` by design. An export that also blanks
+    // product_name and quantity would otherwise trip the structural
+    // summary-row heuristic, and every refund would be dropped under a skip
+    // reason with nothing to do with refunds.
+    const bare = { ...refundRow, product_name: "", quantity: "" };
+    expect(classifySkip(IMPORT_FORMATS.amazon, bare)).toBeNull();
+    expect(validateRowForFormat(IMPORT_FORMATS.amazon, bare, 2).isRefund).toBe(true);
+  });
+
+  it("still applies the currency guard to a refund row", () => {
+    // The summary-row carve-out is scoped to that one heuristic, not an early
+    // return — a refund in an unsupported currency must still be skipped.
+    expect(classifySkip(IMPORT_FORMATS.amazon, { ...refundRow, currency: "JPY" })).toBe(
+      "unsupported currency",
+    );
+  });
+
   it("leaves vatAmount null when the column is absent", () => {
     const { vat_amount, ...noVat } = refundRow;
     const row = validateRowForFormat(IMPORT_FORMATS.amazon, noVat, 2);

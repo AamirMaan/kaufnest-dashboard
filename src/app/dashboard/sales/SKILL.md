@@ -86,7 +86,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   PostgREST URLs break on very long `in()` lists. Keep chunking if you touch it.
 - **Skipped ≠ error**: rows marked `skipped` (order already exists / duplicate in
   file) don't block the import; rows with `error` do. `canImport` requires zero
-  errors AND ≥1 importable row.
+  errors AND at least one *actionable* row — `importable.length > 0 ||
+  refundCount > 0`, since a refunds-only file has no importable rows at all
+  (see the refunds-only gotcha below).
 - **Never derive numbers with `parseFloat` in import code** — always
   `parseLocaleNumber` (`"9,99"` would silently become `9`). Same for dates:
   `parseFlexibleDate`, never a bare regex.
@@ -208,10 +210,45 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   to the whole (`itemAmount < 0 || itemAmount > amount`) is a row error, not
   reconciled — writing a mismatched deduction would make `refunded_amount`
   unauditable against what was actually subtracted.
-- **Amazon order ids are NOT unique** — a multi-line order (one line per SKU)
-  repeats the same `order_id`. Refund matching keys on platform +
-  `external_order_id` + resolved `product_id`, never `external_order_id`
-  alone, or the wrong line gets deducted.
+- **A refund's reported VAT is usually 0, so VAT is SCALED, not subtracted.**
+  Amazon writes `TOTAL_ACTIVITY_VALUE_VAT_AMT = 0` on REFUND lines. Naively
+  subtracting it leaves a fully-refunded order at `total_amount 0.06` with
+  its original `vat_amount 1.28` — Net renders as −1.22 and €1.28 of VAT on
+  €0.06 of goods reaches the Overview VAT Position and the invoice PDF. The
+  loop subtracts only a **non-zero** `target.vatAmount` (Amazon's own figure
+  is authoritative); otherwise it scales:
+  `previous.vat_amount × (nextGross / prevGross)`, gross being
+  `total_amount + (shipping_charged ?? 0)`. Guard on `prevGross > 0`, floor
+  at 0, leave `null` as `null`. Do NOT "simplify" this into a recomputation
+  from `vat_rate`: `vat_amount` is the combined item+shipping figure and the
+  two rates can differ (Swedish shipping at 25%), so a single-rate
+  recomputation is wrong on mixed-rate orders — scaling preserves the
+  blended effective rate.
+- **A refunded order's `unit_price` keeps its pre-refund value on purpose.**
+  The update touches `total_amount`/`shipping_charged`/`vat_amount`/`status`/
+  `refunded_amount` only, so invoices and CSV export show e.g. `8.05 | 0.06`
+  on one line. Totals come from `total_amount` and are correct; `unit_price`
+  is the price the item sold at. Not a bug — don't back-derive it.
+- **A REFUND row must never reach the summary-row heuristic.** `classifySkip`
+  detects the trailing "Total" row structurally
+  (`!date && !product_name && !quantity`), and a refund has no `date` by
+  design — so an export that also blanks product_name/quantity on refund
+  lines would classify every refund as `"summary row"` and refunds would
+  silently stop working. The `status === "refund"` check is scoped to skip
+  *that one heuristic*, deliberately not an early `return null`, so a refund
+  in an unsupported currency is still caught by the currency guard below it.
+- **Amazon order ids are NOT unique in the sheet** — a multi-line order (one
+  line per SKU) repeats the same `order_id`. Refund matching keys on platform
+  + `external_order_id` + resolved `product_id`, never `external_order_id`
+  alone. Note what this does and does not protect against: it canNOT be
+  deducting "the wrong line", because only ONE line of a multi-line order can
+  ever exist in `sales` — `idx_sales_platform_external_order_id` is
+  non-partial, and `markDuplicates`' in-file pass marks the second and later
+  lines `"duplicate in file"`. What actually happens is that a refund against
+  any line OTHER than the imported one resolves a `product_id` that matches
+  nothing and is reported as `refundsSkipped` ("no matching order found").
+  Keep `product_id` in the key — it is correct — but don't justify it with a
+  wrong-line scenario the schema makes impossible.
 - **Unmatched refunds are skipped, not inserted.** A non-partial UNIQUE index
   on `(platform, external_order_id)` exists in every tenant schema (verified
   live) — a standalone insert for an order id with no matching line raises a

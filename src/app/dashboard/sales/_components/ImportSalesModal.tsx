@@ -92,6 +92,10 @@ const MONEY_TOLERANCE = 0.02;
  */
 export interface ImportSummary {
   inserted: number;
+  /** File-level skips (RETURN/FC_TRANSFER/blank/summary/duplicate/…). On a
+   * real Amazon report most of the file is noise, so a summary without this
+   * looks like the import quietly lost hundreds of rows. */
+  skippedRows: number;
   refundsApplied: number;
   /** No matching order. */
   refundsSkipped: number;
@@ -464,19 +468,25 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // while the per-refund entries written earlier in the same run survived —
     // an internally inconsistent trail. Refund outcomes are audited per sale
     // inside the loop; skips change no data and so are not audited.
-    const log = await writeAuditLog(supabase, {
-      userId: user.id,
-      userEmail: user.email ?? "",
-      action: "create",
-      entityType: "sale",
-      metadata: {
-        bulk_import: true,
-        count: inserted.length,
-        format: formatId,
-        skipped: skipped.length,
-      },
-    });
-    if (log) dispatch(addAuditLog(log));
+    // Only when rows actually landed. Re-importing last month's file — every
+    // SALE skipped as a duplicate — otherwise wrote a `create sale` entry
+    // claiming a bulk import of 0 records. Still before the refund loop, so
+    // it survives a mid-loop abort; that was the point of moving it here.
+    if (inserted.length > 0) {
+      const log = await writeAuditLog(supabase, {
+        userId: user.id,
+        userEmail: user.email ?? "",
+        action: "create",
+        entityType: "sale",
+        metadata: {
+          bulk_import: true,
+          count: inserted.length,
+          format: formatId,
+          skipped: skipped.length,
+        },
+      });
+      if (log) dispatch(addAuditLog(log));
+    }
 
     // Match each refund on platform + external_order_id + the product resolved
     // from SKU. Order ids are unique only within a platform (an eBay sale could
@@ -559,32 +569,55 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         continue;
       }
 
-      // Clamped at zero: `vat_amount` has no CHECK constraint, and a negative
-      // would corrupt the Overview page's VAT-Position aggregate silently.
-      const nextVat =
-        previous.vat_amount === null || target.vatAmount === null
-          ? previous.vat_amount
-          : Math.max(0, round2(previous.vat_amount - target.vatAmount));
+      // total_amount holds the ITEM total only; shipping is its own column.
+      // Deducting the full activity value from total_amount would over-deduct
+      // by the shipping portion on every shipped order.
+      //
+      // Floored at zero for the same reason vat_amount is: the check above
+      // admits up to MONEY_TOLERANCE of drift, so an exactly-full refund can
+      // land a cent past the stored figure. A visible negative total would
+      // corrupt every revenue aggregate downstream; being a cent off
+      // `refunded_amount` is the lesser and bounded error.
+      const nextTotal = Math.max(0, round2(previous.total_amount - target.itemAmount));
+      // Left exactly as-is when there is no shipping portion — including when
+      // it is null, which must not become 0.
+      const nextShipping =
+        target.shippingAmount > 0
+          ? Math.max(0, round2((previous.shipping_charged ?? 0) - target.shippingAmount))
+          : previous.shipping_charged;
+
+      // Amazon reports TOTAL_ACTIVITY_VALUE_VAT_AMT as 0 on its REFUND lines
+      // (see the real fixture in importFormats.test.ts). Subtracting that
+      // leaves a refunded order carrying its ENTIRE pre-refund VAT: order
+      // 304-8612000-9060321 would end at total_amount 0.06 with vat_amount
+      // 1.28, so the Sales page computes Net = gross − vat = −1.22, and the
+      // same 1.28 feeds the Overview VAT Position and the invoice PDF —
+      // €1.28 of VAT on €0.06 of goods, in a filed tax number.
+      //
+      // So: trust a real figure when Amazon gives one, otherwise keep VAT
+      // proportional to the gross that survives. Scaling rather than
+      // recomputing from `vat_rate` because `vat_amount` is the combined
+      // item+shipping figure and the two can carry different rates (the
+      // Swedish 25% shipping rows) — a single-rate recomputation is wrong on
+      // a mixed-rate order, while scaling preserves whatever blended
+      // effective rate the order actually had.
+      const prevGross = previous.total_amount + (previous.shipping_charged ?? 0);
+      const nextGross = nextTotal + (nextShipping ?? 0);
+      let nextVat = previous.vat_amount;
+      if (previous.vat_amount !== null) {
+        if (target.vatAmount !== null && target.vatAmount > 0) {
+          nextVat = Math.max(0, round2(previous.vat_amount - target.vatAmount));
+        } else if (prevGross > 0) {
+          // A zero-gross sale has no VAT to scale — left untouched.
+          nextVat = Math.max(0, round2(previous.vat_amount * (nextGross / prevGross)));
+        }
+      }
 
       const { data: updated, error: updErr } = await supabase
         .from("sales")
         .update({
-          // total_amount holds the ITEM total only; shipping is its own
-          // column. Deducting the full activity value from total_amount
-          // would over-deduct by the shipping portion on every shipped order.
-          //
-          // Floored at zero for the same reason vat_amount is: the check
-          // above admits up to MONEY_TOLERANCE of drift, so an exactly-full
-          // refund can land a cent past the stored figure. A visible negative
-          // total would corrupt every revenue aggregate downstream; being a
-          // cent off `refunded_amount` is the lesser and bounded error.
-          total_amount: Math.max(0, round2(previous.total_amount - target.itemAmount)),
-          // Left exactly as-is when there is no shipping portion — including
-          // when it is null, which must not become 0.
-          shipping_charged:
-            target.shippingAmount > 0
-              ? Math.max(0, round2((previous.shipping_charged ?? 0) - target.shippingAmount))
-              : previous.shipping_charged,
+          total_amount: nextTotal,
+          shipping_charged: nextShipping,
           vat_amount: nextVat,
           status: "refunded",
           refunded_amount: target.amount,
@@ -660,6 +693,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     reset();
     onSuccess({
       inserted: inserted.length,
+      skippedRows: skipped.length,
       refundsApplied: appliedRefunds,
       refundsSkipped: unmatchedRefunds.length,
       refundsExceeded: exceededRefunds.length,

@@ -64,8 +64,13 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   after the insert; a refund-outcomes batch, written after the refund loop —
   see "Amazon SALE/REFUND rows"), plus one per-sale entry per applied refund,
   and reports the outcome via an `ImportSummary` passed to `onSuccess` —
-  `page.tsx` turns that into a single toast (`inserted` / `refundsApplied` /
-  `refundsSkipped` / `refundsExceeded` / `refundsAlreadyApplied` counts).
+  `page.tsx` turns that into a single toast (`inserted` / `skippedRows` /
+  `refundsApplied` / `refundsSkipped` / `refundsExceeded` /
+  `refundsAlreadyApplied` counts). `skippedRows` is the file-level skip count
+  and matters more than it looks: on a real Amazon report most of the file is
+  RETURN/FC_TRANSFER/blank/summary noise, so a toast without it reads as
+  though the import quietly lost hundreds of rows. One clause only — the
+  per-reason breakdown stays in the pre-import preview.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
   registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
   (`resolveHeaders`/`canonicalizeRow`), German status synonyms
@@ -415,7 +420,11 @@ differs from the item's (e.g. the Swedish rows, 25%).
 `classifySkip` marks these `skipped` with a reason rather than erroring,
 since validation is all-or-nothing and erroring on them would make a real
 export impossible to import: blank filler rows, a trailing "Total" summary
-row (detected structurally: no `date`/`product_name`/`quantity`), unsupported
+row (detected structurally: no `date`/`product_name`/`quantity` — the
+heuristic is **skipped for `status === "refund"` rows**, which have no `date`
+by design and would otherwise all be swallowed as "summary row"; the
+carve-out is scoped to that one check, not an early return, so a refund is
+still subject to the currency guard), unsupported
 currencies, and **`RETURN`/`FC_TRANSFER`** status rows — pure logistics
 noise, skipped *before* field validation because they legitimately have no
 `date` at all (this ordering is what fixed a prior `Row N: invalid or
@@ -437,10 +446,16 @@ failure on every REFUND line. A `REFUND` never becomes a row — `data` is
 existing sale instead:
 
 - **Match key**: platform + `external_order_id` + resolved `product_id`
-  (from `sku`), same reasoning as before — Amazon order ids are not unique
-  within a sheet (a multi-line order repeats its id once per SKU), so the
-  product must be part of the key or the wrong line gets deducted. No
-  `product_id` (unmapped `sku`) → unmatched.
+  (from `sku`). Amazon order ids are not unique *within a sheet* — a
+  multi-line order repeats its id once per SKU — but only one of those lines
+  can ever reach `sales`: the unique index on `(platform,
+  external_order_id)` is non-partial, and `markDuplicates`' in-file pass
+  marks the rest `"duplicate in file"`. So the key does not protect against
+  deducting the wrong line (impossible); what it does is make a refund
+  against any *other* line of a multi-line order resolve a `product_id` that
+  matches nothing, so it is reported as "no matching order found" rather than
+  silently deducted from the one line that did import. No `product_id`
+  (unmapped `sku`) → unmatched.
 - **Split across two columns**: a SALE's `total_amount` holds the item total
   only — shipping lives in `shipping_charged` — so the refund is parsed
   (`validateRowForFormat` in `importFormats.ts`) into `amount` (full,
@@ -452,6 +467,31 @@ existing sale instead:
   (`itemAmount < 0 || itemAmount > amount`) is a row error, not a guess —
   writing a deduction that disagrees with its own `refunded_amount` would be
   unauditable.
+- **VAT is scaled proportionally, not subtracted, when Amazon reports none.**
+  Amazon's REFUND line reports `TOTAL_ACTIVITY_VALUE_VAT_AMT` as **0**, so
+  subtracting it would leave a refunded order carrying its full pre-refund
+  `vat_amount` (order `304-8612000-9060321` → `total_amount 0.06`,
+  `vat_amount 1.28`, making Net = gross − vat = **−1.22** and feeding €1.28
+  of VAT on €0.06 of goods into the Overview VAT Position and the invoice
+  PDF — a filed tax number). So: when the refund carries a **non-zero**
+  `vatAmount`, it is subtracted (Amazon's own figure wins); otherwise
+  `vat_amount` is scaled by the gross that survives —
+  `previous.vat_amount × (nextGross / prevGross)`, where gross is
+  `total_amount + (shipping_charged ?? 0)` — guarded on `prevGross > 0` and
+  floored at 0, and left `null` when it was already `null`. Scaled rather
+  than recomputed from `vat_rate` because `vat_amount` is the combined
+  item+shipping figure and the two can carry different rates (the Swedish
+  25% shipping rows above), so a single-rate recomputation is wrong on a
+  mixed-rate order; scaling preserves the order's blended effective rate.
+  This is what makes the *VAT* figure match Amazon's net too, not just
+  revenue.
+- **A refunded order's `unit_price` is deliberately left at its pre-refund
+  value.** The refund path updates `total_amount`/`shipping_charged`/
+  `vat_amount`/`status`/`refunded_amount` only, so an invoice or CSV export
+  shows e.g. `8.05 | 0.06` (unit price | total) on one line. That is
+  intentional: `unit_price` records what the item was sold at, and every
+  total is computed from `total_amount`, so the figures are correct. Don't
+  "fix" it by back-deriving `unit_price` from the reduced total.
 - **`refunded_amount` is the re-import idempotency marker.** A matched sale
   that already has one (`previous.refunded_amount != null`) is a no-op —
   counted as `refundsAlreadyApplied`. Consequence: a second, separate refund
@@ -518,7 +558,10 @@ returned/restockable); REFUND rows never touch `restock` at all — they update
 `status`/`total_amount`/`shipping_charged`/`vat_amount`/`refunded_amount`
 only (see "Amazon SALE/REFUND rows" above). Audit log: one entry written
 right after the insert with `{ bulk_import, count, format, skipped }` (omit
-`entityId` — it's `string | undefined`, not nullable), one per-sale entry for
+`entityId` — it's `string | undefined`, not nullable) — **only when
+`inserted.length > 0`**, so re-importing last month's file, where every SALE
+is skipped as a duplicate, no longer writes a `create sale` entry claiming a
+bulk import of 0 records; one per-sale entry for
 each **applied** refund (`action: "update"`, before/after
 status/total_amount/shipping_charged/vat_amount/refunded_amount diff), and —
 only when the file had refund rows — a second batch entry after the refund

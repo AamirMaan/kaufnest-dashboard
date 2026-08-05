@@ -107,7 +107,7 @@ export interface Sale {
   shipping_cost: number | null;
   shipping_charged: number | null;
   advertising_fee: number | null;
-  status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | custom
+  status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | "refunded" | custom
   restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
   /**
    * Total refunded against this order, set by the Amazon REFUND import path.

@@ -447,13 +447,14 @@ export default function SalesPage() {
       <ImportSalesModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onSuccess={({ inserted, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied }) => {
+        onSuccess={({ inserted, skippedRows, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied }) => {
           const parts: string[] = [];
           if (inserted > 0) parts.push(`${inserted} order${inserted !== 1 ? "s" : ""} imported successfully.`);
           if (refundsApplied > 0) parts.push(`${refundsApplied} refund${refundsApplied !== 1 ? "s" : ""} applied.`);
           if (refundsSkipped > 0) parts.push(`${refundsSkipped} refund${refundsSkipped !== 1 ? "s" : ""} skipped — no matching order found.`);
           if (refundsExceeded > 0) parts.push(`${refundsExceeded} refund${refundsExceeded !== 1 ? "s" : ""} skipped — larger than the matched order, which was left unchanged.`);
           if (refundsAlreadyApplied > 0) parts.push(`${refundsAlreadyApplied} refund${refundsAlreadyApplied !== 1 ? "s" : ""} already applied — no change.`);
+          if (skippedRows > 0) parts.push(`${skippedRows} row${skippedRows !== 1 ? "s" : ""} skipped.`);
           const description = parts.length > 0 ? parts.join(" ") : "Nothing to import.";
           if (inserted === 0 && refundsApplied === 0) {
             warning("No orders imported", description);
