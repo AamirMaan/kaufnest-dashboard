@@ -17,6 +17,28 @@ Two Supabase projects:
 
 ## File map + apply status
 
+> **⚠️ VERIFIED LIVE 2026-08-06 — the per-row ⏳ markers below are STALE.**
+> Queried both projects read-only via MCP against `information_schema`,
+> `pg_policies`, `pg_proc` and `storage.buckets`, across all five tenant
+> schemas (not just `tenant_kaufnest`). Result:
+>
+> - **Everything through `030` is applied**, 5/5 tenants — including 007, 008,
+>   010, 015, 021, 023, 025, 026 (all 5/5), the `listing-images` bucket, and
+>   027–030's notifications stack + the `manage_messages` override branch on
+>   `ebay_messages_all_admin`.
+> - **`005_tenant_provisioning.sql` HAS been re-applied** — the live
+>   `provision_tenant_schema()` body contains `notifications`,
+>   `notification_reads` and 030's override branch. It does **not** yet contain
+>   `refunded_amount`, so it needs one more re-apply alongside 031.
+> - **Genuinely outstanding: `031_sales_refunded_amount.sql`** (absent from all
+>   5 tenant schemas) and **`control-plane/004_admin_audit_log.sql`**
+>   (`control.admin_audit_log` does not exist). `control-plane/002` and `003`
+>   are applied.
+>
+> Do not trust a ⏳ marker below without re-checking; this repo still has no
+> migration ledger, which is why they drifted. Re-verify and update this block
+> rather than the individual rows until a ledger exists.
+
 | File | Targets | Status |
 | --- | --- | --- |
 | `migrations/001_init.sql` | `public` | ✅ applied — baseline tables, enums, RLS, indexes |

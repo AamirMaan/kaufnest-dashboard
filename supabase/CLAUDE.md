@@ -49,10 +49,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   provisioned tenants don't need 030 replayed separately.
   The notification-specific grant/revoke is executed after the function's
   blanket schema-wide `GRANT ... ON ALL TABLES` (section 7) so the revoke
-  isn't immediately undone by it. **⏳ Not yet re-applied to Project B** — the
-  live database still runs the pre-notifications function body; until this
-  file is re-run, any newly provisioned tenant gets no notifications tables,
-  policies, or triggers. See `SKILL.md`'s file map.
+  isn't immediately undone by it. **Re-applied to Project B — verified live
+  2026-08-06**: the live function body contains `notifications`,
+  `notification_reads` and 030's `manage_messages` override branch. It does
+  **not** yet contain `refunded_amount`, so it needs one more re-apply
+  alongside `031`; until then a newly provisioned tenant gets every table
+  except that column. See `SKILL.md`'s file map for the full verified status.
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
 - `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
