@@ -629,3 +629,47 @@ describe("normalizeStatus with SALE mapping", () => {
     expect(normalizeStatus("Sale")).toBe("delivered");
   });
 });
+
+describe("validateRowForFormat honours the date order", () => {
+  const amazonRow = {
+    order_id: "028-5781430-5293162",
+    date: "10-04-2026",
+    product_name: "Textilstifte",
+    quantity: "1",
+    unit_price: "8.05",
+    total: "8.05",
+    currency: "EUR",
+    status: "SALE",
+  };
+
+  it("defaults to day-first when no order is passed", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, amazonRow, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.date).toBe("2026-04-10");
+  });
+
+  it("reads month-first when told to", () => {
+    const row = validateRowForFormat(IMPORT_FORMATS.amazon, amazonRow, 2, "mdy");
+    expect(row.data?.date).toBe("2026-10-04");
+  });
+
+  it("errors when the month-first reading is impossible", () => {
+    const row = validateRowForFormat(
+      IMPORT_FORMATS.amazon,
+      { ...amazonRow, date: "30-04-2026" },
+      2,
+      "mdy",
+    );
+    expect(row.error).toContain("date");
+  });
+
+  it("applies the order to the generic format too", () => {
+    const row = validateRowForFormat(
+      IMPORT_FORMATS.generic,
+      { date: "10-04-2026", product_name: "Widget", quantity: "1", unit_price: "9.99" },
+      2,
+      "mdy",
+    );
+    expect(row.data?.date).toBe("2026-10-04");
+  });
+});
