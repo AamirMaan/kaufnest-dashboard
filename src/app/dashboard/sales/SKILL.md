@@ -94,6 +94,22 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `lib/utils/csv.ts`) — affects the purchases/expenses imports too, since they
   share `parseCsvText`.
 
+## Gotchas — date-order detection
+
+- `10-04-2026` is ambiguous. The importer used to assume day-first for every
+  `N-N-YYYY` string; a month-first file therefore imported every date whose
+  day was 1–12 wrongly, with no error. That mis-dated 145 live orders in
+  `tenant_k2_textil` — they landed on the 4th of twelve different months.
+  `detectDateOrder` now decides from file evidence instead.
+- A dot-separated date (`15.01.2024`) is ALWAYS day-first, even when the
+  detected order is `mdy`. `DD.MM.YYYY` is the German convention and
+  `MM.DD.YYYY` does not occur, so `parseFlexibleDate` deliberately ignores
+  `order` for them.
+- Importing the `.xlsx` directly sidesteps ambiguity entirely **when the
+  sheet's date column holds real dates** — `excel.ts` converts those to ISO
+  before parsing. It does not help when the cells hold date-formatted text,
+  which marketplace exports often do.
+
 ## Gotchas — Amazon VAT-report import (`priceColumnsAreLineTotals`/`vatRateIsFraction`)
 
 - **`total_amount` stores the ITEM line total, never the sheet's `total`.**

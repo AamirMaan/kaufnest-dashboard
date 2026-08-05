@@ -300,11 +300,43 @@ deferred to the modal so `importFormats.ts` stays pure and testable.
 **German tolerance (all formats):** delimiter auto-detect (`,`/`;`/tab —
 `lib/utils/csv.ts → detectDelimiter`), BOM strip, decimal commas and thousands
 dots (`"1.234,56"` — `lib/utils/localeParse.ts → parseLocaleNumber`), dates in
-`YYYY-MM-DD` or `DD.MM.YYYY` (`parseFlexibleDate`; two-digit years rejected),
-German **header aliases** (`Datum`, `Artikelname`, `Menge`, `Preis`, `MwSt`,
-`Bestellnummer`, … — the `ALIASES` map in `importFormats.ts`). Files that fail
-UTF-8 decoding are re-read as `windows-1252` (German Excel default). Unknown
-columns are ignored; missing required columns are a file-level error.
+`YYYY-MM-DD`, `DD.MM.YYYY`, or `/`-/`-`-separated day-first or month-first
+(`parseFlexibleDate`; two-digit years rejected — see "Date-order detection"
+below for which order a given file is read with), German **header aliases**
+(`Datum`, `Artikelname`, `Menge`, `Preis`, `MwSt`, `Bestellnummer`, … — the
+`ALIASES` map in `importFormats.ts`). Files that fail UTF-8 decoding are
+re-read as `windows-1252` (German Excel default). Unknown columns are ignored;
+missing required columns are a file-level error.
+
+**Date-order detection (per file, not per row):** `10-04-2026` is genuinely
+ambiguous — day-first (10 April) and month-first (4 October) are both valid
+calendar dates, and nothing in the string says which is meant. Before
+validating any row, `ImportSalesModal` canonicalises the whole file and calls
+`detectDateOrder` (`lib/utils/localeParse.ts`) over every value in the `date`
+column: a `/`- or `-`-separated date where one side is >12 and the other ≤12
+is hard evidence for that order (`30-04-2026` can only be day-first). Dot
+separated dates (`15.01.2024`) carry no evidence — they're always read
+day-first regardless. Three outcomes:
+
+- **Confident, single order** — all evidence in the file agrees; that order
+  is used for every row. The Date format dropdown shows "Auto — detected
+  DD-MM-YYYY" (or MM-DD-YYYY).
+- **No evidence either way** — every date reads the same both ways, or the
+  file has none of the ambiguous separated form. The dropdown shows "Auto —
+  could not tell, assuming DD-MM-YYYY" and a note below it prompts the user
+  to check the preview before importing.
+- **Conflict** — the file contains hard evidence for BOTH orders (a genuinely
+  mixed file). The import is refused outright with a file-level error naming
+  the two conflicting sample dates; there is no partial import of a
+  conflicting file.
+
+The user can override the detected/assumed order via the "Date format"
+dropdown next to the format dropdown (Auto / Day first / Month first). If the
+file has confident single-order evidence, picking the opposite order is also
+refused ("This file can only be read day first (DD-MM-YYYY) — it contains a
+date whose other reading is not a real month. Set the date format back to
+Auto.") — that reading would produce dates that don't exist. Re-parsing
+re-runs (`parseAndValidate`) on every format or date-order change.
 
 **`total` vs `unit_price` rule (I4, generic/ebay only):** if `total` is
 present it wins — `total_amount = total`, and `unit_price` is derived
