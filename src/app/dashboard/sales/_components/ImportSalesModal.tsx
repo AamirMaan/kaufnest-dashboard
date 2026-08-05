@@ -11,6 +11,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
+import { detectDateOrder, type DateOrder, type DateOrderDetection } from "@/lib/utils/localeParse";
 import {
   IMPORT_FORMATS,
   IMPORT_FORMAT_IDS,
@@ -91,6 +92,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   // is a per-import choice. It applies ONLY to returns that matched an
   // existing sale — never to standalone unmatched returns.
   const [restockReturns, setRestockReturns] = useState(false);
+  // null = trust detection. A non-null value is the user forcing an order,
+  // which is only honoured when the file has no hard evidence to the contrary.
+  const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
+  const [dateDetection, setDateDetection] = useState<DateOrderDetection | null>(null);
 
   // Case-insensitive SKU → product ID lookup built from the hydrated inventory.
   const skuToProductId = useMemo(() => {
@@ -132,6 +137,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setFileName("");
     setImportError(null);
     setRestockReturns(false);
+    setDateOrderOverride(null);
+    setDateDetection(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -203,7 +210,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     }
   }
 
-  async function parseAndValidate(source: ParsedSource, fmtId: ImportFormatId) {
+  async function parseAndValidate(
+    source: ParsedSource,
+    fmtId: ImportFormatId,
+    override: DateOrder | null,
+  ) {
     const fmt = IMPORT_FORMATS[fmtId];
     const { headers, rows } = source;
     if (rows.length === 0) {
@@ -219,8 +230,35 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       }]);
       return;
     }
-    const validated = rows.map((row, i) =>
-      validateRowForFormat(fmt, canonicalizeRow(row, mapping), i + 2),
+    // Canonicalise first so the `date` column is resolved, then decide the
+    // order from the whole file BEFORE validating any row. Guessing per-row is
+    // what mis-dated 145 live orders.
+    const canonical = rows.map((row) => canonicalizeRow(row, mapping));
+    const detection = detectDateOrder(canonical.map((r) => r.date ?? ""));
+    setDateDetection(detection);
+
+    if (detection.conflict) {
+      setParsed([{
+        rowNum: 0,
+        data: null,
+        error: `This file mixes date formats — it contains "${detection.conflict.dayFirstSample}" (day first) and "${detection.conflict.monthFirstSample}" (month first). No single rule can read both correctly. Fix the file before importing.`,
+      }]);
+      return;
+    }
+
+    if (override !== null && detection.confident && override !== detection.order) {
+      const proven = detection.order === "dmy" ? "day first (DD-MM-YYYY)" : "month first (MM-DD-YYYY)";
+      setParsed([{
+        rowNum: 0,
+        data: null,
+        error: `This file can only be read ${proven} — it contains a date whose other reading is not a real month. Set the date format back to Auto.`,
+      }]);
+      return;
+    }
+
+    const dateOrder: DateOrder = override ?? detection.order;
+    const validated = canonical.map((row, i) =>
+      validateRowForFormat(fmt, row, i + 2, dateOrder),
     );
     setParsed(validated); // show validation results immediately…
     try {
@@ -234,9 +272,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setFormatId(next);
     setImportError(null);
     if (parsedSource !== null) {
-      void parseAndValidate(parsedSource, next);
+      void parseAndValidate(parsedSource, next, dateOrderOverride);
     } else {
       setParsed([]);
+    }
+  }
+
+  function handleDateOrderChange(next: DateOrder | null) {
+    setDateOrderOverride(next);
+    setImportError(null);
+    if (parsedSource !== null) {
+      void parseAndValidate(parsedSource, formatId, next);
     }
   }
 
@@ -253,7 +299,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     loadAndParse
       .then((source) => {
         setParsedSource(source);
-        return parseAndValidate(source, formatId);
+        return parseAndValidate(source, formatId, dateOrderOverride);
       })
       .catch(() => {
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
@@ -451,6 +497,33 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
             ))}
           </Select>
         </Field>
+
+        {dateDetection && (
+          <label className="flex items-center gap-2 text-sm">
+            Date format
+            <select
+              value={dateOrderOverride ?? "auto"}
+              onChange={(e) =>
+                handleDateOrderChange(e.target.value === "auto" ? null : (e.target.value as DateOrder))
+              }
+              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1"
+            >
+              <option value="auto">
+                {dateDetection.confident
+                  ? `Auto — detected ${dateDetection.order === "dmy" ? "DD-MM-YYYY" : "MM-DD-YYYY"}`
+                  : "Auto — could not tell, assuming DD-MM-YYYY"}
+              </option>
+              <option value="dmy">Day first (DD-MM-YYYY)</option>
+              <option value="mdy">Month first (MM-DD-YYYY)</option>
+            </select>
+          </label>
+        )}
+        {dateDetection && !dateDetection.confident && !dateDetection.conflict && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Every date in this file reads the same either way, so the format could not be
+            detected. Check a few dates in the preview before importing.
+          </p>
+        )}
 
         {parsed.some((r) => r.isReturn && !r.skipped) && (
           <label className="flex items-center gap-2 text-sm">
