@@ -39,6 +39,7 @@ export function normalizedOrderToSaleRow(
     advertising_fee: null,
     status: order.status,
     restock: false,
+    refunded_amount: null,
     external_order_id: order.external_order_id,
   };
 }

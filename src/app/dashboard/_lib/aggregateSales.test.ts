@@ -22,6 +22,7 @@ const makeSale = (overrides: Partial<Sale> = {}): Sale => {
     created_at: "2026-07-01T00:00:00Z",
     vat_rate: null,
     restock: false,
+    refunded_amount: null,
     external_order_id: null,
     shipping_charged: null,
   };

@@ -47,6 +47,7 @@ describe("normalizedOrderToSaleRow", () => {
       advertising_fee: null,
       status: "delivered",
       restock: false,
+      refunded_amount: null,
       external_order_id: "12-34567-89012:001",
     });
   });
@@ -72,6 +73,7 @@ describe("normalizedOrderToSaleRow", () => {
       advertising_fee: null,
       status: "shipped",
       restock: false,
+      refunded_amount: null,
       external_order_id: "112-1234567-1234567:00000001",
     });
   });

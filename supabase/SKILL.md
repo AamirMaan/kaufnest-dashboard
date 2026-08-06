@@ -17,6 +17,28 @@ Two Supabase projects:
 
 ## File map + apply status
 
+> **⚠️ VERIFIED LIVE 2026-08-06 — the per-row ⏳ markers below are STALE.**
+> Queried both projects read-only via MCP against `information_schema`,
+> `pg_policies`, `pg_proc` and `storage.buckets`, across all five tenant
+> schemas (not just `tenant_kaufnest`). Result:
+>
+> - **Everything through `030` is applied**, 5/5 tenants — including 007, 008,
+>   010, 015, 021, 023, 025, 026 (all 5/5), the `listing-images` bucket, and
+>   027–030's notifications stack + the `manage_messages` override branch on
+>   `ebay_messages_all_admin`.
+> - **`005_tenant_provisioning.sql` HAS been re-applied** — the live
+>   `provision_tenant_schema()` body contains `notifications`,
+>   `notification_reads` and 030's override branch. It does **not** yet contain
+>   `refunded_amount`, so it needs one more re-apply alongside 031.
+> - **Genuinely outstanding: `031_sales_refunded_amount.sql`** (absent from all
+>   5 tenant schemas) and **`control-plane/004_admin_audit_log.sql`**
+>   (`control.admin_audit_log` does not exist). `control-plane/002` and `003`
+>   are applied.
+>
+> Do not trust a ⏳ marker below without re-checking; this repo still has no
+> migration ledger, which is why they drifted. Re-verify and update this block
+> rather than the individual rows until a ledger exists.
+
 | File | Targets | Status |
 | --- | --- | --- |
 | `migrations/001_init.sql` | `public` | ✅ applied — baseline tables, enums, RLS, indexes |
@@ -45,6 +67,7 @@ Two Supabase projects:
 | `migrations/028_notifications.sql` | all `tenant_%` schemas | ⏳ **pending** — creates `notifications` and `notification_reads` tables via `run_on_all_tenant_schemas` (one row per EVENT, visibility resolved per-reader by RLS policy); adds `profiles.notifications_read_through` column, 3 indexes, and grants (plus revoke of inherited default privileges for security). No insert/update/delete policy on `notifications` — only SECURITY DEFINER triggers in the next migration write there. Also baked into `provision_tenant_schema()`. Backs the Notifications feature — there is no `src/app/dashboard/notifications/` route; the UI is the `NotificationBell` in `src/components/layout/` plus `notificationsSlice`. |
 | `migrations/029_notification_triggers.sql` | all `tenant_%` schemas | ⏳ **pending** — adds three SECURITY DEFINER trigger functions via `run_on_all_tenant_schemas` (`notify_sale_created`, `notify_purchase_created`, `notify_message_received`); write notification rows on insert into `sales`/`purchases`/`ebay_messages`; low stock is a READ-TIME state, not an event (see migration header comment for why). All functions have pinned `search_path = {{schema}}, public`, explicit 'super_admin' in `visible_to_roles` arrays (required by notification RLS), and exception-handled inserts so notifications never block core writes; idempotent with `DROP TRIGGER IF EXISTS` on each. Does NOT modify `apply_purchase_stock_change`/`apply_sale_stock_change` (002). Also baked into `provision_tenant_schema()`. Backs the Notifications feature. |
 | `migrations/030_ebay_messages_override.sql` | all `tenant_%` schemas | ⏳ **pending — apply AFTER 027** (027 creates `ebay_messages` and the original `ebay_messages_all_admin` policy this redefines) — redefines `ebay_messages_all_admin` via `run_on_all_tenant_schemas` to OR in `current_user_has_override('manage_messages')` on both `using` and `with check`, idempotent via `drop policy if exists`. Fixes the dead-end click where a user granted the `manage_messages` override could see the `message.received` notification (029) but not read the `ebay_messages` row it pointed to. Also baked into `provision_tenant_schema()`. Backs `src/app/dashboard/messages/`. |
+| `migrations/031_sales_refunded_amount.sql` | all `tenant_%` schemas | ⏳ **pending** — adds nullable `sales.refunded_amount numeric(12,2)` (`>= 0` CHECK) via `run_on_all_tenant_schemas`; also baked into `provision_tenant_schema()` in the same commit. Idempotency marker for the Amazon REFUND import path (later tasks): a sale whose `refunded_amount` is already set is skipped on re-import instead of being deducted twice — REFUND rows deduct from the sale they belong to rather than becoming their own row, since `sales_unit_price_check` rejects a negative `unit_price` and `idx_sales_platform_external_order_id` is a non-partial unique index on `(platform, external_order_id)`, which every refund shares with its own sale. Backs `src/app/dashboard/sales/`. |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |

@@ -49,10 +49,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   provisioned tenants don't need 030 replayed separately.
   The notification-specific grant/revoke is executed after the function's
   blanket schema-wide `GRANT ... ON ALL TABLES` (section 7) so the revoke
-  isn't immediately undone by it. **⏳ Not yet re-applied to Project B** — the
-  live database still runs the pre-notifications function body; until this
-  file is re-run, any newly provisioned tenant gets no notifications tables,
-  policies, or triggers. See `SKILL.md`'s file map.
+  isn't immediately undone by it. **Re-applied to Project B — verified live
+  2026-08-06**: the live function body contains `notifications`,
+  `notification_reads` and 030's `manage_messages` override branch. It does
+  **not** yet contain `refunded_amount`, so it needs one more re-apply
+  alongside `031`; until then a newly provisioned tenant gets every table
+  except that column. See `SKILL.md`'s file map for the full verified status.
 - `migrations/006_bootstrap_tenant_kaufnest.sql` — historical record of how
   `tenant_kaufnest` was provisioned + seeded from `public.*`. Do not re-run.
 - `migrations/007_company_profile_invoice_fields.sql` — adds invoice/banking/
@@ -165,6 +167,24 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `provision_tenant_schema()` (`005_tenant_provisioning.sql`) for new
   tenants. Backs the Messages feature
   (`src/app/dashboard/messages/`).
+- `migrations/031_sales_refunded_amount.sql` — adds nullable
+  `sales.refunded_amount numeric(12,2)` (`>= 0` CHECK) to every tenant schema
+  via `run_on_all_tenant_schemas`; **also baked into
+  `provision_tenant_schema()` (`005_tenant_provisioning.sql`) in the same
+  commit**. This is the idempotency marker for the upcoming Amazon REFUND
+  import rework: a sale whose `refunded_amount` is already set is skipped on
+  re-import rather than deducted a second time. REFUND rows deduct from the
+  sale they belong to instead of becoming their own row, because
+  `sales_unit_price_check` rejects a negative `unit_price` and
+  `idx_sales_platform_external_order_id` is a non-partial unique index on
+  `(platform, external_order_id)` that every refund shares with its own
+  sale. `Sale.refunded_amount` and the `SaleImportData` exclusion live in
+  `src/types/index.ts` / `src/app/dashboard/sales/_components/importFormats.ts`;
+  `"refunded"` was also added to `ORDER_STATUSES`
+  (`src/app/dashboard/sales/_components/orderStatus.ts`) and to the
+  `StatusBadge` variant map (`src/components/ui/Badge.tsx`, `warning` — it
+  still counts as revenue at its reduced value, unlike `returned`). Backs
+  the Sales feature (`src/app/dashboard/sales/`).
 
 ## Related code
 

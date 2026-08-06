@@ -97,6 +97,7 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   delivered: "success",
   returned: "danger",
   cancelled: "warning",
+  refunded: "warning",
   active: "success",
   deactivated: "danger",
 };

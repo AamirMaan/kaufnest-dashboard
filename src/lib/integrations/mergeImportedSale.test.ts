@@ -22,6 +22,7 @@ const existingSale: Sale = {
   advertising_fee: 1.2,
   status: "pending",
   restock: false,
+  refunded_amount: null,
   external_order_id: "12-34567-89012:001",
 };
 
@@ -47,6 +48,7 @@ const incomingSale: Sale = {
   advertising_fee: null,
   status: "shipped",
   restock: true,
+  refunded_amount: null,
   external_order_id: "12-34567-89012:001",
 };
 

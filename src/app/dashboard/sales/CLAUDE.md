@@ -55,15 +55,22 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   (German-tolerant — see "CSV import/export" below), runs a duplicate pre-check
   on `external_order_id`, shows per-row errors/skips grouped by reason,
   batch-inserts the importable rows via Supabase, and **then** matches Amazon
-  RETURN rows against existing sales and flips their status (see "Amazon RETURN
-  rows" below). **The insert must stay before the returns loop** — a monthly
-  Amazon report routinely contains a SALE and its RETURN for the same order, so
-  matching first would query `sales` before that SALE row exists and silently
-  drop the return. Dispatches `addSale`/`updateSale` accordingly, writes audit
-  log entries (one per matched return + one for the insert batch), and reports
-  the outcome via an `ImportSummary` passed to `onSuccess` — `page.tsx` turns
-  that into a single toast (`inserted` / `returnsMatched` / `returnsSkipped` /
-  `returnsAlreadyApplied` counts).
+  REFUND rows against existing sales and deducts the refund from them in place
+  (see "Amazon SALE/REFUND rows" below). **The insert must stay before the
+  refund loop** — a monthly Amazon report routinely contains a SALE and its
+  REFUND for the same order, so matching first would query `sales` before that
+  SALE row exists and silently drop the refund. Dispatches `addSale`/`updateSale`
+  accordingly, writes two audit log entries (the insert batch, written right
+  after the insert; a refund-outcomes batch, written after the refund loop —
+  see "Amazon SALE/REFUND rows"), plus one per-sale entry per applied refund,
+  and reports the outcome via an `ImportSummary` passed to `onSuccess` —
+  `page.tsx` turns that into a single toast (`inserted` / `skippedRows` /
+  `refundsApplied` / `refundsSkipped` / `refundsExceeded` /
+  `refundsAlreadyApplied` counts). `skippedRows` is the file-level skip count
+  and matters more than it looks: on a real Amazon report most of the file is
+  RETURN/FC_TRANSFER/blank/summary noise, so a toast without it reads as
+  though the import quietly lost hundreds of rows. One clause only — the
+  per-reason breakdown stays in the pre-import preview.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
   registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
   (`resolveHeaders`/`canonicalizeRow`), German status synonyms
@@ -71,7 +78,8 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `status` column is a row *type*, not a fulfilment state), skip
   classification for non-sale rows (`classifySkip`/`SkipReason` — amazon
   format only), and per-row validation (`validateRowForFormat`, which also
-  parses Amazon RETURN rows into zeroed, `isReturn: true` rows). The `amazon`
+  parses Amazon REFUND rows into an `isRefund: true`/`refund` adjustment
+  instead of a row — see "Amazon SALE/REFUND rows" below). The `amazon`
   format sets two optional `ImportFormat` flags no other format uses:
   `vatRateIsFraction` (Amazon writes `0.19`, not `19`) and
   `priceColumnsAreLineTotals` (Amazon's `unit_price` column is the item LINE
@@ -175,12 +183,24 @@ editable fields.
 
 - `status: string` — defaults to `"pending"`. Both modals render a `Select`
   populated from `ORDER_STATUSES` (`pending`, `processing`, `shipped`,
-  `delivered`, `returned`, `cancelled`) plus an `"Other…"` option that reveals
-  a free-text "Custom Status" `Input`. `EditSaleModal.saleToForm()` uses
-  `isPresetStatus()` to decide whether to show the preset or fall into
+  `delivered`, `returned`, `cancelled`, `refunded`) plus an `"Other…"` option
+  that reveals a free-text "Custom Status" `Input`. `EditSaleModal.saleToForm()`
+  uses `isPresetStatus()` to decide whether to show the preset or fall into
   "Other" with the existing custom value prefilled. `page.tsx` renders it via
-  `StatusBadge` (`components/ui/Badge.tsx`) and exposes a Status filter
-  (`ORDER_STATUSES` ∪ any custom values currently in `sales`, via `statusOptions`).
+  `StatusBadge` (`components/ui/Badge.tsx`, `refunded` → `warning` — unlike
+  `returned` it still counts as revenue at its reduced value) and exposes a
+  Status filter (`ORDER_STATUSES` ∪ any custom values currently in `sales`,
+  via `statusOptions`).
+- `refunded_amount: number | null` — added by migration
+  `031_sales_refunded_amount.sql` (see `supabase/CLAUDE.md`; **not yet applied
+  to any tenant schema**, see "Amazon SALE/REFUND rows" below for why the
+  importer's guard against it is deliberately loose). Set only by the Amazon
+  REFUND import path (`ImportSalesModal.handleImport`), which also flips
+  `status` to `"refunded"`. It is the **re-import idempotency marker**: a sale
+  that already has one is left alone on a later import rather than deducted
+  again. There is no UI to set it manually. `SaleImportData`
+  (`_components/importFormats.ts`) explicitly excludes it from the shape a
+  normal insert can write, so only the refund `update` path can set it.
 - `restock: boolean` — only meaningful when `status === "returned"`; both
   modals show a "Item can be resold (restock inventory)" `Checkbox` only in
   that case, and force `restock = false` for every other status before
@@ -193,13 +213,20 @@ editable fields.
   stock), otherwise `-quantity` as before (normal sale, or a returned/written-off
   item that can't be resold). **Don't add client-side stock math** — same rule
   as the inventory link below.
-- **Revenue/profit exclusion**: any row with `status === "returned"` is
-  excluded from the Gross/VAT/Net summary in `page.tsx` (see `summary` useMemo
-  — `if (s.status === "returned") continue;`) and from every revenue-derived
-  figure on the Overview page (`effectiveSales` in `app/dashboard/page.tsx`).
-  `page.tsx` shows a "N returned order(s) excluded from totals" note when
-  `returnedCount > 0`. If you add new revenue aggregations in either page,
-  apply the same exclusion.
+- **Revenue/profit exclusion**: `isRevenueSale` (`lib/utils/filters.ts`)
+  excludes a row from revenue when `status === "returned"` **or**
+  `status === "cancelled"` — nothing else. It gates the Gross/VAT/Net summary
+  in `page.tsx` (`summary` useMemo) and `effectiveSales` on the Overview page
+  (`app/dashboard/page.tsx`). `page.tsx` shows an "N returned/cancelled
+  order(s) excluded from totals" note when `excludedCount > 0`. **`refunded`
+  is deliberately NOT in this exclusion** — a refunded order stays in both
+  totals at its reduced `total_amount` (the REFUND import path deducts the
+  refund from `total_amount`/`shipping_charged` in place, see "Amazon
+  SALE/REFUND rows" below), which is what makes these figures match Amazon's
+  net. Adding `refunded` here would drop the FULL order from revenue on top
+  of the deduction already applied — double-counting the reduction. If you
+  add new revenue aggregations in either page, filter through `isRevenueSale`
+  and do not add `refunded` to it.
 
 ## Platform-synced orders (additive field on `Sale`)
 
@@ -388,54 +415,138 @@ otherwise derive from `vat_rate` — Amazon supplies the combined item+shipping
 VAT, which a single-rate derivation gets wrong when shipping's VAT rate
 differs from the item's (e.g. the Swedish rows, 25%).
 
-**`classifySkip` (amazon format only):** a real Amazon VAT report is mostly
-non-sale rows — blank filler rows, a trailing "Total" summary row (detected
-structurally: no `date`/`product_name`/`quantity`), `REFUND`/`FC_TRANSFER`
-status rows, and unsupported currencies. These are marked `skipped` with a
-reason rather than errored, since validation is all-or-nothing and erroring
-on them would make a real export impossible to import. `RETURN` rows are
-deliberately NOT skipped here — see "Amazon RETURN rows" below. The format
-guard (`if (!format.priceColumnsAreLineTotals) return null`) must stay the
-first statement in the function — putting the blank-row check above it would
-make `generic` and `ebay` silently skip blank rows instead of erroring them.
+**`classifySkip` (amazon format only):** Amazon's `status` column is a row
+**type**, not a fulfilment state — a real VAT report is mostly non-sale rows.
+`classifySkip` marks these `skipped` with a reason rather than erroring,
+since validation is all-or-nothing and erroring on them would make a real
+export impossible to import: blank filler rows, a trailing "Total" summary
+row (detected structurally: no `date`/`product_name`/`quantity` — the
+heuristic is **skipped for `status === "refund"` rows**, which have no `date`
+by design and would otherwise all be swallowed as "summary row"; the
+carve-out is scoped to that one check, not an early return, so a refund is
+still subject to the currency guard), unsupported
+currencies, and **`RETURN`/`FC_TRANSFER`** status rows — pure logistics
+noise, skipped *before* field validation because they legitimately have no
+`date` at all (this ordering is what fixed a prior `Row N: invalid or
+missing "date"` failure on every RETURN line). **`REFUND` is deliberately
+NOT skipped here** — see "Amazon SALE/REFUND rows" below: it parses into a
+`refund` adjustment instead of a row. The format guard (`if
+(!format.priceColumnsAreLineTotals) return null`) must stay the first
+statement in the function — putting the blank-row check above it would make
+`generic` and `ebay` silently skip blank rows instead of erroring them.
 
-**Amazon RETURN rows:** `validateRowForFormat` parses these into a row with
-`unit_price`/`total_amount` zeroed (`vat_rate`, `vat_amount`,
-`shipping_cost`, `shipping_charged`, and `advertising_fee` are `null`, not
-`0`), `status: "returned"`, `restock: false`, and `isReturn: true` — Amazon
-leaves every money column blank on a RETURN line.
-`ImportSalesModal.handleImport` then tries to match each one to an existing
-sale on **platform + `external_order_id` + resolved `product_id`** (from
-`sku`) — Amazon order ids are not unique within a sheet, a multi-line order
-appears once per SKU, so the product must be part of the match key or the
-wrong line gets flipped. **A match already at `status === "returned"` is a
-no-op** — counted as `returnsAlreadyApplied`, never re-updated. Without that
-guard, re-importing the same file with the restock toggle back at its default
-`false` would flip `restock` true→false and `apply_sale_stock_change` would
-drop stock by the full quantity, silently. A match's `status`/`restock` are updated via
-`updateSale` (restock only when the user checked "Return stock to inventory
-for matched returns" — a per-import toggle, off by default, that applies only
-to matched returns) and a per-sale audit entry is written
-(`reason: "bulk import: matched return"`). **Unmatched returns are skipped**
-(`skipped: "return: no matching order"`), not inserted standalone — a
-non-partial unique index on `(platform, external_order_id)` exists in every
-tenant schema (verified live), so inserting a row for an order id that
-already exists (or a second unmatched line of an already-matched multi-line
-order) would raise a unique violation and fail the whole batch.
+**Amazon SALE/REFUND rows:** only `SALE` and `REFUND` carry importable money;
+`RETURN`/`FC_TRANSFER` are skipped as noise (above). Like `RETURN`, a
+`REFUND` row has an EMPTY `date` column (confirmed against a real report
+row — see `importFormats.test.ts`'s "Amazon REFUND rows" tests), so
+`validateRowForFormat`'s refund-parse branch runs *before* the date parse —
+moving it after would reintroduce a `Row N: invalid or missing "date"`
+failure on every REFUND line. A `REFUND` never becomes a row — `data` is
+`null` and it never enters `importable`/`payload`. It deducts from an
+existing sale instead:
+
+- **Match key**: platform + `external_order_id` + resolved `product_id`
+  (from `sku`). Amazon order ids are not unique *within a sheet* — a
+  multi-line order repeats its id once per SKU — but only one of those lines
+  can ever reach `sales`: the unique index on `(platform,
+  external_order_id)` is non-partial, and `markDuplicates`' in-file pass
+  marks the rest `"duplicate in file"`. So the key does not protect against
+  deducting the wrong line (impossible); what it does is make a refund
+  against any *other* line of a multi-line order resolve a `product_id` that
+  matches nothing, so it is reported as "no matching order found" rather than
+  silently deducted from the one line that did import. No `product_id`
+  (unmapped `sku`) → unmatched.
+- **Split across two columns**: a SALE's `total_amount` holds the item total
+  only — shipping lives in `shipping_charged` — so the refund is parsed
+  (`validateRowForFormat` in `importFormats.ts`) into `amount` (full,
+  `refunded_amount`), `itemAmount` (deducted from `total_amount`) and
+  `shippingAmount` (deducted from `shipping_charged`). When the sheet's
+  `unit_price` is blank, `itemAmount` is backed out of `amount` using the
+  row's `shipping_charged`, mirroring the SALE branch's `sheetTotal - ship`
+  derivation. A row whose parts don't sum to the whole
+  (`itemAmount < 0 || itemAmount > amount`) is a row error, not a guess —
+  writing a deduction that disagrees with its own `refunded_amount` would be
+  unauditable.
+- **VAT is scaled proportionally, not subtracted, when Amazon reports none.**
+  Amazon's REFUND line reports `TOTAL_ACTIVITY_VALUE_VAT_AMT` as **0**, so
+  subtracting it would leave a refunded order carrying its full pre-refund
+  `vat_amount` (order `304-8612000-9060321` → `total_amount 0.06`,
+  `vat_amount 1.28`, making Net = gross − vat = **−1.22** and feeding €1.28
+  of VAT on €0.06 of goods into the Overview VAT Position and the invoice
+  PDF — a filed tax number). So: when the refund carries a **non-zero**
+  `vatAmount`, it is subtracted (Amazon's own figure wins); otherwise
+  `vat_amount` is scaled by the gross that survives —
+  `previous.vat_amount × (nextGross / prevGross)`, where gross is
+  `total_amount + (shipping_charged ?? 0)` — guarded on `prevGross > 0` and
+  floored at 0, and left `null` when it was already `null`. Scaled rather
+  than recomputed from `vat_rate` because `vat_amount` is the combined
+  item+shipping figure and the two can carry different rates (the Swedish
+  25% shipping rows above), so a single-rate recomputation is wrong on a
+  mixed-rate order; scaling preserves the order's blended effective rate.
+  This is what makes the *VAT* figure match Amazon's net too, not just
+  revenue.
+- **A refunded order's `unit_price` is deliberately left at its pre-refund
+  value.** The refund path updates `total_amount`/`shipping_charged`/
+  `vat_amount`/`status`/`refunded_amount` only, so an invoice or CSV export
+  shows e.g. `8.05 | 0.06` (unit price | total) on one line. That is
+  intentional: `unit_price` records what the item was sold at, and every
+  total is computed from `total_amount`, so the figures are correct. Don't
+  "fix" it by back-deriving `unit_price` from the reduced total.
+- **`refunded_amount` is the re-import idempotency marker.** A matched sale
+  that already has one (`previous.refunded_amount != null`) is a no-op —
+  counted as `refundsAlreadyApplied`. Consequence: a second, separate refund
+  against the same order is skipped rather than accumulated — one refund per
+  order is a hard limit of this column, not a v1 shortcut (see the SKILL.md
+  gotcha). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
+  applied to any tenant schema, so `previous.refunded_amount` reads as
+  `undefined` there, and `undefined !== null` is `true` — a strict check
+  would silently classify every refund as already-applied and deduct nothing
+  while still showing a success toast. Do not tighten this until the
+  migration is confirmed live everywhere. This guard runs **before** the
+  over-refund check below, since a fully-refunded order's `total_amount` is
+  `0` and checking order the other way round would misreport a re-import as
+  "exceeds the order".
+- **Over-refund is a per-row skip (`refundsExceeded`), not an import abort**
+  — a match is skipped, not deducted, when `itemAmount`/`shippingAmount`
+  exceed the matched sale's stored `total_amount`/`shipping_charged` by more
+  than the same `0.02` tolerance the SALE branch reconciles with. The write
+  floors `total_amount`, `shipping_charged`, and `vat_amount` at `0`, so a
+  within-tolerance overshoot can leave `refunded_amount` up to 2c above what
+  was actually deducted — a deliberate, bounded trade against writing a
+  negative total that would corrupt every revenue aggregate.
+- **Unmatched refunds are skipped** (`refundsSkipped`), not inserted
+  standalone — a non-partial unique index on `(platform, external_order_id)`
+  exists in every tenant schema (verified live), so a standalone insert for
+  an existing order id would raise a unique violation and fail the whole
+  batch. Unlike the file-level skip reasons above, an unmatched/exceeded/
+  already-applied refund is **not** surfaced as a `ParsedRow.skipped` reason
+  in the pre-import preview — matching only happens during `handleImport`,
+  and the outcome is reported post-import via `ImportSummary` (see the
+  `ImportSalesModal.tsx` bullet above) and `page.tsx`'s toast.
+- **On a Supabase error matching or updating a refund** (`matchErr`/
+  `updErr`), the modal clears `parsed` (`blockRetry()`) so Import cannot be
+  re-clicked — a retry would re-insert the already-committed SALE rows and
+  trip the unique index.
+- **A refunds-only file is importable.** A REFUND row has `data: null` and
+  is never in `importable`, so `canImport`/the Import-button row count
+  (`actionableCount`) count `refundCount` alongside `importable.length` —
+  otherwise a file containing only refunds would read as "Import 0 rows".
 
 **Duplicate pre-check (I3):** rows carrying an `external_order_id` are checked
 against existing `sales` rows per `(platform, external_order_id)` (chunked
 `.in()` queries, 200 ids per chunk) and against duplicates within the file.
 Matches are marked **skipped** and are never overwritten (same protection as
-the integrations re-sync merge rule). RETURN rows are exempt from both dedup
-passes (file-level and DB-level) — they carry the `external_order_id` of an
-*existing* sale by definition, so without the carve-out every return would be
-marked "order already exists" and dropped before the matching path above ever
-runs. Skips don't block importing the remaining rows; validation errors still
-do. The modal groups all skip reasons (duplicate, blank row, summary row, not
-a sale, unsupported currency, no matching order, …) via `skipReasonCounts`
-and names each one in the summary text — it no longer assumes every skip is
-"order already exists".
+the integrations re-sync merge rule). REFUND rows are exempt from both dedup
+passes (file-level and DB-level, `markDuplicates` in `ImportSalesModal.tsx`)
+— they carry the `external_order_id` of an *existing* sale by definition, so
+without the carve-out every refund would be marked "order already exists" and
+dropped before the matching path in "Amazon SALE/REFUND rows" above ever
+runs, making the feature unreachable. Skips don't block importing the
+remaining rows; validation errors still do. The modal groups file-level skip
+reasons (duplicate, blank row, summary row, not a sale, unsupported currency,
+…) via `skipReasonCounts` and names each one in the summary text — refund
+match/skip outcomes are a separate, import-time thing (see above), not part
+of this grouping.
 
 `product_id` is resolved automatically when the row carries a `sku` that matches
 an inventory product (see `sku` above); otherwise it is `null` — user can link
@@ -443,14 +554,22 @@ via Edit afterward. `vat_amount` is computed via `vatAmountFromGross`
 over `total_amount`, unless the file supplies a `vat_amount` column directly
 (amazon/ebay only), which wins. `restock` is always `false` for newly
 **inserted** rows (not importable — edit the record afterward to mark it
-returned/restockable); a matched Amazon return instead **updates** an
-existing sale's `restock` via the per-import toggle (see "Amazon RETURN rows"
-above) — that's a different code path, not an inserted row. Audit log: one
-entry for the whole batch with `{ bulk_import, count, format, skipped,
-returns_matched, returns_unmatched, restock_returns }` (omit `entityId` —
-it's `string | undefined`, not nullable), plus one additional per-sale audit
-entry for each matched return (`action: "update"`, before/after status/restock
-diff).
+returned/restockable); REFUND rows never touch `restock` at all — they update
+`status`/`total_amount`/`shipping_charged`/`vat_amount`/`refunded_amount`
+only (see "Amazon SALE/REFUND rows" above). Audit log: one entry written
+right after the insert with `{ bulk_import, count, format, skipped }` (omit
+`entityId` — it's `string | undefined`, not nullable) — **only when
+`inserted.length > 0`**, so re-importing last month's file, where every SALE
+is skipped as a duplicate, no longer writes a `create sale` entry claiming a
+bulk import of 0 records; one per-sale entry for
+each **applied** refund (`action: "update"`, before/after
+status/total_amount/shipping_charged/vat_amount/refunded_amount diff), and —
+only when the file had refund rows — a second batch entry after the refund
+loop with `{ refunds_applied, refunds_unmatched, refunds_already_applied,
+refunds_exceeded, unmatched_order_ids, already_applied_order_ids,
+exceeded_order_ids }`. The insert entry is written before the refund loop can
+run so it survives a mid-loop abort; the refund-outcomes entry can only exist
+after the loop finishes.
 
 ## Tests
 
