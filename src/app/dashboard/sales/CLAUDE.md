@@ -72,8 +72,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   though the import quietly lost hundreds of rows. One clause only — the
   per-reason breakdown stays in the pre-import preview.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
-  registry: `IMPORT_FORMATS` (generic/amazon/ebay), header-alias resolution
-  (`resolveHeaders`/`canonicalizeRow`), German status synonyms
+  registry: `IMPORT_FORMATS` (generic/amazon/ebay), German status synonyms
   (`normalizeStatus` — includes Amazon's `sale` → `delivered`, since Amazon's
   `status` column is a row *type*, not a fulfilment state), skip
   classification for non-sale rows (`classifySkip`/`SkipReason` — amazon
@@ -85,6 +84,19 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `priceColumnsAreLineTotals` (Amazon's `unit_price` column is the item LINE
   total, not a per-unit price — see "Amazon price/VAT semantics" below).
   **All import-format/validation changes go here**, not in the modal.
+  Header-alias resolution (`resolveHeaders`/`canonicalizeRow`) does **not**
+  live in this file — it moved to the shared `src/lib/utils/importAliases.ts`
+  (also used by Expenses) during the expenses-import-formats work. This file
+  imports both from there and **re-exports** them, so existing Sales call
+  sites (`ImportSalesModal.tsx`, this file's own test) were unchanged by the
+  move — only their definition site did.
+  `resolveHeaders` matches in **two passes** — exact lowercased/trimmed header
+  names first, then `normalizeHeader` (which drops a trailing parenthesised
+  unit so `Gross Amount (€)` matches) for whatever key is still unclaimed. The
+  ordering exists for Sales: a sheet with `Total (net)` before `Total` would
+  otherwise let the net column normalise to `total`, claim the key, and get the
+  real `Total` column dropped by the first-wins guard. Pinned by a test in
+  `lib/utils/importAliases.test.ts`.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -261,6 +273,9 @@ editable fields.
   direct-URL load; `state.purchases.items` is also read for the fast path
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
+- `lib/utils/importAliases.ts` — shared header-alias vocabulary and
+  `resolveHeaders`/`canonicalizeRow` (also used by Expenses); `importFormats.ts`
+  re-exports both so this feature's own call sites didn't need to change
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
 
 ## Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`)

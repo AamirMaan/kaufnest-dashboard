@@ -67,14 +67,24 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const amount = parseFloat(form.amount) || 0;
+  // An expense amount may be NEGATIVE (a credit note) or ZERO — only a
+  // NON-NUMERIC entry is invalid. The importer creates negative expenses from
+  // a German VAT ledger's credit-note lines (migration 032 dropped
+  // `expenses_amount_check`), and it would be incoherent for the app to import
+  // a shape it refuses to let a user type by hand. Do not reintroduce an
+  // `amount > 0` guard here or in `EditExpenseModal`.
+  const parsedAmount = parseFloat(form.amount);
+  const amountIsValid = Number.isFinite(parsedAmount);
+  const amount = amountIsValid ? parsedAmount : 0;
   const vatRate = parseFloat(form.vat_rate) || 0;
+  // `vatAmountFromGross` is linear in `gross`, so a negative gross yields
+  // negative input tax — the correct sign for a credit note.
   const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return setError("Title is required.");
-    if (!(amount > 0)) return setError("Amount must be greater than 0.");
+    if (!amountIsValid) return setError("Amount must be a number.");
     setError(null);
     setSaving(true);
 
@@ -188,9 +198,12 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
 
         <Row>
           <Field label="Amount" required>
+            {/* No `min` — a credit note is a negative expense, and the
+                browser's own constraint validation would otherwise block
+                submit before `handleSubmit` ever runs. See the amount comment
+                above. */}
             <Input
               type="number"
-              min="0.01"
               step="0.01"
               value={form.amount}
               onChange={(e) => set("amount", e.target.value)}
@@ -254,7 +267,9 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
                   onChange={(e) => set("vat_rate", e.target.value)}
                 />
               </Field>
-              {amount > 0 && (
+              {/* Gated on "is a number", not "> 0" — a credit note's breakdown
+                  is exactly the one a user needs to see. */}
+              {amountIsValid && (
                 <p className="text-xs text-[var(--color-text-muted)]">
                   Net {form.currency} {(amount - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
                 </p>

@@ -25,7 +25,7 @@ describe("resolveHeaders", () => {
   it("resolves a German header line fully (generic format)", () => {
     const { mapping, missingRequired } = resolveHeaders(
       ["datum", "artikelname", "menge", "preis", "währung", "mwst"],
-      GENERIC,
+      GENERIC.columns,
     );
     expect(missingRequired).toEqual([]);
     expect(mapping.get("datum")).toBe("date");
@@ -37,25 +37,25 @@ describe("resolveHeaders", () => {
   });
 
   it("versandkosten → shipping_charged (I6); shipping_cost needs explicit header", () => {
-    const { mapping } = resolveHeaders(["versandkosten", "shipping_cost"], GENERIC);
+    const { mapping } = resolveHeaders(["versandkosten", "shipping_cost"], GENERIC.columns);
     expect(mapping.get("versandkosten")).toBe("shipping_charged");
     expect(mapping.get("shipping_cost")).toBe("shipping_cost");
   });
 
   it("ignores unknown columns without error", () => {
-    const { mapping } = resolveHeaders(["date", "käufername"], GENERIC);
+    const { mapping } = resolveHeaders(["date", "käufername"], GENERIC.columns);
     expect(mapping.has("käufername")).toBe(false);
     expect(mapping.get("date")).toBe("date");
   });
 
   it("reports missing required columns by canonical name", () => {
-    const { missingRequired } = resolveHeaders(["date", "product_name"], AMAZON);
+    const { missingRequired } = resolveHeaders(["date", "product_name"], AMAZON.columns);
     expect(missingRequired).toEqual(expect.arrayContaining(["order_id", "quantity", "total"]));
     expect(missingRequired).not.toContain("date");
   });
 
   it("first matching header wins on duplicates", () => {
-    const { mapping } = resolveHeaders(["preis", "unit_price"], GENERIC);
+    const { mapping } = resolveHeaders(["preis", "unit_price"], GENERIC.columns);
     expect(mapping.get("preis")).toBe("unit_price");
     expect(mapping.has("unit_price")).toBe(false);
   });
@@ -63,7 +63,7 @@ describe("resolveHeaders", () => {
 
 describe("canonicalizeRow", () => {
   it("re-keys raw row to canonical keys", () => {
-    const { mapping } = resolveHeaders(["datum", "menge"], GENERIC);
+    const { mapping } = resolveHeaders(["datum", "menge"], GENERIC.columns);
     expect(canonicalizeRow({ datum: "15.01.2024", menge: "2" }, mapping)).toEqual({
       date: "15.01.2024",
       quantity: "2",
@@ -264,13 +264,13 @@ describe("normalizePlatform", () => {
 
 describe("resolveHeaders — sku aliases", () => {
   it("'artikelnummer' resolves to sku", () => {
-    const { mapping } = resolveHeaders(["date", "product_name", "quantity", "unit_price", "artikelnummer"], GENERIC);
+    const { mapping } = resolveHeaders(["date", "product_name", "quantity", "unit_price", "artikelnummer"], GENERIC.columns);
     expect(mapping.get("artikelnummer")).toBe("sku");
   });
 
   it("'sku' resolves to sku in all formats", () => {
     for (const fmt of [GENERIC, AMAZON, EBAY]) {
-      const { mapping } = resolveHeaders(["sku"], fmt);
+      const { mapping } = resolveHeaders(["sku"], fmt.columns);
       expect(mapping.get("sku")).toBe("sku");
     }
   });

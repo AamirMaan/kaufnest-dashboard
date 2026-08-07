@@ -9,7 +9,7 @@ import { updateExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
+import { resolveVatAmount } from "../_lib/vatPreservation";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -48,7 +48,7 @@ function expenseToForm(e: Expense, defaultVatRate: number): FormState {
     vendor: e.vendor ?? "",
     date: e.date,
     description: e.description ?? "",
-    vat_included: e.vat_rate != null,
+    vat_included: e.vat_rate != null || e.vat_amount != null,
     vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(defaultVatRate),
     vendor_vat_number: e.vendor_vat_number ?? "",
     invoice_number: e.invoice_number ?? "",
@@ -69,19 +69,54 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Snapshot of the form exactly as it was populated from `expense`, used to
+  // decide whether the user has touched any VAT-relevant input at all — see
+  // `resolveVatAmount` for why this must be the form's OWN initial values
+  // and not the expense's raw fields. Re-derived during render (the React-
+  // documented "adjusting state when a prop changes" pattern, not an effect)
+  // whenever `expense.id` differs from the id it was last captured for, so a
+  // second edit never compares against the first row's values — `page.tsx`
+  // also remounts this modal per row via `key={editTarget?.id}`, but this
+  // doesn't rely on that.
+  const [loadedExpenseId, setLoadedExpenseId] = useState<string | null>(expense?.id ?? null);
+  const [initialForm, setInitialForm] = useState<FormState>(form);
+  if ((expense?.id ?? null) !== loadedExpenseId) {
+    setLoadedExpenseId(expense?.id ?? null);
+    setInitialForm(expense ? expenseToForm(expense, defaultVatRate) : blankForm);
+  }
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const amount = parseFloat(form.amount) || 0;
+  // An expense amount may be NEGATIVE (a credit note — "Erstattung von
+  // Verkäufergebühren", −123.81) or ZERO, and the importer creates exactly
+  // those rows. `expenses_amount_check` was dropped in migration 032 for this
+  // reason, so only a NON-NUMERIC entry is invalid — mirroring
+  // `validateExpenseRow`'s `Number.isFinite` rule in `expenseImportFormats.ts`.
+  // Do not reintroduce an `amount > 0` guard: it makes every imported credit
+  // note permanently uneditable through this form.
+  const parsedAmount = parseFloat(form.amount);
+  const amountIsValid = Number.isFinite(parsedAmount);
+  const amount = amountIsValid ? parsedAmount : 0;
   const vatRate = parseFloat(form.vat_rate) || 0;
-  const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
+
+  const vatAmount = resolveVatAmount({
+    current: form,
+    initial: initialForm,
+    storedVatAmount: expense?.vat_amount ?? null,
+    amount,
+    vatRate,
+  });
+  // Display-only: the preview line always shows a figure, even for a stored
+  // `null` (rate with no known amount) — the write below keeps the real value.
+  const displayVatAmount = vatAmount ?? 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!expense) return;
     if (!form.title.trim()) return setError("Title is required.");
-    if (!(amount > 0)) return setError("Amount must be greater than 0.");
+    if (!amountIsValid) return setError("Amount must be a number.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     setError(null);
     setSaving(true);
@@ -100,7 +135,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         date: form.date,
         description: form.description.trim() || null,
         vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
+        vat_amount: vatAmount,
         vendor_vat_number: form.vendor_vat_number.trim() || null,
         invoice_number: form.invoice_number.trim() || null,
       })
@@ -175,7 +210,10 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
 
         <Row>
           <Field label="Amount" required>
-            <Input type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
+            {/* No `min` — a credit note is a negative expense, and the browser's
+                own constraint validation would otherwise block Save before
+                `handleSubmit` ever runs. See the amount comment above. */}
+            <Input type="number" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
           </Field>
           <Field label="Currency" required>
             <Select value={form.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
@@ -223,9 +261,11 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
                   onChange={(e) => set("vat_rate", e.target.value)}
                 />
               </Field>
-              {amount > 0 && (
+              {/* Gated on "is a number", not "> 0" — a credit note's breakdown
+                  is exactly the one a user needs to see. */}
+              {amountIsValid && (
                 <p className="text-xs text-[var(--color-text-muted)]">
-                  Net {form.currency} {(amount - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
+                  Net {form.currency} {(amount - displayVatAmount).toFixed(2)} · VAT {form.currency} {displayVatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
                 </p>
               )}
             </>
