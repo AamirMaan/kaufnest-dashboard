@@ -121,17 +121,20 @@ same filter predicates (no `.range()`, capped at 5 000 rows) and calls
 `exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
 vat_rate, vat_amount, description`.
 
-**Import** (`ImportExpensesModal`): Required: `date` (YYYY-MM-DD), `title`,
-`amount`. Optional: `category` (default "other"), `vendor`, `currency`
-(default EUR), `vat_rate`, `description`. `vat_amount` is computed. All rows
-must be valid; one audit log entry for the batch (omit `entityId`).
+**Import** (`ImportExpensesModal`): required and optional columns depend on the
+chosen format — see the table below. Dates, decimal separators and header names
+are locale-tolerant on every format (`lib/utils/localeParse`,
+`lib/utils/importAliases`), so `15.01.2026` and `1.234,56` are accepted.
+`vat_amount` is **not** simply computed — it follows the precedence below. All
+non-skipped rows must be valid; one audit log entry for the batch (omit
+`entityId`).
 
 **Import formats (`_components/expenseImportFormats.ts`)** — the pure registry
 the modal validates against:
 
 | Format | Required columns | Notes |
 |---|---|---|
-| `generic` | `date, title, amount` | the original template, unchanged apart from locale tolerance (German dates, decimal commas). An explicit `category` column still wins and is validated against `ExpenseCategory`; `categoryFor()` fills in only when the column is absent. **No** skip classification — a blank row is still an error. |
+| `generic` | `date, title, amount` | the original template, unchanged apart from locale tolerance (German dates, decimal commas). Optional: `category`, `vendor`, `currency` (default EUR), `vat_rate`, `description`, `invoice_number`, `vendor_vat_number`. An explicit `category` still wins and is validated against `ExpenseCategory`. A **blank** category cell keeps the historical `"other"` default; `categoryFor()` guesses only when the column is **absent entirely** — those two cases are deliberately distinct. **No** skip classification — a blank row is still an error. |
 | `vorsteuer` | `date, title, amount` | German input-tax ledger (Vorsteuerkonto). `amount` is the GROSS figure; `net_amount`/`vat_amount` cross-check it; `category` always comes from `categoryFor(title)`. Skip classification is on. |
 
 ⚠️ **`vat_rate` and `vat_amount` can legitimately disagree on an imported row,
@@ -153,7 +156,9 @@ Rules that are easy to get wrong and are pinned by
      ledger's real credit-note figure);
   3. else `vatAmountFromGross`, derived from `Math.abs(amount)` with the
      amount's sign reapplied so a credit note can never produce *positive*
-     input tax;
+     input tax — reached whenever a rate is stated, tested `vatRate !== null`
+     rather than by truthiness so a stated **0 %** yields `vat_amount: 0`
+     (zero-rated) instead of `null` (unknown);
   4. else `null`.
 
   A stated rate is not evidence the tax was charged: four real rows state 19 %
@@ -171,7 +176,10 @@ Rules that are easy to get wrong and are pinned by
   stations carry only a Steuernummer). `resolveHeaders` maps one header per
   key, so they must stay separate keys and merge here.
 - **`classifySkip`'s rule order is load-bearing** and its format guard must be
-  the first statement — see the SKILL.md gotchas.
+  the first statement — see the SKILL.md gotchas. Rule 1 tests `date` and
+  `amount` only (**not** `title`), so a section-header row carrying just a
+  title is skipped as a "blank row" rather than failing the whole file on a
+  date error.
 
 ## Tests
 

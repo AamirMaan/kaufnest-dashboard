@@ -124,13 +124,19 @@ export function classifySkip(
   if (!format.classifiesSkips) return null;
 
   const date = raw.date?.trim() ?? "";
-  const title = raw.title?.trim() ?? "";
   const amountRaw = raw.amount?.trim() ?? "";
 
-  // 1. Nothing identifying at all. Other columns may still hold a stray
-  //    figure (the ledger's tail has a lone net total), so only these three
-  //    decide it.
-  if (!date && !title && !amountRaw) return "blank row";
+  // 1. No date and no amount — nothing that could be an expense. Covers the
+  //    fully blank filler lines AND the section-header rows, which carry a
+  //    title and nothing else. `title` is deliberately NOT part of this test:
+  //    requiring it to be empty too would let a header row fall through to the
+  //    date error below and, since validation is all-or-nothing, one header
+  //    line would make the whole file unimportable.
+  //    Other columns may still hold a stray figure (the ledger's tail has a
+  //    lone net total), so only these two decide it. The zero-amount filler
+  //    rows are unaffected — their `amount` is the non-empty string "0", so
+  //    they fall through to rule 3 and report as "zero amount", not "blank".
+  if (!date && !amountRaw) return "blank row";
 
   // 2. A date cell that is not a date — the trailing "Total" row.
   //    Checked only when the cell is non-empty, so the zero-amount filler
@@ -241,8 +247,12 @@ export function validateExpenseRow(
     //    sign for free: −123.81 gross less −104.04 net is −19.77, the real
     //    figure from the ledger's credit-note row.
     vatAmount = round2(amount - net);
-  } else if (vatRate) {
+  } else if (vatRate !== null) {
     // 3. No VAT column and no net column — the rate is all that is left.
+    //    `!== null`, not truthiness: a stated 0 % is a real answer (zero-rated
+    //    intra-EU supplies are ordinary in a German ledger), and treating it as
+    //    "no rate" would store `vat_rate: 0` beside `vat_amount: null`, which
+    //    reads downstream as *unknown* rather than *zero*.
     //    `vatAmountFromGross` short-circuits to 0 for a non-positive rate, so
     //    the sign has to be carried explicitly: derive from the magnitude and
     //    put the amount's sign back. A credit note must never yield POSITIVE
@@ -272,12 +282,25 @@ export function validateExpenseRow(
 
   // The ledger has no category column, so `vorsteuer` always derives one from
   // the description. `generic` keeps its explicit column as the authority and
-  // only falls back to the guess when the column is absent — an importer that
-  // overrode a user's stated category would be changing their data.
+  // only guesses when the column is ABSENT — an importer that overrode a
+  // user's stated category would be changing their data.
+  //
+  // Tested against `format.id`, not `classifiesSkips`: whether a sheet carries
+  // noise rows and whether an explicit category may win are unrelated ideas,
+  // and a future format declared `classifiesSkips: true` WITH a category
+  // column would silently discard every user-stated category. (Sales draws the
+  // same distinction with a dedicated `vatRateIsFraction` flag.)
+  //
+  // `undefined` (column absent) and `""` (column present, cell blank) are
+  // deliberately NOT the same thing: a blank cell keeps the historical `other`
+  // default, so re-importing an old generic template with some cells left
+  // empty doesn't start guessing categories the user never chose.
   const categoryRaw = raw.category?.trim().toLowerCase();
   let category: ExpenseCategory;
-  if (format.classifiesSkips || !categoryRaw) {
+  if (format.id === "vorsteuer" || categoryRaw === undefined) {
     category = categoryFor(title);
+  } else if (!categoryRaw) {
+    category = "other";
   } else {
     if (!VALID_CATEGORIES.includes(categoryRaw as ExpenseCategory)) {
       return fail(

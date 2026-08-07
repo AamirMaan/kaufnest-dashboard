@@ -107,6 +107,20 @@ describe("vorsteuer — VAT", () => {
     expect(row.data?.vat_amount).toBe(19);
   });
 
+  it("treats a stated 0% rate as zero-rated, not as 'no rate'", () => {
+    // Zero-rated supplies (intra-EU, for one) are ordinary in a German ledger.
+    // A truthiness check on the rate would store vat_amount: null here, which
+    // reads downstream as "unknown VAT" rather than "no VAT was charged".
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      net_amount: "",
+      vat_rate: "0%",
+      amount: "119.00",
+    }), 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(0);
+    expect(row.data?.vat_amount).toBe(0);
+  });
+
   it("keeps the rate-derived VAT negative on a credit note", () => {
     const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
       title: "Erstattung von Verkäufergebühren",
@@ -172,6 +186,16 @@ describe("classifySkip — vorsteuer only", () => {
     })).toBe("zero amount");
   });
 
+  it("skips a header-only row (title but no date and no amount)", () => {
+    // A section-header line matches no other rule — rule 2 needs a non-empty
+    // date and rule 3 needs a parseable amount ("" parses to null, not 0). It
+    // would fall through to a date error and, since validation is
+    // all-or-nothing, make the entire file unimportable.
+    expect(classifySkip(EXPENSE_IMPORT_FORMATS.vorsteuer, {
+      date: "", title: "Ads", amount: "",
+    })).toBe("blank row");
+  });
+
   it("skips an unsupported currency", () => {
     expect(classifySkip(EXPENSE_IMPORT_FORMATS.vorsteuer, {
       ...vorsteuerRow, currency: "JPY",
@@ -205,6 +229,30 @@ describe("generic format", () => {
     expect(row.error).toBeNull();
     expect(row.data?.date).toBe("2026-01-15");
     expect(row.data?.amount).toBe(1234.56);
+  });
+
+  it("guesses the category only when the column is ABSENT", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.generic, {
+      date: "2026-01-15", title: "Ads", amount: "10",
+    }, 2);
+    expect(row.data?.category).toBe("advertising");
+  });
+
+  it("keeps the historical 'other' default for a present-but-blank cell", () => {
+    // Distinct from an absent column: a user re-importing an old template with
+    // some category cells left empty must not start getting keyword guesses.
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.generic, {
+      date: "2026-01-15", title: "Ads", amount: "10", category: "",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.category).toBe("other");
+  });
+
+  it("lets an explicit category beat the guess", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.generic, {
+      date: "2026-01-15", title: "Ads", amount: "10", category: "office",
+    }, 2);
+    expect(row.data?.category).toBe("office");
   });
 
   it("still errors on a blank row instead of skipping it", () => {

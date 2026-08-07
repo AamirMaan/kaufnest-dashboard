@@ -72,6 +72,16 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   fires only when the `date` cell is NON-EMPTY, so the ledger's zero-amount
   filler rows (which have no date) fall through to the zero-amount rule instead
   of being mislabelled "summary row". Don't reorder.
+- **Rule 1 tests `date` and `amount` only — `title` is deliberately excluded.**
+  A section-header row is exactly "a title and nothing else"; if the rule also
+  required an empty title that row would match nothing (rule 2 needs a
+  non-empty date, rule 3 needs a parseable amount and `parseLocaleNumber("")`
+  is `null`, not `0`), fall through to `invalid or missing "date"`, and — since
+  validation is all-or-nothing — one header line would make the whole file
+  unimportable. Widening it does NOT swallow the zero-amount filler rows: their
+  `amount` is the non-empty string `"0"`, so they still reach rule 3. If you
+  touch rule 1, the `"skips a zero-amount filler row"` test going red means you
+  widened too far.
 - **An expense `amount` may be negative or zero** — `validateExpenseRow`
   rejects only a non-numeric value. Credit-note rows are the whole reason
   `expenses_amount_check` was dropped (migration `032`). If you touch the
@@ -106,6 +116,14 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   amount: `vatAmountFromGross` returns 0 for a non-positive rate, so the sign
   is carried explicitly — derive from `Math.abs(amount)`, then negate. The
   `gross − net` branch inherits the sign for free.
+- **Guard the rate branch with `vatRate !== null`, never truthiness.** A stated
+  **0 %** is a real answer — zero-rated intra-EU supplies are ordinary in a
+  German ledger — and `if (vatRate)` is false at 0, which would store
+  `vat_rate: 0` beside `vat_amount: null`, i.e. *unknown* where the file
+  actually said *zero*. Note Sales has this exact truthiness bug at
+  `sales/_components/importFormats.ts:503`; the divergence is intentional and
+  Sales was left alone as out of scope. Don't "align" the two by copying the
+  bug back into Expenses.
 - **The reconciliation check must not become conditional on which branch
   produced `vat_amount`.** It runs whenever `net_amount` is present and VAT
   resolved, including when VAT was derived from net (where it holds by
@@ -116,6 +134,20 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   columns (`UStID des Anbieters`, `Steuernummer`) into one alias list would
   silently drop whichever column lost the race. Merge in the validator, not in
   `ALIASES`.
+- **Don't reuse `classifiesSkips` as an "is this the vorsteuer format" test.**
+  Whether a sheet carries noise rows and whether an explicit `category` column
+  may win are unrelated ideas. The category branch tests `format.id ===
+  "vorsteuer"`; a future format declared `classifiesSkips: true` *with* a
+  category column would otherwise silently discard every user-stated category,
+  and no existing test would fail. Sales draws the same distinction with a
+  dedicated `vatRateIsFraction` flag — a named flag or an id check are both
+  fine, a borrowed one is not.
+- **An absent category column and a blank category cell are different.**
+  `raw.category?.trim().toLowerCase()` is `undefined` for the former and `""`
+  for the latter. Absent → `categoryFor(title)` guesses; blank → the historical
+  `"other"` default, so re-importing an old generic template with some cells
+  left empty doesn't start assigning categories the user never chose. `!x`
+  collapses the two — test `=== undefined` explicitly.
 - **`vorsteuer` has no `description` column on purpose** — the ledger's
   "Description" column IS the title, and one sheet column cannot resolve to two
   keys. `title`'s alias list is `ALIASES.title` ∪ `ALIASES.description` for
