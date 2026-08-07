@@ -1137,3 +1137,84 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - **`ImportPurchasesModal.tsx` still has the original defect.** Same ISO-only regex and `parseFloat`. It should adopt `importAliases.ts` on a separate branch.
 - **Credit notes are not linked to the invoice they reverse.** No shared key exists — the credit note carries a different invoice number (`DE-CN-AEU-…` vs `DE-AEU-…`).
 - **The modal has no automated test coverage**, as with Sales. All the testable logic lives in the pure modules; the wiring is verified by review and in the browser.
+
+---
+
+### Task 8: Stop EditExpenseModal rewriting an imported row's VAT
+
+**Added mid-execution.** Found by the Task 5 implementer and independently confirmed by the controller against the live source. It is a **pre-existing** bug, but it is currently unreachable — nothing in the app creates a row whose `vat_amount` disagrees with the value derived from its rate. Task 6 makes it reachable, so this branch cannot ship without it.
+
+**Files:**
+- Modify: `src/app/dashboard/expenses/_components/EditExpenseModal.tsx`
+- Modify: `src/app/dashboard/expenses/SKILL.md`
+
+**The bug:**
+
+`EditExpenseModal.tsx:51` seeds the form from the rate, not the stored amount:
+
+```typescript
+vat_included: e.vat_rate != null,
+```
+
+and `:78` recomputes unconditionally, never reading `e.vat_amount`:
+
+```typescript
+const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
+```
+
+So an imported ledger row — `Gebühren im Zusammenhang mit "Versand durch Amazon"`, gross €34.70, `vat_rate: 19`, `vat_amount: 0.00`, exactly as Amazon reported it — becomes `vat_amount: 5.54` the moment a user opens it and presses Save. No edit to the amount or the rate is required. The audit log records it as a user-made change, and €5.54 of input tax that was never charged enters a filed VAT return.
+
+- [ ] **Step 1: Preserve the stored VAT unless the user actually changed something**
+
+Add, alongside the other derived values near line 77:
+
+```typescript
+  // An imported Vorsteuerkonto row can legitimately carry a rate that
+  // disagrees with its VAT — Amazon states 19% against €0.00 on some fee
+  // lines. The stored figure is the authority, so only recompute when the
+  // user has actually touched one of the two inputs it derives from.
+  const vatInputsUnchanged =
+    amount === expense.amount &&
+    (form.vat_included ? vatRate === expense.vat_rate : expense.vat_rate === null);
+
+  const vatAmount = !form.vat_included
+    ? null
+    : vatInputsUnchanged
+      ? expense.vat_amount
+      : vatAmountFromGross(amount, vatRate);
+```
+
+Then change the write at line 103 to use it directly (it is already null-or-number, so the ternary there goes):
+
+```typescript
+        vat_amount: vatAmount,
+```
+
+- [ ] **Step 2: Seed the checkbox from either field**
+
+Line 51 currently reads `vat_included: e.vat_rate != null`. A row could carry a VAT amount with no rate, and unticking the box silently discards it. Change to:
+
+```typescript
+    vat_included: e.vat_rate != null || e.vat_amount != null,
+```
+
+- [ ] **Step 3: Check `AddExpenseModal` for the same shape**
+
+Read `src/app/dashboard/expenses/_components/AddExpenseModal.tsx`. It creates rows from scratch, so deriving VAT from the rate is correct there and it needs no change — but confirm it does not share a helper with the edit modal that you have just altered. Say in your report which it is.
+
+- [ ] **Step 4: Update the SKILL.md gotcha**
+
+The Task 5 implementer added a gotcha describing this as an open live bug. Rewrite it to say it is fixed, how (the stored `vat_amount` wins unless `amount` or `vat_rate` changed), and that **no code may recompute VAT from `amount × vat_rate` for an imported expense**. Keep naming the other tempted call sites — an invoice PDF and a VAT-return export — as still-unwritten code that must obey the same rule.
+
+- [ ] **Step 5: Ask the user to verify in the browser**
+
+Do not start a dev server. Ask the user to open an imported expense whose VAT is €0.00 against a 19% rate, press Save without changing anything, and confirm the VAT stays €0.00 — then to change the amount and confirm VAT is recomputed.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/app/dashboard/expenses/_components/EditExpenseModal.tsx src/app/dashboard/expenses/SKILL.md
+git commit -m "fix(expenses): keep an imported row's stored VAT on save
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
