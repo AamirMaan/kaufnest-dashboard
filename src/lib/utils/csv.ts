@@ -77,13 +77,48 @@ function parseLine(line: string, delimiter: Delimiter): string[] {
   return fields;
 }
 
+/**
+ * Split CSV text into logical rows, honouring newlines INSIDE quoted fields.
+ * A naive `.split("\n")` breaks any field containing a line break, and real
+ * exports do produce them — a German Amazon VAT ledger wraps long fee
+ * descriptions across two lines inside one quoted cell.
+ *
+ * Quote characters are preserved so `parseLine` still sees a well-formed
+ * field; this function only decides where a row ends.
+ */
+function splitRows(text: string): string[] {
+  const rows: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      // An escaped "" inside a quoted field must not toggle the state.
+      if (inQuotes && text[i + 1] === '"') {
+        current += '""';
+        i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      current += ch;
+    } else if (ch === "\n" && !inQuotes) {
+      rows.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  rows.push(current);
+  return rows;
+}
+
 export function parseCsvText(text: string): { headers: string[]; rows: Record<string, string>[] } {
-  const lines = text
-    .replace(new RegExp("^\\uFEFF"), "") // strip UTF-8 BOM (Excel prepends it)
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .filter((l) => l.trim() !== "");
+  const lines = splitRows(
+    text
+      .replace(new RegExp("^\\uFEFF"), "") // strip UTF-8 BOM (Excel prepends it)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n"),
+  ).filter((l) => l.trim() !== "");
   if (lines.length < 2) return { headers: [], rows: [] };
   const delimiter = detectDelimiter(lines[0]);
   const headers = parseLine(lines[0], delimiter).map((h) => h.toLowerCase().trim());
