@@ -90,4 +90,16 @@ describe("parseCsvText — newlines inside quoted fields", () => {
     const { rows } = parseCsvText("a,b\n1,2\n\n\n3,4");
     expect(rows).toHaveLength(2);
   });
+
+  it("a stray unterminated quote merges the remaining rows (accepted trade-off of multi-line support)", () => {
+    // Once a quote opens without a matching close, inQuotes never flips back
+    // off, so every following newline — including ones between otherwise
+    // well-formed rows — is absorbed into the same field. This is the
+    // unavoidable cost of correctly supporting multi-line quoted fields
+    // (see the doc comment on splitRows), not a bug to "fix" with recovery
+    // heuristics.
+    const { rows } = parseCsvText('a,b\n"unterminated,1\n2,3');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual({ a: "unterminated,1\n2,3", b: "" });
+  });
 });

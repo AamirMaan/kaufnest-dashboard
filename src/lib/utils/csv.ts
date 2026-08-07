@@ -85,6 +85,17 @@ function parseLine(line: string, delimiter: Delimiter): string[] {
  *
  * Quote characters are preserved so `parseLine` still sees a well-formed
  * field; this function only decides where a row ends.
+ *
+ * Trade-off, accepted: a single un-doubled `"` anywhere in the file — e.g. a
+ * supplier named `Müller "Express" GmbH` with one quote left un-escaped —
+ * opens `inQuotes` and never closes it, so every newline from that point on
+ * is absorbed and the rest of the file collapses into one row. This is
+ * correct RFC4180-style behaviour, not a bug: supporting real multi-line
+ * quoted fields requires trusting quote state across the whole file, and a
+ * per-line fallback would silently reintroduce the original bug this
+ * function fixes. Do not add recovery heuristics for it — see
+ * csv.test.ts's "stray unterminated quote" test, which pins this exact
+ * behaviour on purpose.
  */
 function splitRows(text: string): string[] {
   const rows: string[] = [];
