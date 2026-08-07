@@ -105,21 +105,31 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   durch Amazon"`, 34.70 gross), so they are stored as
   `vat_rate: 19, vat_amount: 0` — a correct reading of the file, and a loaded
   gun. Anything that re-derives from the rate resurrects €5.54 of input tax
-  that was never charged, on a filed VAT return. The three places that will be
-  tempted:
-  1. **`EditExpenseModal` — this one is already live.** It seeds
-     `vat_included` from `e.vat_rate != null` and never reads the stored
-     `e.vat_amount` at all; on save it writes
-     `vatAmountFromGross(amount, vatRate)` unconditionally. So merely OPENING
-     an imported 0.00-VAT expense and pressing Save rewrites its
-     `vat_amount` from 0.00 to 5.54 — no edit to the amount or rate required,
-     and the audit diff will record it as a user-made change. Fixing it means
-     seeding the form from the stored `vat_amount` and only re-deriving when
-     the user actually changes the amount or the rate. **Not fixed by the
-     import work — treat it as an open bug.**
-  2. **`generateInvoice` / `InvoiceModal`** (shared with Sales + Purchases) —
+  that was never charged, on a filed VAT return.
+
+  **`EditExpenseModal` is fixed (2026-08-07).** It used to seed `vat_included`
+  from `e.vat_rate != null` and never read the stored `e.vat_amount`, writing
+  `vatAmountFromGross(amount, vatRate)` unconditionally on every save — merely
+  OPENING an imported 0.00-VAT expense and pressing Save rewrote its
+  `vat_amount` from 0.00 to 5.54, and the audit diff recorded it as a
+  user-made change. It now computes a `vatInputsUnchanged` flag (`amount ===
+  expense.amount && (form.vat_included ? vatRate === expense.vat_rate :
+  expense.vat_rate === null)`) and only calls `vatAmountFromGross` when that's
+  false; otherwise it writes back `expense.vat_amount` untouched. The
+  checkbox is also now seeded from `e.vat_rate != null || e.vat_amount !=
+  null`, so a row carrying an amount with no rate still shows as VAT-included
+  instead of silently losing it the moment the box is unticked and re-ticked.
+  **`AddExpenseModal` shares no helper with this** — it imports the same
+  `vatAmountFromGross` but has its own inline `vatAmount` derivation with no
+  `vatInputsUnchanged` concept, which is correct for it: it creates rows from
+  scratch, so there is no stored figure to preserve.
+
+  **No code may recompute VAT from `amount × vat_rate` for an imported
+  expense — the stored `vat_amount` is always the authority.** The other two
+  places this rule applies, still unwritten:
+  1. **`generateInvoice` / `InvoiceModal`** (shared with Sales + Purchases) —
      render the stored `vat_amount`; never re-derive it for the PDF.
-  3. **Any VAT-return or net-basis export** — sum the stored `vat_amount`;
+  2. **Any VAT-return or net-basis export** — sum the stored `vat_amount`;
      derive net as `amount − vat_amount`, not from the rate.
 - **VAT derivation precedence is file → `gross − net` → rate → null**, and the
   rate is last on purpose (a stated rate is not evidence the tax was charged;

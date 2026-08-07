@@ -48,7 +48,7 @@ function expenseToForm(e: Expense, defaultVatRate: number): FormState {
     vendor: e.vendor ?? "",
     date: e.date,
     description: e.description ?? "",
-    vat_included: e.vat_rate != null,
+    vat_included: e.vat_rate != null || e.vat_amount != null,
     vat_rate: e.vat_rate != null ? String(e.vat_rate) : String(defaultVatRate),
     vendor_vat_number: e.vendor_vat_number ?? "",
     invoice_number: e.invoice_number ?? "",
@@ -75,7 +75,23 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
 
   const amount = parseFloat(form.amount) || 0;
   const vatRate = parseFloat(form.vat_rate) || 0;
-  const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
+
+  // An imported Vorsteuerkonto row can legitimately carry a rate that
+  // disagrees with its VAT — Amazon states 19% against €0.00 on some fee
+  // lines. The stored figure is the authority, so only recompute when the
+  // user has actually touched one of the two inputs it derives from.
+  const vatInputsUnchanged =
+    amount === expense?.amount &&
+    (form.vat_included ? vatRate === expense?.vat_rate : expense?.vat_rate === null);
+
+  const vatAmount = !form.vat_included
+    ? null
+    : vatInputsUnchanged
+      ? (expense?.vat_amount ?? null)
+      : vatAmountFromGross(amount, vatRate);
+  // Display-only: the preview line always shows a figure, even for a stored
+  // `null` (rate with no known amount) — the write above keeps the real value.
+  const displayVatAmount = vatAmount ?? 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,7 +116,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         date: form.date,
         description: form.description.trim() || null,
         vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
+        vat_amount: vatAmount,
         vendor_vat_number: form.vendor_vat_number.trim() || null,
         invoice_number: form.invoice_number.trim() || null,
       })
@@ -225,7 +241,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
               </Field>
               {amount > 0 && (
                 <p className="text-xs text-[var(--color-text-muted)]">
-                  Net {form.currency} {(amount - vatAmount).toFixed(2)} · VAT {form.currency} {vatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
+                  Net {form.currency} {(amount - displayVatAmount).toFixed(2)} · VAT {form.currency} {displayVatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
                 </p>
               )}
             </>
