@@ -76,11 +76,41 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   rejects only a non-numeric value. Credit-note rows are the whole reason
   `expenses_amount_check` was dropped (migration `032`). If you touch the
   validator, don't reintroduce the old `amount <= 0` rejection.
-- **Never derive `vat_amount` when the file supplies one**, and never let a
-  derivation produce positive VAT on a negative amount. `vatAmountFromGross`
-  returns 0 for a non-positive rate, so the sign is carried explicitly
-  (derive from `Math.abs(amount)`, then negate) — a credit note claiming back
-  positive input tax would be a wrong figure on a filed VAT return.
+- **NEVER recompute VAT from `amount × vat_rate` for an imported expense.**
+  On a `vorsteuer` row `vat_rate` and `vat_amount` can legitimately disagree,
+  and **`vat_amount` is the authority**. Four real ledger rows state a 19 %
+  rate against €0.00 of actual VAT (`Gebühren im Zusammenhang mit "Versand
+  durch Amazon"`, 34.70 gross), so they are stored as
+  `vat_rate: 19, vat_amount: 0` — a correct reading of the file, and a loaded
+  gun. Anything that re-derives from the rate resurrects €5.54 of input tax
+  that was never charged, on a filed VAT return. The three places that will be
+  tempted:
+  1. **`EditExpenseModal` — this one is already live.** It seeds
+     `vat_included` from `e.vat_rate != null` and never reads the stored
+     `e.vat_amount` at all; on save it writes
+     `vatAmountFromGross(amount, vatRate)` unconditionally. So merely OPENING
+     an imported 0.00-VAT expense and pressing Save rewrites its
+     `vat_amount` from 0.00 to 5.54 — no edit to the amount or rate required,
+     and the audit diff will record it as a user-made change. Fixing it means
+     seeding the form from the stored `vat_amount` and only re-deriving when
+     the user actually changes the amount or the rate. **Not fixed by the
+     import work — treat it as an open bug.**
+  2. **`generateInvoice` / `InvoiceModal`** (shared with Sales + Purchases) —
+     render the stored `vat_amount`; never re-derive it for the PDF.
+  3. **Any VAT-return or net-basis export** — sum the stored `vat_amount`;
+     derive net as `amount − vat_amount`, not from the rate.
+- **VAT derivation precedence is file → `gross − net` → rate → null**, and the
+  rate is last on purpose (a stated rate is not evidence the tax was charged;
+  `gross − net` gets the 0.00-VAT rows right and the rate does not). Don't
+  reorder. The rate branch must also never produce positive VAT on a negative
+  amount: `vatAmountFromGross` returns 0 for a non-positive rate, so the sign
+  is carried explicitly — derive from `Math.abs(amount)`, then negate. The
+  `gross − net` branch inherits the sign for free.
+- **The reconciliation check must not become conditional on which branch
+  produced `vat_amount`.** It runs whenever `net_amount` is present and VAT
+  resolved, including when VAT was derived from net (where it holds by
+  construction). A check that is trivially true is still the check; making it
+  branch-dependent is how it quietly stops running.
 - **`vendor_vat_number` merges `vendor_vat_number` + `tax_number` per row.**
   `resolveHeaders` maps one sheet header per key, so folding the two German
   columns (`UStID des Anbieters`, `Steuernummer`) into one alias list would

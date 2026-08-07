@@ -206,42 +206,63 @@ export function validateExpenseRow(
     return fail(`"vat_rate" must be between 0 and 100`);
   }
 
-  // The FILE's vat_amount always wins over anything derivable from the rate.
-  // Four real ledger rows state a 19 % rate against €0.00 of actual VAT
-  // (`Gebühren im Zusammenhang mit "Versand durch Amazon"`, 34.70 gross, 0.00
-  // VAT). Deriving from the rate would invent €5.54 of input tax that was
-  // never charged — on a filed VAT return. Derivation is a fallback for files
-  // with no vat_amount column at all, nothing more.
+  // `net_amount` is not a column on `Expense`. The ledger supplies it as a
+  // cross-check against gross, and — see below — as the preferred basis for
+  // VAT when the VAT column is missing.
+  const netRaw = raw.net_amount?.trim();
+  let net: number | null = null;
+  if (netRaw) {
+    const parsedNet = parseLocaleNumber(netRaw);
+    if (parsedNet === null) {
+      return fail(`"net_amount" must be a number`);
+    }
+    net = round2(parsedNet);
+  }
+
+  // VAT precedence: the FILE, then arithmetic, then the rate. Anything
+  // derivable from `vat_rate` is the LAST resort, because a stated rate is not
+  // evidence that the tax was charged: four real ledger rows state 19 %
+  // against €0.00 of actual VAT (`Gebühren im Zusammenhang mit "Versand durch
+  // Amazon"`, 34.70 gross, 0.00 VAT). Deriving from the rate there would
+  // invent €5.54 of input tax that never existed — on a filed VAT return.
   const vatAmountRaw = raw.vat_amount?.trim();
   let vatAmount: number | null;
   if (vatAmountRaw) {
+    // 1. The file said so. Signed, not absolute — a credit note's VAT is
+    //    negative input tax.
     const parsed = parseLocaleNumber(vatAmountRaw);
     if (parsed === null) {
       return fail(`"vat_amount" must be a number`);
     }
-    // Signed, not absolute: a credit note's VAT is negative input tax.
     vatAmount = round2(parsed);
+  } else if (net !== null) {
+    // 2. `gross − net` is arithmetic truth where the rate is only a guess, and
+    //    the two DO disagree on the 0.00-VAT rows above. It also inherits the
+    //    sign for free: −123.81 gross less −104.04 net is −19.77, the real
+    //    figure from the ledger's credit-note row.
+    vatAmount = round2(amount - net);
   } else if (vatRate) {
-    // `vatAmountFromGross` short-circuits to 0 for a non-positive rate, so the
-    // sign has to be carried explicitly: derive from the magnitude and put the
-    // amount's sign back. A credit note must never yield POSITIVE input tax —
-    // that would claim back money on a refund.
+    // 3. No VAT column and no net column — the rate is all that is left.
+    //    `vatAmountFromGross` short-circuits to 0 for a non-positive rate, so
+    //    the sign has to be carried explicitly: derive from the magnitude and
+    //    put the amount's sign back. A credit note must never yield POSITIVE
+    //    input tax — that would claim money back on a refund.
     const derived = vatAmountFromGross(Math.abs(amount), vatRate);
     vatAmount = amount < 0 ? -derived : derived;
   } else {
     vatAmount = null;
   }
 
-  // `net_amount` is not a column on `Expense` — the ledger supplies it purely
-  // as a cross-check. When all three of net/VAT/gross are present they must
-  // agree, or the row is describing money we cannot account for. Two cents of
-  // tolerance absorbs the ledger's own per-line rounding.
-  const netRaw = raw.net_amount?.trim();
-  if (netRaw && vatAmountRaw && vatAmount !== null) {
-    const net = parseLocaleNumber(netRaw);
-    if (net === null) {
-      return fail(`"net_amount" must be a number`);
-    }
+  // net + VAT must agree with gross, or the row describes money we cannot
+  // account for. Two cents of tolerance absorbs the ledger's own per-line
+  // rounding (and IEEE 754 — `506.65 + 96.26` is not exactly `602.91`).
+  //
+  // This runs whether `vat_amount` came from the file or from branch 2; the
+  // check must not silently disappear depending on which branch produced the
+  // value. Via branch 2 it holds by construction, and a check that is
+  // trivially true is still the check. Branch 3 is unreachable here — it only
+  // fires when `net` is null.
+  if (net !== null && vatAmount !== null) {
     if (Math.abs(net + vatAmount - amount) > 0.02) {
       return fail(
         `"amount" (${amount}) does not reconcile with net + VAT (${round2(net + vatAmount)})`,

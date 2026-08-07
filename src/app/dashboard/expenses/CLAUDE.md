@@ -134,6 +134,10 @@ the modal validates against:
 | `generic` | `date, title, amount` | the original template, unchanged apart from locale tolerance (German dates, decimal commas). An explicit `category` column still wins and is validated against `ExpenseCategory`; `categoryFor()` fills in only when the column is absent. **No** skip classification — a blank row is still an error. |
 | `vorsteuer` | `date, title, amount` | German input-tax ledger (Vorsteuerkonto). `amount` is the GROSS figure; `net_amount`/`vat_amount` cross-check it; `category` always comes from `categoryFor(title)`. Skip classification is on. |
 
+⚠️ **`vat_rate` and `vat_amount` can legitimately disagree on an imported row,
+and `vat_amount` is the authority.** See the SKILL.md gotcha before writing any
+code that recomputes VAT from an expense's rate.
+
 Rules that are easy to get wrong and are pinned by
 `expenseImportFormats.test.ts`:
 
@@ -141,14 +145,26 @@ Rules that are easy to get wrong and are pinned by
   Verkäufergebühren`, −123.81) are real ledger rows — migration
   `032_expenses_allow_negative_amount.sql` dropped `expenses_amount_check`
   for them. Only a *non-numeric* amount is a row error.
-- **The file's `vat_amount` always wins over a derived one.** Four real rows
-  state a 19 % rate against €0.00 of actual VAT; deriving from the rate would
-  invent input tax on a filed VAT return. Derivation (`vatAmountFromGross`) is
-  a fallback for files with no `vat_amount` column, and it carries the
-  amount's sign so a credit note can never produce positive input tax.
-- **net + VAT must reconcile with gross** within 2 cents when all three are
-  present (`does not reconcile` row error). `net_amount` is otherwise
-  discarded — it is not a column on `Expense`.
+- **VAT precedence is file → arithmetic → rate**, in that order, and the rate
+  is deliberately last:
+  1. the file's `vat_amount` when the column is present and parses;
+  2. else `round2(amount − net_amount)` when the net column is present — this
+     inherits the sign for free (−123.81 gross less −104.04 net is −19.77, the
+     ledger's real credit-note figure);
+  3. else `vatAmountFromGross`, derived from `Math.abs(amount)` with the
+     amount's sign reapplied so a credit note can never produce *positive*
+     input tax;
+  4. else `null`.
+
+  A stated rate is not evidence the tax was charged: four real rows state 19 %
+  against €0.00 of actual VAT, so deriving from the rate there would invent
+  €5.54 of input tax on a filed VAT return. `gross − net` gets those rows
+  right; the rate does not.
+- **net + VAT must reconcile with gross** within 2 cents (`does not reconcile`
+  row error). The check runs whenever `net_amount` is present and VAT resolved
+  — via the file *or* via step 2, where it holds by construction. It must not
+  become conditional on which branch produced the VAT. `net_amount` is
+  otherwise discarded — it is not a column on `Expense`.
 - **`vendor_vat_number` merges two sheet columns per ROW**:
   `vendor_vat_number || tax_number`. The ledger has both a `UStID des
   Anbieters` and a `Steuernummer` and fills whichever a vendor has (fuel

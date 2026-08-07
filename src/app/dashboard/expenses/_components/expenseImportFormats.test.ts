@@ -18,6 +18,16 @@ const vorsteuerRow = {
   amount: "602.91",
 };
 
+/**
+ * The same row with the `vat_amount` column ABSENT — not blank. A sheet that
+ * never had the column is what makes the derivation branches reachable.
+ */
+const noVatColumn = (extra: Record<string, string>): Record<string, string> => {
+  const row: Record<string, string> = { ...vorsteuerRow, ...extra };
+  delete row.vat_amount;
+  return row;
+};
+
 describe("vorsteuer — happy path", () => {
   it("parses a German dot date", () => {
     const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, vorsteuerRow, 2);
@@ -61,6 +71,50 @@ describe("vorsteuer — VAT", () => {
       amount: "150.00",
     }, 2);
     expect(row.error).toContain("does not reconcile");
+  });
+
+  it("derives VAT from NET, not the rate, when the vat_amount column is absent", () => {
+    // Same 0.00-VAT row, with the vat_amount column missing entirely. The
+    // stated 19% would derive 5.54; `gross - net` says 0.00. The arithmetic
+    // is the truth and must win — the rate is only ever a last resort.
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      title: 'Gebühren im Zusammenhang mit "Versand durch Amazon"',
+      net_amount: "34.70",
+      vat_rate: "19%",
+      amount: "34.70",
+    }), 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(0);
+  });
+
+  it("derives a NEGATIVE VAT from net on a credit note", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      title: "Erstattung von Verkäufergebühren",
+      net_amount: "-104.04",
+      amount: "-123.81",
+    }), 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(-19.77);
+  });
+
+  it("falls back to the rate only when neither vat_amount nor net_amount is there", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      net_amount: "",
+      vat_rate: "19%",
+      amount: "119.00",
+    }), 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(19);
+  });
+
+  it("keeps the rate-derived VAT negative on a credit note", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      title: "Erstattung von Verkäufergebühren",
+      net_amount: "",
+      vat_rate: "19%",
+      amount: "-123.81",
+    }), 2);
+    expect(row.data?.vat_amount).toBe(-19.77);
   });
 
   it("tolerates a 2-cent rounding difference", () => {
