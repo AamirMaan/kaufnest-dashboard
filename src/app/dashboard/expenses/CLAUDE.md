@@ -147,13 +147,28 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
   `EXPENSE_IMPORT_FORMAT_IDS` by `label`. Changing it re-parses the file
   already in `parsedSource` — the raw `{headers, rows}` is kept in state
   precisely so a format change never asks for a re-upload.
-- **Run-id guard** (`requestIdRef`), same mechanism as `ImportSalesModal`: a
-  parse whose call has been superseded by a newer one is discarded before it
-  writes state. In Sales the awaited step is the duplicate-check query; here
-  it is the **file read** — `handleFile` claims the id before the read starts
-  and re-checks it on resolve, so selecting file A then B before A's
-  `FileReader` fires can't leave `parsedSource` and `parsed` describing
-  different files.
+- **Staleness guards — two counters, and `handleFile` holds the live one.**
+  - `fileReadIdRef` **is the guard that actually protects anything.**
+    `handleFile` claims it before the read starts and re-checks it on **both**
+    the `.then` and the `.catch`, so selecting file A then B before A's
+    `FileReader` fires can't leave `parsedSource` and `parsed` describing
+    different files. Only a newer **file** bumps it — a format change
+    deliberately does not (see `formatIdRef` below).
+  - `requestIdRef`, claimed inside `parseAndValidate`, exists for structural
+    parity with `ImportSalesModal` (where the awaited step is the
+    duplicate-check query). **It is currently unreachable**: `parseAndValidate`
+    is declared `async` but contains no `await`, so it runs to completion
+    synchronously and its check can never be false. Treat it as
+    future-proofing, not protection. If you add an `await` to that function,
+    only the writes **after** the existing check are covered — anything added
+    above it needs its own re-check.
+  - `formatIdRef` mirrors `formatId` for the async read path, and
+    `handleFormatChange` updates the ref **before** it re-parses. `handleFile`'s
+    `.then` parses against `formatIdRef.current`, not the `formatId` its closure
+    captured, so a file that lands after a format change is parsed under the
+    format now selected.
+  - **This is a deliberate divergence from `ImportSalesModal`** — see the
+    SKILL.md gotcha before "aligning" the two.
 - **Header resolution**: `resolveHeaders(headers, format.columns)`; a
   non-empty `missingRequired` is a single **file-level** error naming the
   missing columns, and no rows are validated. Otherwise every row goes

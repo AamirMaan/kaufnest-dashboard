@@ -85,13 +85,36 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
   // "vorsteuer"`: `generic` guesses too whenever the sheet omits the column,
   // and that is precisely the case the breakdown exists to make visible.
   const [categoriesAreGuessed, setCategoriesAreGuessed] = useState(false);
-  // Guards against a stale parse (from a fast file/format change) overwriting a
-  // newer one's result — the two results differ only in interpretation, so a
-  // stale write is silent and hard to notice. Incremented on every parse and on
-  // every file read; a result is applied only if its captured id is still
-  // current when it resolves. Same mechanism as `ImportSalesModal`, where the
-  // await is a duplicate-check query; here the await is the file read itself.
+  // ─── Staleness guards ──────────────────────────────────────────────────────
+  //
+  // TWO counters, deliberately, because there are two independent ways a result
+  // can go stale and one counter conflates them.
+  //
+  // `fileReadIdRef` — claimed by `handleFile` before the read starts, re-checked
+  // when it resolves. Only a NEWER FILE supersedes a pending read. A format
+  // change must NOT, which is the whole reason this is separate from
+  // `requestIdRef`: with one shared counter, loading A, picking B, then changing
+  // the format before B's `FileReader` fires made `handleFormatChange` re-parse
+  // A and bump the counter, so B saw a newer id and returned — leaving
+  // `fileName: "B.csv"` on screen with A's rows loaded and Import writing A's
+  // data into a VAT ledger. It never self-healed either: every later format
+  // change re-parsed A again.
+  const fileReadIdRef = useRef(0);
+  // `requestIdRef` — claimed by `parseAndValidate`. Structural parity with
+  // `ImportSalesModal`, where the awaited step is a duplicate-check query.
+  // CURRENTLY UNREACHABLE: `parseAndValidate` is `async` but contains no
+  // `await`, so it runs to completion synchronously and its check can never be
+  // false. It is future-proofing, not live protection — the guard that actually
+  // does work here is `fileReadIdRef`. If you add an `await` to
+  // `parseAndValidate`, note that only the writes AFTER the existing check are
+  // covered; anything you add above it needs its own re-check.
   const requestIdRef = useRef(0);
+  // Mirrors `formatId` for the async file-read path. `handleFile`'s promise
+  // closes over `formatId` as it was when the file was picked, so a format
+  // change made WHILE the file is being read would otherwise be applied to the
+  // dropdown but not to the parse that follows. The read resolves against this
+  // instead, so the file lands under whatever format is selected when it lands.
+  const formatIdRef = useRef<ExpenseImportFormatId>("generic");
 
   const format = EXPENSE_IMPORT_FORMATS[formatId];
   const requiredColumns = format.columns.filter((c) => c.required).map((c) => c.key);
@@ -205,6 +228,9 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
   }
 
   function handleFormatChange(next: ExpenseImportFormatId) {
+    // Ref BEFORE the re-parse: a file read already in flight resolves against
+    // `formatIdRef.current`, and must see the format the user just chose.
+    formatIdRef.current = next;
     setFormatId(next);
     setImportError(null);
     if (parsedSource !== null) {
@@ -220,23 +246,27 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     setFileName(file.name);
     setImportError(null);
 
-    // The file read is this modal's async step. Selecting file A and then file
-    // B before A's reader fires would otherwise let A resolve last and
-    // overwrite B's result, leaving `parsedSource` and `parsed` describing
-    // different files. Claim a run id now and re-check it on resolve.
-    const requestId = ++requestIdRef.current;
+    // The file read is this modal's only async step, so this is where the live
+    // staleness guard lives. Selecting file A and then file B before A's reader
+    // fires would otherwise let A resolve last and overwrite B's result,
+    // leaving `parsedSource` and `parsed` describing different files. Only a
+    // newer FILE bumps this counter — see `fileReadIdRef` for why a format
+    // change deliberately does not.
+    const fileReadId = ++fileReadIdRef.current;
     const loadAndParse = isExcelFile(file.name)
       ? readFileBuffer(file).then((buf) => parseExcelBuffer(buf))
       : readFileText(file).then((text) => parseCsvText(text));
 
     loadAndParse
       .then((source) => {
-        if (requestIdRef.current !== requestId) return;
+        if (fileReadIdRef.current !== fileReadId) return;
         setParsedSource(source);
-        return parseAndValidate(source, formatId);
+        // `formatIdRef.current`, not the captured `formatId` — the user may
+        // have changed the dropdown while this file was being read.
+        return parseAndValidate(source, formatIdRef.current);
       })
       .catch(() => {
-        if (requestIdRef.current !== requestId) return;
+        if (fileReadIdRef.current !== fileReadId) return;
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
       });
   }

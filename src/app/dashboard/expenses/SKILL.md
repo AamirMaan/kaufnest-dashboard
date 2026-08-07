@@ -35,7 +35,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
   file is deliberately modelled on (format dropdown, `parsedSource`, run-id
   guard, `skipReasonCounts`). Keep the two structurally alike; a reviewer will
-  diff them. **No validation belongs in the modal** — it goes in
+  diff them — **except for two deliberate divergences**, both documented as
+  gotchas below and neither to be "fixed" by copying Sales back: the split
+  `fileReadIdRef`/`requestIdRef` staleness counters, and the absence of a
+  date-order selector. **No validation belongs in the modal** — it goes in
   `_components/expenseImportFormats.ts`.
 
 ## Test command
@@ -200,12 +203,30 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   itself, so the orderings agree — the modal's explicit call is there to keep
   the skip path visible where the rows are built. Don't "simplify" it away
   without checking the ordering still holds.
-- **The run-id guard's async step here is the FILE READ**, not a query. Sales'
-  guard covers its duplicate-check round-trip; this modal has no such query, so
-  `handleFile` claims the id before the read starts and re-checks on resolve.
-  Known, accepted window (identical in Sales): changing the format in the
-  sub-frame gap between picking a file and its `FileReader` firing parses that
-  read against the previous format. Re-selecting the file fixes it.
+- **The live staleness guard is `fileReadIdRef` in `handleFile`, not
+  `requestIdRef` in `parseAndValidate`.** The only async step in this modal is
+  the file read (Sales' guard covers its duplicate-check round-trip; there is no
+  such query here). `parseAndValidate` is declared `async` but has **no
+  `await`**, so it runs to completion synchronously and its internal check can
+  never be false — it is future-proofing kept for parity with Sales, nothing
+  more. **If you add an `await` there, only the writes after that check are
+  covered; anything you add above it needs its own re-check.** Don't reason
+  about it as though it currently protects the writes around it.
+- **Two counters, on purpose — don't merge them, and don't "align" this with
+  Sales.** `fileReadIdRef` is bumped only by a newer FILE; format changes must
+  not bump it. With one shared counter (which is what Sales has), this sequence
+  silently imported the wrong file: A loaded → pick B → change the format before
+  B's `FileReader` fires → `handleFormatChange` re-parses A and bumps the
+  counter → B resolves, sees a newer id, returns. The modal then showed
+  `fileName: "B.csv"` with A's rows loaded and Import wrote **A's data into a
+  VAT ledger**, and it never self-healed (every later format change re-parsed A
+  again). Paired with `formatIdRef` — `handleFormatChange` updates the ref
+  *before* re-parsing, and `handleFile`'s `.then` parses against
+  `formatIdRef.current` rather than its captured `formatId` — so B wins, under
+  whatever format is selected when it lands. **`ImportSalesModal` still has this
+  window** and the divergence is intentional: Sales lets B eventually win, so
+  its outcome is merely stale rather than wrong-file. Copying Sales' single-
+  counter version back here reintroduces the bug.
 - **`readFileText`'s windows-1252 retry is load-bearing, not cosmetic.**
   `categoryFor()` keyword-matches German fee descriptions, so a mojibaked UTF-8
   read ("Geb�hren") silently sends every row to `other` — a broken category
