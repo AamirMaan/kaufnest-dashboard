@@ -898,7 +898,9 @@ import { parseLocaleNumber, parseLocaleRate, parseFlexibleDate, type DateOrder }
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { categoryFor } from "../_lib/expenseCategory";
 
-export { resolveHeaders, canonicalizeRow };
+// No re-export here. Sales re-exports these only because ImportSalesModal
+// already imported them from its registry; the expenses modal is new code and
+// imports them straight from @/lib/utils/importAliases.
 
 const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 const VALID_CATEGORIES: ExpenseCategory[] = [
