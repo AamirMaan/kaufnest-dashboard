@@ -1,76 +1,60 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useAppDispatch } from "@/store/hooks";
 import { addExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Field, Select } from "@/components/ui/FormFields";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
-import type { Expense, ExpenseCategory, Currency } from "@/types";
+import { resolveHeaders, canonicalizeRow } from "@/lib/utils/importAliases";
+import { hasOrderSensitiveDate } from "@/lib/utils/localeParse";
+import {
+  EXPENSE_IMPORT_FORMATS,
+  EXPENSE_IMPORT_FORMAT_IDS,
+  classifySkip,
+  validateExpenseRow,
+  type ExpenseImportFormatId,
+  type ParsedExpenseRow,
+} from "./expenseImportFormats";
+import type { Expense } from "@/types";
 
-const VALID_CATEGORIES: ExpenseCategory[] = [
-  "shipping", "advertising", "software", "office", "inventory", "tax", "salary", "other",
-];
-const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
+type ParsedSource = { headers: string[]; rows: Record<string, string>[] };
 
-const TEMPLATE_HEADERS = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "description", "invoice_number", "vendor_vat_number"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Office Supplies", "office", "Staples", "49.99", "EUR", "19", "Monthly supplies", "RE-2024-001", "DE123456789"];
-
-interface ParsedRow {
-  rowNum: number;
-  data: Omit<Expense, "id" | "created_by" | "created_at"> | null;
-  error: string | null;
+/**
+ * Read a CSV file as text. Tries UTF-8 first; if the decode produced
+ * replacement characters (�), re-reads as windows-1252 — the encoding German
+ * Excel typically saves CSVs in. Same helper as `ImportSalesModal`, and it is
+ * load-bearing here: `categoryFor()` matches German fee descriptions
+ * ("Gebühren…", "Versandkosten…") by keyword, so a mojibaked read would push
+ * every row into "other".
+ */
+function readFileText(file: File): Promise<string> {
+  const readAs = (encoding?: string) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve((ev.target?.result as string) ?? "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(file, encoding);
+    });
+  return readAs().then((text) => (text.includes("�") ? readAs("windows-1252") : text));
 }
 
-function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
-  const date = raw.date?.trim();
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid or missing "date" (expected YYYY-MM-DD)` };
-  }
-  const title = raw.title?.trim();
-  if (!title) {
-    return { rowNum, data: null, error: `Row ${rowNum}: missing "title"` };
-  }
-  const amount = parseFloat(raw.amount?.trim());
-  if (isNaN(amount) || amount <= 0) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "amount" must be a positive number` };
-  }
-  const categoryRaw = (raw.category?.trim().toLowerCase() || "other") as ExpenseCategory;
-  if (!VALID_CATEGORIES.includes(categoryRaw)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid "category" "${raw.category}" — use: ${VALID_CATEGORIES.join(", ")}` };
-  }
-  const currencyRaw = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currencyRaw)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid "currency" "${raw.currency}" — use: EUR, USD, GBP` };
-  }
-  const vatRateRaw = raw.vat_rate?.trim();
-  const vatRate = vatRateRaw ? parseFloat(vatRateRaw) : null;
-  if (vatRate !== null && (isNaN(vatRate) || vatRate < 0 || vatRate > 100)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "vat_rate" must be between 0 and 100` };
-  }
-  const vatAmount = vatRate ? vatAmountFromGross(amount, vatRate) : null;
-  return {
-    rowNum,
-    data: {
-      title,
-      amount,
-      currency: currencyRaw,
-      category: categoryRaw,
-      vendor: raw.vendor?.trim() || null,
-      date,
-      description: raw.description?.trim() || null,
-      vat_rate: vatRate,
-      vat_amount: vatAmount,
-      vendor_vat_number: raw.vendor_vat_number?.trim() || null,
-      invoice_number: raw.invoice_number?.trim() || null,
-    },
-    error: null,
-  };
+function readFileBuffer(file: File): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => resolve(ev.target!.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function isExcelFile(name: string) {
+  return name.endsWith(".xlsx") || name.endsWith(".xls");
 }
 
 interface Props {
@@ -82,19 +66,72 @@ interface Props {
 export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [parsed, setParsed] = useState<ParsedRow[]>([]);
+  const [formatId, setFormatId] = useState<ExpenseImportFormatId>("generic");
+  // The raw `{ headers, rows }` straight off the file, kept so a format change
+  // can re-derive `parsed` without asking the user to re-select the file.
+  const [parsedSource, setParsedSource] = useState<ParsedSource | null>(null);
+  const [parsed, setParsed] = useState<ParsedExpenseRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // True when the file contains a date whose day/month reading is genuinely
+  // ambiguous (`04/09/2026`). Drives the day-first note below — this modal has
+  // no date-order selector, so the assumption has to be stated rather than
+  // silently applied.
+  const [orderSensitiveDates, setOrderSensitiveDates] = useState(false);
+  // Guards against a stale parse (from a fast file/format change) overwriting a
+  // newer one's result — the two results differ only in interpretation, so a
+  // stale write is silent and hard to notice. Incremented on every parse and on
+  // every file read; a result is applied only if its captured id is still
+  // current when it resolves. Same mechanism as `ImportSalesModal`, where the
+  // await is a duplicate-check query; here the await is the file read itself.
+  const requestIdRef = useRef(0);
+
+  const format = EXPENSE_IMPORT_FORMATS[formatId];
+  const requiredColumns = format.columns.filter((c) => c.required).map((c) => c.key);
+  const optionalColumns = format.columns.filter((c) => !c.required).map((c) => c.key);
 
   const validRows = parsed.filter((r) => r.data !== null);
   const errors = parsed.filter((r) => r.error !== null);
+  const skipped = parsed.filter((r) => r.skipped);
+  // Skips are NOT errors: a `vorsteuer` ledger is mostly blank filler, zero
+  // amount padding and a trailing Total row, and erroring on those would make a
+  // real quarterly export impossible to import. They carry `data: null`, so
+  // they can never reach `validRows` either.
   const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0;
+
+  // Group skipped rows by reason so the summary can name the real reasons
+  // instead of reporting an undifferentiated count. Mirrors `skipReasonCounts`
+  // in `ImportSalesModal`.
+  const skipReasonCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of parsed) {
+      if (!r.skipped) continue;
+      counts.set(r.skipped, (counts.get(r.skipped) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [parsed]);
+
+  // The `vorsteuer` ledger has no category column, so every category is a GUESS
+  // made by `categoryFor(title)`. There is no per-row preview in this modal, so
+  // without this line a bad guess is only discoverable after it has landed in
+  // the expenses table. Sorted by count descending — the biggest bucket is the
+  // one worth checking.
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of parsed) {
+      if (!r.data) continue;
+      counts.set(r.data.category, (counts.get(r.data.category) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [parsed]);
 
   function reset() {
     setParsed([]);
+    setParsedSource(null);
     setFileName("");
     setImportError(null);
+    setOrderSensitiveDates(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -104,36 +141,88 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     onClose();
   }
 
+  /**
+   * Resolve headers, canonicalise, classify and validate `source` against
+   * `fmtId`. Declared async and fronted by the run-id guard so it stays
+   * structurally identical to `ImportSalesModal.parseAndValidate`; the guard
+   * is what lets `handleFile` discard a superseded file read.
+   */
+  async function parseAndValidate(source: ParsedSource, fmtId: ExpenseImportFormatId) {
+    const requestId = ++requestIdRef.current;
+    const isCurrent = () => requestIdRef.current === requestId;
+
+    const fmt = EXPENSE_IMPORT_FORMATS[fmtId];
+    const { headers, rows } = source;
+    if (rows.length === 0) {
+      setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
+      setOrderSensitiveDates(false);
+      return;
+    }
+
+    const { mapping, missingRequired } = resolveHeaders(headers, fmt.columns);
+    if (missingRequired.length > 0) {
+      setParsed([{
+        rowNum: 0,
+        data: null,
+        error: `Missing required column${missingRequired.length !== 1 ? "s" : ""}: ${missingRequired.join(", ")} — download the ${fmt.label} template or check the format dropdown.`,
+      }]);
+      setOrderSensitiveDates(false);
+      return;
+    }
+
+    const canonical = rows.map((row) => canonicalizeRow(row, mapping));
+    setOrderSensitiveDates(hasOrderSensitiveDate(canonical.map((r) => r.date ?? "")));
+
+    // `classifySkip` FIRST, `validateExpenseRow` only for what survives it.
+    // A noise row legitimately has no date at all, so validating it first would
+    // fail the whole file on `invalid or missing "date"` — the same ordering
+    // bug that once broke every Amazon RETURN line in the Sales importer.
+    const validated = canonical.map((row, i) => {
+      const rowNum = i + 2;
+      const skipReason = classifySkip(fmt, row);
+      if (skipReason) {
+        return { rowNum, data: null, error: null, skipped: skipReason };
+      }
+      return validateExpenseRow(fmt, row, rowNum);
+    });
+
+    if (!isCurrent()) return; // a newer file/format change has already superseded this run
+    setParsed(validated);
+  }
+
+  function handleFormatChange(next: ExpenseImportFormatId) {
+    setFormatId(next);
+    setImportError(null);
+    if (parsedSource !== null) {
+      void parseAndValidate(parsedSource, next);
+    } else {
+      setParsed([]);
+    }
+  }
+
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setImportError(null);
 
-    const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
-    const load = isExcel
-      ? new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => resolve(parseExcelBuffer(ev.target!.result as ArrayBuffer));
-          reader.onerror = () => reject(reader.error);
-          reader.readAsArrayBuffer(file);
-        })
-      : new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (ev) => resolve(parseCsvText(ev.target?.result as string));
-          reader.onerror = () => reject(reader.error);
-          reader.readAsText(file);
-        });
+    // The file read is this modal's async step. Selecting file A and then file
+    // B before A's reader fires would otherwise let A resolve last and
+    // overwrite B's result, leaving `parsedSource` and `parsed` describing
+    // different files. Claim a run id now and re-check it on resolve.
+    const requestId = ++requestIdRef.current;
+    const loadAndParse = isExcelFile(file.name)
+      ? readFileBuffer(file).then((buf) => parseExcelBuffer(buf))
+      : readFileText(file).then((text) => parseCsvText(text));
 
-    load
-      .then(({ rows }) => {
-        if (rows.length === 0) {
-          setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
-          return;
-        }
-        setParsed(rows.map((row, i) => validateRow(row, i + 2)));
+    loadAndParse
+      .then((source) => {
+        if (requestIdRef.current !== requestId) return;
+        setParsedSource(source);
+        return parseAndValidate(source, formatId);
       })
       .catch(() => {
+        if (requestIdRef.current !== requestId) return;
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
       });
   }
@@ -186,17 +275,37 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
       }
     >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <Field label="Import format">
+          <Select
+            value={formatId}
+            onChange={(e) => handleFormatChange(e.target.value as ExpenseImportFormatId)}
+          >
+            {EXPENSE_IMPORT_FORMAT_IDS.map((id) => (
+              <option key={id} value={id}>{EXPENSE_IMPORT_FORMATS[id].label}</option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">date, title, amount</code>
+            Required: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{requiredColumns.join(", ")}</code>
             <span className="block text-xs mt-1">
-              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">category, vendor, currency, vat_rate, description, invoice_number, vendor_vat_number</code>
+              Optional: <code className="text-xs bg-[var(--color-surface-raised)] px-1 rounded">{optionalColumns.join(", ")}</code>
+            </span>
+            <span className="block text-xs mt-1">
+              German CSVs work too — semicolons, decimal commas (9,99), dates like 15.01.2026, and German column names.
             </span>
           </p>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => exportToCsv("expenses-import-template", TEMPLATE_HEADERS, [TEMPLATE_EXAMPLE])}
+            onClick={() =>
+              exportToCsv(
+                `expenses-import-${formatId}-template`,
+                format.columns.map((c) => c.key),
+                [],
+              )
+            }
           >
             Template
           </Button>
@@ -215,9 +324,34 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
 
         {parsed.length > 0 && (
           <div className="space-y-2">
-            {validRows.length > 0 && errors.length === 0 && (
+            {errors.length === 0 && validRows.length > 0 && (
               <p className="text-sm text-[var(--color-success)]">
                 ✓ {validRows.length} row{validRows.length !== 1 ? "s" : ""} ready to import
+                {skipped.length > 0 && (
+                  <span className="text-[var(--color-text-muted)]">
+                    {" · "}{skipped.length} skipped
+                    {" ("}
+                    {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}
+                    {")"}
+                  </span>
+                )}
+              </p>
+            )}
+            {errors.length === 0 && validRows.length === 0 && skipped.length > 0 && (
+              <p className="text-sm text-[var(--color-text-muted)]">
+                All {skipped.length} row{skipped.length !== 1 ? "s" : ""} skipped —{" "}
+                {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}.
+              </p>
+            )}
+            {formatId === "vorsteuer" && errors.length === 0 && categoryCounts.length > 0 && (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Categories: {categoryCounts.map(([c, n]) => `${c} ${n}`).join(" · ")}
+              </p>
+            )}
+            {errors.length === 0 && orderSensitiveDates && (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                This file contains dates that could be read either way (e.g. 04/09/2026) —
+                they are imported day-first (DD/MM/YYYY).
               </p>
             )}
             {errors.length > 0 && (
@@ -235,10 +369,11 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
                 </div>
               </>
             )}
-            {importError && (
-              <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
-            )}
           </div>
+        )}
+
+        {importError && (
+          <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
         )}
       </div>
     </Modal>

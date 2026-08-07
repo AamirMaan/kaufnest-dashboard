@@ -25,8 +25,18 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
 - `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
-- `_components/ImportExpensesModal.tsx` — bulk CSV import: same pattern as the
-  Sales/Purchases import modals but for expenses. See "CSV import/export" below.
+- `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
+  dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
+  the file in `parsedSource` so changing the format re-derives `parsed` without
+  a re-upload; resolves headers via `resolveHeaders`/`canonicalizeRow`
+  (imported **directly** from `@/lib/utils/importAliases`, not via the
+  registry), calls `classifySkip` before `validateExpenseRow` per row, groups
+  skip reasons via `skipReasonCounts`, and shows a **category breakdown**
+  before import on the `vorsteuer` format. Batch-inserts `validRows`,
+  dispatches `addExpense` per row, writes one audit entry
+  (`{bulk_import, count}`) and calls `onSuccess(count)`. Contains **no
+  validation logic of its own** — all of it lives in the registry below. See
+  "CSV import/export" below.
 - `_components/expenseImportFormats.ts` (+ colocated `.test.ts`) — pure import
   format registry, the Expenses sibling of `sales/_components/importFormats.ts`:
   `EXPENSE_IMPORT_FORMATS` (`generic` / `vorsteuer`), skip classification
@@ -128,6 +138,58 @@ are locale-tolerant on every format (`lib/utils/localeParse`,
 `vat_amount` is **not** simply computed — it follows the precedence below. All
 non-skipped rows must be valid; one audit log entry for the batch (omit
 `entityId`).
+
+**What the modal does around the registry** (the Expenses sibling of
+`ImportSalesModal` — mirror that file when changing this one):
+
+- **Format dropdown** (`Select` from `components/ui/FormFields`) listing
+  `EXPENSE_IMPORT_FORMAT_IDS` by `label`. Changing it re-parses the file
+  already in `parsedSource` — the raw `{headers, rows}` is kept in state
+  precisely so a format change never asks for a re-upload.
+- **Run-id guard** (`requestIdRef`), same mechanism as `ImportSalesModal`: a
+  parse whose call has been superseded by a newer one is discarded before it
+  writes state. In Sales the awaited step is the duplicate-check query; here
+  it is the **file read** — `handleFile` claims the id before the read starts
+  and re-checks it on resolve, so selecting file A then B before A's
+  `FileReader` fires can't leave `parsedSource` and `parsed` describing
+  different files.
+- **Header resolution**: `resolveHeaders(headers, format.columns)`; a
+  non-empty `missingRequired` is a single **file-level** error naming the
+  missing columns, and no rows are validated. Otherwise every row goes
+  through `canonicalizeRow`.
+- **`classifySkip` runs before `validateExpenseRow`, per row.** A noise row
+  legitimately has no `date`, so validating first would fail the whole file
+  on `invalid or missing "date"` — the same ordering bug that once broke
+  every Amazon RETURN line in Sales. (`validateExpenseRow` also calls
+  `classifySkip` internally, so the two orderings agree; the modal's explicit
+  call is what keeps the skip path visible at the call site.)
+- **Skips are non-fatal.** `canImport` is still
+  `errors.length === 0 && validRows.length > 0` — a skipped row carries
+  `data: null` and `error: null`, so it can never enter `validRows` nor block
+  the import. Counts are grouped by reason (`skipReasonCounts`) and each
+  reason is named in the summary line; an all-skipped file reads "All N rows
+  skipped — 12 blank row, 3 zero amount."
+- **Category breakdown before import** (`vorsteuer` only): a one-line
+  `Categories: shipping 40 · advertising 22 · other 42` summary, sorted by
+  count descending, derived from the valid rows' `data.category`. The ledger
+  has no category column so every category is a `categoryFor()` **guess**,
+  and this modal has no per-row preview — without this line a wrong guess is
+  only discoverable after it has landed in the table. Don't remove it when
+  editing the summary block.
+- **Template button** exports the selected format's
+  `columns.map((c) => c.key)` as a header-only CSV. There is no example row —
+  `ExpenseImportFormat` has no `templateExample` (Sales' `ImportFormat` does).
+- **windows-1252 fallback** on CSV reads (`readFileText`, copied from
+  `ImportSalesModal`). Load-bearing here, not cosmetic: `categoryFor()`
+  matches German fee descriptions by keyword, so a mojibaked read would push
+  every row into `other`.
+- **Ambiguous dates are read day-first**, and the modal says so in a note when
+  `hasOrderSensitiveDate` is true. There is deliberately **no date-order
+  selector** (Sales has one): the target ledger uses dot dates, which
+  `parseFlexibleDate` always reads day-first regardless of order, so a
+  selector would be a no-op on the file this format exists for. If a customer
+  ever brings a month-first expense export, port Sales' selector +
+  `detectDateOrder` conflict handling rather than silently guessing.
 
 **Import formats (`_components/expenseImportFormats.ts`)** — the pure registry
 the modal validates against:

@@ -28,6 +28,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `src/lib/utils/importAliases.ts` instead (Sales reads the same table).
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
+- **Change the import modal's UI/plumbing** (dropdown, summary line, category
+  preview, file reading): `_components/ImportExpensesModal.tsx` only — and read
+  `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
+  file is deliberately modelled on (format dropdown, `parsedSource`, run-id
+  guard, `skipReasonCounts`). Keep the two structurally alike; a reviewer will
+  diff them. **No validation belongs in the modal** — it goes in
+  `_components/expenseImportFormats.ts`.
 
 ## Test command
 
@@ -152,6 +159,47 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   "Description" column IS the title, and one sheet column cannot resolve to two
   keys. `title`'s alias list is `ALIASES.title` ∪ `ALIASES.description` for
   that format only.
+- **`ImportExpensesModal` has no test coverage and none is planned.** Every
+  testable rule lives in the pure modules (`expenseImportFormats.ts`,
+  `_lib/expenseCategory.ts`, `lib/utils/{importAliases,localeParse,csv}`), each
+  with a colocated test. Don't contort the component to make it testable — move
+  the logic into a pure module instead, which is the split that already exists.
+- **The category breakdown is a safety feature, not decoration.** On
+  `vorsteuer` every category is a `categoryFor(title)` **guess** (the ledger has
+  no category column) and the modal has no per-row preview, so the
+  `Categories: shipping 40 · advertising 22 · other 42` line is the only chance
+  to notice a bad guess before it lands. Don't drop it while tidying the
+  summary block.
+- **Skipped rows must never block an import.** They carry `data: null` *and*
+  `error: null`, so they fall out of both `validRows` and `errors` by
+  construction — `canImport` needs no special case. If you add a new
+  `SkipReason`, keep that shape: giving a skip a non-null `error` would make a
+  real Vorsteuerkonto (mostly filler rows) unimportable, which is the exact
+  failure the skip machinery exists to prevent.
+- **Call `classifySkip` before `validateExpenseRow`, never after.** Noise rows
+  legitimately have no `date`; validating first fails the whole file on
+  `invalid or missing "date"`. `validateExpenseRow` also calls `classifySkip`
+  itself, so the orderings agree — the modal's explicit call is there to keep
+  the skip path visible where the rows are built. Don't "simplify" it away
+  without checking the ordering still holds.
+- **The run-id guard's async step here is the FILE READ**, not a query. Sales'
+  guard covers its duplicate-check round-trip; this modal has no such query, so
+  `handleFile` claims the id before the read starts and re-checks on resolve.
+  Known, accepted window (identical in Sales): changing the format in the
+  sub-frame gap between picking a file and its `FileReader` firing parses that
+  read against the previous format. Re-selecting the file fixes it.
+- **`readFileText`'s windows-1252 retry is load-bearing, not cosmetic.**
+  `categoryFor()` keyword-matches German fee descriptions, so a mojibaked UTF-8
+  read ("Geb�hren") silently sends every row to `other` — a broken category
+  breakdown with no error anywhere.
+- **There is deliberately no date-order selector.** The Vorsteuerkonto uses dot
+  dates, which `parseFlexibleDate` always reads day-first regardless of
+  `DateOrder`, so a selector would be a no-op on the file the format exists
+  for. Ambiguous `/`-separated dates are read day-first and the modal says so
+  via `hasOrderSensitiveDate`. If a month-first expense export ever turns up,
+  port Sales' selector *with* its `detectDateOrder` conflict handling — a
+  detector without the conflict refusal silently picks an order on a mixed
+  file.
 - The "Search" box in `FilterBar` matches `title`, `vendor`, `description`,
   and `invoice_number` via a Supabase `.or()`/`ilike` clause (see
   `fetchExpensesPage` in `_store/expensesSlice.ts`), sanitized with
