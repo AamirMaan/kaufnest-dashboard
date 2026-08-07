@@ -21,8 +21,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - **Change list/filter/table behavior**: `page.tsx` only (filters dispatch `fetchExpensesPage`, no in-memory filtering).
 - **Change reducer logic**: `_store/expensesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx`.
-- **Change import validation / accepted columns**: `validateRow()` in
-  `_components/ImportExpensesModal.tsx` only.
+- **Change import validation / accepted columns / add an import format**:
+  `_components/expenseImportFormats.ts` + its colocated test — the pure
+  registry (`EXPENSE_IMPORT_FORMATS`, `classifySkip`, `validateExpenseRow`).
+  Do NOT put validation in the modal. A new *header alias* goes in the shared
+  `src/lib/utils/importAliases.ts` instead (Sales reads the same table).
+- **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
+  its test. Rule order in that file is first-match-wins.
 
 ## Test command
 
@@ -57,6 +62,34 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   inventory items).
 - `writeAuditLog` `entityId` is `string | undefined` — omit it for bulk-import
   batch entries rather than passing `null` (which is a TypeScript error).
+- **`classifySkip`'s format guard must stay the first statement** in the
+  function (`if (!format.classifiesSkips) return null;`). Any check above it
+  makes `generic` inherit skip behaviour and silently swallow the blank rows it
+  is required to error on. This exact bug shipped once in the Sales module — a
+  test pins it (`"skips NOTHING for the generic format"`).
+- **The skip-rule ORDER in `classifySkip` is load-bearing**, because a real
+  filler row matches more than one rule. In particular the summary-row check
+  fires only when the `date` cell is NON-EMPTY, so the ledger's zero-amount
+  filler rows (which have no date) fall through to the zero-amount rule instead
+  of being mislabelled "summary row". Don't reorder.
+- **An expense `amount` may be negative or zero** — `validateExpenseRow`
+  rejects only a non-numeric value. Credit-note rows are the whole reason
+  `expenses_amount_check` was dropped (migration `032`). If you touch the
+  validator, don't reintroduce the old `amount <= 0` rejection.
+- **Never derive `vat_amount` when the file supplies one**, and never let a
+  derivation produce positive VAT on a negative amount. `vatAmountFromGross`
+  returns 0 for a non-positive rate, so the sign is carried explicitly
+  (derive from `Math.abs(amount)`, then negate) — a credit note claiming back
+  positive input tax would be a wrong figure on a filed VAT return.
+- **`vendor_vat_number` merges `vendor_vat_number` + `tax_number` per row.**
+  `resolveHeaders` maps one sheet header per key, so folding the two German
+  columns (`UStID des Anbieters`, `Steuernummer`) into one alias list would
+  silently drop whichever column lost the race. Merge in the validator, not in
+  `ALIASES`.
+- **`vorsteuer` has no `description` column on purpose** — the ledger's
+  "Description" column IS the title, and one sheet column cannot resolve to two
+  keys. `title`'s alias list is `ALIASES.title` ∪ `ALIASES.description` for
+  that format only.
 - The "Search" box in `FilterBar` matches `title`, `vendor`, `description`,
   and `invoice_number` via a Supabase `.or()`/`ilike` clause (see
   `fetchExpensesPage` in `_store/expensesSlice.ts`), sanitized with

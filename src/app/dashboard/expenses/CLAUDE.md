@@ -27,6 +27,20 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 - `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
 - `_components/ImportExpensesModal.tsx` — bulk CSV import: same pattern as the
   Sales/Purchases import modals but for expenses. See "CSV import/export" below.
+- `_components/expenseImportFormats.ts` (+ colocated `.test.ts`) — pure import
+  format registry, the Expenses sibling of `sales/_components/importFormats.ts`:
+  `EXPENSE_IMPORT_FORMATS` (`generic` / `vorsteuer`), skip classification
+  (`classifySkip`/`SkipReason` — **vorsteuer only**) and per-row validation
+  (`validateExpenseRow`). **All import-format/validation changes go here**, not
+  in the modal. Header aliases are NOT defined here — they live in the shared
+  `lib/utils/importAliases`, and this module deliberately does not re-export
+  `resolveHeaders`/`canonicalizeRow` (the modal imports them from there
+  directly, unlike Sales which re-exports them for back-compat).
+- `_lib/expenseCategory.ts` (+ colocated `.test.ts`) — pure
+  `categoryFor(description)`: guesses an `ExpenseCategory` from a multilingual
+  fee description. The Vorsteuerkonto has no category column, and Amazon
+  localises each fee description to its marketplace, so without this every
+  imported row would land in "other".
 
 ## Delete gating (super_admin + permission overrides)
 
@@ -112,6 +126,38 @@ vat_rate, vat_amount, description`.
 (default EUR), `vat_rate`, `description`. `vat_amount` is computed. All rows
 must be valid; one audit log entry for the batch (omit `entityId`).
 
+**Import formats (`_components/expenseImportFormats.ts`)** — the pure registry
+the modal validates against:
+
+| Format | Required columns | Notes |
+|---|---|---|
+| `generic` | `date, title, amount` | the original template, unchanged apart from locale tolerance (German dates, decimal commas). An explicit `category` column still wins and is validated against `ExpenseCategory`; `categoryFor()` fills in only when the column is absent. **No** skip classification — a blank row is still an error. |
+| `vorsteuer` | `date, title, amount` | German input-tax ledger (Vorsteuerkonto). `amount` is the GROSS figure; `net_amount`/`vat_amount` cross-check it; `category` always comes from `categoryFor(title)`. Skip classification is on. |
+
+Rules that are easy to get wrong and are pinned by
+`expenseImportFormats.test.ts`:
+
+- **`amount` may be negative or zero.** Credit notes (`Erstattung von
+  Verkäufergebühren`, −123.81) are real ledger rows — migration
+  `032_expenses_allow_negative_amount.sql` dropped `expenses_amount_check`
+  for them. Only a *non-numeric* amount is a row error.
+- **The file's `vat_amount` always wins over a derived one.** Four real rows
+  state a 19 % rate against €0.00 of actual VAT; deriving from the rate would
+  invent input tax on a filed VAT return. Derivation (`vatAmountFromGross`) is
+  a fallback for files with no `vat_amount` column, and it carries the
+  amount's sign so a credit note can never produce positive input tax.
+- **net + VAT must reconcile with gross** within 2 cents when all three are
+  present (`does not reconcile` row error). `net_amount` is otherwise
+  discarded — it is not a column on `Expense`.
+- **`vendor_vat_number` merges two sheet columns per ROW**:
+  `vendor_vat_number || tax_number`. The ledger has both a `UStID des
+  Anbieters` and a `Steuernummer` and fills whichever a vendor has (fuel
+  stations carry only a Steuernummer). `resolveHeaders` maps one header per
+  key, so they must stay separate keys and merge here.
+- **`classifySkip`'s rule order is load-bearing** and its format guard must be
+  the first statement — see the SKILL.md gotchas.
+
 ## Tests
 
-`npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`.
+`npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
+`_lib/expenseCategory.test.ts` and `_components/expenseImportFormats.test.ts`.
