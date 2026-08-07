@@ -80,7 +80,11 @@ export default function ExpensesPage() {
       vat: sumAmounts(vat),
     }));
   }, [expenses]);
-  const hasVat = summary.some((s) => s.vat > 0);
+  // `!== 0`, not `> 0`: credit notes carry NEGATIVE input tax, so a page (or a
+  // filtered period) made up only of refunds sums to a negative VAT total that
+  // is still real VAT to report. `> 0` hid the whole summary for exactly those
+  // rows. Same reasoning as `hasVatData` on the Overview page.
+  const hasVat = summary.some((s) => s.vat !== 0);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
@@ -199,13 +203,31 @@ export default function ExpensesPage() {
     {
       header: "Amount",
       sortValue: (e: Expense) => e.amount,
+      // Colour follows the SIGN, matching the Overview page's Expenses-by-
+      // Category list: a credit note (`Erstattung von Verkäufergebühren`,
+      // −123.81) is money coming back, so it reads green, not red. Rendering
+      // every amount in `--color-danger` made a refund look like a cost on the
+      // primary screen users actually meet these rows on.
       render: (e: Expense) => (
-        <span className="text-sm font-semibold text-(--color-danger) tabular-nums">{formatCurrency(e.amount, e.currency)}</span>
+        <span
+          className={`text-sm font-semibold tabular-nums ${
+            e.amount < 0 ? "text-(--color-success)" : "text-(--color-danger)"
+          }`}
+        >
+          {formatCurrency(e.amount, e.currency)}
+        </span>
       ),
     },
     {
       header: "VAT",
-      sortValue: (e: Expense) => e.vat_amount ?? -1,
+      // `-1` used to mean "no VAT sorts below everything", which stopped being
+      // true once credit notes brought NEGATIVE vat_amounts: a real −19.77
+      // sorted below the sentinel, interleaving no-VAT rows between the credit
+      // notes and the ordinary ones. NEGATIVE_INFINITY is the only sentinel a
+      // real figure cannot collide with, and it keeps the "nulls last when
+      // ascending" behaviour the -1 was chosen for — no comparator change
+      // needed, so `DataTable`'s shared sort stays untouched.
+      sortValue: (e: Expense) => e.vat_amount ?? Number.NEGATIVE_INFINITY,
       render: (e: Expense) =>
         e.vat_rate != null ? (
           <div className="tabular-nums">

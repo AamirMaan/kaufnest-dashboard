@@ -313,6 +313,40 @@ export function validateExpenseRow(
     }
   }
 
+  // A rate stated as a FRACTION ("0.19") rather than a percentage ("19") is
+  // the one bad rate this importer cannot see on its own: 0.19 sits happily
+  // inside the 0–100 range above and would be stored as `vat_rate: 0.19`, a
+  // 0.19 % rate, with nothing downstream to catch it. It is not hypothetical —
+  // the modal accepts .xlsx, and opening the ledger in Excel and re-saving it
+  // turns the rate column into percentage-formatted cells, which `excel.ts`
+  // stringifies as "0.19".
+  //
+  // Deliberately NOT fixed with a magnitude heuristic (`if (rate < 1) rate *=
+  // 100`) — that was rejected on the Sales branch because it silently corrupts
+  // a genuine 100 % rate. Instead the rate is cross-checked against the row's
+  // OWN arithmetic, which this ledger always supplies: net × rate must land on
+  // the resolved VAT, within the same 2 cents the reconciliation above allows.
+  // A fraction rate misses by two orders of magnitude, so it cannot hide.
+  //
+  // `vatAmount !== 0` is LOAD-BEARING, not defensive. Four real ledger rows
+  // state 19 % against €0.00 of actual VAT (`Gebühren im Zusammenhang mit
+  // "Versand durch Amazon"`, 34.70 gross / 0.00 VAT). For those, net × rate is
+  // 6.59 against a stated 0.00 — a genuine, intended disagreement between rate
+  // and amount that `vat_amount` wins (see the VAT-precedence comment above).
+  // Dropping this condition would reject four valid rows and, since validation
+  // is all-or-nothing, make the real quarterly file unimportable.
+  if (net !== null && vatAmount !== null && vatRate !== null && vatAmount !== 0) {
+    const expectedFromRate = (net * vatRate) / 100;
+    if (Math.abs(vatAmount - expectedFromRate) > 0.02) {
+      return fail(
+        `"vat_rate" (${vatRate}) disagrees with the row's own figures — ` +
+          `net ${net} × ${vatRate}% is ${round2(expectedFromRate)}, but "vat_amount" is ${vatAmount}. ` +
+          `A rate column reading "0.19" rather than "19" usually means the sheet was ` +
+          `re-saved from Excel with percentage formatting`,
+      );
+    }
+  }
+
   // The ledger has no category column, so `vorsteuer` always derives one from
   // the description. `generic` keeps its explicit column as the authority and
   // only guesses when the column is ABSENT — an importer that overrode a

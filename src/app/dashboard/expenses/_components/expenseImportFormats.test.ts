@@ -142,6 +142,75 @@ describe("vorsteuer — VAT", () => {
   });
 });
 
+describe("vorsteuer — a rate stated as a fraction", () => {
+  // The modal accepts .xlsx and the source ledger IS one. Open it in Excel,
+  // re-save, and the rate column becomes percentage-formatted cells that
+  // `excel.ts` stringifies as "0.19" — which passes the 0–100 range check and
+  // would otherwise be stored as a 0.19 % rate with nothing to catch it. The
+  // guard is a cross-check against the row's own arithmetic, NOT a magnitude
+  // heuristic (`rate < 1 ? rate * 100 : rate`), which would corrupt a genuine
+  // 100 % rate — that approach was rejected on the Sales branch.
+  it("passes a row whose rate agrees with net and vat_amount", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, vorsteuerRow, 2);
+    expect(row.error).toBeNull();
+    // 506.65 × 19% = 96.2635, within 2 cents of the stated 96.26.
+    expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("errors when the rate reads 0.19 instead of 19", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, {
+      ...vorsteuerRow,
+      vat_rate: "0.19",
+    }, 2);
+    // Reconciliation still holds (506.65 + 96.26 = 602.91) — only the rate is
+    // wrong, which is exactly why the arithmetic cross-check is needed.
+    expect(row.data).toBeNull();
+    expect(row.error).toContain("vat_rate");
+    expect(row.error).toContain("percentage formatting");
+  });
+
+  it("still accepts a real 19% row stating 0.00 of actual VAT", () => {
+    // FOUR real rows in the Q2 ledger look like this. 34.70 × 19% is 6.59
+    // against a stated 0.00, so the cross-check would reject them — hence its
+    // `vat_amount !== 0` condition. Validation is all-or-nothing, so failing
+    // these would make the real quarterly file unimportable.
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, {
+      ...vorsteuerRow,
+      title: 'Gebühren im Zusammenhang mit "Versand durch Amazon"',
+      net_amount: "34.70",
+      vat_rate: "19%",
+      vat_amount: "0.00",
+      amount: "34.70",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_amount).toBe(0);
+    expect(row.data?.vat_rate).toBe(19);
+  });
+
+  it("catches a fraction rate on a credit note too", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, {
+      ...vorsteuerRow,
+      title: "Erstattung von Verkäufergebühren",
+      net_amount: "-104.04",
+      vat_amount: "-19.77",
+      vat_rate: "0.19",
+      amount: "-123.81",
+    }, 2);
+    expect(row.error).toContain("percentage formatting");
+  });
+
+  it("does not fire when the sheet has no net_amount column", () => {
+    // Without a net column there is no arithmetic to cross-check against, so
+    // the rate has to be taken at face value.
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, noVatColumn({
+      net_amount: "",
+      vat_rate: "0.19",
+      amount: "119.00",
+    }), 2);
+    expect(row.error).toBeNull();
+  });
+});
+
 describe("vorsteuer — credit notes", () => {
   it("accepts a negative amount and negative VAT", () => {
     const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.vorsteuer, {

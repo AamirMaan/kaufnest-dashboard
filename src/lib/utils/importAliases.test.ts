@@ -46,6 +46,37 @@ describe("resolveHeaders", () => {
     expect(mapping.get("Amount")).toBe("amount");
     expect(mapping.has("Brutto")).toBe(false);
   });
+
+  it("prefers an EXACT header match over a normalised one, whatever the order", () => {
+    // The regression this pins: a Sales sheet with "Total (net)" BEFORE
+    // "Total". `normalizeHeader` strips the trailing "(net)", so a single
+    // pass let "Total (net)" claim the `total` key first and the real "Total"
+    // column was then dropped by the first-wins guard — silently importing
+    // the net figure as the order total. Two passes fix it: exact names get
+    // first refusal, normalised names only fill what is still unclaimed.
+    const salesColumns: ColumnSpec[] = [
+      { key: "total", aliases: ["total", "gesamt"], required: true },
+    ];
+    const { mapping, missingRequired } = resolveHeaders(["Total (net)", "Total"], salesColumns);
+    expect(missingRequired).toEqual([]);
+    expect(mapping.get("Total")).toBe("total");
+    expect(mapping.has("Total (net)")).toBe(false);
+  });
+
+  it("still resolves a unit-suffixed header when nothing matches it exactly", () => {
+    // The other half of the same rule — dropping the trailing unit is what
+    // makes "Gross Amount (€)" work at all, so pass 2 must remain.
+    const { mapping } = resolveHeaders(["Gross Amount (€)"], columns);
+    expect(mapping.get("Gross Amount (€)")).toBe("amount");
+  });
+
+  it("lets an exact match win even when the normalised one comes first", () => {
+    // Order-independence, stated directly: "Amount (net)" normalises to
+    // "amount", but the literal "Amount" column owns the key.
+    const { mapping } = resolveHeaders(["Amount (net)", "Amount"], columns);
+    expect(mapping.get("Amount")).toBe("amount");
+    expect(mapping.has("Amount (net)")).toBe(false);
+  });
 });
 
 describe("canonicalizeRow", () => {

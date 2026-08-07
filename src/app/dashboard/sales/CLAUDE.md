@@ -90,6 +90,13 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   imports both from there and **re-exports** them, so existing Sales call
   sites (`ImportSalesModal.tsx`, this file's own test) were unchanged by the
   move — only their definition site did.
+  `resolveHeaders` matches in **two passes** — exact lowercased/trimmed header
+  names first, then `normalizeHeader` (which drops a trailing parenthesised
+  unit so `Gross Amount (€)` matches) for whatever key is still unclaimed. The
+  ordering exists for Sales: a sheet with `Total (net)` before `Total` would
+  otherwise let the net column normalise to `total`, claim the key, and get the
+  real `Total` column dropped by the first-wins guard. Pinned by a test in
+  `lib/utils/importAliases.test.ts`.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.

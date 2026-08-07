@@ -99,10 +99,73 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `amount` is the non-empty string `"0"`, so they still reach rule 3. If you
   touch rule 1, the `"skips a zero-amount filler row"` test going red means you
   widened too far.
-- **An expense `amount` may be negative or zero** — `validateExpenseRow`
-  rejects only a non-numeric value. Credit-note rows are the whole reason
-  `expenses_amount_check` was dropped (migration `032`). If you touch the
-  validator, don't reintroduce the old `amount <= 0` rejection.
+- **An expense `amount` may be negative or zero — in the IMPORTER *and* in both
+  modals.** `validateExpenseRow` rejects only a non-numeric value; credit-note
+  rows are the whole reason `expenses_amount_check` was dropped (migration
+  `032`). The same rule now holds in `AddExpenseModal` and `EditExpenseModal`:
+  both parse with `Number.isFinite` and reject only `"Amount must be a
+  number."`. Do not reinstate `if (!(amount > 0))` in any of the three.
+  - **Why the modals had to change too (2026-08-07).** With the old guard, the
+    11 credit notes the importer creates were **permanently uneditable**:
+    opening one and changing only its category hit "Amount must be greater than
+    0." on Save, and there was no other way to fix the row in the UI. Zero was
+    blocked as well, which the registry explicitly permits. `AddExpenseModal`
+    was changed by the same ruling rather than as a side effect — a user must
+    be able to hand-enter a credit note they received, and it is incoherent for
+    the app to import a shape it refuses to let you type.
+  - **The `min="0.01"` on the Amount `<Input>` had to go with it.** It is
+    browser-level constraint validation, so it blocks submit *before*
+    `handleSubmit` runs — fixing only the JS guard would have left the form
+    just as stuck, with no error message of our own to explain it. `step="0.01"`
+    stays.
+  - **The Net/VAT/Gross preview is gated on `amountIsValid`, not `amount > 0`.**
+    Under the old gate it hid itself for exactly the rows whose breakdown is
+    least obvious. `vatAmountFromGross` is linear in `gross`, so a negative
+    gross yields negative input tax — the correct sign for a credit note.
+- **A `vat_rate` stated as a FRACTION ("0.19") is caught by arithmetic, not by
+  magnitude.** The import modal accepts `.xlsx` and the source ledger is one:
+  open it in Excel and re-save, and the rate column becomes percentage-formatted
+  cells that `excel.ts` stringifies as `"0.19"`. That passes `parseLocaleRate`
+  and the 0–100 range check, and would be stored as a 0.19 % rate with nothing
+  downstream to notice. `validateExpenseRow` cross-checks the rate against the
+  row's own figures instead: when `net_amount`, `vat_amount` and `vat_rate` are
+  all resolved, `|vat_amount − net_amount × vat_rate / 100|` must be within
+  0.02 (the same tolerance the reconciliation check uses), and the failure
+  message names Excel percentage formatting as the likely cause. A fraction
+  rate misses by two orders of magnitude, so it cannot hide.
+  - **Do NOT "simplify" this to `if (rate < 1) rate *= 100`.** That heuristic
+    was explicitly rejected on the Sales branch: it silently corrupts a genuine
+    100 % rate, and it guesses where the row already states the answer.
+  - **The `vat_amount !== 0` condition is load-bearing — never drop it.** Four
+    real Q2 rows state 19 % against €0.00 of actual VAT (`Gebühren im
+    Zusammenhang mit "Versand durch Amazon"`, 34.70 gross). For those, net ×
+    rate is 6.59 against a stated 0.00 — a genuine, intended disagreement that
+    `vat_amount` wins (see the VAT-authority gotcha above). Without the
+    exemption the check rejects four valid rows, and since validation is
+    all-or-nothing that makes the real quarterly file unimportable. A test pins
+    each of the three cases: consistent row passes, fraction rate errors,
+    19 %/€0.00 row still passes.
+  - It also cannot fire when the sheet has no `net_amount` column — there is no
+    arithmetic to check against, so the rate is taken at face value. That is the
+    `generic` format's normal state.
+- **Amount colour follows the SIGN in the expenses table.** `page.tsx` renders
+  a negative amount in `--color-success` and a positive one in `--color-danger`,
+  matching the Overview page's Expenses-by-Category list. Rendering every row in
+  `--color-danger` made a refund read as a cost on the screen users actually
+  meet these rows on.
+- **VAT "is there any" checks test `!== 0`, never `> 0`.** Credit notes carry
+  negative input tax, so a period made only of refunds sums to a negative VAT
+  total that is still real VAT to report. Both `hasVat` (`expenses/page.tsx`)
+  and `hasVatData` (`dashboard/page.tsx`) used `> 0` and hid their entire VAT
+  summary for exactly those periods.
+- **The VAT column's sort sentinel is `Number.NEGATIVE_INFINITY`, not `-1`.**
+  `sortValue: (e) => e.vat_amount ?? -1` meant "no VAT sorts below everything",
+  which stopped being true once credit notes brought negative `vat_amount`s: a
+  real −19.77 sorted *below* the sentinel and interleaved null rows between the
+  credit notes and the ordinary ones. `NEGATIVE_INFINITY` is the only sentinel a
+  real figure cannot collide with, and it preserves the nulls-last-ascending
+  behaviour without touching `DataTable`'s shared comparator. Any new sentinel
+  for a signed column needs the same reasoning.
 - **NEVER recompute VAT from `amount × vat_rate` for an imported expense.**
   On a `vorsteuer` row `vat_rate` and `vat_amount` can legitimately disagree,
   and **`vat_amount` is the authority**. Four real ledger rows state a 19 %

@@ -72,18 +72,40 @@ export const ALIASES: Record<string, string[]> = {
   tax_number: ["tax_number", "steuernummer", "steuer-nr"],
 };
 
+/**
+ * Map each sheet header onto a column key, first header to claim a key wins.
+ *
+ * TWO PASSES, and the order is load-bearing. `normalizeHeader` strips a
+ * trailing parenthesised unit so "Gross Amount (€)" can match the alias
+ * "gross amount" — but that same strip lets a header claim a key it does not
+ * actually name. A Sales sheet with "Total (net)" appearing BEFORE "Total"
+ * normalises the first to "total", which claims the `total` key, and the real
+ * "Total" column is then dropped by the first-wins guard.
+ *
+ * So: pass 1 matches only the raw lowercased-and-trimmed name, letting any
+ * header that spells an alias exactly take its key. Pass 2 then offers the
+ * normalised name for whatever is still unclaimed, which is what keeps the
+ * "(€)" / "(%)" unit suffixes working. An exact match always beats a
+ * normalised one regardless of column order in the sheet.
+ */
 export function resolveHeaders(rawHeaders: string[], columns: ColumnSpec[]): HeaderResolution {
   const mapping = new Map<string, string>();
-  for (const raw of rawHeaders) {
-    const normalized = normalizeHeader(raw);
-    const spec = columns.find((c) => c.aliases.includes(normalized));
-    if (spec && ![...mapping.values()].includes(spec.key)) {
+  const claimed = new Set<string>();
+
+  const claim = (raw: string, candidate: string) => {
+    if (mapping.has(raw)) return;
+    const spec = columns.find((c) => c.aliases.includes(candidate));
+    if (spec && !claimed.has(spec.key)) {
       mapping.set(raw, spec.key);
+      claimed.add(spec.key);
     }
-  }
-  const resolved = new Set(mapping.values());
+  };
+
+  for (const raw of rawHeaders) claim(raw, raw.trim().toLowerCase());
+  for (const raw of rawHeaders) claim(raw, normalizeHeader(raw));
+
   const missingRequired = columns
-    .filter((c) => c.required && !resolved.has(c.key))
+    .filter((c) => c.required && !claimed.has(c.key))
     .map((c) => c.key);
   return { mapping, missingRequired };
 }

@@ -89,7 +89,16 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  const amount = parseFloat(form.amount) || 0;
+  // An expense amount may be NEGATIVE (a credit note — "Erstattung von
+  // Verkäufergebühren", −123.81) or ZERO, and the importer creates exactly
+  // those rows. `expenses_amount_check` was dropped in migration 032 for this
+  // reason, so only a NON-NUMERIC entry is invalid — mirroring
+  // `validateExpenseRow`'s `Number.isFinite` rule in `expenseImportFormats.ts`.
+  // Do not reintroduce an `amount > 0` guard: it makes every imported credit
+  // note permanently uneditable through this form.
+  const parsedAmount = parseFloat(form.amount);
+  const amountIsValid = Number.isFinite(parsedAmount);
+  const amount = amountIsValid ? parsedAmount : 0;
   const vatRate = parseFloat(form.vat_rate) || 0;
 
   const vatAmount = resolveVatAmount({
@@ -107,7 +116,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     e.preventDefault();
     if (!expense) return;
     if (!form.title.trim()) return setError("Title is required.");
-    if (!(amount > 0)) return setError("Amount must be greater than 0.");
+    if (!amountIsValid) return setError("Amount must be a number.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     setError(null);
     setSaving(true);
@@ -201,7 +210,10 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
 
         <Row>
           <Field label="Amount" required>
-            <Input type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
+            {/* No `min` — a credit note is a negative expense, and the browser's
+                own constraint validation would otherwise block Save before
+                `handleSubmit` ever runs. See the amount comment above. */}
+            <Input type="number" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
           </Field>
           <Field label="Currency" required>
             <Select value={form.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
@@ -249,7 +261,9 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
                   onChange={(e) => set("vat_rate", e.target.value)}
                 />
               </Field>
-              {amount > 0 && (
+              {/* Gated on "is a number", not "> 0" — a credit note's breakdown
+                  is exactly the one a user needs to see. */}
+              {amountIsValid && (
                 <p className="text-xs text-[var(--color-text-muted)]">
                   Net {form.currency} {(amount - displayVatAmount).toFixed(2)} · VAT {form.currency} {displayVatAmount.toFixed(2)} · Gross {form.currency} {amount.toFixed(2)}
                 </p>

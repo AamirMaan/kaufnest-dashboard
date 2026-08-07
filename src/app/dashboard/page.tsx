@@ -215,7 +215,11 @@ export default function DashboardPage() {
     periodPurchases.reduce((s, r) => s + (r.vat_amount ?? 0), 0) +
     periodExpenses.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
   const vatPosition = vatCollected - vatPaid;
-  const hasVatData = vatCollected > 0 || vatPaid > 0;
+  // `!== 0`, not `> 0`: expenses may be NEGATIVE (credit notes), so their
+  // input tax is negative too. Filter to a period holding only refunds and
+  // `vatPaid` goes negative while `vatCollected` stays 0 — `> 0` then hid the
+  // entire VAT Position section despite there being real input tax to report.
+  const hasVatData = vatCollected !== 0 || vatPaid !== 0;
 
   // Monthly trend data — grouped by YYYY-MM
   const monthlyTrend = useMemo(() => {

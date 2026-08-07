@@ -11,6 +11,12 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
   query, no `.range()`, capped at 5 000 rows), **Import CSV** button, wires up
   the modals below.
+  Two sign-aware details, both because expenses may be negative: the Amount
+  cell colours by sign (negative `--color-success`, positive `--color-danger`,
+  matching the Overview page's Expenses-by-Category list), and the VAT
+  summary's `hasVat` gate tests `!== 0` rather than `> 0`. The VAT column's
+  `sortValue` null-sentinel is `Number.NEGATIVE_INFINITY` — `-1` collided with
+  real credit-note VAT. See the SKILL.md gotchas.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
@@ -28,6 +34,11 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `EditExpenseModal` delegates its VAT-write decision to
   `_lib/vatPreservation.ts` rather than deriving `vat_amount` inline — see
   that file's bullet below and the SKILL.md VAT gotcha before touching either.
+  **Both accept a NEGATIVE or ZERO amount** (`Number.isFinite`, the same rule
+  as `validateExpenseRow`); the Amount input carries no `min` attribute, and
+  the Net/VAT/Gross preview is gated on "is a number", not on `> 0`. An
+  `amount > 0` guard here makes every imported credit note permanently
+  uneditable — see the SKILL.md gotcha before reinstating one.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -250,7 +261,17 @@ Rules that are easy to get wrong and are pinned by
 - **`amount` may be negative or zero.** Credit notes (`Erstattung von
   Verkäufergebühren`, −123.81) are real ledger rows — migration
   `032_expenses_allow_negative_amount.sql` dropped `expenses_amount_check`
-  for them. Only a *non-numeric* amount is a row error.
+  for them. Only a *non-numeric* amount is a row error. `AddExpenseModal` and
+  `EditExpenseModal` follow the same rule (see their bullet above).
+- **A `vat_rate` stated as a fraction is caught by arithmetic.** When
+  `net_amount`, `vat_amount` and `vat_rate` are all resolved **and
+  `vat_amount !== 0`**, `|vat_amount − net_amount × vat_rate / 100|` must be
+  within 0.02 or the row fails, naming Excel percentage formatting as the
+  likely cause. A `.xlsx` re-saved from Excel writes `19%` as `"0.19"`, which
+  passes the 0–100 range check and would store a 0.19 % rate silently. The
+  `vat_amount !== 0` exemption is load-bearing — the four 19 %/€0.00 rows
+  must keep passing. **Not** a magnitude heuristic (`rate < 1 ? rate * 100`),
+  which was rejected on the Sales branch for corrupting a genuine 100 % rate.
 - **VAT precedence is file → arithmetic → rate**, in that order, and the rate
   is deliberately last:
   1. the file's `vat_amount` when the column is present and parses;
