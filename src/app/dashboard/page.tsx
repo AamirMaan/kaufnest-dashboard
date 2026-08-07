@@ -771,7 +771,13 @@ export default function DashboardPage() {
                 {expensesByCategory.map(([category, amount]) => (
                   <div key={category} className="flex items-center justify-between py-2.5">
                     <CategoryBadge category={category} />
-                    <span className="text-sm font-semibold tabular-nums text-(--color-danger)">
+                    <span
+                      className={`text-sm font-semibold tabular-nums ${
+                        amount < 0
+                          ? "text-(--color-success)"
+                          : "text-(--color-danger)"
+                      }`}
+                    >
                       {formatCurrency(amount)}
                     </span>
                   </div>

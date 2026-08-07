@@ -185,6 +185,19 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `StatusBadge` variant map (`src/components/ui/Badge.tsx`, `warning` — it
   still counts as revenue at its reduced value, unlike `returned`). Backs
   the Sales feature (`src/app/dashboard/sales/`).
+- `migrations/032_expenses_allow_negative_amount.sql` — drops
+  `expenses_amount_check CHECK (amount >= 0)` from `expenses` in every
+  tenant schema via `run_on_all_tenant_schemas` (idempotent, `drop
+  constraint if exists`); **`provision_tenant_schema()`
+  (`005_tenant_provisioning.sql`) was updated in the same commit** — the
+  `amount` column's `CHECK` removed, with a trailing comment noting it may
+  be negative. Lets the Expenses importer store German Vorsteuerkonto
+  credit notes ("Erstattung von Verkäufergebühren", "Tarifas reembolsadas",
+  "Återbetalda avgifter") as negative `amount` rows instead of dropping
+  them, so dashboard totals reconcile with the filed VAT return.
+  `src/app/dashboard/page.tsx`'s Expenses-by-Category list colors a
+  negative category total `--color-success` instead of `--color-danger`.
+  Backs the Expenses feature (`src/app/dashboard/expenses/`).
 
 ## Related code
 

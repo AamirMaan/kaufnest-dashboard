@@ -108,7 +108,7 @@ BEGIN
     CREATE TABLE IF NOT EXISTS %1$I.expenses (
       id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       title       text NOT NULL,
-      amount      numeric(12,2) NOT NULL CHECK (amount >= 0),
+      amount            numeric(12,2) NOT NULL, -- may be negative: credit notes (032)
       currency    text NOT NULL DEFAULT 'EUR',
       category    text NOT NULL,
       vendor      text,
