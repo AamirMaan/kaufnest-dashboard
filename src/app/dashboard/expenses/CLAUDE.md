@@ -25,6 +25,9 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
 - `_components/AddExpenseModal.tsx` / `EditExpenseModal.tsx` — create/edit forms.
+  `EditExpenseModal` delegates its VAT-write decision to
+  `_lib/vatPreservation.ts` rather than deriving `vat_amount` inline — see
+  that file's bullet below and the SKILL.md VAT gotcha before touching either.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -52,6 +55,15 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   fee description. The Vorsteuerkonto has no category column, and Amazon
   localises each fee description to its marketplace, so without this every
   imported row would land in "other".
+- `_lib/vatPreservation.ts` (+ colocated `.test.ts`) — pure
+  `vatInputsUnchanged`/`resolveVatAmount`, used only by `EditExpenseModal`.
+  Decides whether an edit save should keep an imported row's stored
+  `vat_amount` or recompute it from `amount × vat_rate` — see the SKILL.md
+  VAT gotcha for why the comparison must be against the form's own initial
+  snapshot (`initialForm` state in the modal, re-derived during render off an
+  `expense.id` identity check — not a `useRef`; this repo's `react-hooks/refs`
+  lint rule forbids reading/writing `.current` during render), never against
+  `expense`'s raw fields directly.
 
 ## Delete gating (super_admin + permission overrides)
 
@@ -275,4 +287,5 @@ Rules that are easy to get wrong and are pinned by
 ## Tests
 
 `npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
-`_lib/expenseCategory.test.ts` and `_components/expenseImportFormats.test.ts`.
+`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts` and
+`_components/expenseImportFormats.test.ts`.

@@ -9,7 +9,7 @@ import { updateExpense } from "../_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
+import { resolveVatAmount } from "../_lib/vatPreservation";
 import type { ExpenseCategory, Currency, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -69,6 +69,22 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Snapshot of the form exactly as it was populated from `expense`, used to
+  // decide whether the user has touched any VAT-relevant input at all — see
+  // `resolveVatAmount` for why this must be the form's OWN initial values
+  // and not the expense's raw fields. Re-derived during render (the React-
+  // documented "adjusting state when a prop changes" pattern, not an effect)
+  // whenever `expense.id` differs from the id it was last captured for, so a
+  // second edit never compares against the first row's values — `page.tsx`
+  // also remounts this modal per row via `key={editTarget?.id}`, but this
+  // doesn't rely on that.
+  const [loadedExpenseId, setLoadedExpenseId] = useState<string | null>(expense?.id ?? null);
+  const [initialForm, setInitialForm] = useState<FormState>(form);
+  if ((expense?.id ?? null) !== loadedExpenseId) {
+    setLoadedExpenseId(expense?.id ?? null);
+    setInitialForm(expense ? expenseToForm(expense, defaultVatRate) : blankForm);
+  }
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -76,21 +92,15 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const amount = parseFloat(form.amount) || 0;
   const vatRate = parseFloat(form.vat_rate) || 0;
 
-  // An imported Vorsteuerkonto row can legitimately carry a rate that
-  // disagrees with its VAT — Amazon states 19% against €0.00 on some fee
-  // lines. The stored figure is the authority, so only recompute when the
-  // user has actually touched one of the two inputs it derives from.
-  const vatInputsUnchanged =
-    amount === expense?.amount &&
-    (form.vat_included ? vatRate === expense?.vat_rate : expense?.vat_rate === null);
-
-  const vatAmount = !form.vat_included
-    ? null
-    : vatInputsUnchanged
-      ? (expense?.vat_amount ?? null)
-      : vatAmountFromGross(amount, vatRate);
+  const vatAmount = resolveVatAmount({
+    current: form,
+    initial: initialForm,
+    storedVatAmount: expense?.vat_amount ?? null,
+    amount,
+    vatRate,
+  });
   // Display-only: the preview line always shows a figure, even for a stored
-  // `null` (rate with no known amount) — the write above keeps the real value.
+  // `null` (rate with no known amount) — the write below keeps the real value.
   const displayVatAmount = vatAmount ?? 0;
 
   async function handleSubmit(e: React.FormEvent) {

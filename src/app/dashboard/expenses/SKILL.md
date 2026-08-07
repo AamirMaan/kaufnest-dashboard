@@ -30,6 +30,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   see the gotcha below.
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
+- **Change the VAT-preservation decision on edit**: `_lib/vatPreservation.ts`
+  (`vatInputsUnchanged`/`resolveVatAmount`) + its colocated test — not inline
+  in `EditExpenseModal.tsx`. The comparison must stay against the form's own
+  initial snapshot (`EditExpenseModal`'s `initialForm` state), never against
+  `expense`'s raw `vat_rate`/`vat_amount` — see the gotcha below for why.
 - **Change the import modal's UI/plumbing** (dropdown, summary line, category
   preview, file reading): `_components/ImportExpensesModal.tsx` only — and read
   `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
@@ -112,17 +117,43 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `vatAmountFromGross(amount, vatRate)` unconditionally on every save — merely
   OPENING an imported 0.00-VAT expense and pressing Save rewrote its
   `vat_amount` from 0.00 to 5.54, and the audit diff recorded it as a
-  user-made change. It now computes a `vatInputsUnchanged` flag (`amount ===
-  expense.amount && (form.vat_included ? vatRate === expense.vat_rate :
-  expense.vat_rate === null)`) and only calls `vatAmountFromGross` when that's
-  false; otherwise it writes back `expense.vat_amount` untouched. The
-  checkbox is also now seeded from `e.vat_rate != null || e.vat_amount !=
-  null`, so a row carrying an amount with no rate still shows as VAT-included
+  user-made change.
+
+  **The guard is "did the user change anything in the form", not "does the
+  form still match the expense's stored rate".** Those sound like the same
+  test and are not: `expenseToForm` seeds `vat_rate` from the tenant's
+  default whenever the expense's own rate is `null` (a `generic`-format row
+  with a VAT *amount* but no rate column parses to exactly this shape —
+  `vat_amount: 96.26, vat_rate: null`). Comparing the live form against the
+  expense's raw `vat_rate` would read `"19" !== null` as "user changed it" on
+  a completely untouched row and silently recompute 96.26 away — the same
+  corruption this fix exists to prevent, just reached through a different
+  door. The first version of this fix made exactly that mistake. The correct
+  comparison is form-against-its-own-initial-snapshot: `EditExpenseModal`
+  captures `initialForm` state from `expenseToForm(expense, defaultVatRate)`
+  once per loaded expense, re-derived **during render** (not an effect) via
+  an `expense.id`-vs-`loadedExpenseId` identity check — the React-documented
+  "adjusting state when a prop changes" pattern. A `useRef` written during
+  render was tried first and rejected by this repo's `react-hooks/refs` lint
+  rule (`.current` may not be read or written during render); `useState`
+  called conditionally in the render body is the sanctioned replacement, and
+  the modal is also remounted per row by `page.tsx`'s `key={editTarget?.id}`,
+  though this guard doesn't depend on that. The pure helper
+  `_lib/vatPreservation.ts` (`vatInputsUnchanged`/`resolveVatAmount`,
+  colocated test covers all 5 behaviours below) compares
+  `form.{amount,vat_rate,vat_included}` against that snapshot — never against
+  `expense` directly. An untouched field always compares equal because both
+  sides were seeded by the identical defaulting logic; a real edit to either
+  input is still caught because only the live side moves.
+
+  The checkbox is seeded from `e.vat_rate != null || e.vat_amount != null`,
+  so a row carrying an amount with no rate still shows as VAT-included
   instead of silently losing it the moment the box is unticked and re-ticked.
+
   **`AddExpenseModal` shares no helper with this** — it imports the same
   `vatAmountFromGross` but has its own inline `vatAmount` derivation with no
-  `vatInputsUnchanged` concept, which is correct for it: it creates rows from
-  scratch, so there is no stored figure to preserve.
+  `vatInputsUnchanged`/initial-snapshot concept, which is correct for it: it
+  creates rows from scratch, so there is no stored figure to preserve.
 
   **No code may recompute VAT from `amount × vat_rate` for an imported
   expense — the stored `vat_amount` is always the authority.** The other two
