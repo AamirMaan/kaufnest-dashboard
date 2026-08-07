@@ -50,4 +50,27 @@ describe("categoryFor", () => {
     expect(categoryFor("")).toBe("other");
     expect(categoryFor("Something nobody mapped")).toBe("other");
   });
+
+  it("matches real ledger entries using word boundaries", () => {
+    // Real rows from the quarterly ledger
+    expect(categoryFor("DCP Container Packing")).toBe("shipping");
+    expect(categoryFor("Logistik provider")).toBe("shipping");
+  });
+
+  it("does not mistake 'wrap' for the RAP eco-levy", () => {
+    // Shrink wrap and bubble wrap are ordinary packaging lines for e-commerce.
+    // Without word boundaries, "rap" in "wrap" would incorrectly match as tax.
+    expect(categoryFor("Shrink wrap for shipping boxes")).toBe("shipping");
+  });
+
+  it("does not mistake 'ads' in 'downloads'", () => {
+    // Without word boundaries, "ads" would incorrectly match in "downloads".
+    expect(categoryFor("E-book downloads")).toBe("other");
+  });
+
+  it("does not mistake payroll for eco-contribution tax", () => {
+    // Spanish payroll entry. Without checking word boundaries and removing
+    // "contribuciones" from the keywords, this would incorrectly land in tax.
+    expect(categoryFor("Contribuciones a la Seguridad Social")).toBe("other");
+  });
 });
