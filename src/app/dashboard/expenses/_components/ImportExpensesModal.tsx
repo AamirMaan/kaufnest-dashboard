@@ -79,6 +79,12 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
   // no date-order selector, so the assumption has to be stated rather than
   // silently applied.
   const [orderSensitiveDates, setOrderSensitiveDates] = useState(false);
+  // True when the resolved header mapping has NO `category` column, which is
+  // exactly when `categoryFor(title)` is deciding the category rather than the
+  // user. Drives the breakdown below. Deliberately not `formatId ===
+  // "vorsteuer"`: `generic` guesses too whenever the sheet omits the column,
+  // and that is precisely the case the breakdown exists to make visible.
+  const [categoriesAreGuessed, setCategoriesAreGuessed] = useState(false);
   // Guards against a stale parse (from a fast file/format change) overwriting a
   // newer one's result — the two results differ only in interpretation, so a
   // stale write is silent and hard to notice. Incremented on every parse and on
@@ -112,11 +118,11 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [parsed]);
 
-  // The `vorsteuer` ledger has no category column, so every category is a GUESS
-  // made by `categoryFor(title)`. There is no per-row preview in this modal, so
-  // without this line a bad guess is only discoverable after it has landed in
-  // the expenses table. Sorted by count descending — the biggest bucket is the
-  // one worth checking.
+  // Shown only when the categories are GUESSED (see `categoriesAreGuessed`).
+  // `categoryFor(title)` is a heuristic and this modal has no per-row preview,
+  // so without this line a bad guess is only discoverable after it has landed
+  // in the expenses table. Sorted by count descending — the biggest bucket is
+  // the one worth checking.
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of parsed) {
@@ -132,6 +138,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     setFileName("");
     setImportError(null);
     setOrderSensitiveDates(false);
+    setCategoriesAreGuessed(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -156,6 +163,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
     if (rows.length === 0) {
       setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
       setOrderSensitiveDates(false);
+      setCategoriesAreGuessed(false);
       return;
     }
 
@@ -167,8 +175,14 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
         error: `Missing required column${missingRequired.length !== 1 ? "s" : ""}: ${missingRequired.join(", ")} — download the ${fmt.label} template or check the format dropdown.`,
       }]);
       setOrderSensitiveDates(false);
+      setCategoriesAreGuessed(false);
       return;
     }
+
+    // No resolved `category` column ⇒ `validateExpenseRow` falls through to
+    // `categoryFor(title)` for every row. `vorsteuer` has no such column at all,
+    // so this is always true there; `generic` only when the sheet omits it.
+    setCategoriesAreGuessed(![...mapping.values()].includes("category"));
 
     const canonical = rows.map((row) => canonicalizeRow(row, mapping));
     setOrderSensitiveDates(hasOrderSensitiveDate(canonical.map((r) => r.date ?? "")));
@@ -303,7 +317,9 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
               exportToCsv(
                 `expenses-import-${formatId}-template`,
                 format.columns.map((c) => c.key),
-                [],
+                // `templateExample` is ordered to match `columns`; header-only
+                // when a format doesn't define one.
+                format.templateExample ? [format.templateExample] : [],
               )
             }
           >
@@ -343,7 +359,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
                 {skipReasonCounts.map(([reason, n]) => `${n} ${reason}`).join(", ")}.
               </p>
             )}
-            {formatId === "vorsteuer" && errors.length === 0 && categoryCounts.length > 0 && (
+            {categoriesAreGuessed && errors.length === 0 && categoryCounts.length > 0 && (
               <p className="text-xs text-[var(--color-text-muted)]">
                 Categories: {categoryCounts.map(([c, n]) => `${c} ${n}`).join(" · ")}
               </p>

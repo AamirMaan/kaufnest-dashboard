@@ -47,6 +47,17 @@ export interface ExpenseImportFormat {
   columns: ColumnSpec[];
   /** Only `vorsteuer` tolerates noise rows. See classifySkip's first statement. */
   classifiesSkips: boolean;
+  /**
+   * One example row for the downloadable template, **ordered to match
+   * `columns`** — the modal emits `columns.map(c => c.key)` as the header line,
+   * so any other order silently mislabels every cell.
+   *
+   * Most of a template's value is the example, not the headers: it is what
+   * documents the accepted date format and (for `generic`) the category
+   * vocabulary. Optional so a future format can ship header-only rather than
+   * ship a wrong example.
+   */
+  templateExample?: string[];
 }
 
 /** What an imported row becomes — the shape the modal inserts. */
@@ -80,6 +91,14 @@ export const EXPENSE_IMPORT_FORMATS: Record<ExpenseImportFormatId, ExpenseImport
       col("category"), col("vendor"), col("currency"), col("vat_rate"),
       col("description"), col("invoice_number"), col("vendor_vat_number"),
     ],
+    // The historical template row, re-ordered to match `columns` above (the old
+    // constant listed category/vendor before amount). Its job is to show the
+    // ISO date shape and one member of the category vocabulary.
+    templateExample: [
+      "2024-01-15", "Office Supplies", "49.99",
+      "office", "Staples", "EUR", "19",
+      "Monthly supplies", "RE-2024-001", "DE123456789",
+    ],
   },
   vorsteuer: {
     id: "vorsteuer",
@@ -95,6 +114,20 @@ export const EXPENSE_IMPORT_FORMATS: Record<ExpenseImportFormatId, ExpenseImport
       col("net_amount"), col("vat_rate"), col("vat_amount"),
       col("vendor"), col("currency"), col("invoice_number"),
       col("vendor_vat_number"), col("tax_number"),
+    ],
+    // A real ledger line, ordered to match `columns` above. Chosen so the
+    // example itself documents the three things this format is easiest to get
+    // wrong: `amount` is the GROSS figure (602.91), not the net (506.65); the
+    // rate may carry its percent sign ("19%"); and `net + vat` must reconcile
+    // with gross — 506.65 + 96.26 = 602.91, the same figures the reconciliation
+    // check's comment uses. `tax_number` is left blank on purpose: the ledger
+    // fills whichever identifier a vendor has, and the two columns are merged
+    // per row by `validateExpenseRow`.
+    templateExample: [
+      "13.04.2026", "Ads", "602.91",
+      "506.65", "19%", "96.26",
+      "Amazon Online Germany GmbH", "EUR", "1691682M5PA26",
+      "DE123456789", "",
     ],
   },
 };

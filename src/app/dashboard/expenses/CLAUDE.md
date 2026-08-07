@@ -32,7 +32,7 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   (imported **directly** from `@/lib/utils/importAliases`, not via the
   registry), calls `classifySkip` before `validateExpenseRow` per row, groups
   skip reasons via `skipReasonCounts`, and shows a **category breakdown**
-  before import on the `vorsteuer` format. Batch-inserts `validRows`,
+  before import whenever the categories are being guessed. Batch-inserts `validRows`,
   dispatches `addExpense` per row, writes one audit entry
   (`{bulk_import, count}`) and calls `onSuccess(count)`. Contains **no
   validation logic of its own** — all of it lives in the registry below. See
@@ -40,8 +40,9 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 - `_components/expenseImportFormats.ts` (+ colocated `.test.ts`) — pure import
   format registry, the Expenses sibling of `sales/_components/importFormats.ts`:
   `EXPENSE_IMPORT_FORMATS` (`generic` / `vorsteuer`), skip classification
-  (`classifySkip`/`SkipReason` — **vorsteuer only**) and per-row validation
-  (`validateExpenseRow`). **All import-format/validation changes go here**, not
+  (`classifySkip`/`SkipReason` — **vorsteuer only**), per-row validation
+  (`validateExpenseRow`) and each format's `templateExample` row for the
+  Template download. **All import-format/validation changes go here**, not
   in the modal. Header aliases are NOT defined here — they live in the shared
   `lib/utils/importAliases`, and this module deliberately does not re-export
   `resolveHeaders`/`canonicalizeRow` (the modal imports them from there
@@ -169,16 +170,29 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
   the import. Counts are grouped by reason (`skipReasonCounts`) and each
   reason is named in the summary line; an all-skipped file reads "All N rows
   skipped — 12 blank row, 3 zero amount."
-- **Category breakdown before import** (`vorsteuer` only): a one-line
+- **Category breakdown before import**: a one-line
   `Categories: shipping 40 · advertising 22 · other 42` summary, sorted by
-  count descending, derived from the valid rows' `data.category`. The ledger
-  has no category column so every category is a `categoryFor()` **guess**,
-  and this modal has no per-row preview — without this line a wrong guess is
-  only discoverable after it has landed in the table. Don't remove it when
-  editing the summary block.
+  count descending, derived from the valid rows' `data.category`. Shown when
+  the resolved header mapping has **no `category` key** (state:
+  `categoriesAreGuessed`) — i.e. exactly when `categoryFor(title)` is deciding
+  the category rather than the user. That is always the case for `vorsteuer`
+  (the format has no such column at all) and for `generic` whenever the sheet
+  omits it; it stays hidden when the user supplied categories explicitly.
+  **Condition it on the guess, never on `formatId === "vorsteuer"`** — that
+  was the original spec and it left `generic`'s silent guessing unreported,
+  which is the exact case the breakdown exists to prevent. This modal has no
+  per-row preview, so without this line a wrong guess is only discoverable
+  after it has landed in the table. Don't remove it when editing the summary
+  block.
 - **Template button** exports the selected format's
-  `columns.map((c) => c.key)` as a header-only CSV. There is no example row —
-  `ExpenseImportFormat` has no `templateExample` (Sales' `ImportFormat` does).
+  `columns.map((c) => c.key)` as the header line plus that format's
+  `templateExample` as one data row (header-only if a format defines no
+  example). `templateExample` is **ordered to match `columns`** and nothing at
+  runtime checks that — a column inserted mid-list without a matching value
+  ships a template whose every cell sits under the wrong header, and it would
+  still "work" since all values are strings. Two tests in
+  `expenseImportFormats.test.ts` pin the alignment and that each example
+  re-imports cleanly.
 - **windows-1252 fallback** on CSV reads (`readFileText`, copied from
   `ImportSalesModal`). Load-bearing here, not cosmetic: `categoryFor()`
   matches German fee descriptions by keyword, so a mojibaked read would push

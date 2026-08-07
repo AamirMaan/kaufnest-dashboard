@@ -25,7 +25,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `_components/expenseImportFormats.ts` + its colocated test — the pure
   registry (`EXPENSE_IMPORT_FORMATS`, `classifySkip`, `validateExpenseRow`).
   Do NOT put validation in the modal. A new *header alias* goes in the shared
-  `src/lib/utils/importAliases.ts` instead (Sales reads the same table).
+  `src/lib/utils/importAliases.ts` instead (Sales reads the same table). A new
+  *column* also needs a `templateExample` value inserted at the same index —
+  see the gotcha below.
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
 - **Change the import modal's UI/plumbing** (dropdown, summary line, category
@@ -164,12 +166,28 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `_lib/expenseCategory.ts`, `lib/utils/{importAliases,localeParse,csv}`), each
   with a colocated test. Don't contort the component to make it testable — move
   the logic into a pure module instead, which is the split that already exists.
-- **The category breakdown is a safety feature, not decoration.** On
-  `vorsteuer` every category is a `categoryFor(title)` **guess** (the ledger has
-  no category column) and the modal has no per-row preview, so the
-  `Categories: shipping 40 · advertising 22 · other 42` line is the only chance
-  to notice a bad guess before it lands. Don't drop it while tidying the
-  summary block.
+- **The category breakdown is a safety feature, not decoration.** When
+  `categoryFor(title)` is deciding the category, the modal has no per-row
+  preview, so the `Categories: shipping 40 · advertising 22 · other 42` line is
+  the only chance to notice a bad guess before it lands. Don't drop it while
+  tidying the summary block.
+- **Gate the breakdown on the GUESS, not on the format.** The condition is
+  `categoriesAreGuessed` — the resolved header mapping has no `category` key —
+  not `formatId === "vorsteuer"`. `generic` guesses too whenever the sheet
+  omits the column (`validateExpenseRow` falls through to `categoryFor` when
+  `raw.category === undefined`), and a format-based check leaves exactly that
+  case silent, which is the thing the breakdown exists to prevent. It also
+  correctly stays hidden when the user did supply categories, since then
+  nothing is being guessed.
+- **`templateExample` must stay ordered to match its format's `columns`.** The
+  Template download emits `columns.map(c => c.key)` as the header line and
+  `templateExample` as the single data row; nothing at runtime cross-checks
+  them, and because every value is a string a mismatch produces a
+  perfectly-valid-looking template with every cell under the wrong header. Add
+  a column mid-list ⇒ insert the matching value at the same index. Two tests
+  in `expenseImportFormats.test.ts` pin the length and that each example
+  re-imports cleanly; `vorsteuer`'s also pins which figure is gross (602.91)
+  and which is net (506.65), so a "fix" can't just swap them.
 - **Skipped rows must never block an import.** They carry `data: null` *and*
   `error: null`, so they fall out of both `validRows` and `errors` by
   construction — `canImport` needs no special case. If you add a new

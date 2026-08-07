@@ -262,3 +262,63 @@ describe("generic format", () => {
     expect(row.error).not.toBeNull();
   });
 });
+
+/**
+ * The downloadable template is `columns.map(c => c.key)` as the header line plus
+ * `templateExample` as the single data row. Nothing at runtime checks that the
+ * two line up, so a column added in the middle of `columns` without a matching
+ * insert into `templateExample` would silently ship a template whose every cell
+ * sits under the wrong header — and it would still "work", because the values
+ * are all strings.
+ */
+describe("template example rows", () => {
+  const formats = [
+    EXPENSE_IMPORT_FORMATS.generic,
+    EXPENSE_IMPORT_FORMATS.vorsteuer,
+  ];
+
+  it.each(formats)("$id — has one value per column", (format) => {
+    expect(format.templateExample).toHaveLength(format.columns.length);
+  });
+
+  it.each(formats)("$id — the example row imports cleanly", (format) => {
+    // The template's headers ARE the canonical keys, so zipping them gives
+    // exactly what `canonicalizeRow` would hand the validator.
+    const raw = Object.fromEntries(
+      format.columns.map((c, i) => [c.key, format.templateExample![i]]),
+    );
+    const row = validateExpenseRow(format, raw, 2);
+    expect(row.error).toBeNull();
+    expect(row.skipped).toBeUndefined();
+    expect(row.data).not.toBeNull();
+  });
+
+  it("generic's example demonstrates the category vocabulary", () => {
+    // The whole point of shipping an example: it documents a legal category and
+    // the accepted date shape. A guessed category here would mean the example
+    // silently stopped exercising the explicit-category path.
+    const format = EXPENSE_IMPORT_FORMATS.generic;
+    const raw = Object.fromEntries(
+      format.columns.map((c, i) => [c.key, format.templateExample![i]]),
+    );
+    const row = validateExpenseRow(format, raw, 2);
+    expect(row.data?.category).toBe("office");
+    expect(row.data?.date).toBe("2024-01-15");
+  });
+
+  it("vorsteuer's example uses the GROSS figure as `amount` and reconciles", () => {
+    // The easiest way to misread this format is to put the net in `amount`.
+    // 506.65 + 96.26 = 602.91 — if the example ever stopped reconciling, the
+    // "imports cleanly" test above would fail, but this pins WHICH figure is
+    // which so a "fix" can't just swap them.
+    const format = EXPENSE_IMPORT_FORMATS.vorsteuer;
+    const raw = Object.fromEntries(
+      format.columns.map((c, i) => [c.key, format.templateExample![i]]),
+    );
+    const row = validateExpenseRow(format, raw, 2);
+    expect(row.data?.amount).toBe(602.91);
+    expect(row.data?.vat_amount).toBe(96.26);
+    expect(row.data?.vat_rate).toBe(19);
+    expect(row.data?.date).toBe("2026-04-13");
+  });
+});
