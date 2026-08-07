@@ -4,6 +4,7 @@ import {
   detectDateOrder,
   firstAmbiguousDate,
   hasOrderSensitiveDate,
+  parseLocaleRate,
 } from "./localeParse";
 
 describe("parseLocaleNumber", () => {
@@ -209,5 +210,23 @@ describe("parseFlexibleDate with an explicit order", () => {
   it("leaves ISO untouched under either order", () => {
     expect(parseFlexibleDate("2026-04-10", "mdy")).toBe("2026-04-10");
     expect(parseFlexibleDate("2026-04-10", "dmy")).toBe("2026-04-10");
+  });
+});
+
+describe("parseLocaleRate", () => {
+  it("accepts a trailing percent sign", () => {
+    expect(parseLocaleRate("19%")).toBe(19);
+    expect(parseLocaleRate("19 %")).toBe(19);
+  });
+
+  it("still accepts a plain number and German decimals", () => {
+    expect(parseLocaleRate("19")).toBe(19);
+    expect(parseLocaleRate("7,5")).toBe(7.5);
+  });
+
+  it("returns null for blank or unparseable input", () => {
+    expect(parseLocaleRate("")).toBeNull();
+    expect(parseLocaleRate(undefined)).toBeNull();
+    expect(parseLocaleRate("abc")).toBeNull();
   });
 });

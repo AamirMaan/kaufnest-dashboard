@@ -321,7 +321,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
       return;
     }
-    const { mapping, missingRequired } = resolveHeaders(headers, fmt);
+    const { mapping, missingRequired } = resolveHeaders(headers, fmt.columns);
     if (missingRequired.length > 0) {
       setParsed([{
         rowNum: 0,

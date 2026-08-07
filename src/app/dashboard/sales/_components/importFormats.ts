@@ -18,6 +18,15 @@
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
+import {
+  ALIASES,
+  resolveHeaders,
+  canonicalizeRow,
+  type ColumnSpec,
+  type HeaderResolution,
+} from "@/lib/utils/importAliases";
+
+export { resolveHeaders, canonicalizeRow, type HeaderResolution };
 
 export const VALID_PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 export const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -65,14 +74,6 @@ export interface ParsedRow {
   };
 }
 
-interface ColumnSpec {
-  /** Canonical key, e.g. "unit_price". */
-  key: string;
-  /** Lowercase header names (EN + DE) that resolve to this column. */
-  aliases: string[];
-  required: boolean;
-}
-
 export interface ImportFormat {
   id: ImportFormatId;
   label: string;
@@ -94,27 +95,7 @@ export interface ImportFormat {
   priceColumnsAreLineTotals?: boolean;
 }
 
-// ─── Header aliases (all lowercase — parseCsvText lowercases headers) ────────
-
-const ALIASES: Record<string, string[]> = {
-  date: ["date", "datum", "bestelldatum", "verkaufsdatum"],
-  product_name: ["product_name", "product", "artikel", "artikelname", "artikelbezeichnung", "titel", "produktname", "produkt"],
-  platform: ["platform", "plattform"],
-  quantity: ["quantity", "qty", "menge", "anzahl", "stück", "stueck", "stk"],
-  unit_price: ["unit_price", "price", "preis", "stückpreis", "stueckpreis", "einzelpreis"],
-  // "Versandkosten" on an order sheet means what the buyer paid → shipping_charged (I6).
-  total: ["total", "total_amount", "gesamt", "gesamtbetrag", "gesamtpreis", "brutto", "verkaufsbetrag", "summe"],
-  currency: ["currency", "währung", "waehrung"],
-  vat_rate: ["vat_rate", "vat", "mwst", "mwst-satz", "mwst.", "ust", "ust-satz", "steuersatz"],
-  vat_amount: ["vat_amount", "vat_betrag", "mwst_betrag", "mwstbetrag", "steuerbetrag"],
-  status: ["status", "bestellstatus"],
-  description: ["description", "beschreibung", "bemerkung", "notiz", "kommentar"],
-  shipping_charged: ["shipping_charged", "shipping", "versand", "versandkosten"],
-  shipping_cost: ["shipping_cost", "versandkosten_bezahlt", "eigene versandkosten"],
-  advertising_fee: ["advertising_fee", "werbekosten", "anzeigenkosten", "werbegebühr", "werbegebuehr"],
-  order_id: ["order_id", "order-id", "bestellnummer", "bestell-nr", "bestellnr", "auftragsnummer", "external_order_id"],
-  sku: ["sku", "artikel-nr", "artikelnr", "artikelnummer"],
-};
+// ─── Header aliases (shared with Expenses — see `lib/utils/importAliases`) ───
 
 function col(key: string, required: boolean): ColumnSpec {
   return { key, aliases: ALIASES[key], required };
@@ -189,40 +170,6 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
 };
 
 export const IMPORT_FORMAT_IDS: ImportFormatId[] = ["generic", "amazon", "ebay"];
-
-// ─── Header resolution ────────────────────────────────────────────────────────
-
-export interface HeaderResolution {
-  /** raw header (lowercase) → canonical key. Unknown headers are absent (ignored). */
-  mapping: Map<string, string>;
-  /** Canonical keys of required columns not present in the file. */
-  missingRequired: string[];
-}
-
-export function resolveHeaders(rawHeaders: string[], format: ImportFormat): HeaderResolution {
-  const mapping = new Map<string, string>();
-  for (const raw of rawHeaders) {
-    const normalized = raw.trim().toLowerCase();
-    const spec = format.columns.find((c) => c.aliases.includes(normalized));
-    if (spec && ![...mapping.values()].includes(spec.key)) {
-      mapping.set(raw, spec.key);
-    }
-  }
-  const resolved = new Set(mapping.values());
-  const missingRequired = format.columns
-    .filter((c) => c.required && !resolved.has(c.key))
-    .map((c) => c.key);
-  return { mapping, missingRequired };
-}
-
-/** Re-key a parsed CSV row from raw headers to canonical column keys. */
-export function canonicalizeRow(raw: Record<string, string>, mapping: Map<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [rawKey, key] of mapping) {
-    out[key] = raw[rawKey] ?? "";
-  }
-  return out;
-}
 
 // ─── Platform normalization ───────────────────────────────────────────────────
 

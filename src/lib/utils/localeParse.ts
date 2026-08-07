@@ -63,6 +63,17 @@ export function parseLocaleNumber(input: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * `parseLocaleNumber` for a percentage cell. German sheets write a VAT rate
+ * as "19%", which `parseLocaleNumber` rejects outright — its guard is
+ * /^[+-]?[\d.,]+$/ and "%" is not a digit. The percent sign carries no
+ * information here (the column is already "VAT Rate (%)"), so strip it.
+ */
+export function parseLocaleRate(input: string | undefined): number | null {
+  if (input == null) return null;
+  return parseLocaleNumber(input.replace(/%/g, ""));
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DE_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
 
