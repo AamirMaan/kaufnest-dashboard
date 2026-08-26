@@ -13,6 +13,12 @@ function mockXmlResponse(xml: string) {
   }) as unknown as typeof fetch;
 }
 
+const ONE_PAGE = `<?xml version="1.0" encoding="utf-8"?>
+  <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+    <Ack>Success</Ack>
+    <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+  </GetMemberMessagesResponse>`;
+
 describe("fetchMemberMessages", () => {
   it("parses an inbound message from a MemberMessageExchange block", async () => {
     mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
@@ -112,5 +118,60 @@ describe("fetchMemberMessages", () => {
     await expect(fetchMemberMessages("token", "2026-01-01T00:00:00.000Z")).rejects.toThrow(
       /re-authorization/
     );
+  });
+
+  it("never sends a MessageStatus element (eBay rejects it: only Answered/Unanswered/CustomCode are valid, not the 'All' this used to send)", async () => {
+    mockXmlResponse(ONE_PAGE);
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    const sentBody = (global.fetch as jest.Mock).mock.calls[0][1].body as string;
+    expect(sentBody).not.toMatch(/<MessageStatus>/);
+    // MailMessageType=All IS a valid enum value for that (different) field — must survive.
+    expect(sentBody).toMatch(/<MailMessageType>All<\/MailMessageType>/);
+  });
+
+  it("reads TotalNumberOfPages specifically, not the first digit sequence in PaginationResult", async () => {
+    // Regression guard: PaginationResult also carries TotalNumberOfEntries,
+    // which eBay may emit before TotalNumberOfPages. A naive /(\d+)/ match
+    // against the whole tag text would read 500 here and try up to 10 pages
+    // (MAX_PAGES) instead of stopping after page 1.
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult>
+          <TotalNumberOfEntries>500</TotalNumberOfEntries>
+          <TotalNumberOfPages>1</TotalNumberOfPages>
+        </PaginationResult>
+      </GetMemberMessagesResponse>`);
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs a warning and still treats the message as inbound when <Incoming> is absent (schema assumption broken, not silently misparsed)", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <MemberMessageExchange>
+          <ItemID>1</ItemID>
+          <MemberMessage>
+            <MessageID>msg-4</MessageID>
+            <Sender>buyer1</Sender>
+            <Text>No Incoming tag on this one</Text>
+            <Read>false</Read>
+            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
+          </MemberMessage>
+        </MemberMessageExchange>
+      </GetMemberMessagesResponse>`);
+
+    const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    expect(message.direction).toBe("inbound");
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("msg-4"));
+    warnSpy.mockRestore();
   });
 });

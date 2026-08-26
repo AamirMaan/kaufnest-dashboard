@@ -27,28 +27,77 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
-- **The GetMemberMessages XML parsing is unverified against a live
-  response.** `lib/integrations/ebay/messages.ts` was written from eBay's
-  documented Trading API schema, not tested against a real synced account
-  (no sandbox test message data was available at implementation time). If
-  `fetchMemberMessages` returns messages with an empty `itemId`/
+- **`<MessageStatus>All</MessageStatus>` was an invalid enum value and made
+  every sync fail (fixed 2026-08-26).** `GetMemberMessages`'s
+  `MessageStatus` field is `MessageStatusTypeCodeType`, whose only valid
+  values are `Answered`/`Unanswered`/`CustomCode` — verified directly
+  against eBay's Trading API reference, not inferred. eBay returned
+  `Ack=Failure` on page 1 of every attempt, which the sync route's catch-all
+  reported as a bare 502 with no server-side log — the actual cause was only
+  visible by reading the response body in the browser Network tab. Confirmed
+  this had **never once succeeded**: `ebay_messages` was empty across all 5
+  tenant schemas before this fix (checked live). `MailMessageType` still
+  legitimately accepts `All` — that field's enum is different from
+  `MessageStatus`'s and was never the problem. The element is now omitted
+  entirely (optional; omitting it returns both answered and unanswered
+  messages, which is what `All` was meant to express).
+- **`fetchMemberMessages`'s pagination read the wrong number (fixed
+  2026-08-26).** It grabbed the first digit sequence anywhere inside
+  `<PaginationResult>`, which also contains `<TotalNumberOfEntries>` — on a
+  real account with hundreds of messages, that silently drove the loop by
+  the entries count instead of the page count (verified in a test: 500
+  entries → 10 fetches instead of 1, hitting `MAX_PAGES`). Now scopes to
+  `PaginationResult` and reads `TotalNumberOfPages` specifically, matching
+  `listings.ts`'s `fetchActiveListings`. If you touch either function's
+  pagination again, keep both reading the same way.
+- **The GetMemberMessages XML parsing is still unverified against a live
+  response** — the fixes above were request-side (what we send) and
+  pagination-side (a self-contained bug), not from ever seeing a real
+  response. `lib/integrations/ebay/messages.ts` was written from eBay's
+  documented Trading API schema, not tested against a real synced account.
+  If `fetchMemberMessages` returns messages with an empty `itemId`/
   `buyerUsername`, or misses messages entirely, the first thing to check is
   whether `<ItemID>` and `<Incoming>`/`<Sender>`/`<RecipientID>` actually
   nest the way `parseExchangeBlock` assumes (comment at the top of that
-  file). Log a raw response and compare against the parser before assuming
-  the bug is elsewhere.
-- **Scope reuse is also unverified.** This feature deliberately reuses the
-  eBay connection's existing `sell.inventory` OAuth scope (same one
-  `listings.ts`'s `GetMyeBaySelling` uses) rather than adding a new scope to
-  `EBAY_SCOPE` in `lib/integrations/ebay.ts` — on the assumption Trading API
-  messaging calls work with any valid seller token. If `GetMemberMessages`/
+  file). `parseExchangeBlock` now warns via `console.warn` (with the
+  message id) whenever `<Incoming>` is absent on a real message rather than
+  silently defaulting it to inbound — check Vercel logs for that warning
+  before assuming the parser is right. `tradingApiCall` also now logs the
+  raw XML (truncated, no token) to `console.error` on any `Ack=Failure`, so
+  once a real sync runs, a raw response is one log line away instead of
+  requiring a code change to capture — do the fixture-test step in Phase 3
+  of `docs/superpowers/plans/2026-08-26-fix-messages-and-listings.md` once
+  one lands.
+- **Scope reuse is also still unverified — do not assume the enum fix
+  above proves the scope is fine.** Sync had never succeeded even once
+  before 2026-08-26, so nothing had reached far enough to distinguish "bad
+  enum" from "bad scope"; fixing the enum only rules out the former. This
+  feature deliberately reuses the eBay connection's existing
+  `sell.inventory` OAuth scope (same one `listings.ts`'s
+  `GetMyeBaySelling` uses) rather than adding a new scope to `EBAY_SCOPE`
+  in `lib/integrations/ebay.ts` — on the assumption Trading API messaging
+  calls work with any valid seller token. If `GetMemberMessages`/
   `AddMemberMessageRTQ` return the token-scope error codes
   (`tradingApi.ts`'s `21916984`/`21917053`/`931`/`932` list), the existing
   "disconnect and reconnect" error message will surface, but reconnecting
   won't actually add a new scope — nothing requests one. If that turns out
   to be needed, the fix is adding to `EBAY_SCOPE`, which invalidates *every*
   existing eBay connection (documented precedent: see the
-  `sell.inventory`-not-`.readonly` comment in `ebay.ts`).
+  `sell.inventory`-not-`.readonly` comment in `ebay.ts`). Treat it as its
+  own coordinated task with tenant comms, not a hotfix.
+- **A 502 from either API route means eBay itself failed; a 500 means our
+  own code (Supabase write, parsing) did (fixed 2026-08-26).** Previously
+  both routes caught everything in one block and always returned 502 with
+  no server log — a DB write failure was reported to the user as if eBay
+  had rejected the call, and nothing was recorded anywhere to diagnose it
+  from. `sync/route.ts` and `[id]/reply/route.ts` now log
+  `console.error` before every error response, and specifically: in
+  `reply/route.ts`, once `replyToMessage` succeeds the reply **has** been
+  sent to eBay — a subsequent failure to save it locally is a 500 with
+  wording that says the reply went through, so a user doesn't get told
+  "Reply failed" and resend a message that already landed. Keep this
+  ordering (eBay call → own try/catch, DB write → separate try/catch) if
+  you touch either route again.
 - **Replies require a `ParentMessageID`.** `POST /api/messages/[id]/reply`
   400s if the target row's `external_message_id` is null — this can only
   happen for a row that was never actually synced from eBay (shouldn't occur
@@ -99,4 +148,9 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 ## Tests
 
 `npx jest dashboard/messages` (slice + `groupThreads`).
-`npx jest lib/integrations/ebay/messages` (XML-parsing fixture test).
+`npx jest lib/integrations/ebay/messages` (XML-parsing fixture test — covers
+the `MessageStatus`/pagination/`Incoming`-absent regressions above; all
+fixtures are hand-built XML, not a captured real response — see the
+still-unverified-parsing gotcha).
+`npx jest lib/integrations/ebay/tradingApi` (Ack=Failure logging, token
+never logged).

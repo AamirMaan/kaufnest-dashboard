@@ -65,6 +65,13 @@ export async function tradingApiCall(
 
   const ack = tagText(xml, "Ack");
   if (ack === "Failure") {
+    // The token never appears in eBay's response body, only in the request
+    // header we sent — safe to log the raw XML (truncated) here. This is
+    // what every hypothesis during the messages-sync 502 investigation
+    // (2026-08-26) needed and nobody had, because only the thrown message
+    // ever reached the caller, never the server logs.
+    console.error(`[tradingApi] ${callName} Ack=Failure:`, xml.slice(0, 1000));
+
     const message = tagText(xml, "LongMessage") ?? tagText(xml, "ShortMessage") ?? "Unknown error";
     const errorCode = tagText(xml, "ErrorCode") ?? "";
 

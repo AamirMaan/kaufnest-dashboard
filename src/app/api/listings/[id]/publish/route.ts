@@ -45,10 +45,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to refresh eBay token" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    console.error("[listings/publish] token refresh failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   // Step 1: assign a SKU on first publish attempt, persist before calling eBay.
@@ -89,6 +88,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json(updated);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Publish failed";
+    console.error("[listings/publish] failed:", message);
 
     // Best-effort: persist whatever offerId was captured before the failure
     // (publishListing throws after createOffer but before publishOffer, for

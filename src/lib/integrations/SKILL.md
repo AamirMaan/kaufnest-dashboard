@@ -47,7 +47,13 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   `tradingApiCall()`, `tagText()`/`decodeXml()`/`escapeXml()`. Extracted from
   `ebay/listings.ts` when `ebay/messages.ts` needed the same auth/
   error-handling — both files import from here now, neither defines its own
-  copy. See "eBay messages (Trading API)" below.
+  copy. `tradingApiCall()` logs the raw response XML (truncated to 1000
+  chars, no token — the token is never in the response body) via
+  `console.error` on any `Ack=Failure`, so a caller's thrown message no
+  longer has to be manually surfaced from the client to diagnose a real
+  failure (added 2026-08-26 after a `GetMemberMessages` 502 took hours to
+  diagnose with nothing in server logs — see `dashboard/messages/SKILL.md`).
+  See "eBay messages (Trading API)" below.
 - `ebay/messages.ts` — `fetchMemberMessages()`/`replyToMessage()`, backs the
   Messages feature (`src/app/dashboard/messages/`). See "eBay messages
   (Trading API)" below.

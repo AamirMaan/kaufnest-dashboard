@@ -28,9 +28,8 @@ export async function GET(req: NextRequest) {
     const categories = await searchCategories(query);
     return NextResponse.json({ categories });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Category search failed" },
-      { status: 502 }
-    );
+    const message = err instanceof Error ? err.message : "Category search failed";
+    console.error("[listings/ebay/categories] search failed:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
