@@ -27,6 +27,33 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **`GetMemberMessages` is scoped to the seller's currently ACTIVE listings
+  only — investigating as of 2026-08-26, not yet confirmed against a live
+  response.** After the enum fix below made sync succeed, a real sync
+  returned 0 messages despite the tenant expecting prior conversation
+  history. Cross-referenced against eBay's own docs (via search, since
+  developer.ebay.com does not load for this agent — every fetch attempt
+  timed out): eBay's own comparison of `GetMemberMessages` vs `GetMyMessages`
+  states the former "returns a list of the messages buyers have posted about
+  your **active** item listings" — i.e. it is not the general "every message
+  this account has" call the header comment at the top of `messages.ts`
+  assumed it was, and it structurally cannot see messages tied to sold/ended
+  listings **regardless of `StartCreationTime`**. This is a different and
+  more fundamental limitation than the 90-day `DEFAULT_LOOKBACK_MS` window
+  in `sync/route.ts` — widening that window would not fix it if this is
+  right. `GetMyMessages` is the call that mirrors the My eBay Messages web
+  UI, but switching (or adding a second source) is unstarted: its
+  request/response shape is unparsed here, and whether the `sell.inventory`
+  scope this feature reuses even covers it is unverified on top of the
+  scope gotcha below. **Do not build a `GetMyMessages` integration on the
+  strength of this note alone** — confirm first via the diagnostic log
+  below, since a genuinely empty exchange-block count on every sync is the
+  only hard evidence this repo can gather without eBay's site loading.
+  `fetchMemberMessages` now logs `{ exchangeBlocks, messagesParsed }` per
+  page via `console.info` specifically so the next sync settles this: zero
+  exchange blocks confirms the scoping theory (or the 90-day window); a
+  nonzero count with zero parsed messages instead points at a parsing bug
+  in `parseExchangeBlock`, a different fix entirely.
 - **`<MessageStatus>All</MessageStatus>` was an invalid enum value and made
   every sync fail (fixed 2026-08-26).** `GetMemberMessages`'s
   `MessageStatus` field is `MessageStatusTypeCodeType`, whose only valid

@@ -108,9 +108,20 @@ export async function fetchMemberMessages(
     );
 
     const exchangeBlocks = xml.match(/<MemberMessageExchange>[\s\S]*?<\/MemberMessageExchange>/g) ?? [];
-    for (const block of exchangeBlocks) {
-      messages.push(...parseExchangeBlock(block));
-    }
+    const pageMessages = exchangeBlocks.flatMap(parseExchangeBlock);
+    messages.push(...pageMessages);
+
+    // Diagnostic, not an error: distinguishes "eBay genuinely returned
+    // nothing" from "eBay returned exchange blocks but parseExchangeBlock
+    // dropped them" without needing another deploy to find out. Relevant
+    // because GetMemberMessages is scoped to the seller's currently ACTIVE
+    // listings only (unlike the web Messages Hub) — 0 here on every sync is
+    // expected, not a bug, if the account's real conversation history is
+    // about items that have since sold or ended. See messages/SKILL.md.
+    console.info(`[ebay/messages] GetMemberMessages page ${page}:`, {
+      exchangeBlocks: exchangeBlocks.length,
+      messagesParsed: pageMessages.length,
+    });
 
     // Scope to PaginationResult, then read TotalNumberOfPages specifically —
     // that tag also carries TotalNumberOfEntries, and eBay does not guarantee
