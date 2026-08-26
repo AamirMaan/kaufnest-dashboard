@@ -13,9 +13,23 @@ tenant schemas, so sync has never once succeeded — ruling out Hypothesis 2
 **Hypothesis 1 fixed, plus the two independent bugs and Phase 3's logging.
 Hypothesis 2 (scope) and Phase 2 (listings) are NOT addressed — no evidence
 either needs it, and Phase 2 explicitly requires knowing the symptom first,
-which wasn't provided.** If the fix below doesn't fully resolve sync on the
-next real attempt, `tradingApiCall`'s new logging will show the actual eBay
-response instead of requiring another multi-hour investigation.
+which wasn't provided.**
+
+**Update 2026-08-26, later same day:** the enum fix made sync succeed but
+return 0 messages. Rather than guess, added `console.info`/`console.warn`
+diagnostics and asked the user to run a real sync and paste the Vercel log
+line. First result: `{ exchangeBlocks: 46, messagesParsed: 0 }` — eBay
+genuinely returns 46 conversations (disproving an "active listings only"
+scoping theory raised in between), but every block failed to parse. A
+second, more targeted diagnostic (tag names only, never message content,
+for privacy) then revealed the real cause: `parseExchangeBlock` assumed the
+wrong wrapper tag (`<MemberMessage>`, which doesn't exist) and several wrong
+field names (`Sender`→`SenderID`, `Text`→`Body`, no `<Incoming>`/`<Read>` at
+all). Fixed against the confirmed shape — see the wrapper-tag/field-name
+gotcha in `dashboard/messages/SKILL.md` for the full mapping. **Sync should
+now actually populate messages; this needs the user to confirm on the next
+real attempt.** The diagnostic logging is kept permanently as defense
+against a future eBay schema change, not removed post-fix.
 
 ---
 

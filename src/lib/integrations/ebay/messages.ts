@@ -4,13 +4,21 @@
 // returns/INR disputes, which don't cover ordinary "question about an item"
 // messages. Same auth/error-handling as listings.ts, via ./tradingApi.
 //
-// Gotcha: eBay's XML schema for GetMemberMessages nests messages inside a
-// <MemberMessageExchange> block per item, with <ItemID> as a sibling of
-// (not inside) each <MemberMessage> — parsing below scopes ItemID lookup to
-// the enclosing exchange block rather than the individual message. This is
-// unverified against a live response (no sandbox test data available at
-// implementation time) — if fields come back empty/misparsed, verify the
-// actual response shape against a real synced account first.
+// CONFIRMED against a real synced account (2026-08-26, tenant_kaufnest —
+// see the schema-mismatch gotcha in dashboard/messages/SKILL.md for how):
+// each <MemberMessageExchange> wraps its message in <Question>, an
+// "Ask Seller a Question" (ASQ) container — NOT <MemberMessage>, which the
+// original implementation assumed and which does not appear anywhere in a
+// real response. <ItemID> is nested one level deeper under <Item>, but
+// `tagText` searches the whole exchange block regardless of depth, so that
+// part needed no change. Fields inside <Question>: SenderID (not Sender),
+// Body (not Text), MessageStatus (Answered/Unanswered — not a Read boolean).
+// There is no <Incoming> tag at all: per eBay's own docs, GetMemberMessages
+// only ever returns messages BUYERS have posted, never the seller's own
+// replies (AddMemberMessageRTQ has no response payload to sync back either
+// — see replyToMessage below and reply/route.ts, which writes the outbound
+// row locally instead). So every message this function returns is inbound,
+// unconditionally — there is no direction to infer.
 
 import { tradingApiCall, tagText, decodeXml, escapeXml } from "./tradingApi";
 
@@ -53,39 +61,27 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
   const itemId = tagText(exchangeXml, "ItemID") ?? "";
   const messages: EbayMemberMessage[] = [];
 
-  const messageBlocks = exchangeXml.match(/<MemberMessage>[\s\S]*?<\/MemberMessage>/g) ?? [];
+  const messageBlocks = exchangeXml.match(/<Question>[\s\S]*?<\/Question>/g) ?? [];
   for (const block of messageBlocks) {
     const messageId = tagText(block, "MessageID");
-    const text = tagText(block, "Text");
+    const text = tagText(block, "Body");
     if (!messageId || !text) continue;
-
-    // Incoming=true means the seller received it (buyer is the Sender);
-    // Incoming=false means the seller sent it (buyer is the RecipientID).
-    const incomingRaw = tagText(block, "Incoming");
-    if (incomingRaw === null) {
-      // Falls through to the inbound default below (preserves prior
-      // behavior), but this means the <Incoming> nesting assumption in this
-      // file's header comment is wrong for at least one real message — worth
-      // knowing rather than silently misclassifying every future reply too.
-      console.warn(
-        `[ebay/messages] <Incoming> missing on message ${messageId} — schema assumption may be wrong, defaulting to inbound`
-      );
-    }
-    const incoming = incomingRaw !== "false";
-    const buyerUsername = incoming ? tagText(block, "Sender") : tagText(block, "RecipientID");
 
     messages.push({
       externalMessageId: messageId,
       itemId,
-      buyerUsername: decodeXml(buyerUsername ?? ""),
-      direction: incoming ? "inbound" : "outbound",
+      buyerUsername: decodeXml(tagText(block, "SenderID") ?? ""),
+      direction: "inbound",
       subject: (() => {
         const subject = tagText(block, "Subject");
         return subject ? decodeXml(subject) : null;
       })(),
       body: decodeXml(text),
       questionType: tagText(block, "QuestionType"),
-      isRead: tagText(block, "Read") === "true",
+      // No true read/unread signal exists in this response. MessageStatus
+      // (Answered/Unanswered) is the closest real proxy — a question the
+      // seller has already answered is treated as read.
+      isRead: tagText(block, "MessageStatus") === "Answered",
       ebayCreatedAt: tagText(block, "CreationDate") ?? new Date().toISOString(),
     });
   }
@@ -93,7 +89,11 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
   return messages;
 }
 
-/** Fetches inbound + outbound member messages created since `sinceISO` (ISO timestamp). */
+/**
+ * Fetches inbound buyer messages created since `sinceISO` (ISO timestamp).
+ * Never returns outbound messages — see the header comment for why none exist
+ * in this response.
+ */
 export async function fetchMemberMessages(
   accessToken: string,
   sinceISO: string
@@ -111,13 +111,10 @@ export async function fetchMemberMessages(
     const pageMessages = exchangeBlocks.flatMap(parseExchangeBlock);
     messages.push(...pageMessages);
 
-    // Diagnostic, not an error: distinguishes "eBay genuinely returned
-    // nothing" from "eBay returned exchange blocks but parseExchangeBlock
-    // dropped them" without needing another deploy to find out. Relevant
-    // because GetMemberMessages is scoped to the seller's currently ACTIVE
-    // listings only (unlike the web Messages Hub) — 0 here on every sync is
-    // expected, not a bug, if the account's real conversation history is
-    // about items that have since sold or ended. See messages/SKILL.md.
+    // Diagnostic, not an error: cheap ongoing signal that this page's
+    // exchange blocks parsed as expected. Kept permanently (not just for the
+    // 2026-08-26 investigation) since eBay changing this schema again would
+    // otherwise silently zero out sync results the same way it did before.
     console.info(`[ebay/messages] GetMemberMessages page ${page}:`, {
       exchangeBlocks: exchangeBlocks.length,
       messagesParsed: pageMessages.length,
@@ -126,16 +123,17 @@ export async function fetchMemberMessages(
     const [sample] = exchangeBlocks;
     if (sample && pageMessages.length < exchangeBlocks.length) {
       // Exchange blocks exist but some/all failed parseExchangeBlock's
-      // messageId/text guard — the real XML nests differently than assumed.
-      // Log only TAG NAMES from one sample block, never field content: a
-      // buyer's message text is private and must not end up in server logs.
-      const memberMessageTagCount = (sample.match(/<MemberMessage>/g) ?? []).length;
+      // messageId/text guard — the real XML nests differently than
+      // parseExchangeBlock currently assumes. Log only TAG NAMES from one
+      // sample block, never field content: a buyer's message text is
+      // private and must not end up in server logs.
+      const questionTagCount = (sample.match(/<Question>/g) ?? []).length;
       const tagsInFirstBlock = [
         ...new Set([...sample.matchAll(/<([A-Za-z][\w-]*)[ >]/g)].map((m) => m[1])),
       ];
       console.warn(
         `[ebay/messages] schema mismatch on page ${page}: ${exchangeBlocks.length} exchange block(s), only ${pageMessages.length} parsed`,
-        { memberMessageTagCount, tagsInFirstBlock }
+        { questionTagCount, tagsInFirstBlock }
       );
     }
 

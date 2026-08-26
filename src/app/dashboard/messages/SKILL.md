@@ -27,38 +27,52 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
-- **`parseExchangeBlock` does not match the real `GetMemberMessages` response
-  shape — confirmed live 2026-08-26, root cause not yet identified.** A real
-  sync against a tenant's connected account returned
-  `{ exchangeBlocks: 46, messagesParsed: 0 }` — eBay genuinely has 46
-  conversations reachable by this call (**ruling out** the theory below that
-  `GetMemberMessages` is scoped to active-listing messages only; whatever
-  that call's real scope is, it is not what's blocking this account), but
-  every single block failed `parseExchangeBlock`'s `if (!messageId || !text)
-  continue` guard. The real tag nesting differs from what the top-of-file
-  comment assumed — most likely `<MemberMessage>` isn't the wrapper tag for
-  at least some message types (recall `GetMemberMessages` distinguishes ASQ
-  vs CEM messages with different response shapes per eBay's docs), or
-  `MessageID`/`Text` live under different tag names. **Do not guess the fix**
-  — a `console.warn` now fires whenever blocks exist but don't all parse,
-  logging `{ memberMessageTagCount, tagsInFirstBlock }` (tag NAMES only,
-  never field content — buyer message text must never reach server logs).
-  Get that line from the next sync's logs before touching
-  `parseExchangeBlock`: if `memberMessageTagCount` is 0, the wrapper tag
-  itself is wrong; if it's nonzero, `MessageID`/`Text` are named differently
-  inside it. Once fixed, capture a redacted real response as a fixture (see
-  Phase 3 of `docs/superpowers/plans/2026-08-26-fix-messages-and-listings.md`)
-  so this can't silently regress again.
+- **`parseExchangeBlock`'s wrapper tag and field names — CONFIRMED against a
+  real response, fixed 2026-08-26.** A real sync against `tenant_kaufnest`'s
+  connected account returned `{ exchangeBlocks: 46, messagesParsed: 0 }` —
+  eBay genuinely had 46 conversations reachable by this call (which also
+  **disproves**, for this account, the theory that `GetMemberMessages` is
+  scoped to active-listing messages only — see the next gotcha), but every
+  block failed `parseExchangeBlock`'s `messageId`/`text` guard. A follow-up
+  diagnostic logged the real tag names present in one block (never field
+  content), which showed the actual shape:
+
+  | Assumed | Real | Note |
+  |---|---|---|
+  | `<MemberMessage>` wrapper | `<Question>` | ASQ container — `<MemberMessage>` does not appear anywhere in a real response |
+  | `Sender` | `SenderID` | |
+  | `Text` | `Body` | |
+  | `Incoming` | *(doesn't exist)* | see below |
+  | `Read` | *(doesn't exist)* — `MessageStatus` (`Answered`/`Unanswered`) is the closest real signal | `isRead = MessageStatus === "Answered"` |
+  | `ItemID` sibling of the message | `ItemID` nested under `<Item>` | `tagText` searches the whole block regardless of depth — needed no code change |
+
+  **There is no `<Incoming>` tag because every message this call returns is
+  inbound, unconditionally** — eBay's own docs describe `GetMemberMessages`
+  as returning only messages buyers have posted, and `AddMemberMessageRTQ`
+  (the seller's reply) has no response payload to sync back either; outbound
+  rows are written locally by `reply/route.ts` instead, never discovered by
+  sync. The old `Incoming`-presence warning and its `incoming ? ... :`
+  branching are gone — `direction` is always `"inbound"` here.
+
+  The `console.warn` schema-mismatch diagnostic from the investigation is
+  kept permanently (not removed post-fix) as defense-in-depth: it now checks
+  for `<Question>` specifically, so if eBay changes this shape again, the
+  next sync's logs will say so instead of silently zeroing out results the
+  same way this did. **Still outstanding**: capture a redacted real response
+  as a fixture (Phase 3 of
+  `docs/superpowers/plans/2026-08-26-fix-messages-and-listings.md`) so this
+  exact class of drift can't silently regress again — the current tests use
+  hand-built fixtures matching the confirmed shape, not a captured response.
 - **`GetMemberMessages` may still be scoped to active listings for OTHER
-  accounts, even though it isn't the blocker here.** The theory came from
-  eBay's own comparison of `GetMemberMessages` vs `GetMyMessages` ("returns
-  messages buyers have posted about your **active** item listings" — via
-  search, since developer.ebay.com does not load for this agent on any
-  fetch attempt). It's disproven for the account tested (46 real exchange
-  blocks came back), but that doesn't mean the claim is false in general —
-  it may just mean this account's 46 conversations happen to be about
-  currently-active listings. Once parsing is fixed, if the resulting message
-  count still feels low against what the tenant expects, revisit this.
+  accounts.** The theory (`GetMemberMessages` "returns messages buyers have
+  posted about your **active** item listings", per eBay's own comparison
+  with `GetMyMessages` — via search, since developer.ebay.com does not load
+  for this agent on any fetch attempt) is disproven for the account tested
+  above (46 real exchange blocks came back), but that doesn't make the claim
+  false in general — it may just mean those 46 conversations happen to be
+  about currently-active listings. If a tenant reports a message count that
+  still feels low against what they expect, revisit this before assuming
+  the parser (now fixed) is the problem again.
 - **`<MessageStatus>All</MessageStatus>` was an invalid enum value and made
   every sync fail (fixed 2026-08-26).** `GetMemberMessages`'s
   `MessageStatus` field is `MessageStatusTypeCodeType`, whose only valid
@@ -82,24 +96,13 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   `PaginationResult` and reads `TotalNumberOfPages` specifically, matching
   `listings.ts`'s `fetchActiveListings`. If you touch either function's
   pagination again, keep both reading the same way.
-- **The GetMemberMessages XML parsing is still unverified against a live
-  response** — the fixes above were request-side (what we send) and
-  pagination-side (a self-contained bug), not from ever seeing a real
-  response. `lib/integrations/ebay/messages.ts` was written from eBay's
-  documented Trading API schema, not tested against a real synced account.
-  If `fetchMemberMessages` returns messages with an empty `itemId`/
-  `buyerUsername`, or misses messages entirely, the first thing to check is
-  whether `<ItemID>` and `<Incoming>`/`<Sender>`/`<RecipientID>` actually
-  nest the way `parseExchangeBlock` assumes (comment at the top of that
-  file). `parseExchangeBlock` now warns via `console.warn` (with the
-  message id) whenever `<Incoming>` is absent on a real message rather than
-  silently defaulting it to inbound — check Vercel logs for that warning
-  before assuming the parser is right. `tradingApiCall` also now logs the
-  raw XML (truncated, no token) to `console.error` on any `Ack=Failure`, so
-  once a real sync runs, a raw response is one log line away instead of
-  requiring a code change to capture — do the fixture-test step in Phase 3
-  of `docs/superpowers/plans/2026-08-26-fix-messages-and-listings.md` once
-  one lands.
+- **The GetMemberMessages XML parsing is now verified against a live
+  response (2026-08-26)** — see the wrapper-tag/field-name gotcha above for
+  the confirmed shape and what changed. `tradingApiCall` still logs the raw
+  XML (truncated, no token) to `console.error` on any `Ack=Failure`, and
+  `fetchMemberMessages` logs `{ exchangeBlocks, messagesParsed }` per page
+  plus a schema-mismatch warning if parsing ever drops a block again — both
+  kept permanently, not just for this investigation.
 - **Scope reuse is also still unverified — do not assume the enum fix
   above proves the scope is fine.** Sync had never succeeded even once
   before 2026-08-26, so nothing had reached far enough to distinguish "bad

@@ -19,26 +19,36 @@ const ONE_PAGE = `<?xml version="1.0" encoding="utf-8"?>
     <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
   </GetMemberMessagesResponse>`;
 
+// Real shape confirmed live 2026-08-26 against tenant_kaufnest's connected
+// account — see the schema-mismatch gotcha in dashboard/messages/SKILL.md.
+// <Question> is the message wrapper (not <MemberMessage>, which never
+// appears in a real response), ItemID nests under <Item>, and there is no
+// <Incoming> tag at all — every message here is inbound by construction.
+const REAL_SHAPE_EXCHANGE = `
+  <MemberMessageExchange>
+    <Item>
+      <ItemID>123456789</ItemID>
+      <Title>Sample listing</Title>
+    </Item>
+    <Question>
+      <MessageID>msg-1</MessageID>
+      <SenderID>buyer1</SenderID>
+      <RecipientID>seller1</RecipientID>
+      <Subject>Question about item</Subject>
+      <Body>Is this still available?</Body>
+      <QuestionType>General</QuestionType>
+      <MessageStatus>Unanswered</MessageStatus>
+      <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
+    </Question>
+  </MemberMessageExchange>`;
+
 describe("fetchMemberMessages", () => {
-  it("parses an inbound message from a MemberMessageExchange block", async () => {
+  it("parses a question from a MemberMessageExchange block (real <Question> wrapper, not <MemberMessage>)", async () => {
     mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
       <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
         <Ack>Success</Ack>
         <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
-        <MemberMessageExchange>
-          <ItemID>123456789</ItemID>
-          <MemberMessage>
-            <MessageID>msg-1</MessageID>
-            <Sender>buyer1</Sender>
-            <RecipientID>seller1</RecipientID>
-            <Incoming>true</Incoming>
-            <Subject>Question about item</Subject>
-            <Text>Is this still available?</Text>
-            <QuestionType>General</QuestionType>
-            <Read>false</Read>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
-          </MemberMessage>
-        </MemberMessageExchange>
+        ${REAL_SHAPE_EXCHANGE}
       </GetMemberMessagesResponse>`);
 
     const messages = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
@@ -58,29 +68,40 @@ describe("fetchMemberMessages", () => {
     ]);
   });
 
-  it("derives buyerUsername from RecipientID for an outbound (Incoming=false) message", async () => {
+  it("is always inbound — GetMemberMessages only ever returns buyers' messages, never the seller's own replies", async () => {
+    // RecipientID being present (the seller's own username) must not flip
+    // direction the way the old removed <Incoming>-based logic did.
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        ${REAL_SHAPE_EXCHANGE}
+      </GetMemberMessagesResponse>`);
+
+    const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+    expect(message.direction).toBe("inbound");
+    expect(message.buyerUsername).toBe("buyer1");
+  });
+
+  it("treats MessageStatus=Answered as read, Unanswered as unread", async () => {
     mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
       <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
         <Ack>Success</Ack>
         <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
         <MemberMessageExchange>
-          <ItemID>123456789</ItemID>
-          <MemberMessage>
-            <MessageID>msg-2</MessageID>
-            <Sender>seller1</Sender>
-            <RecipientID>buyer1</RecipientID>
-            <Incoming>false</Incoming>
-            <Text>Yes, still available!</Text>
-            <Read>true</Read>
-            <CreationDate>2026-07-20T11:00:00.000Z</CreationDate>
-          </MemberMessage>
+          <Item><ItemID>1</ItemID></Item>
+          <Question>
+            <MessageID>msg-answered</MessageID>
+            <SenderID>buyer1</SenderID>
+            <Body>Already answered</Body>
+            <MessageStatus>Answered</MessageStatus>
+            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
+          </Question>
         </MemberMessageExchange>
       </GetMemberMessagesResponse>`);
 
     const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
-
-    expect(message.direction).toBe("outbound");
-    expect(message.buyerUsername).toBe("buyer1");
+    expect(message.isRead).toBe(true);
   });
 
   it("decodes XML entities in the message body and subject", async () => {
@@ -89,15 +110,14 @@ describe("fetchMemberMessages", () => {
         <Ack>Success</Ack>
         <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
         <MemberMessageExchange>
-          <ItemID>1</ItemID>
-          <MemberMessage>
+          <Item><ItemID>1</ItemID></Item>
+          <Question>
             <MessageID>msg-3</MessageID>
-            <Sender>buyer1</Sender>
-            <Incoming>true</Incoming>
-            <Text>Price &amp; shipping &lt;fast&gt;?</Text>
-            <Read>false</Read>
+            <SenderID>buyer1</SenderID>
+            <Body>Price &amp; shipping &lt;fast&gt;?</Body>
+            <MessageStatus>Unanswered</MessageStatus>
             <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
-          </MemberMessage>
+          </Question>
         </MemberMessageExchange>
       </GetMemberMessagesResponse>`);
 
@@ -150,31 +170,6 @@ describe("fetchMemberMessages", () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("logs a warning and still treats the message as inbound when <Incoming> is absent (schema assumption broken, not silently misparsed)", async () => {
-    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
-      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
-        <Ack>Success</Ack>
-        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
-        <MemberMessageExchange>
-          <ItemID>1</ItemID>
-          <MemberMessage>
-            <MessageID>msg-4</MessageID>
-            <Sender>buyer1</Sender>
-            <Text>No Incoming tag on this one</Text>
-            <Read>false</Read>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
-          </MemberMessage>
-        </MemberMessageExchange>
-      </GetMemberMessagesResponse>`);
-
-    const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
-
-    expect(message.direction).toBe("inbound");
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("msg-4"));
-    warnSpy.mockRestore();
-  });
-
   it("logs how many exchange blocks eBay returned per page, so an empty result can be told apart from a parsing failure without another deploy", async () => {
     const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
     mockXmlResponse(ONE_PAGE); // zero <MemberMessageExchange> blocks
@@ -189,11 +184,9 @@ describe("fetchMemberMessages", () => {
   });
 
   it("warns with the real tag names (never message content) when exchange blocks exist but none parse", async () => {
-    // Simulates the real 2026-08-26 production finding: 46 exchange blocks,
-    // 0 parsed. Here the account's response nests under <Message>, not the
-    // <MemberMessage> parseExchangeBlock assumes — a stand-in for whatever
-    // the real mismatch turns out to be, to prove the diagnostic surfaces
-    // structure without needing to guess the real shape in this test.
+    // Synthetic wrong-shape example (not the real one, which is now fixed) —
+    // this pins the diagnostic's own behavior as a permanent defense against
+    // a FUTURE schema change, independent of what shape is currently correct.
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
       <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -214,7 +207,7 @@ describe("fetchMemberMessages", () => {
     const [, meta] = warnSpy.mock.calls.find(([msg]) =>
       typeof msg === "string" && msg.includes("schema mismatch")
     )!;
-    expect(meta).toMatchObject({ memberMessageTagCount: 0 });
+    expect(meta).toMatchObject({ questionTagCount: 0 });
     expect(meta.tagsInFirstBlock).toEqual(
       expect.arrayContaining(["ItemID", "Message", "ExternalMessageID", "Body"])
     );
@@ -232,17 +225,7 @@ describe("fetchMemberMessages", () => {
       <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
         <Ack>Success</Ack>
         <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
-        <MemberMessageExchange>
-          <ItemID>1</ItemID>
-          <MemberMessage>
-            <MessageID>msg-5</MessageID>
-            <Sender>buyer1</Sender>
-            <Incoming>true</Incoming>
-            <Text>Fine as-is</Text>
-            <Read>false</Read>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
-          </MemberMessage>
-        </MemberMessageExchange>
+        ${REAL_SHAPE_EXCHANGE}
       </GetMemberMessagesResponse>`);
 
     await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
