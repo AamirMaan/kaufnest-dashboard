@@ -187,4 +187,69 @@ describe("fetchMemberMessages", () => {
     );
     infoSpy.mockRestore();
   });
+
+  it("warns with the real tag names (never message content) when exchange blocks exist but none parse", async () => {
+    // Simulates the real 2026-08-26 production finding: 46 exchange blocks,
+    // 0 parsed. Here the account's response nests under <Message>, not the
+    // <MemberMessage> parseExchangeBlock assumes — a stand-in for whatever
+    // the real mismatch turns out to be, to prove the diagnostic surfaces
+    // structure without needing to guess the real shape in this test.
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <MemberMessageExchange>
+          <ItemID>111</ItemID>
+          <Message>
+            <ExternalMessageID>abc-123</ExternalMessageID>
+            <Body>A real buyer's private question that must never reach a log line</Body>
+          </Message>
+        </MemberMessageExchange>
+      </GetMemberMessagesResponse>`);
+
+    const messages = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    expect(messages).toEqual([]);
+    const [, meta] = warnSpy.mock.calls.find(([msg]) =>
+      typeof msg === "string" && msg.includes("schema mismatch")
+    )!;
+    expect(meta).toMatchObject({ memberMessageTagCount: 0 });
+    expect(meta.tagsInFirstBlock).toEqual(
+      expect.arrayContaining(["ItemID", "Message", "ExternalMessageID", "Body"])
+    );
+
+    // Privacy: the buyer's message text must never appear in any logged call.
+    for (const call of warnSpy.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain("A real buyer's private question");
+    }
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn when every exchange block parses successfully", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <MemberMessageExchange>
+          <ItemID>1</ItemID>
+          <MemberMessage>
+            <MessageID>msg-5</MessageID>
+            <Sender>buyer1</Sender>
+            <Incoming>true</Incoming>
+            <Text>Fine as-is</Text>
+            <Read>false</Read>
+            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
+          </MemberMessage>
+        </MemberMessageExchange>
+      </GetMemberMessagesResponse>`);
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    expect(
+      warnSpy.mock.calls.some(([msg]) => typeof msg === "string" && msg.includes("schema mismatch"))
+    ).toBe(false);
+    warnSpy.mockRestore();
+  });
 });

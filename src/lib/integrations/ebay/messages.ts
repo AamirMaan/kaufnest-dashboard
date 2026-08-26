@@ -123,6 +123,22 @@ export async function fetchMemberMessages(
       messagesParsed: pageMessages.length,
     });
 
+    const [sample] = exchangeBlocks;
+    if (sample && pageMessages.length < exchangeBlocks.length) {
+      // Exchange blocks exist but some/all failed parseExchangeBlock's
+      // messageId/text guard — the real XML nests differently than assumed.
+      // Log only TAG NAMES from one sample block, never field content: a
+      // buyer's message text is private and must not end up in server logs.
+      const memberMessageTagCount = (sample.match(/<MemberMessage>/g) ?? []).length;
+      const tagsInFirstBlock = [
+        ...new Set([...sample.matchAll(/<([A-Za-z][\w-]*)[ >]/g)].map((m) => m[1])),
+      ];
+      console.warn(
+        `[ebay/messages] schema mismatch on page ${page}: ${exchangeBlocks.length} exchange block(s), only ${pageMessages.length} parsed`,
+        { memberMessageTagCount, tagsInFirstBlock }
+      );
+    }
+
     // Scope to PaginationResult, then read TotalNumberOfPages specifically —
     // that tag also carries TotalNumberOfEntries, and eBay does not guarantee
     // TotalNumberOfPages appears first, so a bare digit match against the

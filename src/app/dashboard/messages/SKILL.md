@@ -27,33 +27,38 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
-- **`GetMemberMessages` is scoped to the seller's currently ACTIVE listings
-  only — investigating as of 2026-08-26, not yet confirmed against a live
-  response.** After the enum fix below made sync succeed, a real sync
-  returned 0 messages despite the tenant expecting prior conversation
-  history. Cross-referenced against eBay's own docs (via search, since
-  developer.ebay.com does not load for this agent — every fetch attempt
-  timed out): eBay's own comparison of `GetMemberMessages` vs `GetMyMessages`
-  states the former "returns a list of the messages buyers have posted about
-  your **active** item listings" — i.e. it is not the general "every message
-  this account has" call the header comment at the top of `messages.ts`
-  assumed it was, and it structurally cannot see messages tied to sold/ended
-  listings **regardless of `StartCreationTime`**. This is a different and
-  more fundamental limitation than the 90-day `DEFAULT_LOOKBACK_MS` window
-  in `sync/route.ts` — widening that window would not fix it if this is
-  right. `GetMyMessages` is the call that mirrors the My eBay Messages web
-  UI, but switching (or adding a second source) is unstarted: its
-  request/response shape is unparsed here, and whether the `sell.inventory`
-  scope this feature reuses even covers it is unverified on top of the
-  scope gotcha below. **Do not build a `GetMyMessages` integration on the
-  strength of this note alone** — confirm first via the diagnostic log
-  below, since a genuinely empty exchange-block count on every sync is the
-  only hard evidence this repo can gather without eBay's site loading.
-  `fetchMemberMessages` now logs `{ exchangeBlocks, messagesParsed }` per
-  page via `console.info` specifically so the next sync settles this: zero
-  exchange blocks confirms the scoping theory (or the 90-day window); a
-  nonzero count with zero parsed messages instead points at a parsing bug
-  in `parseExchangeBlock`, a different fix entirely.
+- **`parseExchangeBlock` does not match the real `GetMemberMessages` response
+  shape — confirmed live 2026-08-26, root cause not yet identified.** A real
+  sync against a tenant's connected account returned
+  `{ exchangeBlocks: 46, messagesParsed: 0 }` — eBay genuinely has 46
+  conversations reachable by this call (**ruling out** the theory below that
+  `GetMemberMessages` is scoped to active-listing messages only; whatever
+  that call's real scope is, it is not what's blocking this account), but
+  every single block failed `parseExchangeBlock`'s `if (!messageId || !text)
+  continue` guard. The real tag nesting differs from what the top-of-file
+  comment assumed — most likely `<MemberMessage>` isn't the wrapper tag for
+  at least some message types (recall `GetMemberMessages` distinguishes ASQ
+  vs CEM messages with different response shapes per eBay's docs), or
+  `MessageID`/`Text` live under different tag names. **Do not guess the fix**
+  — a `console.warn` now fires whenever blocks exist but don't all parse,
+  logging `{ memberMessageTagCount, tagsInFirstBlock }` (tag NAMES only,
+  never field content — buyer message text must never reach server logs).
+  Get that line from the next sync's logs before touching
+  `parseExchangeBlock`: if `memberMessageTagCount` is 0, the wrapper tag
+  itself is wrong; if it's nonzero, `MessageID`/`Text` are named differently
+  inside it. Once fixed, capture a redacted real response as a fixture (see
+  Phase 3 of `docs/superpowers/plans/2026-08-26-fix-messages-and-listings.md`)
+  so this can't silently regress again.
+- **`GetMemberMessages` may still be scoped to active listings for OTHER
+  accounts, even though it isn't the blocker here.** The theory came from
+  eBay's own comparison of `GetMemberMessages` vs `GetMyMessages` ("returns
+  messages buyers have posted about your **active** item listings" — via
+  search, since developer.ebay.com does not load for this agent on any
+  fetch attempt). It's disproven for the account tested (46 real exchange
+  blocks came back), but that doesn't mean the claim is false in general —
+  it may just mean this account's 46 conversations happen to be about
+  currently-active listings. Once parsing is fixed, if the resulting message
+  count still feels low against what the tenant expects, revisit this.
 - **`<MessageStatus>All</MessageStatus>` was an invalid enum value and made
   every sync fail (fixed 2026-08-26).** `GetMemberMessages`'s
   `MessageStatus` field is `MessageStatusTypeCodeType`, whose only valid
