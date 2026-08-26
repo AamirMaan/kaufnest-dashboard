@@ -34,7 +34,11 @@ function buildGetMemberMessagesRequest(sinceISO: string, pageNumber: number): st
     '<?xml version="1.0" encoding="utf-8"?>' +
     '<GetMemberMessagesRequest xmlns="urn:ebay:apis:eBLBaseComponents">' +
     "<MailMessageType>All</MailMessageType>" +
-    "<MessageStatus>All</MessageStatus>" +
+    // No <MessageStatus> element: its enum (MessageStatusTypeCodeType) is only
+    // Answered/Unanswered/CustomCode — "All" is not a valid value and makes
+    // eBay return Ack=Failure on this call. Omitting it returns both answered
+    // and unanswered messages, which is the behavior "All" was meant to express
+    // (verified against eBay's Trading API docs, 2026-08-26).
     `<StartCreationTime>${sinceISO}</StartCreationTime>` +
     "<DetailLevel>ReturnMessages</DetailLevel>" +
     "<Pagination>" +
@@ -57,7 +61,17 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
 
     // Incoming=true means the seller received it (buyer is the Sender);
     // Incoming=false means the seller sent it (buyer is the RecipientID).
-    const incoming = tagText(block, "Incoming") !== "false";
+    const incomingRaw = tagText(block, "Incoming");
+    if (incomingRaw === null) {
+      // Falls through to the inbound default below (preserves prior
+      // behavior), but this means the <Incoming> nesting assumption in this
+      // file's header comment is wrong for at least one real message — worth
+      // knowing rather than silently misclassifying every future reply too.
+      console.warn(
+        `[ebay/messages] <Incoming> missing on message ${messageId} — schema assumption may be wrong, defaulting to inbound`
+      );
+    }
+    const incoming = incomingRaw !== "false";
     const buyerUsername = incoming ? tagText(block, "Sender") : tagText(block, "RecipientID");
 
     messages.push({
@@ -98,7 +112,13 @@ export async function fetchMemberMessages(
       messages.push(...parseExchangeBlock(block));
     }
 
-    const totalPages = Number(tagText(xml, "PaginationResult")?.match(/(\d+)/)?.[1] ?? "1");
+    // Scope to PaginationResult, then read TotalNumberOfPages specifically —
+    // that tag also carries TotalNumberOfEntries, and eBay does not guarantee
+    // TotalNumberOfPages appears first, so a bare digit match against the
+    // whole tag text can silently read the entries count instead (same fix
+    // as listings.ts:86).
+    const pagination = tagText(xml, "PaginationResult") ?? "";
+    const totalPages = Number(tagText(pagination, "TotalNumberOfPages") ?? "1");
     if (page >= totalPages) break;
   }
 

@@ -21,19 +21,17 @@ export async function GET() {
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to refresh eBay token" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    console.error("[listings/ebay/policies] token refresh failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   try {
     const policies = await fetchBusinessPolicies(accessToken);
     return NextResponse.json(policies);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to fetch business policies" },
-      { status: 502 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to fetch business policies";
+    console.error("[listings/ebay/policies] fetch failed:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

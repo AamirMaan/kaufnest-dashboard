@@ -55,12 +55,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to refresh eBay token" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    console.error("[messages/reply] token refresh failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
+  // 502 is reserved for the eBay call itself failing. Once replyToMessage
+  // succeeds, the message HAS been sent — a failure recording it locally
+  // afterward is our own bug (a 500), and must not be reported as "Reply
+  // failed", which would read as "eBay rejected it" and risk the user
+  // resending a reply that already went through.
   try {
     await replyToMessage(
       accessToken,
@@ -69,7 +73,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       original.buyer_username,
       text.trim()
     );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Reply failed";
+    console.error("[messages/reply] eBay call failed:", message);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 
+  try {
     const { data: sent, error: insertError } = await client
       .from("ebay_messages")
       .insert({
@@ -95,7 +105,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json(sent);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Reply failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    console.error("[messages/reply] failed to record sent reply:", err);
+    return NextResponse.json(
+      { error: "Reply was sent to eBay, but could not be saved locally. Refresh to check for it before resending." },
+      { status: 500 }
+    );
   }
 }

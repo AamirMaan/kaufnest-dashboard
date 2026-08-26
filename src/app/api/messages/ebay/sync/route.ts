@@ -36,10 +36,9 @@ export async function POST() {
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to refresh eBay token" },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    console.error("[messages/ebay/sync] token refresh failed:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const { data: latest } = await client
@@ -51,35 +50,45 @@ export async function POST() {
 
   const since = latest?.ebay_created_at ?? new Date(Date.now() - DEFAULT_LOOKBACK_MS).toISOString();
 
+  // 502 is reserved for the eBay call itself failing (a genuinely bad
+  // upstream response); a failure in our own Supabase write is a 500. Folding
+  // both into one catch previously meant a DB error was reported to the user
+  // as an eBay failure — and either way, nothing was ever logged server-side,
+  // which is what made the original 502 here take hours to diagnose.
+  let messages;
   try {
-    const messages = await fetchMemberMessages(accessToken, since);
-
-    if (messages.length === 0) {
-      return NextResponse.json({ synced: 0 });
-    }
-
-    const { error: upsertError } = await client
-      .from("ebay_messages")
-      .upsert(
-        messages.map((m) => ({
-          external_message_id: m.externalMessageId,
-          item_id: m.itemId,
-          buyer_username: m.buyerUsername,
-          direction: m.direction,
-          subject: m.subject,
-          body: m.body,
-          question_type: m.questionType,
-          is_read: m.isRead,
-          ebay_created_at: m.ebayCreatedAt,
-        })),
-        { onConflict: "external_message_id" }
-      );
-
-    if (upsertError) throw upsertError;
-
-    return NextResponse.json({ synced: messages.length });
+    messages = await fetchMemberMessages(accessToken, since);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed";
+    console.error("[messages/ebay/sync] eBay fetch failed:", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  if (messages.length === 0) {
+    return NextResponse.json({ synced: 0 });
+  }
+
+  const { error: upsertError } = await client
+    .from("ebay_messages")
+    .upsert(
+      messages.map((m) => ({
+        external_message_id: m.externalMessageId,
+        item_id: m.itemId,
+        buyer_username: m.buyerUsername,
+        direction: m.direction,
+        subject: m.subject,
+        body: m.body,
+        question_type: m.questionType,
+        is_read: m.isRead,
+        ebay_created_at: m.ebayCreatedAt,
+      })),
+      { onConflict: "external_message_id" }
+    );
+
+  if (upsertError) {
+    console.error("[messages/ebay/sync] upsert failed:", upsertError.message);
+    return NextResponse.json({ error: "Failed to save synced messages" }, { status: 500 });
+  }
+
+  return NextResponse.json({ synced: messages.length });
 }
