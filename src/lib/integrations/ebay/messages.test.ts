@@ -174,4 +174,17 @@ describe("fetchMemberMessages", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("msg-4"));
     warnSpy.mockRestore();
   });
+
+  it("logs how many exchange blocks eBay returned per page, so an empty result can be told apart from a parsing failure without another deploy", async () => {
+    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
+    mockXmlResponse(ONE_PAGE); // zero <MemberMessageExchange> blocks
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("page 1"),
+      expect.objectContaining({ exchangeBlocks: 0, messagesParsed: 0 })
+    );
+    infoSpy.mockRestore();
+  });
 });
