@@ -5,6 +5,8 @@ import {
   fetchMessagesPage,
   syncMessages,
   sendReply,
+  searchMessages,
+  clearSearch,
 } from "./messagesSlice";
 import type { EbayMessage } from "@/types";
 
@@ -88,6 +90,85 @@ describe("messagesSlice", () => {
       fetchMessagesPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50 })
     );
     expect(state.isFetching).toBe(false);
+  });
+
+  it("tracks page>1 loading as isLoadingMore, not isFetching (infinite scroll)", () => {
+    const pending = reducer(undefined, fetchMessagesPage.pending("req-id", { page: 2, pageSize: 50 }));
+    expect(pending.isLoadingMore).toBe(true);
+    expect(pending.isFetching).toBe(false);
+
+    const rejected = reducer(
+      pending,
+      fetchMessagesPage.rejected(new Error("fail"), "req-id", { page: 2, pageSize: 50 })
+    );
+    expect(rejected.isLoadingMore).toBe(false);
+  });
+
+  it("appends page data when page > 1, replaces when page === 1 (infinite scroll)", () => {
+    const page1 = reducer(
+      undefined,
+      fetchMessagesPage.fulfilled(
+        { data: [makeMessage({ id: "msg-1" })], count: 3, page: 1, pageSize: 50 },
+        "req-id",
+        { page: 1, pageSize: 50 }
+      )
+    );
+    expect(page1.items.map((m) => m.id)).toEqual(["msg-1"]);
+
+    const page2 = reducer(
+      page1,
+      fetchMessagesPage.fulfilled(
+        { data: [makeMessage({ id: "msg-2" })], count: 3, page: 2, pageSize: 50 },
+        "req-id",
+        { page: 2, pageSize: 50 }
+      )
+    );
+    expect(page2.items.map((m) => m.id)).toEqual(["msg-1", "msg-2"]);
+    expect(page2.isLoadingMore).toBe(false);
+
+    // A page-1 refetch (e.g. after sync) discards accumulated scroll pages.
+    const refreshed = reducer(
+      page2,
+      fetchMessagesPage.fulfilled(
+        { data: [makeMessage({ id: "msg-fresh" })], count: 1, page: 1, pageSize: 50 },
+        "req-id",
+        { page: 1, pageSize: 50 }
+      )
+    );
+    expect(refreshed.items.map((m) => m.id)).toEqual(["msg-fresh"]);
+  });
+
+  it("sets isSearching across the searchMessages lifecycle and stores query + results", () => {
+    const pending = reducer(undefined, searchMessages.pending("req-id", "buyer1"));
+    expect(pending.isSearching).toBe(true);
+
+    const fulfilled = reducer(
+      pending,
+      searchMessages.fulfilled(
+        { query: "buyer1", data: [makeMessage({ id: "msg-found" })] },
+        "req-id",
+        "buyer1"
+      )
+    );
+    expect(fulfilled.isSearching).toBe(false);
+    expect(fulfilled.searchQuery).toBe("buyer1");
+    expect(fulfilled.searchResults.map((m) => m.id)).toEqual(["msg-found"]);
+
+    const rejectedFrom = reducer(
+      pending,
+      searchMessages.rejected(new Error("fail"), "req-id", "buyer1")
+    );
+    expect(rejectedFrom.isSearching).toBe(false);
+  });
+
+  it("clearSearch resets query and results", () => {
+    const searched = reducer(
+      undefined,
+      searchMessages.fulfilled({ query: "buyer1", data: [makeMessage()] }, "req-id", "buyer1")
+    );
+    const cleared = reducer(searched, clearSearch());
+    expect(cleared.searchQuery).toBe("");
+    expect(cleared.searchResults).toEqual([]);
   });
 
   it("sets isSyncing across the syncMessages lifecycle", () => {
