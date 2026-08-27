@@ -7,13 +7,26 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Minimal file set per change type
 
-- **New field surfaced from eBay** (e.g. an attachment URL): add it to
-  `EbayMemberMessage` in `lib/integrations/ebay/messages.ts`'s
-  `parseExchangeBlock`, add the DB column via the "2 places" rule
-  (`supabase/SKILL.md`) — new migration using `run_on_all_tenant_schemas`
-  PLUS `provision_tenant_schema()` — add it to `EbayMessage` in
-  `types/index.ts`, and thread it through the sync route's `.upsert()` call
-  (`app/api/messages/ebay/sync/route.ts`).
+- **New field surfaced from eBay** (e.g. an attachment URL — the
+  `item_title`/`item_price`/`item_currency`/`item_url` fields added
+  2026-08-27 by migration `034` are the reference example, worth reading
+  before repeating this): add it to `EbayMemberMessage` in
+  `lib/integrations/ebay/messages.ts`'s `parseExchangeBlock`, add the DB
+  column via the "2 places" rule (`supabase/SKILL.md`) — new migration
+  using `run_on_all_tenant_schemas` PLUS `provision_tenant_schema()` — add
+  it to `EbayMessage` in `types/index.ts`, and thread it through the sync
+  route's `.upsert()` call (`app/api/messages/ebay/sync/route.ts`).
+  **If the field is something `groupThreads.ts` reads from "the most recent
+  message" (like the item-details header does), also copy it onto the
+  reply route's `.insert()`** (`app/api/messages/[id]/reply/route.ts`,
+  already done for `item_id`/`buyer_username`) — otherwise the very next
+  reply a user sends becomes the thread's newest message, and its blank
+  field silently overwrites what synced messages had, since a
+  locally-created outbound row has no `<Item>`/exchange XML of its own to
+  read the field from. This is exactly the shape of bug that would only
+  show up after shipping, when someone actually replies — caught here by
+  tracing `groupThreads.ts`'s "last message wins" logic forward rather than
+  waiting for it to be reported.
 - **Changing thread grouping/ordering**: `_lib/groupThreads.ts` is the single
   source of truth — both `ThreadList` and `page.tsx`'s `replyTarget`
   computation depend on it. Has a colocated test; extend that test alongside
@@ -24,9 +37,55 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   existing `ebay_messages` row to attach to, so it can't reuse
   `POST /api/messages/[id]/reply`), and a "New message" UI entry point that
   doesn't exist yet — this is a real scope expansion, not a small tweak.
+- **Changing the auto-sync trigger or cadence**: `page.tsx`'s `runSync` +
+  the `useEffect` that calls it on mount is the only place this lives — no
+  slice/thunk changes needed for a cadence tweak (e.g. throttling), just
+  the effect's condition. **Adding avatar colors or changing bubble/unread
+  styling**: `_lib/avatarColor.ts` (colors) and `_components/ThreadView.tsx`
+  / `_components/ThreadList.tsx` (layout) — see the Tailwind-static-strings
+  gotcha below before touching `avatarColor.ts`.
 
 ## Gotchas
 
+- **`<CreationDate>` is not found inside `<Question>` — every message
+  synced in one call lands with the identical fallback timestamp.
+  CONFIRMED live 2026-08-27, root cause not yet identified.** Checked
+  directly against the database: nearly every multi-message thread has
+  exactly ONE distinct `ebay_created_at` regardless of message count (one
+  thread has 8 messages, one timestamp) — the fingerprint of
+  `tagText(block, "CreationDate") ?? new Date().toISOString()` in
+  `parseExchangeBlock` hitting its fallback for every message parsed within
+  the same sync. `<CreationDate>` DOES appear somewhere in a real exchange
+  block (it showed up in the flat tag-name diagnostic from the prior
+  investigation), just not where `parseExchangeBlock` looks for it — most
+  likely a sibling of `<Question>` under `<MemberMessageExchange>`
+  (exchange-level, not per-message) rather than a child of `<Question>`
+  itself. **Do not guess the fix.** `fetchMemberMessages` now logs a fully
+  redacted structural skeleton of one exchange block on every sync
+  (`redactedStructure()` — tag names and nesting preserved, ALL leaf text
+  replaced with `…`, so no buyer content or field values reach a log) —
+  get that line from the next sync's logs and find where `<CreationDate>`
+  actually sits before touching `parseExchangeBlock` again. This blocks the
+  day-separator feature from being meaningful (it's built and correct, but
+  will show one separator per synced-thread today, not real per-message
+  days) until this is fixed.
+- **`--color-surface-hover` does not exist anywhere in `globals.css` — was
+  never a real token, fixed 2026-08-27.** Both `ThreadList.tsx` (the row
+  hover state) and `ThreadView.tsx` (the original inbound-answered bubble
+  background, pre-dating the 2026-08-26 redesign) referenced it. An
+  undefined CSS custom property with no fallback makes the declaration
+  invalid at computed-value time — `background-color` silently reverts to
+  its initial value (`transparent`), not to any visible color. Every
+  inbound-answered bubble had a fully transparent background this whole
+  time; the row hover state simply did nothing. Both now use
+  `--color-surface-subtle`, this app's actual established token for a
+  subtle hover/alternate background (see `components/ui/Button.tsx`,
+  `components/ui/DataTable.tsx`, `listings/_components/CategoryStep.tsx`
+  for the same pattern elsewhere). **If a bubble/row background looks like
+  it's doing nothing, check the custom property genuinely exists in
+  `globals.css` before assuming the Tailwind class or theme logic is
+  wrong** — Tailwind will happily emit a rule for `bg-(--anything)` whether
+  or not that variable is ever defined.
 - **The sync upsert's `ON CONFLICT` target was a PARTIAL index — fixed in
   migration `033_ebay_messages_full_unique_index.sql`, confirmed live
   2026-08-27.** Once parsing was fixed (next gotcha), sync got past
@@ -167,11 +226,26 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   from) — replying to your own outbound row is blocked by
   `ReplyBox`/`latestInboundMessage` always targeting the latest *inbound*
   message in the thread, never an outbound one.
-- **No push sync — messages only update when a user clicks "Sync
-  messages."** Unlike orders (`api/integrations/review`), there's no
-  scheduled/cron sync route in this codebase (see `AGENTS.md`), and eBay's
-  Trading API has no webhook for member messages. A buyer's new message
-  won't appear until someone opens `/dashboard/messages` and syncs.
+- **No push sync — messages only update when someone opens the page
+  (fetched automatically, no button since 2026-08-27).** Unlike orders
+  (`api/integrations/review`), there's no scheduled/cron sync route in this
+  codebase (see `AGENTS.md`), and eBay's Trading API has no webhook for
+  member messages. A buyer's new message won't appear until someone opens
+  `/dashboard/messages` — which now syncs unconditionally, every visit, no
+  throttle. That was a deliberate choice over debouncing (e.g. "only if the
+  last sync was >5 min ago") for simplicity; each real sync is a live ~5s
+  Trading API call (see the Vercel-log-driven investigation elsewhere in
+  this file), so if this page ever gets a lot of foot traffic, revisit
+  whether every visit still needs a live call.
+- **`avatarColor.ts`'s Tailwind classes must stay full static strings —
+  do not "simplify" them into a template literal.** Tailwind's JIT scanner
+  reads source text at build time, not runtime values; `` `bg-(--color-avatar-${n})` ``
+  would be invisible to it and silently generate no CSS for any avatar but
+  whichever ones happen to also appear literally elsewhere in the codebase.
+  `components/ui/Badge.tsx`'s `VARIANT_CLASSES` is the same pattern for the
+  same reason — if you add a 7th avatar color, add both a new literal string
+  to the `AVATAR_CLASSES` array AND the matching `--color-avatar-7`/
+  `-7-text` pair in `globals.css`.
 - **Reply body is XML-escaped, not the read side.** `escapeXml()`
   (`lib/integrations/ebay/tradingApi.ts`) is applied to `itemId`/
   `parentMessageId`/`recipientUsername`/`body` before building the

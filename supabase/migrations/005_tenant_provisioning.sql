@@ -334,6 +334,11 @@ BEGIN
       question_type          text,
       is_read                boolean NOT NULL DEFAULT false,
       ebay_created_at        timestamptz NOT NULL,
+      -- Item title/price/link — see 034_ebay_messages_item_details.sql.
+      item_title             text,
+      item_price             numeric(12,2),
+      item_currency          text,
+      item_url               text,
       created_at             timestamptz NOT NULL DEFAULT now(),
       updated_at             timestamptz NOT NULL DEFAULT now()
     )

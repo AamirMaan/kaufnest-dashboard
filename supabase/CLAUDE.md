@@ -213,6 +213,22 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   confirmed live 2026-08-27 across all 5 tenants (identical partial index in
   each, table empty in each, so converting had zero duplicate-data risk).
   Backs the Messages feature (`src/app/dashboard/messages/`).
+- `migrations/034_ebay_messages_item_details.sql` — adds nullable
+  `item_title text`, `item_price numeric(12,2)`, `item_currency text`,
+  `item_url text` to `ebay_messages` via `run_on_all_tenant_schemas`; also
+  mirrored into `provision_tenant_schema()` in the same commit.
+  `GetMemberMessages`' `<Item>` block already carries `Title`,
+  `SellingStatus`/`CurrentPrice` (with a `currencyID` attribute, same
+  `MoneyType` shape `listings.ts` already parses for `GetMyeBaySelling`),
+  and `ViewItemURL` — confirmed live 2026-08-27 — but the app was
+  discarding all of it, extracting only `<ItemID>`, so the Messages UI
+  could show nothing better than a bare numeric item id. Denormalized onto
+  every message row rather than a separate items table, matching how
+  eBay's own response already repeats the same `<Item>` block on every
+  message about that item. `src/app/api/messages/[id]/reply/route.ts`'s
+  insert copies these four fields from the original message, same as it
+  already does for `item_id`/`buyer_username` — see the gotcha in
+  `dashboard/messages/SKILL.md` for why. Backs the Messages feature.
 
 ## Related code
 

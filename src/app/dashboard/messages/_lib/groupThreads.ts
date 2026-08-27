@@ -7,6 +7,12 @@ export interface MessageThread {
   messages: EbayMessage[]; // ascending by ebay_created_at
   lastMessageAt: string;
   unreadCount: number;
+  // From the most recent message — null for rows synced before migration
+  // 034 added these columns, or if eBay's response ever lacks them.
+  itemTitle: string | null;
+  itemPrice: number | null;
+  itemCurrency: string | null;
+  itemUrl: string | null;
 }
 
 /** Groups a flat message list into per-(buyer, item) threads, most-recently-active first. */
@@ -31,6 +37,10 @@ export function groupThreads(messages: EbayMessage[]): MessageThread[] {
       messages: sorted,
       lastMessageAt: last.ebay_created_at,
       unreadCount: sorted.filter((m) => m.direction === "inbound" && !m.is_read).length,
+      itemTitle: last.item_title,
+      itemPrice: last.item_price,
+      itemCurrency: last.item_currency,
+      itemUrl: last.item_url,
     });
   }
 

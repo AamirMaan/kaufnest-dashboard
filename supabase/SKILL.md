@@ -17,27 +17,27 @@ Two Supabase projects:
 
 ## File map + apply status
 
-> **⚠️ VERIFIED LIVE 2026-08-27 — the per-row ⏳ markers below are STALE.**
-> Queried both projects read-only via MCP against `information_schema`,
-> `pg_policies`/`pg_indexes`/`pg_constraint`, across all five tenant schemas
-> (not just `tenant_kaufnest`). Result:
+> **⚠️ VERIFIED LIVE 2026-08-27 (updated same day, later) — the per-row ⏳
+> markers below are STALE.** Queried both projects read-only via MCP against
+> `information_schema`/`pg_policies`/`pg_indexes`/`pg_constraint`, across all
+> five tenant schemas (not just `tenant_kaufnest`). Result:
 >
-> - **Everything through `032` is applied**, 5/5 tenants — including 007, 008,
+> - **Everything through `033` is applied**, 5/5 tenants — including 007, 008,
 >   010, 015, 021, 023, 025, 026 (all 5/5), the `listing-images` bucket,
 >   027–030's notifications stack + the `manage_messages` override branch on
->   `ebay_messages_all_admin`, `031_sales_refunded_amount.sql`, and
->   `032_expenses_allow_negative_amount.sql` (both confirmed re-checked
->   2026-08-27, having been outstanding as of the 2026-08-06 pass below).
-> - **`005_tenant_provisioning.sql` is current** through 030's override branch
->   and 031/032's changes — re-verify against `033` before assuming it covers
->   that one too; this file is edited alongside each new migration but the
+>   `ebay_messages_all_admin`, `031_sales_refunded_amount.sql`,
+>   `032_expenses_allow_negative_amount.sql`, and
+>   `033_ebay_messages_full_unique_index.sql` (`idx_ebay_messages_external_id`
+>   re-checked directly — genuinely non-partial in all 5 tenants now; it was
+>   still the old partial index as of the first 2026-08-27 pass below).
+> - **`005_tenant_provisioning.sql` is current** through 030's override
+>   branch and 031/032's changes — re-verify before assuming it also covers
+>   `033`/`034`; this file is edited alongside each new migration but the
 >   live function body is only checked when explicitly re-verified here.
-> - **Genuinely outstanding: `033_ebay_messages_full_unique_index.sql`** (the
->   live index in all 5 tenants is still the old partial one — this is what
->   makes every `messages/ebay/sync` upsert fail with "no unique or exclusion
->   constraint matching the ON CONFLICT specification", confirmed live) and
->   **`control-plane/004_admin_audit_log.sql`** (`control.admin_audit_log`
->   does not exist). `control-plane/002` and `003` are applied.
+> - **Genuinely outstanding: `034_ebay_messages_item_details.sql`** (added
+>   2026-08-27, not yet applied) and **`control-plane/004_admin_audit_log.sql`**
+>   (`control.admin_audit_log` does not exist). `control-plane/002` and `003`
+>   are applied.
 >
 > Do not trust a ⏳ marker below without re-checking; this repo still has no
 > migration ledger, which is why they drifted. Re-verify and update this block
@@ -73,7 +73,8 @@ Two Supabase projects:
 | `migrations/030_ebay_messages_override.sql` | all `tenant_%` schemas | ⏳ **pending — apply AFTER 027** (027 creates `ebay_messages` and the original `ebay_messages_all_admin` policy this redefines) — redefines `ebay_messages_all_admin` via `run_on_all_tenant_schemas` to OR in `current_user_has_override('manage_messages')` on both `using` and `with check`, idempotent via `drop policy if exists`. Fixes the dead-end click where a user granted the `manage_messages` override could see the `message.received` notification (029) but not read the `ebay_messages` row it pointed to. Also baked into `provision_tenant_schema()`. Backs `src/app/dashboard/messages/`. |
 | `migrations/031_sales_refunded_amount.sql` | all `tenant_%` schemas | ⏳ **pending** — adds nullable `sales.refunded_amount numeric(12,2)` (`>= 0` CHECK) via `run_on_all_tenant_schemas`; also baked into `provision_tenant_schema()` in the same commit. Idempotency marker for the Amazon REFUND import path (later tasks): a sale whose `refunded_amount` is already set is skipped on re-import instead of being deducted twice — REFUND rows deduct from the sale they belong to rather than becoming their own row, since `sales_unit_price_check` rejects a negative `unit_price` and `idx_sales_platform_external_order_id` is a non-partial unique index on `(platform, external_order_id)`, which every refund shares with its own sale. Backs `src/app/dashboard/sales/`. |
 | `migrations/032_expenses_allow_negative_amount.sql` | all `tenant_%` schemas | ⏳ **pending** — drops `expenses_amount_check CHECK (amount >= 0)` via `run_on_all_tenant_schemas`, idempotent (`drop constraint if exists`); also mirrored into `provision_tenant_schema()` in the same commit (the `amount` column's `CHECK` removed, comment noting it may be negative). Lets the Expenses importer store German Vorsteuerkonto credit notes (`Erstattung von Verkäufergebühren`, `Tarifas reembolsadas`, `Återbetalda avgifter`) as negative `amount` rows instead of dropping them, so totals reconcile with the filed VAT return. `src/app/dashboard/page.tsx`'s Expenses-by-Category list colors a negative category total `--color-success` instead of `--color-danger`. Backs `src/app/dashboard/expenses/` (later tasks 5/6 depend on this). |
-| `migrations/033_ebay_messages_full_unique_index.sql` | all `tenant_%` schemas | ⏳ **pending** — drops and recreates `idx_ebay_messages_external_id` as a full (non-partial) unique index via `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()` in the same commit. The partial version (026) blocked `sync/route.ts`'s `.upsert(rows, { onConflict: "external_message_id" })` outright — Postgres won't infer a partial unique index for a plain `ON CONFLICT (col)` with no predicate, which is all Supabase's `.upsert()` can express, so every sync failed at the DB write with "no unique or exclusion constraint matching the ON CONFLICT specification" (42P10). Confirmed live 2026-08-27 (identical partial index in all 5 tenants, table empty in all 5 — the failed upsert never wrote a row, so converting had zero duplicate-data risk). Backs `src/app/dashboard/messages/`. |
+| `migrations/033_ebay_messages_full_unique_index.sql` | all `tenant_%` schemas | ✅ applied 5/5 (re-verified 2026-08-27) — drops and recreates `idx_ebay_messages_external_id` as a full (non-partial) unique index via `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()` in the same commit. The partial version (026) blocked `sync/route.ts`'s `.upsert(rows, { onConflict: "external_message_id" })` outright — Postgres won't infer a partial unique index for a plain `ON CONFLICT (col)` with no predicate, which is all Supabase's `.upsert()` can express, so every sync failed at the DB write with "no unique or exclusion constraint matching the ON CONFLICT specification" (42P10). Backs `src/app/dashboard/messages/`. |
+| `migrations/034_ebay_messages_item_details.sql` | all `tenant_%` schemas | ⏳ **pending** — adds nullable `item_title`/`item_price`/`item_currency`/`item_url` to `ebay_messages` via `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()` in the same commit. `GetMemberMessages`' `<Item>` block already carries this (confirmed live 2026-08-27) but the app discarded all of it, extracting only `<ItemID>`. Backs `src/app/dashboard/messages/`. |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |

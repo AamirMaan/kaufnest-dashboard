@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { hasPermission } from "@/lib/utils/permissions";
+import { formatDateTime } from "@/lib/utils/date";
 import { fetchMessagesPage, syncMessages, sendReply } from "./_store/messagesSlice";
 import { groupThreads, latestInboundMessage } from "./_lib/groupThreads";
 import { ThreadList } from "./_components/ThreadList";
@@ -26,6 +26,8 @@ export default function MessagesPage() {
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const canManage = role && hasPermission(role, "manage_messages", permissionOverrides);
   const threads = useMemo(() => groupThreads(items), [items]);
@@ -36,15 +38,28 @@ export default function MessagesPage() {
     dispatch(fetchMessagesPage({ page: nextPage, pageSize }));
   }
 
-  async function handleSync() {
+  const runSync = useCallback(async () => {
+    setSyncErrorMsg(null);
     try {
       const synced = await dispatch(syncMessages()).unwrap();
       await dispatch(fetchMessagesPage({ page: 1, pageSize }));
-      success(synced > 0 ? `Synced ${synced} message(s)` : "No new messages");
+      setLastSyncedAt(new Date());
+      if (synced > 0) success(`Synced ${synced} new message${synced === 1 ? "" : "s"}`);
     } catch (err) {
-      toastError(err instanceof Error ? err.message : "Sync failed");
+      setSyncErrorMsg(err instanceof Error ? err.message : "Sync failed");
     }
-  }
+  }, [dispatch, pageSize, success]);
+
+  // Fetches on every visit to this page — matches "open Messages, see what's
+  // actually on eBay" rather than a manual button. Gated the same way the
+  // removed button was: only users with manage_messages ever trigger a sync.
+  // Deferred via a microtask (not called directly): runSync's first
+  // statement is a synchronous setState, and calling that straight from an
+  // effect body risks a cascading render (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (!canManage) return;
+    Promise.resolve().then(() => runSync());
+  }, [canManage, runSync]);
 
   async function handleSend(text: string) {
     if (!replyTarget) return;
@@ -83,19 +98,33 @@ export default function MessagesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Messages"
-        description="Reply to eBay buyer messages from your dashboard"
-        action={
-          canManage && (
-            <Button size="sm" variant="secondary" onClick={handleSync} disabled={isSyncing}>
-              <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
-              {isSyncing ? "Syncing…" : "Sync messages"}
-            </Button>
-          )
-        }
-      />
+      <PageHeader title="Messages" description="Reply to eBay buyer messages from your dashboard" />
 
+      {canManage && (
+        <div className="mb-4 flex items-center gap-1.5 text-sm">
+          {syncErrorMsg ? (
+            <>
+              <span className="text-(--color-danger)">Couldn&rsquo;t refresh messages.</span>
+              <button
+                type="button"
+                onClick={runSync}
+                className="font-medium text-(--color-primary) hover:underline"
+              >
+                Retry
+              </button>
+            </>
+          ) : isSyncing ? (
+            <span className="flex items-center gap-1.5 text-(--color-text-muted)">
+              <RefreshCw size={14} className="animate-spin" />
+              Checking eBay for new messages…
+            </span>
+          ) : (
+            lastSyncedAt && (
+              <span className="text-(--color-text-muted)">Updated {formatDateTime(lastSyncedAt.toISOString())}</span>
+            )
+          )}
+        </div>
+      )}
       {isFetching && <div className="mb-4 text-sm text-(--color-text-muted)">Loading…</div>}
 
       <div className="grid grid-cols-1 overflow-hidden rounded-(--radius-card) border border-(--color-border) md:grid-cols-[280px_1fr]">

@@ -48,6 +48,35 @@ drops and recreates it as a full unique index — this needs the user to
 apply it, then re-sync to confirm messages actually land in the table this
 time. No application code changed; this is a pure schema fix.
 
+**Update 2026-08-27, later:** messages now land, and a first UI pass shipped
+(auto-sync, avatars, bubble split, unanswered tint). User feedback on that
+pass surfaced two more real bugs, found by checking data rather than
+guessing from the screenshot:
+
+1. **`--color-surface-hover` never existed in `globals.css`.** Pre-dates
+   this whole investigation — every inbound-answered bubble (and the
+   ThreadList row hover) had a fully transparent background this entire
+   time, since an undefined CSS custom property with no fallback reverts to
+   `transparent`, not to any visible color. Fixed to the app's actual
+   established token, `--color-surface-subtle`.
+2. **`<CreationDate>` isn't nested inside `<Question>` either — same class
+   of bug as the wrapper-tag mismatch from 2026-08-26, not yet located.**
+   Checked directly against the database: nearly every multi-message thread
+   collapses to exactly one distinct `ebay_created_at`, the signature of
+   `parseExchangeBlock`'s `?? new Date().toISOString()` fallback firing for
+   every message in a sync. This blocks the requested day-separator feature
+   from being meaningful — it's built and tested, but will show one
+   separator per thread today, not real per-day grouping, until this is
+   fixed. Added a fully redacted structural-skeleton diagnostic (tag names/
+   nesting only, zero content) to `fetchMemberMessages` rather than guess a
+   third time where the field actually lives — needs one more real sync +
+   log check, same pattern as before.
+
+Also removed the per-bubble `subject` render entirely: confirmed live that
+eBay's `Subject` value for these messages is a full auto-generated sentence,
+identical across every message in a thread — pure repeated noise once the
+header already names the buyer and item.
+
 ---
 
 ## What we actually know
@@ -252,6 +281,40 @@ nothing in the server logs.** Fix that class of problem.
 
 Per `AGENTS.md`: don't run the dev server or `npm test` mid-task — ask for the
 output. Write tests alongside the fix, in the same commit.
+
+---
+
+**Update 2026-08-27, third round:** the first UI-polish pass (auto-sync,
+avatars, bubble redesign) shipped and got real user feedback. Three items,
+each verified before touching code rather than assumed:
+
+1. **Day labels showed German ("Heute") when the app's system language is
+   English.** Genuine mistake — I'd matched `lib/utils/date.ts`'s existing
+   `de-DE` convention, but that reflects the *buyer messages'* language
+   (German marketplace), not the app's own UI language. Fixed to English.
+2. **"Why aren't my messages on the right?"** — checked the database first:
+   zero outbound rows and zero `message`-entity audit log entries exist
+   anywhere. No reply has actually been sent yet, so there was nothing to
+   observe failing. Not content to leave it at that a third time, though:
+   re-read my own alignment code and found a real fragility regardless — a
+   `display:contents` wrapper controlling `align-self` on its former
+   children, a CSS combination with a genuinely rocky cross-browser
+   history. Replaced with a `Fragment` (zero DOM nodes, sidesteps the
+   question entirely) rather than assert the original was definitely fine.
+3. **Show real article details instead of a bare item number.** Confirmed
+   `GetMemberMessages`' `<Item>` block already carries `Title`,
+   `CurrentPrice`+`currencyID`, and `ViewItemURL` (from the schema
+   investigation two days earlier) — the app was parsing `<ItemID>` only
+   and discarding the rest. Added migration `034` (nullable columns,
+   2-places rule), threaded through parsing/upsert/UI. Caught one real bug
+   while doing it: `groupThreads.ts` reads item details from the thread's
+   *latest* message, and the reply route's local insert didn't carry them
+   — meaning the very first reply a user sent would have blanked the title
+   it just took two rounds of work to add. Fixed by copying those fields
+   onto the reply insert, same as `item_id`/`buyer_username` already are.
+
+No further CreationDate evidence yet — that fix (see the second 2026-08-27
+update above) is still pending a sync + log check, independent of this round.
 
 ---
 

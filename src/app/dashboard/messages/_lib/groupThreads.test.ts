@@ -12,6 +12,10 @@ const makeMessage = (overrides: Partial<EbayMessage> = {}): EbayMessage => ({
   question_type: null,
   is_read: false,
   ebay_created_at: "2026-07-20T10:00:00.000Z",
+  item_title: null,
+  item_price: null,
+  item_currency: null,
+  item_url: null,
   created_at: "2026-07-20T10:00:00.000Z",
   updated_at: "2026-07-20T10:00:00.000Z",
   ...overrides,
@@ -62,6 +66,36 @@ describe("groupThreads", () => {
       makeMessage({ id: "c", direction: "outbound", is_read: false }),
     ]);
     expect(threads[0].unreadCount).toBe(1);
+  });
+
+  it("exposes item title/price/currency/url from the most recent message", () => {
+    const threads = groupThreads([
+      makeMessage({
+        id: "a",
+        ebay_created_at: "2026-07-20T09:00:00.000Z",
+        item_title: "Old title",
+        item_price: 5,
+        item_currency: "USD",
+        item_url: "https://old",
+      }),
+      makeMessage({
+        id: "b",
+        ebay_created_at: "2026-07-20T11:00:00.000Z",
+        item_title: "Sample listing",
+        item_price: 12.99,
+        item_currency: "EUR",
+        item_url: "https://www.ebay.de/itm/123456789",
+      }),
+    ]);
+    expect(threads[0].itemTitle).toBe("Sample listing");
+    expect(threads[0].itemPrice).toBe(12.99);
+    expect(threads[0].itemCurrency).toBe("EUR");
+    expect(threads[0].itemUrl).toBe("https://www.ebay.de/itm/123456789");
+  });
+
+  it("falls back to null item details when the latest message has none (older rows, pre-034 sync)", () => {
+    const threads = groupThreads([makeMessage({ id: "a" })]);
+    expect(threads[0].itemTitle).toBeNull();
   });
 });
 
