@@ -229,6 +229,19 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   insert copies these four fields from the original message, same as it
   already does for `item_id`/`buyer_username` — see the gotcha in
   `dashboard/messages/SKILL.md` for why. Backs the Messages feature.
+- `migrations/035_sales_platform_fee.sql` — adds nullable `platform_fee
+  numeric(12,2)` to `sales` via `run_on_all_tenant_schemas`. Also fixes a
+  real, still-live gap found while adding it: `005_tenant_provisioning.sql`'s
+  `sales` CREATE TABLE never had `shipping_cost`/`shipping_charged`/
+  `advertising_fee` either, even though `010_order_fees.sql` (via
+  `027_reconcile_tenant_drift.sql`, which fixed `010`'s own original
+  hardcoded-`tenant_kaufnest` bug) put all three live on every existing
+  tenant — nobody updated `005`'s template alongside either fix. `005` is
+  fixed in the same commit to include all four fee columns, so a tenant
+  provisioned from now on gets them from day one instead of silently
+  missing them until the next drift-reconciliation pass. Backs the Sales
+  feature (`src/app/dashboard/sales/`) — see its SKILL.md's fee-fields
+  gotcha for the full story.
 
 ## Related code
 

@@ -15,6 +15,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
+import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import type { Platform, Currency, Sale, Purchase, Product } from "@/types";
 
@@ -44,6 +45,7 @@ interface FormState {
   shipping_cost: string;
   shipping_charged: string;
   advertising_fee: string;
+  platform_fee: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -66,6 +68,7 @@ function makeDefaults(defaultVatRate: number): FormState {
     shipping_cost: "",
     shipping_charged: "",
     advertising_fee: "",
+    platform_fee: "",
   };
 }
 
@@ -123,6 +126,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
     const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
     const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+    const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
 
     const { data, error: dbError } = await supabase
       .from("sales")
@@ -142,6 +146,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         shipping_cost: shippingCost,
         shipping_charged: shippingCharged,
         advertising_fee: advertisingFee,
+        platform_fee: platformFee,
         status,
         restock,
       })
@@ -469,16 +474,22 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
                   />
                 </Field>
               </Row>
-              <Field label="Advertising Fee">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
+              <Row>
+                <FeeAmountOrPercentField
+                  label="Advertising Fee"
                   value={form.advertising_fee}
-                  onChange={(e) => set("advertising_fee", e.target.value)}
-                  placeholder="0.00"
+                  onChange={(v) => set("advertising_fee", v)}
+                  itemTotal={total}
+                  currency={form.currency}
                 />
-              </Field>
+                <FeeAmountOrPercentField
+                  label="Platform Fee"
+                  value={form.platform_fee}
+                  onChange={(v) => set("platform_fee", v)}
+                  itemTotal={total}
+                  currency={form.currency}
+                />
+              </Row>
             </div>
           )}
         </div>

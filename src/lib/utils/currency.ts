@@ -51,3 +51,13 @@ export function vatAmountFromGross(gross: number, ratePercent: number): number {
   const vat = (gross * ratePercent) / (100 + ratePercent);
   return Math.round(vat * 100) / 100;
 }
+
+/**
+ * Compute a fee amount from a percentage of a base figure — e.g. an
+ * advertising or platform fee entered as "12%" of the order's item total.
+ * Returns 0 when the percentage is 0 or negative.
+ */
+export function computeFeeFromPercent(base: number, percent: number): number {
+  if (percent <= 0) return 0;
+  return Math.round(base * percent) / 100;
+}

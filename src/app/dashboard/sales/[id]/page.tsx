@@ -347,6 +347,14 @@ export default function SaleDetailPage({ params }: PageProps) {
                   : "—"
               }
             />
+            <FinRow
+              label="Platform Fee"
+              value={
+                sale.platform_fee != null
+                  ? formatCurrency(sale.platform_fee, sale.currency)
+                  : "—"
+              }
+            />
 
             <div className="border-t border-(--color-border) my-2" />
 

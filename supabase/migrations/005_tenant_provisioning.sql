@@ -144,7 +144,16 @@ BEGIN
       refunded_amount   numeric(12,2) CHECK (refunded_amount >= 0),
       status       text NOT NULL DEFAULT 'pending',
       restock      boolean NOT NULL DEFAULT false,
-      external_order_id text
+      external_order_id text,
+      -- Fee columns — see 010_order_fees.sql / 035_sales_platform_fee.sql.
+      -- Baked into this CREATE TABLE now (previously missing here despite
+      -- being live on every tenant since 027_reconcile_tenant_drift.sql —
+      -- a newly-provisioned tenant would have silently lacked all four
+      -- until this fix).
+      shipping_cost    numeric(12,2) CHECK (shipping_cost    >= 0),
+      shipping_charged numeric(12,2) CHECK (shipping_charged >= 0),
+      advertising_fee  numeric(12,2) CHECK (advertising_fee  >= 0),
+      platform_fee     numeric(12,2) CHECK (platform_fee     >= 0)
     )
   $sql$, schema_name);
 

@@ -133,7 +133,14 @@ describe("validateRowForFormat — amazon/ebay", () => {
   it("vat + fees parse with decimal commas", () => {
     const r = validateRowForFormat(
       AMAZON,
-      { ...AMAZON_BASE, vat_rate: "0,19", shipping_charged: "4,99", shipping_cost: "3,20", advertising_fee: "1,50" },
+      {
+        ...AMAZON_BASE,
+        vat_rate: "0,19",
+        shipping_charged: "4,99",
+        shipping_cost: "3,20",
+        advertising_fee: "1,50",
+        platform_fee: "1,25",
+      },
       2,
     );
     expect(r.error).toBeNull();
@@ -143,6 +150,19 @@ describe("validateRowForFormat — amazon/ebay", () => {
     expect(r.data?.shipping_charged).toBe(4.99);
     expect(r.data?.shipping_cost).toBe(3.2);
     expect(r.data?.advertising_fee).toBe(1.5);
+    expect(r.data?.platform_fee).toBe(1.25);
+  });
+
+  it("platform_fee is optional — blank → null", () => {
+    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, platform_fee: "" }, 2);
+    expect(r.error).toBeNull();
+    expect(r.data?.platform_fee).toBeNull();
+  });
+
+  it("negative platform_fee → row error", () => {
+    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, platform_fee: "-1" }, 2);
+    expect(r.error).toMatch(/platform_fee.*non-negative/);
+    expect(r.data).toBeNull();
   });
 
   it("German status synonym normalized", () => {

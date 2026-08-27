@@ -4,6 +4,7 @@ import {
   sumAmounts,
   calculateMargin,
   vatAmountFromGross,
+  computeFeeFromPercent,
 } from "./currency";
 
 describe("formatCurrency", () => {
@@ -149,5 +150,31 @@ describe("vatAmountFromGross", () => {
 
   it("handles a reduced rate (e.g. 7%)", () => {
     expect(vatAmountFromGross(107, 7)).toBe(7);
+  });
+});
+
+describe("computeFeeFromPercent", () => {
+  it("computes a percentage of the base amount", () => {
+    expect(computeFeeFromPercent(100, 12)).toBe(12);
+  });
+
+  it("rounds to 2 decimal places", () => {
+    expect(computeFeeFromPercent(33.33, 15)).toBe(5);
+  });
+
+  it("returns 0 when the percentage is 0", () => {
+    expect(computeFeeFromPercent(100, 0)).toBe(0);
+  });
+
+  it("returns 0 when the percentage is negative", () => {
+    expect(computeFeeFromPercent(100, -5)).toBe(0);
+  });
+
+  it("returns 0 when the base is 0", () => {
+    expect(computeFeeFromPercent(0, 12)).toBe(0);
+  });
+
+  it("handles a fractional percentage", () => {
+    expect(computeFeeFromPercent(250, 8.5)).toBe(21.25);
   });
 });
