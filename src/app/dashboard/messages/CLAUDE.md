@@ -40,19 +40,44 @@ Trading API mechanics this reuses.
   interpolated (`bg-(--color-avatar-${n})` would be invisible to Tailwind's
   JIT scanner — see the file's own comment and `components/ui/Badge.tsx`'s
   `VARIANT_CLASSES` for the same pattern). Colocated test.
+- `_lib/dayLabel.ts` — pure `dayLabelFor(isoDate, now?)` / `isNewDay(isoDate,
+  previousIsoDate)`. WhatsApp-style day-separator logic: "Heute"/"Gestern"/
+  German weekday for the last week, a short German date beyond that — German
+  to match this app's existing `de-DE` convention (`lib/utils/date.ts`), not
+  a literal copy of WhatsApp's English labels. Operates on the viewer's
+  **local** calendar day deliberately (correct for a chat UI — matches how
+  WhatsApp groups on a user's own device). Colocated test builds fixtures
+  from local `Date` components round-tripped through `.toISOString()` rather
+  than hardcoded UTC literals, specifically so it isn't timezone-flaky —
+  `process.env.TZ` reassignment mid-test-file does **not** reliably work,
+  Node caches timezone data at process start.
 - `_components/ThreadList.tsx` — left pane, one row per thread: avatar
   circle (`avatarColor.ts`) + buyer name (bold when the thread has any
   unanswered inbound message) + the existing unread-count `Badge`.
 - `_components/ThreadView.tsx` — right pane: a header bar (avatar + bold name
   + item id — this pane had no header at all before 2026-08-27) above
-  chat-bubble rendering of the selected thread's messages (inbound left,
-  outbound right, using `--color-primary` — emerald in light mode, violet in
-  dark, whatever the app's brand accent currently is). An inbound message
-  that's still unanswered (`!is_read`) gets an amber left-border/tint
+  chat-bubble rendering of the selected thread's messages. Outbound (your
+  replies) render right-aligned in `--color-primary-muted`/`--color-primary-text`
+  (the same soft "brand chip" pairing already used elsewhere, e.g.
+  `dashboard/page.tsx` — deliberately NOT the saturated `--color-primary` +
+  white text used for buttons, so a sent bubble doesn't read as a clickable
+  action). Inbound renders left-aligned; still-unanswered inbound
+  (`!is_read`) additionally gets an amber left-border/tint
   (`--color-warning`/`--color-warning-bg`) so it's visually obvious which
   questions still need a reply, even partway down a long thread — see the
   `is_read` gotcha in `dashboard/messages/SKILL.md` for what that flag
-  actually tracks (answered-on-eBay, not seen-by-you).
+  actually tracks (answered-on-eBay, not seen-by-you). Both directions get
+  one rounded corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
+  WhatsApp-style bubble "tail." A day-separator pill (`dayLabel.ts`) is
+  inserted before the first message of each new local calendar day, via a
+  `display:contents` wrapper per message so the optional centered separator
+  and the self-start/self-end bubble can both be direct flex children
+  without a plain wrapper `div` flattening their alignment into one box.
+  `message.subject` is intentionally **not** rendered per-bubble — eBay's
+  own `Subject` value for these messages is a full auto-generated sentence
+  ("`<buyer>` hat eine Nachricht gesendet zu `<item title>` #`<item id>`"),
+  identical across every message in a thread, confirmed live 2026-08-27 —
+  pure repeated noise once the header already names the buyer and item.
 - `_components/ReplyBox.tsx` — controlled textarea + Send button. Disabled
   when the selected thread has no inbound message to reply to (Trading API's
   `AddMemberMessageRTQ` requires a `ParentMessageID`) — see the "v1 scope"
@@ -100,4 +125,4 @@ OAuth token.
 ## Tests
 
 `npx jest dashboard/messages` runs `_store/messagesSlice.test.ts`,
-`_lib/groupThreads.test.ts`, and `_lib/avatarColor.test.ts`.
+`_lib/groupThreads.test.ts`, `_lib/avatarColor.test.ts`, and `_lib/dayLabel.test.ts`.

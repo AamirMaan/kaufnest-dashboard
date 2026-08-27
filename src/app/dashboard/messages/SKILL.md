@@ -34,6 +34,45 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **`<CreationDate>` is not found inside `<Question>` — every message
+  synced in one call lands with the identical fallback timestamp.
+  CONFIRMED live 2026-08-27, root cause not yet identified.** Checked
+  directly against the database: nearly every multi-message thread has
+  exactly ONE distinct `ebay_created_at` regardless of message count (one
+  thread has 8 messages, one timestamp) — the fingerprint of
+  `tagText(block, "CreationDate") ?? new Date().toISOString()` in
+  `parseExchangeBlock` hitting its fallback for every message parsed within
+  the same sync. `<CreationDate>` DOES appear somewhere in a real exchange
+  block (it showed up in the flat tag-name diagnostic from the prior
+  investigation), just not where `parseExchangeBlock` looks for it — most
+  likely a sibling of `<Question>` under `<MemberMessageExchange>`
+  (exchange-level, not per-message) rather than a child of `<Question>`
+  itself. **Do not guess the fix.** `fetchMemberMessages` now logs a fully
+  redacted structural skeleton of one exchange block on every sync
+  (`redactedStructure()` — tag names and nesting preserved, ALL leaf text
+  replaced with `…`, so no buyer content or field values reach a log) —
+  get that line from the next sync's logs and find where `<CreationDate>`
+  actually sits before touching `parseExchangeBlock` again. This blocks the
+  day-separator feature from being meaningful (it's built and correct, but
+  will show one separator per synced-thread today, not real per-message
+  days) until this is fixed.
+- **`--color-surface-hover` does not exist anywhere in `globals.css` — was
+  never a real token, fixed 2026-08-27.** Both `ThreadList.tsx` (the row
+  hover state) and `ThreadView.tsx` (the original inbound-answered bubble
+  background, pre-dating the 2026-08-26 redesign) referenced it. An
+  undefined CSS custom property with no fallback makes the declaration
+  invalid at computed-value time — `background-color` silently reverts to
+  its initial value (`transparent`), not to any visible color. Every
+  inbound-answered bubble had a fully transparent background this whole
+  time; the row hover state simply did nothing. Both now use
+  `--color-surface-subtle`, this app's actual established token for a
+  subtle hover/alternate background (see `components/ui/Button.tsx`,
+  `components/ui/DataTable.tsx`, `listings/_components/CategoryStep.tsx`
+  for the same pattern elsewhere). **If a bubble/row background looks like
+  it's doing nothing, check the custom property genuinely exists in
+  `globals.css` before assuming the Tailwind class or theme logic is
+  wrong** — Tailwind will happily emit a rule for `bg-(--anything)` whether
+  or not that variable is ever defined.
 - **The sync upsert's `ON CONFLICT` target was a PARTIAL index — fixed in
   migration `033_ebay_messages_full_unique_index.sql`, confirmed live
   2026-08-27.** Once parsing was fixed (next gotcha), sync got past

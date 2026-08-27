@@ -48,6 +48,35 @@ drops and recreates it as a full unique index — this needs the user to
 apply it, then re-sync to confirm messages actually land in the table this
 time. No application code changed; this is a pure schema fix.
 
+**Update 2026-08-27, later:** messages now land, and a first UI pass shipped
+(auto-sync, avatars, bubble split, unanswered tint). User feedback on that
+pass surfaced two more real bugs, found by checking data rather than
+guessing from the screenshot:
+
+1. **`--color-surface-hover` never existed in `globals.css`.** Pre-dates
+   this whole investigation — every inbound-answered bubble (and the
+   ThreadList row hover) had a fully transparent background this entire
+   time, since an undefined CSS custom property with no fallback reverts to
+   `transparent`, not to any visible color. Fixed to the app's actual
+   established token, `--color-surface-subtle`.
+2. **`<CreationDate>` isn't nested inside `<Question>` either — same class
+   of bug as the wrapper-tag mismatch from 2026-08-26, not yet located.**
+   Checked directly against the database: nearly every multi-message thread
+   collapses to exactly one distinct `ebay_created_at`, the signature of
+   `parseExchangeBlock`'s `?? new Date().toISOString()` fallback firing for
+   every message in a sync. This blocks the requested day-separator feature
+   from being meaningful — it's built and tested, but will show one
+   separator per thread today, not real per-day grouping, until this is
+   fixed. Added a fully redacted structural-skeleton diagnostic (tag names/
+   nesting only, zero content) to `fetchMemberMessages` rather than guess a
+   third time where the field actually lives — needs one more real sync +
+   log check, same pattern as before.
+
+Also removed the per-bubble `subject` render entirely: confirmed live that
+eBay's `Subject` value for these messages is a full auto-generated sentence,
+identical across every message in a thread — pure repeated noise once the
+header already names the buyer and item.
+
 ---
 
 ## What we actually know

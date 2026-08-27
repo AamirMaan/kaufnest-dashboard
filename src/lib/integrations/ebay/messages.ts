@@ -57,6 +57,18 @@ function buildGetMemberMessagesRequest(sinceISO: string, pageNumber: number): st
   );
 }
 
+/**
+ * Replaces every leaf text node with "…", keeping all tag names and nesting
+ * intact — reveals the real shape of an eBay response (which field lives
+ * where) without exposing any buyer content in a log. Deliberately
+ * all-or-nothing: no per-field allowlist of "safe" tags to maintain or
+ * accidentally get wrong. Whitespace-only spans between tags (pretty-printed
+ * indentation) are left alone — only genuine text content is redacted.
+ */
+function redactedStructure(xml: string): string {
+  return xml.replace(/>([^<]*[^\s<][^<]*)</g, ">…<");
+}
+
 function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
   const itemId = tagText(exchangeXml, "ItemID") ?? "";
   const messages: EbayMemberMessage[] = [];
@@ -121,6 +133,18 @@ export async function fetchMemberMessages(
     });
 
     const [sample] = exchangeBlocks;
+    if (sample) {
+      // Every message in a thread with >1 message has been landing with the
+      // exact same ebayCreatedAt (confirmed live 2026-08-27 across nearly
+      // every multi-message thread) — the `?? new Date().toISOString()`
+      // fallback on line below is firing for every message, meaning
+      // <CreationDate> isn't actually inside <Question> the way it's
+      // currently read. Logged unconditionally (not just on a parse
+      // mismatch) because this failure is silent otherwise: the row still
+      // "succeeds" per parseExchangeBlock's messageId/text guard, so nothing
+      // else would ever surface it.
+      console.info(`[ebay/messages] exchange structure (redacted, page ${page}):`, redactedStructure(sample));
+    }
     if (sample && pageMessages.length < exchangeBlocks.length) {
       // Exchange blocks exist but some/all failed parseExchangeBlock's
       // messageId/text guard — the real XML nests differently than

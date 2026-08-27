@@ -235,4 +235,63 @@ describe("fetchMemberMessages", () => {
     ).toBe(false);
     warnSpy.mockRestore();
   });
+
+  it("logs a redacted structural skeleton of the exchange XML — tag names/nesting kept, all text content stripped", async () => {
+    // Needed to see WHERE a field actually lives in a real response (e.g.
+    // CreationDate) without a captured fixture and without logging any
+    // buyer content. This is the mechanism, not a claim about the real
+    // shape — that's still unconfirmed, which is exactly why it exists.
+    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        ${REAL_SHAPE_EXCHANGE}
+      </GetMemberMessagesResponse>`);
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    const call = infoSpy.mock.calls.find(
+      ([msg]) => typeof msg === "string" && msg.includes("exchange structure")
+    )!;
+    const skeleton = call[1] as string;
+    expect(skeleton).toContain("<MemberMessageExchange>");
+    expect(skeleton).toContain("<Question>");
+    expect(skeleton).toContain("<CreationDate>…</CreationDate>");
+    // Structure preserved, content redacted — no buyer data leaks into logs.
+    expect(skeleton).not.toContain("buyer1");
+    expect(skeleton).not.toContain("Is this still available?");
+    infoSpy.mockRestore();
+  });
+
+  it("redacts every leaf value uniformly — including short, non-sensitive-looking ones like an id — rather than selectively picking which fields to hide", async () => {
+    // Redaction is deliberately all-or-nothing: no per-field allowlist to
+    // maintain or accidentally miss. The point is tag structure, not values.
+    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <MemberMessageExchange>
+          <Item>
+            <ItemID>123456789</ItemID>
+          </Item>
+        </MemberMessageExchange>
+      </GetMemberMessagesResponse>`);
+
+    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+
+    const call = infoSpy.mock.calls.find(
+      ([msg]) => typeof msg === "string" && msg.includes("exchange structure")
+    )!;
+    const skeleton = call[1] as string;
+    expect(skeleton).toContain("<Item>");
+    expect(skeleton).toContain("<ItemID>…</ItemID>");
+    expect(skeleton).not.toContain("123456789");
+    // Pure indentation whitespace between <MemberMessageExchange> and <Item>
+    // must be left alone, not turned into its own "…" — only genuine text
+    // nodes (like ItemID's value above) get redacted.
+    expect(skeleton).not.toMatch(/<MemberMessageExchange>\s*…/);
+    infoSpy.mockRestore();
+  });
 });

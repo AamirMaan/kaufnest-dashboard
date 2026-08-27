@@ -28,8 +28,8 @@ export function ThreadList({ threads, selectedKey, onSelect }: Props) {
             <button
               type="button"
               onClick={() => onSelect(thread.key)}
-              className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-(--color-surface-hover) ${
-                selectedKey === thread.key ? "bg-(--color-surface-hover)" : ""
+              className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-(--color-surface-subtle) ${
+                selectedKey === thread.key ? "bg-(--color-surface-subtle)" : ""
               }`}
             >
               <span
