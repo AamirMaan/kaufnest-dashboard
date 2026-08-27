@@ -1,12 +1,13 @@
 # Messages feature
 
 Route: `/dashboard/messages`. Lets an admin/super_admin read and reply to
-eBay buyer messages without leaving the dashboard. Gated the same way as
-Listings/Integrations (`hasPlatformIntegrations`) plus a dedicated
-`manage_messages` permission (admin/super_admin only — nav entry is visible
-to all roles, but the reply box and auto-sync both require the permission;
-RLS on `ebay_messages` is admin/super_admin-only for every operation, so
-other roles simply see an empty thread list).
+eBay buyer messages without leaving the dashboard. Gated on the **Business
+plan** (`hasMessagingAndListings` — not `hasPlatformIntegrations`/Pro+Business,
+changed 2026-08-27 alongside the same change to Listings) **and** a connected
+eBay account, plus a dedicated `manage_messages` permission (admin/super_admin
+only — nav entry is visible to all roles, but the reply box and auto-sync both
+require the permission; RLS on `ebay_messages` is admin/super_admin-only for
+every operation, so other roles simply see an empty thread list).
 
 There's no push/webhook for eBay buyer messages — sync runs once per page
 visit (2026-08-27: the manual "Sync messages" button was removed; `page.tsx`
@@ -32,12 +33,20 @@ Trading API mechanics this reuses.
   not client-side). While `searchQuery` is non-empty the thread list is
   built from `searchResults` instead of `items`, and infinite-scroll loading
   is paused (search's own 200-row cap is its only "pagination"). Two-pane
-  layout: `ThreadList` (left) + `ThreadView`/`ReplyBox` (right). Also gates
-  the whole page behind `hasPlatformIntegrations(tenantPlan)` with an
-  upgrade prompt, same as Listings. `runSync` (a `useCallback`-memoized
-  wrapper around `syncMessages()` + `fetchMessagesPage({ page: 1 })`) fires
-  once from a `useEffect` on mount, gated on `canManage` — the same
-  permission that used to gate the removed button. Status is shown inline
+  layout: `ThreadList` (left) + `ThreadView`/`ReplyBox` (right). Gates the
+  whole page behind `hasMessagingAndListings(tenantPlan)` (Business only)
+  with an upgrade prompt, THEN a connected-eBay check
+  (`s.integrations.connections`) with a "connect eBay" prompt — same
+  two-guard sequence as `dropshipping/page.tsx` and Listings'
+  `BusinessEbayGate.tsx` (2026-08-27; there's no shared component here since
+  Messages has only one route to gate, unlike Listings' three). `runSync`
+  (a `useCallback`-memoized wrapper around `syncMessages()` +
+  `fetchMessagesPage({ page: 1 })`) fires once from a `useEffect` on mount,
+  gated on `canManage` **and** the eBay connection being present — added
+  2026-08-27, since without it a disconnected tenant's auto-sync would still
+  fire and hit the sync route's own "eBay is not connected" 400 every visit,
+  for no benefit (the page shows the connection-required prompt instead of
+  the thread list either way). Status is shown inline
   where the button was: "Checking eBay…" while `isSyncing`, "Updated
   `<time>`" after a successful sync, or "Couldn't refresh messages — Retry"
   (calls `runSync` again) on failure — there's no other manual re-sync
@@ -169,7 +178,11 @@ OAuth token.
   2026-08-27 in favor of infinite scroll, see `ThreadList.tsx` above)
 - `components/layout/PageHeader`
 - `store/slices/currentUserSlice` (`tenantPlan`, `profile.role`/`permission_overrides`)
-- `lib/utils/{date, permissions, planGating, pagedQuery, currency}`
+- `store/slices` — `s.integrations.connections` (the eBay-connected check;
+  hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
+  Dropshipping/Listings use)
+- `lib/utils/{date, permissions, pagedQuery, currency}` — `planGating`'s
+  `hasMessagingAndListings` specifically, not `hasPlatformIntegrations`
   (`currency`'s `formatCurrency` renders `EbayMessage.item_price` in
   `ThreadView.tsx`'s header; `item_currency` is narrowed to the app's
   `Currency` union with an EUR fallback for display only — the stored raw

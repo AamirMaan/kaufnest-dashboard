@@ -56,6 +56,19 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **Messages is Business-plan-only, not Pro+Business, and requires a
+  connected eBay account — CHANGED 2026-08-27.** `hasPlatformIntegrations`
+  (Pro + Business) was the original gate; it's now `hasMessagingAndListings`
+  (Business only, `lib/utils/planGating.ts`) plus a second guard checking
+  `s.integrations.connections` for an `ebay` row with `status ===
+  "connected"` — same change made to Listings at the same time (see its
+  SKILL.md; Listings needed a shared `BusinessEbayGate` component since it
+  has three routes to gate, Messages only has one so the checks are inline
+  in `page.tsx`). The auto-sync `useEffect` is also gated on the connection
+  now, not just `canManage` — otherwise a disconnected tenant would still
+  fire a doomed sync request (the API route already 400s on no connection)
+  on every page visit for no UI benefit, since the connection-required
+  prompt renders instead of the thread list either way.
 - **`<CreationDate>` and `<MessageStatus>` are siblings of `<Question>`, not
   nested inside it — CONFIRMED live 2026-08-27, fixed.** A one-time
   diagnostic (`redactedStructure()`, since removed — its job was done)

@@ -27,9 +27,25 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `app/api/listings/[id]/publish/route.ts` — read both together, the route
   owns the `status`/`ebay_sku`/`ebay_offer_id` persistence, `publishListing`
   owns the actual eBay calls.
+- **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
+  is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
+  `[id]/page.tsx`. Change the copy/condition there, not in any individual
+  route file.
 
 ## Gotchas
 
+- **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
+  and the wizard routes had no gate at all until the same change.**
+  `hasPlatformIntegrations` (Pro + Business) was the original gate on
+  `page.tsx` only; it's now `hasMessagingAndListings` (Business only, see
+  `lib/utils/planGating.ts`) PLUS a connected-eBay check, applied via
+  `_components/BusinessEbayGate.tsx` to **all three** routes. Before this,
+  `new/page.tsx`/`[id]/page.tsx` rendered `ListingWizard` with no gate
+  whatsoever — a Pro tenant, or one with no eBay connection at all, could
+  reach the wizard by navigating straight to the URL even though the list
+  page's "New Listing" button was correctly hidden from them. Don't
+  reintroduce a route that renders `ListingWizard` without wrapping it in
+  `BusinessEbayGate`.
 - **Category search needs an application token, not the seller's user
   token — fixed.** `searchCategories` (Taxonomy API,
   `lib/integrations/ebay/publish.ts`) used to be called with the tenant's
