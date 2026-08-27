@@ -24,6 +24,13 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   existing `ebay_messages` row to attach to, so it can't reuse
   `POST /api/messages/[id]/reply`), and a "New message" UI entry point that
   doesn't exist yet — this is a real scope expansion, not a small tweak.
+- **Changing the auto-sync trigger or cadence**: `page.tsx`'s `runSync` +
+  the `useEffect` that calls it on mount is the only place this lives — no
+  slice/thunk changes needed for a cadence tweak (e.g. throttling), just
+  the effect's condition. **Adding avatar colors or changing bubble/unread
+  styling**: `_lib/avatarColor.ts` (colors) and `_components/ThreadView.tsx`
+  / `_components/ThreadList.tsx` (layout) — see the Tailwind-static-strings
+  gotcha below before touching `avatarColor.ts`.
 
 ## Gotchas
 
@@ -167,11 +174,26 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   from) — replying to your own outbound row is blocked by
   `ReplyBox`/`latestInboundMessage` always targeting the latest *inbound*
   message in the thread, never an outbound one.
-- **No push sync — messages only update when a user clicks "Sync
-  messages."** Unlike orders (`api/integrations/review`), there's no
-  scheduled/cron sync route in this codebase (see `AGENTS.md`), and eBay's
-  Trading API has no webhook for member messages. A buyer's new message
-  won't appear until someone opens `/dashboard/messages` and syncs.
+- **No push sync — messages only update when someone opens the page
+  (fetched automatically, no button since 2026-08-27).** Unlike orders
+  (`api/integrations/review`), there's no scheduled/cron sync route in this
+  codebase (see `AGENTS.md`), and eBay's Trading API has no webhook for
+  member messages. A buyer's new message won't appear until someone opens
+  `/dashboard/messages` — which now syncs unconditionally, every visit, no
+  throttle. That was a deliberate choice over debouncing (e.g. "only if the
+  last sync was >5 min ago") for simplicity; each real sync is a live ~5s
+  Trading API call (see the Vercel-log-driven investigation elsewhere in
+  this file), so if this page ever gets a lot of foot traffic, revisit
+  whether every visit still needs a live call.
+- **`avatarColor.ts`'s Tailwind classes must stay full static strings —
+  do not "simplify" them into a template literal.** Tailwind's JIT scanner
+  reads source text at build time, not runtime values; `` `bg-(--color-avatar-${n})` ``
+  would be invisible to it and silently generate no CSS for any avatar but
+  whichever ones happen to also appear literally elsewhere in the codebase.
+  `components/ui/Badge.tsx`'s `VARIANT_CLASSES` is the same pattern for the
+  same reason — if you add a 7th avatar color, add both a new literal string
+  to the `AVATAR_CLASSES` array AND the matching `--color-avatar-7`/
+  `-7-text` pair in `globals.css`.
 - **Reply body is XML-escaped, not the read side.** `escapeXml()`
   (`lib/integrations/ebay/tradingApi.ts`) is applied to `itemId`/
   `parentMessageId`/`recipientUsername`/`body` before building the

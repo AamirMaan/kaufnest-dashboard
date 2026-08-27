@@ -56,6 +56,16 @@
   --color-badge-default-bg:   #eff6ff; /* blue-50  */
   --color-badge-default-text: #1d4ed8; /* blue-700 */
 
+  /* Avatar palette — decorative only, hashed per-username (messages feature).
+     Deliberately distinct from success/warning/danger/info/primary so an
+     avatar color is never mistaken for a status. */
+  --color-avatar-1:      #ede9fe; --color-avatar-1-text: #6d28d9; /* violet-100/700 */
+  --color-avatar-2:      #fce7f3; --color-avatar-2-text: #be185d; /* pink-100/700   */
+  --color-avatar-3:      #cffafe; --color-avatar-3-text: #0e7490; /* cyan-100/700   */
+  --color-avatar-4:      #e0e7ff; --color-avatar-4-text: #4338ca; /* indigo-100/700 */
+  --color-avatar-5:      #ccfbf1; --color-avatar-5-text: #0f766e; /* teal-100/700   */
+  --color-avatar-6:      #ffedd5; --color-avatar-6-text: #c2410c; /* orange-100/700 */
+
   /* Typography */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -204,6 +214,13 @@ body {
   --color-badge-default-bg:   #172554; /* blue-950  */
   --color-badge-default-text: #93c5fd; /* blue-300  */
   --shadow-card:          0 1px 3px 0 rgb(0 0 0 / .4), 0 1px 2px -1px rgb(0 0 0 / .4);
+
+  --color-avatar-1:      #2e1065; --color-avatar-1-text: #c4b5fd; /* violet-950/300 */
+  --color-avatar-2:      #500724; --color-avatar-2-text: #f9a8d4; /* pink-950/300   */
+  --color-avatar-3:      #083344; --color-avatar-3-text: #67e8f9; /* cyan-950/300   */
+  --color-avatar-4:      #1e1b4b; --color-avatar-4-text: #a5b4fc; /* indigo-950/300 */
+  --color-avatar-5:      #042f2e; --color-avatar-5-text: #5eead4; /* teal-950/300   */
+  --color-avatar-6:      #431407; --color-avatar-6-text: #fdba74; /* orange-950/300 */
 
   --color-sidebar-active-text: #ffffff;
 
