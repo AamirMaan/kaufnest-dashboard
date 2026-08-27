@@ -35,6 +35,10 @@ export interface EbayMemberMessage {
   questionType: string | null;
   isRead: boolean;
   ebayCreatedAt: string;
+  itemTitle: string | null;
+  itemPrice: number | null;
+  itemCurrency: string | null;
+  itemUrl: string | null;
 }
 
 function buildGetMemberMessagesRequest(sinceISO: string, pageNumber: number): string {
@@ -69,8 +73,19 @@ function redactedStructure(xml: string): string {
   return xml.replace(/>([^<]*[^\s<][^<]*)</g, ">…<");
 }
 
+// <CurrentPrice currencyID="EUR">12.99</CurrentPrice> — same eBay Trading API
+// MoneyType shape listings.ts already parses for GetMyeBaySelling; reused
+// verbatim since GetMemberMessages' <Item> block uses the same convention.
+const CURRENT_PRICE = /<CurrentPrice currencyID="([A-Z]{3})">([\d.]+)<\/CurrentPrice>/;
+
 function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
   const itemId = tagText(exchangeXml, "ItemID") ?? "";
+  // Confirmed live 2026-08-27: <Item> also carries Title, SellingStatus/
+  // CurrentPrice, and ViewItemURL — previously discarded, so the Messages
+  // UI could show nothing better than the bare numeric item id.
+  const itemTitle = tagText(exchangeXml, "Title");
+  const priceMatch = CURRENT_PRICE.exec(exchangeXml);
+  const itemUrl = tagText(exchangeXml, "ViewItemURL");
   const messages: EbayMemberMessage[] = [];
 
   const messageBlocks = exchangeXml.match(/<Question>[\s\S]*?<\/Question>/g) ?? [];
@@ -95,6 +110,10 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
       // seller has already answered is treated as read.
       isRead: tagText(block, "MessageStatus") === "Answered",
       ebayCreatedAt: tagText(block, "CreationDate") ?? new Date().toISOString(),
+      itemTitle: itemTitle ? decodeXml(itemTitle) : null,
+      itemPrice: priceMatch ? Number(priceMatch[2]) : null,
+      itemCurrency: priceMatch ? priceMatch[1] : null,
+      itemUrl: itemUrl ? decodeXml(itemUrl) : null,
     });
   }
 

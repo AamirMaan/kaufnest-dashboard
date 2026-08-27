@@ -88,6 +88,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         direction: "outbound",
         body: text.trim(),
         ebay_created_at: new Date().toISOString(),
+        // Copied from the message being replied to, same as item_id/
+        // buyer_username above — without this, the reply becomes the
+        // thread's newest message and groupThreads' "read item details from
+        // the latest message" would blank out the title/price the instant
+        // a reply is sent, since a locally-created reply has no Item block
+        // of its own to parse them from.
+        item_title: original.item_title,
+        item_price: original.item_price,
+        item_currency: original.item_currency,
+        item_url: original.item_url,
       })
       .select()
       .single<EbayMessage>();

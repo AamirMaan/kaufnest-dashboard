@@ -350,6 +350,10 @@ export interface EbayMessage {
   question_type: string | null;
   is_read: boolean;
   ebay_created_at: string;
+  item_title: string | null;
+  item_price: number | null;
+  item_currency: string | null;
+  item_url: string | null;
   created_at: string;
   updated_at: string;
 }

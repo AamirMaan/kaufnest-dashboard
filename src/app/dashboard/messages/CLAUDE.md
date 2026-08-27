@@ -41,38 +41,50 @@ Trading API mechanics this reuses.
   JIT scanner — see the file's own comment and `components/ui/Badge.tsx`'s
   `VARIANT_CLASSES` for the same pattern). Colocated test.
 - `_lib/dayLabel.ts` — pure `dayLabelFor(isoDate, now?)` / `isNewDay(isoDate,
-  previousIsoDate)`. WhatsApp-style day-separator logic: "Heute"/"Gestern"/
-  German weekday for the last week, a short German date beyond that — German
-  to match this app's existing `de-DE` convention (`lib/utils/date.ts`), not
-  a literal copy of WhatsApp's English labels. Operates on the viewer's
-  **local** calendar day deliberately (correct for a chat UI — matches how
-  WhatsApp groups on a user's own device). Colocated test builds fixtures
-  from local `Date` components round-tripped through `.toISOString()` rather
-  than hardcoded UTC literals, specifically so it isn't timezone-flaky —
-  `process.env.TZ` reassignment mid-test-file does **not** reliably work,
-  Node caches timezone data at process start.
+  previousIsoDate)`. WhatsApp-style day-separator logic: "Today"/"Yesterday"/
+  weekday name for the last week, a short date beyond that. **English**,
+  matching this app's system/UI language — deliberately NOT the buyer
+  messages' language (German, since these are German eBay marketplace
+  conversations) and NOT `lib/utils/date.ts`'s `de-DE` choice for
+  `formatDate`/`formatDateTime`, a separate, unrelated existing decision
+  this file doesn't touch. Corrected from an initial German-label version
+  2026-08-27 — matching `lib/utils/date.ts`'s locale was the wrong instinct,
+  since that reflects the buyer-facing content's language, not the app's own.
+  Operates on the viewer's **local** calendar day deliberately (correct for
+  a chat UI — matches how WhatsApp groups on a user's own device). Colocated
+  test builds fixtures from local `Date` components round-tripped through
+  `.toISOString()` rather than hardcoded UTC literals, specifically so it
+  isn't timezone-flaky — `process.env.TZ` reassignment mid-test-file does
+  **not** reliably work, Node caches timezone data at process start.
 - `_components/ThreadList.tsx` — left pane, one row per thread: avatar
   circle (`avatarColor.ts`) + buyer name (bold when the thread has any
   unanswered inbound message) + the existing unread-count `Badge`.
-- `_components/ThreadView.tsx` — right pane: a header bar (avatar + bold name
-  + item id — this pane had no header at all before 2026-08-27) above
-  chat-bubble rendering of the selected thread's messages. Outbound (your
-  replies) render right-aligned in `--color-primary-muted`/`--color-primary-text`
-  (the same soft "brand chip" pairing already used elsewhere, e.g.
-  `dashboard/page.tsx` — deliberately NOT the saturated `--color-primary` +
-  white text used for buttons, so a sent bubble doesn't read as a clickable
-  action). Inbound renders left-aligned; still-unanswered inbound
-  (`!is_read`) additionally gets an amber left-border/tint
-  (`--color-warning`/`--color-warning-bg`) so it's visually obvious which
-  questions still need a reply, even partway down a long thread — see the
-  `is_read` gotcha in `dashboard/messages/SKILL.md` for what that flag
-  actually tracks (answered-on-eBay, not seen-by-you). Both directions get
-  one rounded corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
+- `_components/ThreadView.tsx` — right pane: a header bar (avatar + bold
+  name + item **title**, linking to the live eBay listing when
+  `item_url` is present, plus price — falls back to the bare "Item
+  `<id>`" for rows synced before migration `034` added these columns, or
+  if a response ever lacks them; this pane had no header at all before
+  2026-08-27) above chat-bubble rendering of the selected thread's
+  messages. Outbound (your replies) render right-aligned in
+  `--color-primary-muted`/`--color-primary-text` (the same soft "brand
+  chip" pairing already used elsewhere, e.g. `dashboard/page.tsx` —
+  deliberately NOT the saturated `--color-primary` + white text used for
+  buttons, so a sent bubble doesn't read as a clickable action). Inbound
+  renders left-aligned; still-unanswered inbound (`!is_read`) additionally
+  gets an amber left-border/tint (`--color-warning`/`--color-warning-bg`)
+  so it's visually obvious which questions still need a reply, even
+  partway down a long thread — see the `is_read` gotcha in
+  `dashboard/messages/SKILL.md` for what that flag actually tracks
+  (answered-on-eBay, not seen-by-you). Both directions get one rounded
+  corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
   WhatsApp-style bubble "tail." A day-separator pill (`dayLabel.ts`) is
   inserted before the first message of each new local calendar day, via a
-  `display:contents` wrapper per message so the optional centered separator
-  and the self-start/self-end bubble can both be direct flex children
-  without a plain wrapper `div` flattening their alignment into one box.
+  **`Fragment`** per message (not a wrapper `div`, and deliberately not
+  `display:contents` either — that technically achieves the same flex-child
+  flattening on paper, but its interaction with `align-self` has a real
+  cross-browser history of quirks; a `Fragment` sidesteps the question
+  entirely by adding no DOM node) so the optional centered separator and
+  the self-start/self-end bubble can both be direct flex children.
   `message.subject` is intentionally **not** rendered per-bubble — eBay's
   own `Subject` value for these messages is a full auto-generated sentence
   ("`<buyer>` hat eine Nachricht gesendet zu `<item title>` #`<item id>`"),
@@ -89,7 +101,14 @@ Trading API mechanics this reuses.
   `/api/messages/ebay/sync`, caller re-fetches page 1 on success — the slice
   doesn't try to merge an unknown-sized synced batch itself), `sendReply({
   messageId, text })` (POSTs `/api/messages/[id]/reply`, unshifts the
-  returned row via its own `fulfilled` case).
+  returned row via its own `fulfilled` case). The reply route's insert
+  copies `item_title`/`item_price`/`item_currency`/`item_url` from the
+  original message being replied to, same as it already does for
+  `item_id`/`buyer_username` — without this, sending a reply makes it the
+  thread's newest message, and `groupThreads.ts` reading item details from
+  the latest message would blank the title/price it just took two rounds
+  of investigation to add, since a locally-created reply has no `<Item>`
+  block of its own to parse them from.
 
 ## v1 scope: reply-only, no new conversations
 
@@ -115,7 +134,11 @@ OAuth token.
 - `components/ui/{Badge, Button, Pagination, Toast}`
 - `components/layout/PageHeader`
 - `store/slices/currentUserSlice` (`tenantPlan`, `profile.role`/`permission_overrides`)
-- `lib/utils/{date, permissions, planGating, pagedQuery}`
+- `lib/utils/{date, permissions, planGating, pagedQuery, currency}`
+  (`currency`'s `formatCurrency` renders `EbayMessage.item_price` in
+  `ThreadView.tsx`'s header; `item_currency` is narrowed to the app's
+  `Currency` union with an EUR fallback for display only — the stored raw
+  value is untouched)
 - `lib/integrations/{authGuard, tokenStore, ebay}` — server-only, used by the
   two API routes, never imported client-side
 - `lib/integrations/ebay/messages.ts` — `fetchMemberMessages`/`replyToMessage`

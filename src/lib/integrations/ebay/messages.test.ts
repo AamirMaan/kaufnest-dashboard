@@ -29,6 +29,8 @@ const REAL_SHAPE_EXCHANGE = `
     <Item>
       <ItemID>123456789</ItemID>
       <Title>Sample listing</Title>
+      <SellingStatus><CurrentPrice currencyID="EUR">12.99</CurrentPrice></SellingStatus>
+      <ViewItemURL>https://www.ebay.de/itm/123456789</ViewItemURL>
     </Item>
     <Question>
       <MessageID>msg-1</MessageID>
@@ -64,8 +66,36 @@ describe("fetchMemberMessages", () => {
         questionType: "General",
         isRead: false,
         ebayCreatedAt: "2026-07-20T10:00:00.000Z",
+        itemTitle: "Sample listing",
+        itemPrice: 12.99,
+        itemCurrency: "EUR",
+        itemUrl: "https://www.ebay.de/itm/123456789",
       },
     ]);
+  });
+
+  it("falls back to null for item title/price/currency/url when the exchange doesn't carry them", async () => {
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <MemberMessageExchange>
+          <Item><ItemID>1</ItemID></Item>
+          <Question>
+            <MessageID>msg-no-item-details</MessageID>
+            <SenderID>buyer1</SenderID>
+            <Body>No item details on this one</Body>
+            <MessageStatus>Unanswered</MessageStatus>
+            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
+          </Question>
+        </MemberMessageExchange>
+      </GetMemberMessagesResponse>`);
+
+    const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+    expect(message.itemTitle).toBeNull();
+    expect(message.itemPrice).toBeNull();
+    expect(message.itemCurrency).toBeNull();
+    expect(message.itemUrl).toBeNull();
   });
 
   it("is always inbound — GetMemberMessages only ever returns buyers' messages, never the seller's own replies", async () => {

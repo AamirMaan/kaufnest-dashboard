@@ -13,24 +13,24 @@ const local = (year: number, month: number, day: number, hour = 12, minute = 0) 
 const NOW = new Date(2026, 7, 27, 15, 0); // Aug 27 2026, 15:00 local
 
 describe("dayLabelFor", () => {
-  it("labels the same calendar day as Heute", () => {
-    expect(dayLabelFor(local(2026, 8, 27, 9), NOW)).toBe("Heute");
+  it("labels the same calendar day as Today", () => {
+    expect(dayLabelFor(local(2026, 8, 27, 9), NOW)).toBe("Today");
   });
 
-  it("labels the previous calendar day as Gestern", () => {
-    expect(dayLabelFor(local(2026, 8, 26, 23, 59), NOW)).toBe("Gestern");
+  it("labels the previous calendar day as Yesterday", () => {
+    expect(dayLabelFor(local(2026, 8, 26, 23, 59), NOW)).toBe("Yesterday");
   });
 
-  it("labels 2-6 days ago with the German weekday name", () => {
+  it("labels 2-6 days ago with the weekday name — English, matching the app's system language, not the buyer messages' German", () => {
     // 2026-08-24 is a Monday
-    expect(dayLabelFor(local(2026, 8, 24, 9), NOW)).toBe("Montag");
+    expect(dayLabelFor(local(2026, 8, 24, 9), NOW)).toBe("Monday");
   });
 
-  it("labels 7+ days ago with a short German date, not a weekday", () => {
+  it("labels 7+ days ago with a short date, not a weekday", () => {
     const label = dayLabelFor(local(2026, 8, 1, 9), NOW);
-    expect(label).not.toBe("Heute");
-    expect(label).not.toBe("Gestern");
-    expect(label).toMatch(/Aug/); // short month, de-DE
+    expect(label).not.toBe("Today");
+    expect(label).not.toBe("Yesterday");
+    expect(label).toMatch(/Aug/); // short month, en-US
   });
 
   it("does not crash on a timestamp slightly ahead of `now` (clock skew)", () => {

@@ -7,13 +7,26 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Minimal file set per change type
 
-- **New field surfaced from eBay** (e.g. an attachment URL): add it to
-  `EbayMemberMessage` in `lib/integrations/ebay/messages.ts`'s
-  `parseExchangeBlock`, add the DB column via the "2 places" rule
-  (`supabase/SKILL.md`) — new migration using `run_on_all_tenant_schemas`
-  PLUS `provision_tenant_schema()` — add it to `EbayMessage` in
-  `types/index.ts`, and thread it through the sync route's `.upsert()` call
-  (`app/api/messages/ebay/sync/route.ts`).
+- **New field surfaced from eBay** (e.g. an attachment URL — the
+  `item_title`/`item_price`/`item_currency`/`item_url` fields added
+  2026-08-27 by migration `034` are the reference example, worth reading
+  before repeating this): add it to `EbayMemberMessage` in
+  `lib/integrations/ebay/messages.ts`'s `parseExchangeBlock`, add the DB
+  column via the "2 places" rule (`supabase/SKILL.md`) — new migration
+  using `run_on_all_tenant_schemas` PLUS `provision_tenant_schema()` — add
+  it to `EbayMessage` in `types/index.ts`, and thread it through the sync
+  route's `.upsert()` call (`app/api/messages/ebay/sync/route.ts`).
+  **If the field is something `groupThreads.ts` reads from "the most recent
+  message" (like the item-details header does), also copy it onto the
+  reply route's `.insert()`** (`app/api/messages/[id]/reply/route.ts`,
+  already done for `item_id`/`buyer_username`) — otherwise the very next
+  reply a user sends becomes the thread's newest message, and its blank
+  field silently overwrites what synced messages had, since a
+  locally-created outbound row has no `<Item>`/exchange XML of its own to
+  read the field from. This is exactly the shape of bug that would only
+  show up after shipping, when someone actually replies — caught here by
+  tracing `groupThreads.ts`'s "last message wins" logic forward rather than
+  waiting for it to be reported.
 - **Changing thread grouping/ordering**: `_lib/groupThreads.ts` is the single
   source of truth — both `ThreadList` and `page.tsx`'s `replyTarget`
   computation depend on it. Has a colocated test; extend that test alongside

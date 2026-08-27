@@ -81,6 +81,10 @@ export async function POST() {
         question_type: m.questionType,
         is_read: m.isRead,
         ebay_created_at: m.ebayCreatedAt,
+        item_title: m.itemTitle,
+        item_price: m.itemPrice,
+        item_currency: m.itemCurrency,
+        item_url: m.itemUrl,
       })),
       { onConflict: "external_message_id" }
     );
