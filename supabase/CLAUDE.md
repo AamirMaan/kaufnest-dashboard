@@ -198,6 +198,21 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `src/app/dashboard/page.tsx`'s Expenses-by-Category list colors a
   negative category total `--color-success` instead of `--color-danger`.
   Backs the Expenses feature (`src/app/dashboard/expenses/`).
+- `migrations/033_ebay_messages_full_unique_index.sql` — drops and recreates
+  `idx_ebay_messages_external_id` (from `026_ebay_messages.sql`) as a full
+  (non-partial) unique index via `run_on_all_tenant_schemas`; also mirrored
+  into `provision_tenant_schema()` in the same commit. `026` made it
+  PARTIAL (`WHERE external_message_id IS NOT NULL`) to let locally-created
+  outbound rows coexist — unnecessary, since Postgres never treats two
+  `NULL`s as conflicting under a plain `UNIQUE` index either — and it broke
+  `sync/route.ts`'s `.upsert(rows, { onConflict: "external_message_id" })`:
+  Postgres will not infer a partial unique index for a plain
+  `ON CONFLICT (col)` with no predicate, which is all Supabase's `.upsert()`
+  can express, so every real sync failed at the DB write with "no unique or
+  exclusion constraint matching the ON CONFLICT specification" (42P10) —
+  confirmed live 2026-08-27 across all 5 tenants (identical partial index in
+  each, table empty in each, so converting had zero duplicate-data risk).
+  Backs the Messages feature (`src/app/dashboard/messages/`).
 
 ## Related code
 
