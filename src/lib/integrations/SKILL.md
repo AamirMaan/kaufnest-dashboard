@@ -21,9 +21,15 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
 - `mapToSale.ts` — pure `normalizedOrderToSaleRow(order, platform,
-  connectedBy)`. Synced orders always have fee fields (`shipping_cost`,
-  `shipping_charged`, `advertising_fee`) set to `null` — these are editable
-  later via the Edit Sale modal. Has a colocated `mapToSale.test.ts`.
+  connectedBy, fees?)`. `shipping_cost`/`shipping_charged` always come out
+  `null` — editable later via the Edit Sale modal, no earlier entry point
+  exists for them. `advertising_fee`/`platform_fee` default to `null` too
+  when `fees` is omitted, but the Review Orders page
+  (`dashboard/integrations/review/page.tsx`) can supply them via the
+  optional `ReviewOrderFees` 4th argument — per-order manual entry or a
+  bulk percent-of-total apply, since neither eBay's nor Amazon's
+  order-listing API returns a fee breakdown at that granularity (added
+  2026-08-27). Has a colocated `mapToSale.test.ts`.
 - `tokenStore.ts` — `getConnection`, `upsertConnection`,
   `ensureValidAccessToken` (refresh-on-demand). `getConnection` decrypts,
   `upsertConnection` encrypts — see "Token encryption at rest" below.

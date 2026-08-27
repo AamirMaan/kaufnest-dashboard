@@ -20,6 +20,7 @@ const existingSale: Sale = {
   shipping_cost: 2.5,
   shipping_charged: 4.99,
   advertising_fee: 1.2,
+  platform_fee: 0.8,
   status: "pending",
   restock: false,
   refunded_amount: null,
@@ -46,6 +47,7 @@ const incomingSale: Sale = {
   shipping_cost: null,
   shipping_charged: null,
   advertising_fee: null,
+  platform_fee: null,
   status: "shipped",
   restock: true,
   refunded_amount: null,
@@ -88,6 +90,7 @@ describe("mergeImportedSale", () => {
     expect(result.shipping_cost).toBe(existingSale.shipping_cost);     // 2.5
     expect(result.shipping_charged).toBe(existingSale.shipping_charged); // 4.99
     expect(result.advertising_fee).toBe(existingSale.advertising_fee); // 1.2
+    expect(result.platform_fee).toBe(existingSale.platform_fee);       // 0.8
     expect(result.restock).toBe(existingSale.restock);                 // false
   });
 

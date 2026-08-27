@@ -116,12 +116,13 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("shipping_charged", false),
   col("shipping_cost", false),
   col("advertising_fee", false),
+  col("platform_fee", false),
   col("status", false),
   col("description", false),
   col("sku", false),
 ];
 
-const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "vat_amount", "shipping_charged", "shipping_cost", "advertising_fee", "status", "description", "sku"];
+const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "vat_amount", "shipping_charged", "shipping_cost", "advertising_fee", "platform_fee", "status", "description", "sku"];
 
 export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
   generic: {
@@ -142,11 +143,12 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
       col("shipping_cost", false),
       col("shipping_charged", false),
       col("advertising_fee", false),
+      col("platform_fee", false),
       col("order_id", false),
       col("sku", false),
     ],
-    templateHeaders: ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "sku"],
-    templateExample: ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", "", ""],
+    templateHeaders: ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee", "sku"],
+    templateExample: ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", "", "", ""],
   },
   amazon: {
     id: "amazon",
@@ -155,7 +157,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
-    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "shipped", "", "WIDGET-BLU"],
+    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "0,60", "shipped", "", "WIDGET-BLU"],
     vatRateIsFraction: true,
     priceColumnsAreLineTotals: true,
   },
@@ -165,7 +167,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     forcedPlatform: "ebay",
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
-    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "4,75", "5,99", "4,10", "0,80", "shipped", "Promoted Listings fee in advertising_fee", "WIDGET-BLU"],
+    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "4,75", "5,99", "4,10", "0,80", "1,25", "shipped", "Promoted Listings fee in advertising_fee, final value fee in platform_fee", "WIDGET-BLU"],
   },
 };
 
@@ -503,7 +505,9 @@ export function validateRowForFormat(
     vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
   }
 
-  const fee = (key: "shipping_cost" | "shipping_charged" | "advertising_fee"): { value: number | null; error?: string } => {
+  const fee = (
+    key: "shipping_cost" | "shipping_charged" | "advertising_fee" | "platform_fee"
+  ): { value: number | null; error?: string } => {
     const s = raw[key]?.trim();
     if (!s) return { value: null };
     const n = parseLocaleNumber(s);
@@ -516,6 +520,8 @@ export function validateRowForFormat(
   if (shippingCharged.error) return fail(shippingCharged.error);
   const advertisingFee = fee("advertising_fee");
   if (advertisingFee.error) return fail(advertisingFee.error);
+  const platformFee = fee("platform_fee");
+  if (platformFee.error) return fail(platformFee.error);
 
   const externalOrderId = raw.order_id?.trim() || null;
   if (!externalOrderId && format.columns.some((c) => c.key === "order_id" && c.required)) {
@@ -538,6 +544,7 @@ export function validateRowForFormat(
       shipping_cost: shippingCost.value,
       shipping_charged: shippingCharged.value,
       advertising_fee: advertisingFee.value,
+      platform_fee: platformFee.value,
       status: normalizeStatus(raw.status),
       restock: false,
       external_order_id: externalOrderId,

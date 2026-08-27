@@ -30,15 +30,23 @@ export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     items: { platform: IntegrationPlatform; order: NormalizedOrder }[];
     purchaseCosts?: Record<string, { price: string; vendor: string }>;
+    orderFees?: Record<string, { advertisingFee: string; platformFee: string }>;
   };
 
   if (!body.items?.length) {
     return NextResponse.json({ imported: 0 });
   }
 
-  const incomingRows = body.items.map(({ platform, order }) =>
-    normalizedOrderToSaleRow(order, platform, userId)
-  );
+  const orderFees = body.orderFees ?? {};
+  const incomingRows = body.items.map(({ platform, order }) => {
+    const feeEntry = orderFees[order.external_order_id];
+    const advertisingFee = parseFloat(feeEntry?.advertisingFee ?? "");
+    const platformFee = parseFloat(feeEntry?.platformFee ?? "");
+    return normalizedOrderToSaleRow(order, platform, userId, {
+      advertisingFee: isNaN(advertisingFee) ? null : advertisingFee,
+      platformFee: isNaN(platformFee) ? null : platformFee,
+    });
+  });
 
   // Fetch existing rows so we can preserve user-owned fields on re-import
   const extIds = incomingRows

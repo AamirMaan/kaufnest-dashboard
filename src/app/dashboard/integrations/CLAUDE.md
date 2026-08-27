@@ -39,6 +39,21 @@ and imported manually via `/dashboard/integrations/review` and stored as
   imported rows in local state, calls `router.refresh()` to re-hydrate
   `salesSlice`. Applies the same plan/role guards as `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
+  **Fee entry (2026-08-27)**: per-order "Ad Fee"/"Platform Fee" `€` inputs
+  (transient local state, `orderFees`, same shape/pattern as the existing
+  `purchaseCosts` column) plus a bulk toolbar above the table — "Apply X% to
+  N selected" for each fee, computed as `X% × that order's own total_amount`
+  via `computeFeeFromPercent` (`lib/utils/currency.ts`) and written into
+  every selected row's per-order field (overwriting whatever was already
+  there; still hand-editable afterward per row). Neither eBay's nor Amazon's
+  order-listing API returns a fee breakdown at that granularity, which is
+  why this exists here rather than being read from the order data itself.
+  `handleImport` posts `orderFees` alongside `items`/`purchaseCosts`; the
+  import route parses each to a number (blank/invalid → `null`) and passes
+  them into `normalizedOrderToSaleRow`'s new optional 4th argument. No
+  percent toggle per row (table space) — bulk-percent is the only percent
+  entry point here, unlike the Add/Edit Sale modals' per-field toggle
+  (`dashboard/sales/_components/FeeAmountOrPercentField.tsx`).
 - `_store/integrationsSlice.ts` — `state.integrations.connections:
   PlatformConnection[]`. Actions: `hydrateConnections`, `upsertConnection`
   (replace-or-append by `platform`), `setConnectionStatus` (no-op if no
@@ -76,10 +91,12 @@ upsert them into `sales` and update `last_synced_at` per platform.
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
-  `{ items: { platform, order }[] }`, maps each to a `SaleInsert` via
-  `normalizedOrderToSaleRow`, upserts into `sales` with
-  `onConflict: "platform,external_order_id"`, updates `last_synced_at` per
-  platform. Returns `{ imported: number }`.
+  `{ items: { platform, order }[], purchaseCosts?, orderFees? }`, maps each
+  item to a `SaleInsert` via `normalizedOrderToSaleRow` (passing
+  `orderFees[order.external_order_id]` — parsed to numbers, blank/invalid →
+  `null` — as the new optional 4th `fees` argument), upserts into `sales`
+  with `onConflict: "platform,external_order_id"`, updates `last_synced_at`
+  per platform. Returns `{ imported: number }`.
 
 ## Plan gating
 
@@ -91,8 +108,11 @@ upsert them into `sales` and update `last_synced_at` per platform.
 ## Shared dependencies
 
 - `src/lib/integrations/` — server-only OAuth adapters + order-fetch/import pipeline (not
-  imported here directly, only via the API routes)
+  imported here directly, only via the API routes); `mapToSale.ts`'s
+  `normalizedOrderToSaleRow`/`ReviewOrderFees` specifically for the fee-entry
+  feature above
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
+- `src/lib/utils/currency` — `computeFeeFromPercent` (bulk fee-percent toolbar)
 - `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`
 - `src/lib/utils/date` — `formatDateTime`
 - `components/layout/PageHeader`, `components/ui/{Badge,Button,Toast}`

@@ -60,18 +60,41 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 ## Gotchas — fee fields
 
-- `shipping_cost`, `shipping_charged`, `advertising_fee` are all `number | null`.
-  Empty string in form state → `null` before the DB write (never `0`). This is the
-  same pattern as `vat_rate`/`vat_amount`.
+- `shipping_cost`, `shipping_charged`, `advertising_fee`, `platform_fee` are
+  all `number | null`. Empty string in form state → `null` before the DB
+  write (never `0`). This is the same pattern as `vat_rate`/`vat_amount`.
 - `EditSaleModal` auto-opens the "Fees & shipping" section when the existing sale has
   at least one fee non-null (checked in the `showFees` initializer).
 - Import validation lives in `validateRowForFormat()` in the pure
   `_components/importFormats.ts` (unit-tested in `importFormats.test.ts` and
   `ImportSalesModal.test.ts`); the modal only orchestrates file reading, the
   dedup query, and inserts.
-- The table "Fees" column sums `shipping_cost + advertising_fee` (seller costs);
-  `shipping_charged` is not in the computed sum — it's the buyer-facing amount and
-  appears only in the CSV export.
+- The table "Fees" column sums `shipping_cost + advertising_fee + platform_fee`
+  (seller costs); `shipping_charged` is not in the computed sum — it's the
+  buyer-facing amount and appears only in the CSV export.
+- **`005_tenant_provisioning.sql`'s `sales` CREATE TABLE was missing all four
+  fee columns until 2026-08-27, despite all four being live on every existing
+  tenant.** `010_order_fees.sql` added the first three via
+  `run_on_all_tenant_schemas` (after `027_reconcile_tenant_drift.sql` fixed
+  `010`'s own original bug — it had hardcoded `tenant_kaufnest` instead of
+  using `run_on_all_tenant_schemas`), but nobody updated `005`'s CREATE TABLE
+  template alongside either fix, so a tenant provisioned any time between
+  `010` and this fix would have been provisioned WITHOUT them. Found while
+  adding `platform_fee` (035) — checking `005` before adding a new fee column
+  is what surfaced it. Confirmed live via direct query that all 5 tenants
+  already had the first three (so `010`/`027` themselves were fine, just
+  `005`'s template was stale) before fixing `005` alongside `035`. **If you
+  add a 5th fee column, add it to BOTH the new migration's
+  `run_on_all_tenant_schemas` call AND `005`'s `sales` CREATE TABLE — this is
+  exactly the gap that bit this column family twice.**
+- `_components/FeeAmountOrPercentField.tsx` computes the percent-mode amount
+  via `computeFeeFromPercent(itemTotal, pct)` (`lib/utils/currency.ts`),
+  where `itemTotal` is `qty × unit_price` — confirmed with the user
+  explicitly rather than assumed, since "% of the order" is genuinely
+  ambiguous (item total only, vs. item + shipping). If a future request
+  wants the shipping-inclusive base, that's a one-line change to what gets
+  passed as `itemTotal` in both modals, not a change to the component or
+  `computeFeeFromPercent` itself.
 
 ## Gotchas — CSV import formats (German support)
 

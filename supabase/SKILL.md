@@ -30,14 +30,21 @@ Two Supabase projects:
 >   `033_ebay_messages_full_unique_index.sql` (`idx_ebay_messages_external_id`
 >   re-checked directly — genuinely non-partial in all 5 tenants now; it was
 >   still the old partial index as of the first 2026-08-27 pass below).
-> - **`005_tenant_provisioning.sql` is current** through 030's override
->   branch and 031/032's changes — re-verify before assuming it also covers
->   `033`/`034`; this file is edited alongside each new migration but the
->   live function body is only checked when explicitly re-verified here.
+> - **`005_tenant_provisioning.sql` is current in the repo** through 030's
+>   override branch and 031/032's changes, PLUS a 2026-08-27 fix adding
+>   `shipping_cost`/`shipping_charged`/`advertising_fee`/`platform_fee` to
+>   its `sales` CREATE TABLE (they were missing there despite being live on
+>   every tenant since `010`/`027` — see `035`'s row and the gotcha in
+>   `dashboard/sales/SKILL.md`) — but the file being current in the repo is
+>   NOT the same as the live `provision_tenant_schema()` function body being
+>   up to date; that's only true once `005` is actually re-applied. Re-verify
+>   before assuming it covers `033`/`034`/`035`.
 > - **Genuinely outstanding: `034_ebay_messages_item_details.sql`** (added
->   2026-08-27, not yet applied) and **`control-plane/004_admin_audit_log.sql`**
->   (`control.admin_audit_log` does not exist). `control-plane/002` and `003`
->   are applied.
+>   2026-08-27, not yet applied), **`035_sales_platform_fee.sql`** (added
+>   2026-08-27, not yet applied — also needs `005` re-applied for the fix
+>   above to take effect for new tenants), and
+>   **`control-plane/004_admin_audit_log.sql`** (`control.admin_audit_log`
+>   does not exist). `control-plane/002` and `003` are applied.
 >
 > Do not trust a ⏳ marker below without re-checking; this repo still has no
 > migration ledger, which is why they drifted. Re-verify and update this block
@@ -75,6 +82,7 @@ Two Supabase projects:
 | `migrations/032_expenses_allow_negative_amount.sql` | all `tenant_%` schemas | ⏳ **pending** — drops `expenses_amount_check CHECK (amount >= 0)` via `run_on_all_tenant_schemas`, idempotent (`drop constraint if exists`); also mirrored into `provision_tenant_schema()` in the same commit (the `amount` column's `CHECK` removed, comment noting it may be negative). Lets the Expenses importer store German Vorsteuerkonto credit notes (`Erstattung von Verkäufergebühren`, `Tarifas reembolsadas`, `Återbetalda avgifter`) as negative `amount` rows instead of dropping them, so totals reconcile with the filed VAT return. `src/app/dashboard/page.tsx`'s Expenses-by-Category list colors a negative category total `--color-success` instead of `--color-danger`. Backs `src/app/dashboard/expenses/` (later tasks 5/6 depend on this). |
 | `migrations/033_ebay_messages_full_unique_index.sql` | all `tenant_%` schemas | ✅ applied 5/5 (re-verified 2026-08-27) — drops and recreates `idx_ebay_messages_external_id` as a full (non-partial) unique index via `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()` in the same commit. The partial version (026) blocked `sync/route.ts`'s `.upsert(rows, { onConflict: "external_message_id" })` outright — Postgres won't infer a partial unique index for a plain `ON CONFLICT (col)` with no predicate, which is all Supabase's `.upsert()` can express, so every sync failed at the DB write with "no unique or exclusion constraint matching the ON CONFLICT specification" (42P10). Backs `src/app/dashboard/messages/`. |
 | `migrations/034_ebay_messages_item_details.sql` | all `tenant_%` schemas | ⏳ **pending** — adds nullable `item_title`/`item_price`/`item_currency`/`item_url` to `ebay_messages` via `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()` in the same commit. `GetMemberMessages`' `<Item>` block already carries this (confirmed live 2026-08-27) but the app discarded all of it, extracting only `<ItemID>`. Backs `src/app/dashboard/messages/`. |
+| `migrations/035_sales_platform_fee.sql` | all `tenant_%` schemas | ⏳ **pending** — adds nullable `sales.platform_fee numeric(12,2)` (`>= 0` CHECK) via `run_on_all_tenant_schemas`. Also fixes `005_tenant_provisioning.sql`'s `sales` CREATE TABLE, which was missing `shipping_cost`/`shipping_charged`/`advertising_fee` too (confirmed live 2026-08-27 that all 5 tenants already had those three from `010`/`027` — only the `005` template itself was stale) — **applying `035` alone does not fix that gap for future tenants; `005` must be re-applied too**. Backs `src/app/dashboard/sales/` — see its SKILL.md's fee-fields gotcha. |
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |

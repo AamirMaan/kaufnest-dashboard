@@ -25,6 +25,7 @@ const makeSale = (overrides: Partial<Sale> = {}): Sale => {
     refunded_amount: null,
     external_order_id: null,
     shipping_charged: null,
+    platform_fee: null,
   };
   return { ...defaults, ...overrides };
 };
@@ -105,6 +106,21 @@ describe("aggregateSaleRevenue", () => {
       const result = aggregateSaleRevenue(sales);
 
       expect(result.fees).toBe(5); // 2 + 3
+    });
+
+    it("also sums platform_fee", () => {
+      const sales = [
+        makeSale({
+          id: "s1",
+          shipping_cost: 2,
+          advertising_fee: 3,
+          platform_fee: 4,
+        }),
+      ];
+
+      const result = aggregateSaleRevenue(sales);
+
+      expect(result.fees).toBe(9); // 2 + 3 + 4
     });
 
     it("treats missing shipping_cost as 0", () => {

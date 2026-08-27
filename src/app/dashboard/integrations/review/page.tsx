@@ -11,7 +11,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hasPermission } from "@/lib/utils/permissions";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import { formatCurrency } from "@/lib/utils/currency";
+import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
 
@@ -39,6 +39,11 @@ export default function ReviewPage() {
   const [purchaseCosts, setPurchaseCosts] = useState<
     Record<string, { price: string; vendor: string }>
   >({});
+  const [orderFees, setOrderFees] = useState<
+    Record<string, { advertisingFee: string; platformFee: string }>
+  >({});
+  const [bulkAdFeePct, setBulkAdFeePct] = useState("");
+  const [bulkPlatformFeePct, setBulkPlatformFeePct] = useState("");
 
   function updatePurchaseCost(
     key: string,
@@ -53,6 +58,47 @@ export default function ReviewPage() {
         [field]: value,
       },
     }));
+  }
+
+  function updateOrderFee(
+    key: string,
+    field: "advertisingFee" | "platformFee",
+    value: string
+  ) {
+    setOrderFees((prev) => ({
+      ...prev,
+      [key]: {
+        advertisingFee: prev[key]?.advertisingFee ?? "",
+        platformFee: prev[key]?.platformFee ?? "",
+        [field]: value,
+      },
+    }));
+  }
+
+  /**
+   * Fills advertisingFee/platformFee for every currently-selected order with
+   * `pct`% of that order's own total_amount — a quick way to apply a known
+   * eBay/Amazon fee rate across a whole batch instead of typing it per row.
+   * Overwrites whatever's already in those rows' fields; per-row values can
+   * still be hand-edited afterward for any order that's an exception.
+   */
+  function applyBulkFeePercent(field: "advertisingFee" | "platformFee", pct: string) {
+    const pctNum = parseFloat(pct);
+    if (isNaN(pctNum) || !activeTab) return;
+    setOrderFees((prev) => {
+      const next = { ...prev };
+      for (const order of activeOrders) {
+        const key = order.external_order_id;
+        if (!selected.has(`${activeTab}:${key}`)) continue;
+        const amount = computeFeeFromPercent(order.total_amount, pctNum);
+        next[key] = {
+          advertisingFee: next[key]?.advertisingFee ?? "",
+          platformFee: next[key]?.platformFee ?? "",
+          [field]: amount.toFixed(2),
+        };
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -143,7 +189,7 @@ export default function ReviewPage() {
       const res = await fetch("/api/integrations/review/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, purchaseCosts }),
+        body: JSON.stringify({ items, purchaseCosts, orderFees }),
       });
       const result = (await res.json()) as {
         imported?: number;
@@ -290,6 +336,55 @@ export default function ReviewPage() {
             </p>
           )}
 
+          {/* Bulk fee-percent toolbar — fills advertisingFee/platformFee for
+              every selected order as pct% of that order's own total_amount.
+              Per-row cells stay editable afterward for any exception. */}
+          <div className={`${cardCls} flex flex-wrap items-center gap-3 p-3 text-sm`}>
+            <span className="text-[var(--color-text-muted)]">
+              Apply fee % to {selected.size} selected order{selected.size === 1 ? "" : "s"}:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-[var(--color-text-muted)]">Ad Fee</label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={bulkAdFeePct}
+                onChange={(e) => setBulkAdFeePct(e.target.value)}
+                placeholder="%"
+                className="w-16 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={selected.size === 0 || bulkAdFeePct.trim() === ""}
+                onClick={() => applyBulkFeePercent("advertisingFee", bulkAdFeePct)}
+              >
+                Apply
+              </Button>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs text-[var(--color-text-muted)]">Platform Fee</label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={bulkPlatformFeePct}
+                onChange={(e) => setBulkPlatformFeePct(e.target.value)}
+                placeholder="%"
+                className="w-16 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={selected.size === 0 || bulkPlatformFeePct.trim() === ""}
+                onClick={() => applyBulkFeePercent("platformFee", bulkPlatformFeePct)}
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+
           {/* Orders table */}
           <div className={`${cardCls} overflow-x-auto`}>
             <table className="w-full text-sm">
@@ -320,13 +415,19 @@ export default function ReviewPage() {
                   <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
                     Vendor
                   </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
+                    Ad Fee
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
+                    Platform Fee
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {activeOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={11}
                       className="py-8 text-center text-sm text-[var(--color-text-muted)]"
                     >
                       No orders found in the last 90 days.
@@ -405,6 +506,34 @@ export default function ReviewPage() {
                             }
                             placeholder="Vendor"
                             className="w-32 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={orderFees[order.external_order_id]?.advertisingFee ?? ""}
+                            onChange={(e) =>
+                              updateOrderFee(order.external_order_id, "advertisingFee", e.target.value)
+                            }
+                            placeholder="0.00"
+                            className="w-24 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={orderFees[order.external_order_id]?.platformFee ?? ""}
+                            onChange={(e) =>
+                              updateOrderFee(order.external_order_id, "platformFee", e.target.value)
+                            }
+                            placeholder="0.00"
+                            className="w-24 rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                             onClick={(e) => e.stopPropagation()}
                           />
                         </td>

@@ -11,6 +11,9 @@ import { isRevenueSale } from "@/lib/utils/filters";
  * Fees include:
  * - shipping_cost (when present, per B-4 spec)
  * - advertising_fee (when present, per B-4 spec)
+ * - platform_fee (when present — added alongside advertising_fee 2026-08-27,
+ *   same treatment, so Overview's Net Profit matches computeNetProceeds'
+ *   per-order figure instead of silently overstating profit)
  *
  * Only counts revenue sales (not returned/cancelled).
  *
@@ -23,7 +26,7 @@ export function aggregateSaleRevenue(
   return sales.filter(isRevenueSale).reduce(
     (acc, s) => ({
       revenue: acc.revenue + s.total_amount + (s.shipping_charged ?? 0),
-      fees: acc.fees + (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0),
+      fees: acc.fees + (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0) + (s.platform_fee ?? 0),
     }),
     { revenue: 0, fees: 0 }
   );

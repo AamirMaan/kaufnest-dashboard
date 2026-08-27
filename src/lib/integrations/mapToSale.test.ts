@@ -45,6 +45,7 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_cost: null,
       shipping_charged: null,
       advertising_fee: null,
+      platform_fee: null,
       status: "delivered",
       restock: false,
       refunded_amount: null,
@@ -71,6 +72,7 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_cost: null,
       shipping_charged: null,
       advertising_fee: null,
+      platform_fee: null,
       status: "shipped",
       restock: false,
       refunded_amount: null,
@@ -78,12 +80,37 @@ describe("normalizedOrderToSaleRow", () => {
     });
   });
 
-  it("sets shipping_cost, shipping_charged, and advertising_fee to null (entered manually later)", () => {
+  it("sets shipping_cost, shipping_charged, advertising_fee, and platform_fee to null when fees is omitted (entered manually or via Review Orders later)", () => {
     const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123");
 
     expect(row.shipping_cost).toBeNull();
     expect(row.shipping_charged).toBeNull();
     expect(row.advertising_fee).toBeNull();
+    expect(row.platform_fee).toBeNull();
+  });
+
+  it("uses advertisingFee/platformFee from the fees argument when provided (Review Orders per-order or bulk-percent entry)", () => {
+    const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123", {
+      advertisingFee: 1.5,
+      platformFee: 2.4,
+    });
+
+    expect(row.advertising_fee).toBe(1.5);
+    expect(row.platform_fee).toBe(2.4);
+    // shipping stays null even when fees are supplied — that's still a
+    // manual Edit Sale step, unrelated to Review Orders' fee entry.
+    expect(row.shipping_cost).toBeNull();
+    expect(row.shipping_charged).toBeNull();
+  });
+
+  it("falls back to null for either fee individually when only one is provided", () => {
+    const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123", {
+      advertisingFee: 1.5,
+      platformFee: null,
+    });
+
+    expect(row.advertising_fee).toBe(1.5);
+    expect(row.platform_fee).toBeNull();
   });
 
   it("falls back to EUR for an unrecognized currency code", () => {

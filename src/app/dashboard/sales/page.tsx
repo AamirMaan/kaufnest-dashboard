@@ -153,11 +153,11 @@ export default function SalesPage() {
     const { data: allRows } = await query;
     if (!allRows || allRows.length === 0) return;
 
-    const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee"];
+    const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
     const rows = (allRows as Sale[]).map((s) => [
       s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
-      s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "",
+      s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "", s.platform_fee ?? "",
     ]);
     exportToCsv(`sales-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
@@ -258,10 +258,10 @@ export default function SalesPage() {
     },
     {
       header: "Fees",
-      sortValue: (s: Sale) => (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0),
+      sortValue: (s: Sale) => (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0) + (s.platform_fee ?? 0),
       render: (s: Sale) => {
-        const feesTotal = (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0);
-        return s.shipping_cost == null && s.advertising_fee == null ? (
+        const feesTotal = (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0) + (s.platform_fee ?? 0);
+        return s.shipping_cost == null && s.advertising_fee == null && s.platform_fee == null ? (
           <span className="text-sm text-[var(--color-text-muted)]">—</span>
         ) : (
           <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(feesTotal, s.currency)}</span>

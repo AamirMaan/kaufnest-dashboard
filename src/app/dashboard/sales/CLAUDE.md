@@ -50,6 +50,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
   treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
+- `_components/FeeAmountOrPercentField.tsx` — the €/% toggle input used for
+  `advertising_fee`/`platform_fee` in both modals above (2026-08-27). See
+  "Fee fields" below.
 - `_components/ImportSalesModal.tsx` — bulk CSV import with a **format dropdown**
   (Generic / Amazon sheet / eBay sheet): parses + validates a user-uploaded CSV
   (German-tolerant — see "CSV import/export" below), runs a duplicate pre-check
@@ -278,23 +281,59 @@ editable fields.
   re-exports both so this feature's own call sites didn't need to change
 - `types` (`Sale`, `Platform`, `Currency`, `Product`)
 
-## Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`)
+## Fee fields (`shipping_cost`, `shipping_charged`, `advertising_fee`, `platform_fee`)
 
-All three are `number | null` on `Sale`. They surface in:
+All four are `number | null` on `Sale`. `platform_fee` (added 2026-08-27 —
+the marketplace's own commission, e.g. eBay's final value fee or Amazon's
+referral fee, distinct from `advertising_fee`'s Promoted Listings/Sponsored
+Products spend) follows the exact same shape and treatment as the other
+three everywhere below — search for `advertising_fee` in this codebase
+before assuming a fee-related change only needs one field touched. They
+surface in:
 - `AddSaleModal` / `EditSaleModal` — collapsible "Fees & shipping (optional)" section
   (state-controlled `showFees` boolean + chevron toggle). Empty string → `null`, never `0`.
   `EditSaleModal` auto-opens the section when the existing sale has at least one fee set.
   Fee changes are included in the before/after audit-log diff alongside all other fields.
+  **`advertising_fee`/`platform_fee` specifically** (not shipping) use
+  `_components/FeeAmountOrPercentField.tsx` (2026-08-27) instead of a plain
+  `Input` — a €/% toggle lets the fee be entered as a percentage of the
+  order's item total (`qty × unit_price`); switching to `%` computes and
+  stores the resulting flat amount via `computeFeeFromPercent`
+  (`lib/utils/currency.ts`), same as typing it directly. **The percentage
+  itself is never persisted** — only the computed flat amount is — so
+  reopening an existing sale always shows amount mode with the stored flat
+  value, never re-derives or shows a percentage.
 - `ImportSalesModal` — optional CSV columns `shipping_cost`, `shipping_charged`,
-  `advertising_fee` in every import format. Blank/missing → `null`. Non-numeric or
-  negative → row error. Validated in `validateRowForFormat()`
-  (`_components/importFormats.ts`). **Despite its name, `ImportSalesModal.test.ts`
-  has zero modal tests** — it only exercises `validateRowForFormat` against the
-  `generic` format (fee-field cases). The modal component itself
-  (`ImportSalesModal.tsx`) is untested; don't cite this file as modal coverage.
-  Fee-field validation is also covered in `importFormats.test.ts`.
+  `advertising_fee`, `platform_fee` in every import format. Blank/missing → `null`.
+  Non-numeric or negative → row error. Validated in `validateRowForFormat()`
+  (`_components/importFormats.ts`) via a shared `fee()` closure parametrized
+  by column key — adding a 5th fee column means adding one more call to that
+  closure plus its `if (x.error) return fail(...)` line, not new validation
+  logic. **Despite its name, `ImportSalesModal.test.ts` has zero modal tests**
+  — it only exercises `validateRowForFormat` against the `generic` format
+  (fee-field cases). The modal component itself (`ImportSalesModal.tsx`) is
+  untested; don't cite this file as modal coverage. Fee-field validation is
+  also covered in `importFormats.test.ts`. CSV import/export is
+  **amount-only, no `%` notation** — platform-exported reports already give
+  fees as flat currency values, so the percent-entry convenience only exists
+  in the manual Add/Edit forms and the Review Orders page (below).
 - `page.tsx` — exported in `handleExport()`; computed "Fees" column in the table
-  (value: `shipping_cost + advertising_fee`, displays `—` when both are `null`).
+  (value: `shipping_cost + advertising_fee + platform_fee`, displays `—` only
+  when all three are `null`).
+- `_lib/aggregateSales.ts`'s (in `dashboard/_lib/`, feeds the Overview page's
+  Net Profit) `fees` sum also includes `platform_fee` — added in the same
+  change specifically so Overview's Net Profit doesn't silently drift from
+  `orderMath.ts`'s per-order `computeNetProceeds` once a tenant starts using
+  the new field.
+- **Review Orders** (`dashboard/integrations/review/page.tsx`) — see
+  `dashboard/integrations/CLAUDE.md`'s Fee entry section. Per-order Ad
+  Fee/Platform Fee `€`-only inputs (no percent toggle — table row space) plus
+  a bulk "apply X% of this order's total to every selected row" toolbar,
+  since neither eBay's nor Amazon's order-listing API returns a fee
+  breakdown. Threaded through `normalizedOrderToSaleRow`'s new optional 4th
+  `fees` argument (`lib/integrations/mapToSale.ts`) — `undefined`/omitted
+  still defaults both to `null`, so every other caller of that function is
+  unaffected.
 
 ## Linked Purchase (cost of goods)
 

@@ -79,6 +79,7 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     shipping_cost: null,
     shipping_charged: null,
     advertising_fee: null,
+    platform_fee: null,
     status: "pending",
     restock: false,
     refunded_amount: null,

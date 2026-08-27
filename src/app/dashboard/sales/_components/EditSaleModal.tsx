@@ -16,6 +16,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
+import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import type { Platform, Currency, Sale, Product, Purchase } from "@/types";
 
@@ -46,6 +47,7 @@ interface FormState {
   shipping_cost: string;
   shipping_charged: string;
   advertising_fee: string;
+  platform_fee: string;
 }
 
 function saleToForm(sale: Sale, defaultVatRate: number): FormState {
@@ -68,6 +70,7 @@ function saleToForm(sale: Sale, defaultVatRate: number): FormState {
     shipping_cost: sale.shipping_cost != null ? String(sale.shipping_cost) : "",
     shipping_charged: sale.shipping_charged != null ? String(sale.shipping_charged) : "",
     advertising_fee: sale.advertising_fee != null ? String(sale.advertising_fee) : "",
+    platform_fee: sale.platform_fee != null ? String(sale.platform_fee) : "",
   };
 }
 
@@ -75,7 +78,7 @@ const blankForm: FormState = {
   platform: "amazon", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
   date: "", description: "", vat_included: false, vat_rate: "0",
   status: "pending", customStatus: "", restock: false, reason: "",
-  shipping_cost: "", shipping_charged: "", advertising_fee: "",
+  shipping_cost: "", shipping_charged: "", advertising_fee: "", platform_fee: "",
 };
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
@@ -90,7 +93,12 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showFees, setShowFees] = useState(() => {
     if (!sale) return false;
-    return sale.shipping_cost != null || sale.shipping_charged != null || sale.advertising_fee != null;
+    return (
+      sale.shipping_cost != null ||
+      sale.shipping_charged != null ||
+      sale.advertising_fee != null ||
+      sale.platform_fee != null
+    );
   });
   const [showAddPurchase, setShowAddPurchase] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
@@ -136,6 +144,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
     const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
     const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+    const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
 
     const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -157,6 +166,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         shipping_cost: shippingCost,
         shipping_charged: shippingCharged,
         advertising_fee: advertisingFee,
+        platform_fee: platformFee,
         status,
         restock,
       })
@@ -188,8 +198,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       entityType: "sale",
       entityId: sale.id,
       metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, status: sale.status, restock: sale.restock },
-        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, status: data.status, restock: data.restock },
+        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock },
+        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock },
         reason: form.reason.trim(),
       },
     });
@@ -422,16 +432,22 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
                   />
                 </Field>
               </Row>
-              <Field label="Advertising Fee">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
+              <Row>
+                <FeeAmountOrPercentField
+                  label="Advertising Fee"
                   value={form.advertising_fee}
-                  onChange={(e) => set("advertising_fee", e.target.value)}
-                  placeholder="0.00"
+                  onChange={(v) => set("advertising_fee", v)}
+                  itemTotal={total}
+                  currency={form.currency}
                 />
-              </Field>
+                <FeeAmountOrPercentField
+                  label="Platform Fee"
+                  value={form.platform_fee}
+                  onChange={(v) => set("platform_fee", v)}
+                  itemTotal={total}
+                  currency={form.currency}
+                />
+              </Row>
             </div>
           )}
         </div>

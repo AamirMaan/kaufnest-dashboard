@@ -51,6 +51,7 @@ export const ALIASES: Record<string, string[]> = {
   shipping_charged: ["shipping_charged", "shipping", "versand", "versandkosten"],
   shipping_cost: ["shipping_cost", "versandkosten_bezahlt", "eigene versandkosten"],
   advertising_fee: ["advertising_fee", "werbekosten", "anzeigenkosten", "werbegebühr", "werbegebuehr"],
+  platform_fee: ["platform_fee", "plattformgebühr", "plattformgebuehr", "verkaufsprovision", "vermittlungsgebühr", "vermittlungsgebuehr"],
   order_id: ["order_id", "order-id", "bestellnummer", "bestell-nr", "bestellnr", "auftragsnummer", "external_order_id"],
   sku: ["sku", "artikel-nr", "artikelnr", "artikelnummer"],
 

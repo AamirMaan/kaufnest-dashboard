@@ -21,6 +21,7 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     shipping_cost: null,
     shipping_charged: null,
     advertising_fee: null,
+    platform_fee: null,
     status: "pending",
     restock: false,
     refunded_amount: null,
@@ -44,6 +45,18 @@ describe("computeNetProceeds", () => {
       advertising_fee: 2,
     });
     expect(computeNetProceeds(sale)).toBe(103);
+  });
+
+  it("also subtracts platform_fee", () => {
+    // 100 + 10 - 5 - 2 - 3 = 100
+    const sale = makeSale({
+      total_amount: 100,
+      shipping_charged: 10,
+      shipping_cost: 5,
+      advertising_fee: 2,
+      platform_fee: 3,
+    });
+    expect(computeNetProceeds(sale)).toBe(100);
   });
 
   it("handles a returned order with zero total_amount without error", () => {

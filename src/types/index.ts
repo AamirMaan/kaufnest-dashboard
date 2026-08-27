@@ -107,6 +107,7 @@ export interface Sale {
   shipping_cost: number | null;
   shipping_charged: number | null;
   advertising_fee: number | null;
+  platform_fee: number | null; // e.g. eBay/Amazon's own commission — distinct from advertising_fee
   status: string; // "pending" | "processing" | "shipped" | "delivered" | "returned" | "cancelled" | "refunded" | custom
   restock: boolean; // only meaningful when status === "returned" — true = item went back to sellable stock
   /**
