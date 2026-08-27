@@ -6,7 +6,7 @@ import { RefreshCw, Search, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasMessagingAndListings } from "@/lib/utils/planGating";
 import { hasPermission } from "@/lib/utils/permissions";
 import { formatDateTime } from "@/lib/utils/date";
 import { fetchMessagesPage, syncMessages, sendReply, searchMessages, clearSearch } from "./_store/messagesSlice";
@@ -25,6 +25,7 @@ export default function MessagesPage() {
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
+  const connections = useAppSelector((s) => s.integrations.connections);
   const {
     items,
     page,
@@ -44,6 +45,8 @@ export default function MessagesPage() {
   const [searchInput, setSearchInput] = useState("");
 
   const canManage = role && hasPermission(role, "manage_messages", permissionOverrides);
+  const ebayConnection = connections.find((c) => c.platform === "ebay");
+  const isEbayConnected = ebayConnection?.status === "connected";
   const isSearchActive = searchQuery.trim().length > 0;
   const threads = useMemo(
     () => groupThreads(isSearchActive ? searchResults : items),
@@ -93,9 +96,9 @@ export default function MessagesPage() {
   // statement is a synchronous setState, and calling that straight from an
   // effect body risks a cascading render (react-hooks/set-state-in-effect).
   useEffect(() => {
-    if (!canManage) return;
+    if (!canManage || !isEbayConnected) return;
     Promise.resolve().then(() => runSync());
-  }, [canManage, runSync]);
+  }, [canManage, isEbayConnected, runSync]);
 
   async function handleSend(text: string): Promise<boolean> {
     if (!replyTarget) return false;
@@ -112,7 +115,7 @@ export default function MessagesPage() {
     }
   }
 
-  if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
+  if (!tenantPlan || !hasMessagingAndListings(tenantPlan)) {
     return (
       <div>
         <PageHeader title="Messages" description="Reply to eBay buyer messages from your dashboard" />
@@ -121,13 +124,35 @@ export default function MessagesPage() {
             Upgrade to unlock Messages
           </h2>
           <p className="mt-2 text-sm text-(--color-text-muted)">
-            eBay messaging is available on the Pro and Business plans.
+            eBay messaging is available on the Business plan.
           </p>
           <Link
             href="/dashboard/settings"
             className="mt-4 inline-block text-sm font-medium text-(--color-primary) hover:underline"
           >
             View plans &amp; billing →
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isEbayConnected) {
+    return (
+      <div>
+        <PageHeader title="Messages" description="Reply to eBay buyer messages from your dashboard" />
+        <div className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6">
+          <h2 className="text-sm font-semibold text-(--color-text-strong)">
+            eBay connection required
+          </h2>
+          <p className="mt-2 text-sm text-(--color-text-muted)">
+            Connect your eBay seller account in Integrations to read and reply to buyer messages.
+          </p>
+          <Link
+            href="/dashboard/integrations"
+            className="mt-4 inline-block text-sm font-medium text-(--color-primary) hover:underline"
+          >
+            Go to Integrations →
           </Link>
         </div>
       </div>
