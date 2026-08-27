@@ -126,7 +126,9 @@ describe("messagesSlice", () => {
     expect(page2.items.map((m) => m.id)).toEqual(["msg-1", "msg-2"]);
     expect(page2.isLoadingMore).toBe(false);
 
-    // A page-1 refetch (e.g. after sync) discards accumulated scroll pages.
+    // A page-1 refetch merges rather than replaces (see the dedicated merge
+    // test below for why) — items already known locally but absent from
+    // this response survive alongside the fresh page-1 data.
     const refreshed = reducer(
       page2,
       fetchMessagesPage.fulfilled(
@@ -135,7 +137,41 @@ describe("messagesSlice", () => {
         { page: 1, pageSize: 50 }
       )
     );
-    expect(refreshed.items.map((m) => m.id)).toEqual(["msg-fresh"]);
+    expect(refreshed.items.map((m) => m.id)).toEqual(["msg-fresh", "msg-1", "msg-2"]);
+  });
+
+  it("merges a page-1 refetch instead of replacing, so a reply added locally survives a stale response that doesn't include it yet", () => {
+    // Reproduces the race: auto-sync's own page-1 refetch can resolve AFTER
+    // a reply the user just sent (sendReply.fulfilled unshifts it locally),
+    // if the underlying eBay sync call was slow enough that this query ran
+    // before the reply committed. Before this fix, the fulfilled page-1
+    // response would blindly replace `items`, silently erasing the reply
+    // from the UI until the next real fetch.
+    const afterReply = reducer(
+      reducer(
+        undefined,
+        hydrateMessages({ data: [makeMessage({ id: "msg-1" })], count: 1, page: 1, pageSize: 50 })
+      ),
+      sendReply.fulfilled(
+        makeMessage({ id: "msg-reply", direction: "outbound" }),
+        "req-id",
+        { messageId: "msg-1", text: "Yes!" }
+      )
+    );
+    expect(afterReply.items.map((m) => m.id)).toEqual(["msg-reply", "msg-1"]);
+
+    // A stale page-1 response, queried before the reply existed.
+    const staleRefetch = reducer(
+      afterReply,
+      fetchMessagesPage.fulfilled(
+        { data: [makeMessage({ id: "msg-1" })], count: 1, page: 1, pageSize: 50 },
+        "req-id",
+        { page: 1, pageSize: 50 }
+      )
+    );
+    expect(staleRefetch.items.map((m) => m.id).sort()).toEqual(["msg-1", "msg-reply"]);
+    // Total must not regress below what's actually held locally.
+    expect(staleRefetch.total).toBe(2);
   });
 
   it("sets isSearching across the searchMessages lifecycle and stores query + results", () => {

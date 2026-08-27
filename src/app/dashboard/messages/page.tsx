@@ -100,14 +100,16 @@ export default function MessagesPage() {
     Promise.resolve().then(() => runSync());
   }, [canManage, isEbayConnected, runSync]);
 
-  async function handleSend(text: string) {
-    if (!replyTarget) return;
+  async function handleSend(text: string): Promise<boolean> {
+    if (!replyTarget) return false;
     setSending(true);
     try {
       await dispatch(sendReply({ messageId: replyTarget.id, text })).unwrap();
       success("Reply sent");
+      return true;
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Reply failed");
+      return false;
     } finally {
       setSending(false);
     }

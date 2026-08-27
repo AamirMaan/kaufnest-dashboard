@@ -7,17 +7,19 @@ interface Props {
   disabled: boolean;
   disabledReason?: string;
   sending: boolean;
-  onSend: (text: string) => void;
+  // Resolves true on success, false on failure — the text is only cleared
+  // on success so a failed send never loses what was typed.
+  onSend: (text: string) => Promise<boolean>;
 }
 
 export function ReplyBox({ disabled, disabledReason, sending, onSend }: Props) {
   const [text, setText] = useState("");
 
-  function handleSend() {
+  async function handleSend() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSend(trimmed);
-    setText("");
+    const sent = await onSend(trimmed);
+    if (sent) setText("");
   }
 
   return (

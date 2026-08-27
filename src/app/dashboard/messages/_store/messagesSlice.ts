@@ -153,10 +153,26 @@ export const messagesSlice = createSlice({
       })
       .addCase(fetchMessagesPage.fulfilled, (state, action) => {
         const { data, count, page, pageSize } = action.payload;
-        state.items = page === 1 ? data : [...state.items, ...data];
+        if (page === 1) {
+          // Merge, don't replace: the auto-sync's own page-1 refetch can
+          // resolve AFTER a reply the user just sent (sendReply.fulfilled
+          // unshifts it locally), if the underlying eBay sync call was slow
+          // enough that this query ran before the reply committed. A blind
+          // replace here would silently erase that reply from the UI until
+          // the next real fetch — fresh rows win by id, anything present
+          // only locally (not yet reflected in this response) survives.
+          const incomingIds = new Set(data.map((m) => m.id));
+          const localOnly = state.items.filter((m) => !incomingIds.has(m.id));
+          state.items = [...data, ...localOnly];
+        } else {
+          state.items = [...state.items, ...data];
+        }
         state.page = page;
         state.pageSize = pageSize;
-        state.total = count;
+        // A stale response's count can undercount rows sendReply.fulfilled
+        // already added locally — never let total regress below what's
+        // actually held.
+        state.total = Math.max(count, state.items.length);
         state.isFetching = false;
         state.isLoadingMore = false;
         state.loaded = true;

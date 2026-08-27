@@ -126,19 +126,33 @@ Trading API mechanics this reuses.
 - `_components/ReplyBox.tsx` — controlled textarea + Send button. Disabled
   when the selected thread has no inbound message to reply to (Trading API's
   `AddMemberMessageRTQ` requires a `ParentMessageID`) — see the "v1 scope"
-  gotcha below.
+  gotcha below. `onSend` returns `Promise<boolean>` (fixed 2026-08-27, was a
+  real bug): the typed text is only cleared once the parent's send actually
+  resolves successfully — it previously cleared synchronously on click,
+  before the network call even started, so a failed send silently lost what
+  was typed with no way to recover it. The textarea stays visible and
+  populated (just disabled) while `sending` is true instead.
 - `_store/messagesSlice.ts` — `state.messages` (`items`, `loaded`, `page`,
   `pageSize`, `total`, `isFetching`, `isLoadingMore`, `isSyncing`,
   `searchQuery`, `searchResults`, `isSearching`). Actions: `hydratePage`
   (aliased `hydrateMessages`), `addMessage`, `setFetching`, `clearSearch`.
-  Thunks: `fetchMessagesPage({ page, pageSize })` — **`page === 1` replaces
-  `items`, `page > 1` appends** (2026-08-27, for infinite scroll); tracked
-  via a separate `isLoadingMore` flag (set in `.pending` only when
+  Thunks: `fetchMessagesPage({ page, pageSize })` — **`page === 1` merges,
+  `page > 1` appends** (2026-08-27, for infinite scroll); tracked via a
+  separate `isLoadingMore` flag (set in `.pending` only when
   `action.meta.arg.page > 1`) so a scroll-triggered load never shows the
-  same "Loading…" indicator as an initial/post-sync fetch. `syncMessages()`
-  (POSTs `/api/messages/ebay/sync`, caller re-fetches **page 1** on success
-  — which replaces, discarding any pages accumulated by scrolling, same as
-  reopening a WhatsApp chat). `searchMessages(query)` (2026-08-27 — server-side
+  same "Loading…" indicator as an initial/post-sync fetch. **Page 1 merges
+  by id rather than replacing outright (fixed 2026-08-27, was a real bug)**:
+  auto-sync's own page-1 refetch can resolve *after* a reply the user just
+  sent (`sendReply.fulfilled` unshifts it into `items` immediately) if the
+  underlying eBay sync call was slow enough that this query ran before the
+  reply committed — a blind replace silently erased the just-sent reply from
+  the UI until the next real fetch. Fresh rows win by id; anything present
+  only locally (not yet reflected in this response — e.g. that reply, or
+  older items loaded by scrolling) survives alongside them. `total` is
+  floored at `Math.max(count, items.length)` for the same reason: a stale
+  response's count must never regress below what's already held locally.
+  `syncMessages()` (POSTs `/api/messages/ebay/sync`, caller re-fetches
+  **page 1** on success). `searchMessages(query)` (2026-08-27 — server-side
   `ilike` over `buyer_username`/`body` via `createTenantClient()`, capped at
   200 rows, `ilike` wildcard characters escaped in the query text; stores
   into `searchQuery`/`searchResults`, separate from `items`/`page`/`total`
