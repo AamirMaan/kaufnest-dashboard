@@ -56,6 +56,26 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **A sent reply could vanish from the UI until the next real fetch — a
+  slow background sync racing a fast local mutation, fixed 2026-08-27.**
+  `page.tsx`'s auto-sync (`runSync`) fires on every page visit and calls a
+  live eBay API (`syncMessages()`, can take a few seconds) before refetching
+  page 1. The `ReplyBox` is never disabled while that's in flight — nothing
+  gates it on `isSyncing`. If a user opens a thread and replies while that
+  auto-sync is still running, `sendReply.fulfilled` unshifts the new
+  outbound row into `items` immediately (correct), but the *slower*,
+  already-in-flight `fetchMessagesPage({ page: 1 })` from `runSync` can then
+  resolve with a snapshot queried **before** the reply was inserted — and its
+  `.fulfilled` case used to blindly `state.items = data`, replacing the
+  array and silently erasing the just-sent reply until the next fetch
+  (manual refresh, or the layout's next server-side hydration) picked it up
+  fresh. Fixed by merging page-1 responses by id instead of replacing (see
+  the `messagesSlice.ts` bullet in CLAUDE.md) — fresh rows win, anything
+  present only locally survives. **If you ever add another "background
+  refresh replaces local state" pattern to this feature, ask whether a
+  user-initiated mutation could be in flight at the same time** — a
+  REPLACE-based reducer case is only safe when nothing else can be adding
+  rows to that same array concurrently.
 - **`<CreationDate>` and `<MessageStatus>` are siblings of `<Question>`, not
   nested inside it — CONFIRMED live 2026-08-27, fixed.** A one-time
   diagnostic (`redactedStructure()`, since removed — its job was done)
