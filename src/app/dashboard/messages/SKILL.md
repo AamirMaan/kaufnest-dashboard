@@ -44,6 +44,15 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   styling**: `_lib/avatarColor.ts` (colors) and `_components/ThreadView.tsx`
   / `_components/ThreadList.tsx` (layout) — see the Tailwind-static-strings
   gotcha below before touching `avatarColor.ts`.
+- **Changing infinite-scroll behavior** (threshold, page size): the scroll
+  listener and its `150px` threshold live entirely in
+  `_components/ThreadList.tsx` (`LOAD_MORE_THRESHOLD_PX`); the
+  replace-vs-append decision lives in `messagesSlice.ts`'s
+  `fetchMessagesPage.fulfilled` (`page === 1` ? replace : append). Both need
+  to change together if you ever want e.g. "append on page 1 too."
+  **Changing search** (scope, result cap, debounce): `messagesSlice.ts`'s
+  `searchMessages` thunk (`SEARCH_RESULT_LIMIT`, the `.or(...)` filter
+  columns) and `page.tsx`'s `SEARCH_DEBOUNCE_MS`.
 
 ## Gotchas
 
@@ -101,6 +110,21 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   `globals.css` before assuming the Tailwind class or theme logic is
   wrong** — Tailwind will happily emit a rule for `bg-(--anything)` whether
   or not that variable is ever defined.
+- **A subtler variant of the same class of bug: answered inbound bubbles
+  used `bg-(--color-surface-subtle)`, a token that DOES exist, but is the
+  exact same value as the page's own `--background`
+  (`globals.css`: `--background: var(--color-surface-subtle)`) — fixed
+  2026-08-27.** No CSS bug this time, just the wrong token: the bubble was
+  painted the identical color as what's behind it, so it read as "no skin
+  around the message" (reported with a screenshot showing some bubbles —
+  the amber unread ones — with a visible fill, others with none). Fixed to
+  `bg-(--color-surface)` + `style={{ boxShadow: "var(--shadow-card)" }}`,
+  the same white-card-on-subtle-page-background treatment
+  `StatCard`/`DataTable` use elsewhere in this app. **Lesson**: when
+  checking "does this token exist," also check "is this token
+  *distinguishable* from whatever's underneath it" — existing in
+  `globals.css` doesn't guarantee a token renders visibly in every context
+  it's used.
 - **The sync upsert's `ON CONFLICT` target was a PARTIAL index — fixed in
   migration `033_ebay_messages_full_unique_index.sql`, confirmed live
   2026-08-27.** Once parsing was fixed (next gotcha), sync got past

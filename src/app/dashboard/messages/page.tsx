@@ -2,19 +2,22 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { hasPermission } from "@/lib/utils/permissions";
 import { formatDateTime } from "@/lib/utils/date";
-import { fetchMessagesPage, syncMessages, sendReply } from "./_store/messagesSlice";
+import { fetchMessagesPage, syncMessages, sendReply, searchMessages, clearSearch } from "./_store/messagesSlice";
 import { groupThreads, latestInboundMessage } from "./_lib/groupThreads";
 import { ThreadList } from "./_components/ThreadList";
 import { ThreadView } from "./_components/ThreadView";
 import { ReplyBox } from "./_components/ReplyBox";
+
+// Debounce so every keystroke doesn't fire its own query — long enough to
+// absorb normal typing speed, short enough that search still feels live.
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default function MessagesPage() {
   const dispatch = useAppDispatch();
@@ -22,20 +25,53 @@ export default function MessagesPage() {
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
-  const { items, page, pageSize, total, isFetching, isSyncing } = useAppSelector((s) => s.messages);
+  const {
+    items,
+    page,
+    pageSize,
+    total,
+    isFetching,
+    isLoadingMore,
+    isSyncing,
+    searchQuery,
+    searchResults,
+  } = useAppSelector((s) => s.messages);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [searchInput, setSearchInput] = useState("");
 
   const canManage = role && hasPermission(role, "manage_messages", permissionOverrides);
-  const threads = useMemo(() => groupThreads(items), [items]);
+  const isSearchActive = searchQuery.trim().length > 0;
+  const threads = useMemo(
+    () => groupThreads(isSearchActive ? searchResults : items),
+    [isSearchActive, searchResults, items]
+  );
   const selectedThread = threads.find((t) => t.key === selectedKey) ?? threads[0] ?? null;
   const replyTarget = selectedThread ? latestInboundMessage(selectedThread) : null;
+  // Search results are a single bounded query (see messagesSlice), not paged
+  // themselves — infinite scroll only applies to the normal thread list.
+  const hasMoreThreads = !isSearchActive && items.length < total;
 
-  function goToPage(nextPage: number) {
-    dispatch(fetchMessagesPage({ page: nextPage, pageSize }));
+  // Debounced server-side search — client-side filtering would silently miss
+  // any message not yet loaded into `items` by infinite scroll.
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    const handle = setTimeout(() => {
+      if (trimmed) {
+        dispatch(searchMessages(trimmed));
+      } else {
+        dispatch(clearSearch());
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(handle);
+  }, [searchInput, dispatch]);
+
+  function handleLoadMoreThreads() {
+    if (isFetching || isLoadingMore || !hasMoreThreads) return;
+    dispatch(fetchMessagesPage({ page: page + 1, pageSize }));
   }
 
   const runSync = useCallback(async () => {
@@ -128,8 +164,39 @@ export default function MessagesPage() {
       {isFetching && <div className="mb-4 text-sm text-(--color-text-muted)">Loading…</div>}
 
       <div className="grid grid-cols-1 overflow-hidden rounded-(--radius-card) border border-(--color-border) md:grid-cols-[280px_1fr]">
-        <div className="max-h-[600px] overflow-y-auto border-b border-(--color-border) md:border-b-0 md:border-r">
-          <ThreadList threads={threads} selectedKey={selectedThread?.key ?? null} onSelect={setSelectedKey} />
+        <div className="flex h-[600px] flex-col border-b border-(--color-border) md:border-b-0 md:border-r">
+          <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-2">
+            <Search size={14} className="shrink-0 text-(--color-text-muted)" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search messages or sender…"
+              aria-label="Search messages or sender"
+              className="w-full bg-transparent text-sm text-(--color-text-strong) placeholder:text-(--color-text-muted) focus:outline-none"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                aria-label="Clear search"
+                className="shrink-0 text-(--color-text-muted) hover:text-(--color-text-strong)"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ThreadList
+              threads={threads}
+              selectedKey={selectedThread?.key ?? null}
+              onSelect={setSelectedKey}
+              onLoadMore={handleLoadMoreThreads}
+              hasMore={hasMoreThreads}
+              isLoadingMore={isLoadingMore}
+              emptyMessage={isSearchActive ? "No conversations match your search." : undefined}
+            />
+          </div>
         </div>
         <div className="flex h-[600px] flex-col">
           <div className="flex-1 overflow-hidden">
@@ -144,10 +211,6 @@ export default function MessagesPage() {
             />
           )}
         </div>
-      </div>
-
-      <div className="mt-3">
-        <Pagination page={page} pageSize={pageSize} total={total} onPageChange={goToPage} />
       </div>
     </div>
   );

@@ -96,8 +96,21 @@ export function ThreadView({ thread }: Props) {
                     ? "self-end rounded-br-none bg-(--color-primary-muted) text-(--color-primary-text)"
                     : needsReply
                       ? "self-start rounded-bl-none border-l-4 border-(--color-warning) bg-(--color-warning-bg) text-(--color-text-strong)"
-                      : "self-start rounded-bl-none bg-(--color-surface-subtle) text-(--color-text-strong)"
+                      : "self-start rounded-bl-none bg-(--color-surface) text-(--color-text-strong)"
                 }`}
+                // Answered inbound bubbles need an explicit card treatment,
+                // not just a background class: --color-surface-subtle (the
+                // prior choice) is literally this page's own --background
+                // token (globals.css), so the bubble was invisible against
+                // it. --color-surface + the app's existing shadow-card
+                // convention (StatCard, DataTable) makes it read as a
+                // floating card instead, same as WhatsApp's white bubble
+                // on a light gray page.
+                style={
+                  message.direction === "inbound" && !needsReply
+                    ? { boxShadow: "var(--shadow-card)" }
+                    : undefined
+                }
               >
                 <p className="whitespace-pre-wrap">{message.body}</p>
                 <p className="mt-1 text-[10px] opacity-70">{formatDateTime(message.ebay_created_at)}</p>

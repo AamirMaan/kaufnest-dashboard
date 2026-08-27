@@ -16,19 +16,32 @@ Trading API mechanics this reuses.
 
 ## Files in this folder
 
-- `page.tsx` — paginated flat message list (`fetchMessagesPage` thunk, same
-  pagination architecture as Sales/Purchases/Listings), grouped client-side
-  into threads via `_lib/groupThreads.ts`. Two-pane layout: `ThreadList`
-  (left) + `ThreadView`/`ReplyBox` (right). Also gates the whole page behind
-  `hasPlatformIntegrations(tenantPlan)` with an upgrade prompt, same as
-  Listings. `runSync` (a `useCallback`-memoized wrapper around
-  `syncMessages()` + `fetchMessagesPage({ page: 1 })`) fires once from a
-  `useEffect` on mount, gated on `canManage` — the same permission that used
-  to gate the removed button. Status is shown inline where the button was:
-  "Checking eBay…" while `isSyncing`, "Updated `<time>`" after a successful
-  sync, or "Couldn't refresh messages — Retry" (calls `runSync` again) on
-  failure — there's no other manual re-sync affordance, so a failed auto-sync
-  must not fail silently.
+- `page.tsx` — flat message list fetched via `fetchMessagesPage` (same
+  underlying paged-query shape as Sales/Purchases/Listings), grouped
+  client-side into threads via `_lib/groupThreads.ts`. **Not the shared
+  `<Pagination>` UI, though** (2026-08-27) — the left pane scrolls
+  infinitely instead: `ThreadList` fires `onLoadMore` near the bottom, which
+  dispatches `fetchMessagesPage({ page: page + 1, pageSize })`; `page > 1`
+  results append in the slice rather than replace (see `messagesSlice.ts`
+  below). A debounced (300ms) search input above the list dispatches
+  `searchMessages(query)` on eBay/`ebay_messages` (server-side `ilike` over
+  `body`/`buyer_username`, capped at 200 results — see the slice) instead of
+  filtering `items` client-side; if it filtered client-side it would
+  silently miss anything not yet scrolled into view, matching the
+  project-wide pagination rule in `AGENTS.md` (filters go into the query,
+  not client-side). While `searchQuery` is non-empty the thread list is
+  built from `searchResults` instead of `items`, and infinite-scroll loading
+  is paused (search's own 200-row cap is its only "pagination"). Two-pane
+  layout: `ThreadList` (left) + `ThreadView`/`ReplyBox` (right). Also gates
+  the whole page behind `hasPlatformIntegrations(tenantPlan)` with an
+  upgrade prompt, same as Listings. `runSync` (a `useCallback`-memoized
+  wrapper around `syncMessages()` + `fetchMessagesPage({ page: 1 })`) fires
+  once from a `useEffect` on mount, gated on `canManage` — the same
+  permission that used to gate the removed button. Status is shown inline
+  where the button was: "Checking eBay…" while `isSyncing`, "Updated
+  `<time>`" after a successful sync, or "Couldn't refresh messages — Retry"
+  (calls `runSync` again) on failure — there's no other manual re-sync
+  affordance, so a failed auto-sync must not fail silently.
 - `_lib/groupThreads.ts` — pure `groupThreads(messages)` (groups by
   `buyer_username + item_id`, most-recently-active thread first) and
   `latestInboundMessage(thread)` (the message a reply threads off of — its
@@ -58,7 +71,15 @@ Trading API mechanics this reuses.
   **not** reliably work, Node caches timezone data at process start.
 - `_components/ThreadList.tsx` — left pane, one row per thread: avatar
   circle (`avatarColor.ts`) + buyer name (bold when the thread has any
-  unanswered inbound message) + the existing unread-count `Badge`.
+  unanswered inbound message) + the existing unread-count `Badge`. Owns its
+  own scroll container (2026-08-27, was previously owned by `page.tsx`) so
+  it can drive infinite scroll: an `onScroll` handler fires the optional
+  `onLoadMore` prop once the user scrolls within `150px` of the bottom,
+  gated on `hasMore`/`isLoadingMore` props from `page.tsx`. Renders a
+  "Loading more…" footer while `isLoadingMore`, and accepts an
+  `emptyMessage` override (`page.tsx` uses it to show "No conversations
+  match your search" instead of the default "sync to pull in messages"
+  copy when a search is active).
 - `_components/ThreadView.tsx` — right pane: a header bar (avatar + bold
   name + item **title**, linking to the live eBay listing when
   `item_url` is present, plus price — falls back to the bare "Item
@@ -70,13 +91,16 @@ Trading API mechanics this reuses.
   chip" pairing already used elsewhere, e.g. `dashboard/page.tsx` —
   deliberately NOT the saturated `--color-primary` + white text used for
   buttons, so a sent bubble doesn't read as a clickable action). Inbound
-  renders left-aligned; still-unanswered inbound (`!is_read`) additionally
-  gets an amber left-border/tint (`--color-warning`/`--color-warning-bg`)
-  so it's visually obvious which questions still need a reply, even
-  partway down a long thread — see the `is_read` gotcha in
-  `dashboard/messages/SKILL.md` for what that flag actually tracks
-  (answered-on-eBay, not seen-by-you). Both directions get one rounded
-  corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
+  renders left-aligned; still-unanswered inbound (`!is_read`) gets an amber
+  left-border/tint (`--color-warning`/`--color-warning-bg`) so it's visually
+  obvious which questions still need a reply, even partway down a long
+  thread — see the `is_read` gotcha in `dashboard/messages/SKILL.md` for
+  what that flag actually tracks (answered-on-eBay, not seen-by-you).
+  Answered inbound bubbles use `bg-(--color-surface)` +
+  `boxShadow: var(--shadow-card)` (fixed 2026-08-27 — `--color-surface-subtle`,
+  the prior choice, is this page's own `--background` token, so the bubble
+  was invisible against it; see the SKILL.md gotcha). Both directions get
+  one rounded corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
   WhatsApp-style bubble "tail." A day-separator pill (`dayLabel.ts`) is
   inserted before the first message of each new local calendar day, via a
   **`Fragment`** per message (not a wrapper `div`, and deliberately not
@@ -95,15 +119,25 @@ Trading API mechanics this reuses.
   `AddMemberMessageRTQ` requires a `ParentMessageID`) — see the "v1 scope"
   gotcha below.
 - `_store/messagesSlice.ts` — `state.messages` (`items`, `loaded`, `page`,
-  `pageSize`, `total`, `isFetching`, `isSyncing`). Actions: `hydratePage`
-  (aliased `hydrateMessages`), `addMessage`, `setFetching`. Thunks:
-  `fetchMessagesPage({ page, pageSize })`, `syncMessages()` (POSTs
-  `/api/messages/ebay/sync`, caller re-fetches page 1 on success — the slice
-  doesn't try to merge an unknown-sized synced batch itself), `sendReply({
-  messageId, text })` (POSTs `/api/messages/[id]/reply`, unshifts the
-  returned row via its own `fulfilled` case). The reply route's insert
-  copies `item_title`/`item_price`/`item_currency`/`item_url` from the
-  original message being replied to, same as it already does for
+  `pageSize`, `total`, `isFetching`, `isLoadingMore`, `isSyncing`,
+  `searchQuery`, `searchResults`, `isSearching`). Actions: `hydratePage`
+  (aliased `hydrateMessages`), `addMessage`, `setFetching`, `clearSearch`.
+  Thunks: `fetchMessagesPage({ page, pageSize })` — **`page === 1` replaces
+  `items`, `page > 1` appends** (2026-08-27, for infinite scroll); tracked
+  via a separate `isLoadingMore` flag (set in `.pending` only when
+  `action.meta.arg.page > 1`) so a scroll-triggered load never shows the
+  same "Loading…" indicator as an initial/post-sync fetch. `syncMessages()`
+  (POSTs `/api/messages/ebay/sync`, caller re-fetches **page 1** on success
+  — which replaces, discarding any pages accumulated by scrolling, same as
+  reopening a WhatsApp chat). `searchMessages(query)` (2026-08-27 — server-side
+  `ilike` over `buyer_username`/`body` via `createTenantClient()`, capped at
+  200 rows, `ilike` wildcard characters escaped in the query text; stores
+  into `searchQuery`/`searchResults`, separate from `items`/`page`/`total`
+  entirely). `sendReply({ messageId, text })` (POSTs
+  `/api/messages/[id]/reply`, unshifts the returned row via its own
+  `fulfilled` case). The reply route's insert copies
+  `item_title`/`item_price`/`item_currency`/`item_url` from the original
+  message being replied to, same as it already does for
   `item_id`/`buyer_username` — without this, sending a reply makes it the
   thread's newest message, and `groupThreads.ts` reading item details from
   the latest message would blank the title/price it just took two rounds
@@ -131,7 +165,8 @@ OAuth token.
 
 ## Shared dependencies
 
-- `components/ui/{Badge, Button, Pagination, Toast}`
+- `components/ui/{Badge, Button, Toast}` — **not** `Pagination` (removed
+  2026-08-27 in favor of infinite scroll, see `ThreadList.tsx` above)
 - `components/layout/PageHeader`
 - `store/slices/currentUserSlice` (`tenantPlan`, `profile.role`/`permission_overrides`)
 - `lib/utils/{date, permissions, planGating, pagedQuery, currency}`
