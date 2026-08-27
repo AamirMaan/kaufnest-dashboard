@@ -3,8 +3,13 @@
 
 import { use } from "react";
 import { ListingWizard } from "../_components/ListingWizard";
+import { BusinessEbayGate } from "../_components/BusinessEbayGate";
 
 export default function EditListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  return <ListingWizard draftId={id} />;
+  return (
+    <BusinessEbayGate>
+      <ListingWizard draftId={id} />
+    </BusinessEbayGate>
+  );
 }

@@ -3,10 +3,11 @@
 Route: `/dashboard/listings`, `/dashboard/listings/new`, `/dashboard/listings/[id]`.
 Lets an admin/super_admin build an eBay listing from an Inventory item or a
 third-party (dropship) source, save it as a draft, and publish it to eBay via
-the eBay Inventory API. Gated the same way as Integrations
-(`hasPlatformIntegrations`) plus a dedicated `manage_listings` permission
-(admin/super_admin only — nav entry is visible to all roles, but Save
-Draft/Publish/category-search/policy-fetch all require the permission).
+the eBay Inventory API. Gated on the **Business plan** (not Pro — changed
+2026-08-27, see `_components/BusinessEbayGate.tsx`) **and** a connected eBay
+account, applied to all three routes, plus a dedicated `manage_listings`
+permission (admin/super_admin only — nav entry is visible to all roles, but
+Save Draft/Publish/category-search/policy-fetch all require the permission).
 
 Sub-project 1 of a two-part feature — editing/ending/relisting *published*
 listings is a separate, not-yet-built follow-up (see
@@ -16,12 +17,22 @@ listings is a separate, not-yet-built follow-up (see
 
 - `page.tsx` — paginated listings table (`fetchListingsPage` thunk, same
   pagination architecture as Sales/Purchases/Expenses). "New Listing" button
-  gated on `manage_listings`. Also gates the whole page behind
-  `hasPlatformIntegrations(tenantPlan)` with an upgrade prompt when the plan
-  doesn't include it.
+  gated on `manage_listings`. Wrapped in `_components/BusinessEbayGate.tsx`
+  for the plan/connection gate (see below) — `page.tsx` itself no longer
+  reads `tenantPlan`/`connections` directly.
 - `new/page.tsx` / `[id]/page.tsx` — thin client-component wrappers around
   `_components/ListingWizard.tsx` (draftId `null` vs the route param, read via
-  React's `use(params)`).
+  React's `use(params)`), each also wrapped in `_components/BusinessEbayGate.tsx`
+  — added 2026-08-27; these two routes previously had no gate at all, so a
+  Pro tenant or a tenant with no eBay connection could reach the wizard
+  directly by URL even with the list page's button correctly hidden.
+- `_components/BusinessEbayGate.tsx` — the plan/connection gate itself
+  (2026-08-27): renders an upgrade prompt when `tenantPlan` isn't Business
+  (`hasMessagingAndListings`, `lib/utils/planGating.ts`), an "eBay connection
+  required" prompt when `state.integrations.connections` has no `platform:
+  "ebay"` row with `status === "connected"`, or `children` otherwise. Used by
+  all three route files above — change the gate condition/copy here, not
+  per-route.
 - `_components/ListingWizard.tsx` — the wizard shell. Owns `draft`
   (`DraftFormState`, all-string controlled-input state) and `step` state,
   loads an existing draft row when `draftId` is set, renders the current
@@ -84,7 +95,12 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 - `store/slices/{auditLogsSlice,currentUserSlice,companyProfileSlice}`
 - `app/dashboard/inventory/_store/inventorySlice` — read-only, `selectorItems`
   for the Source step's Inventory picker
-- `lib/utils/{audit,currency,detectPlatform,permissions,planGating,pagedQuery}`
+- `lib/utils/{audit,currency,detectPlatform,permissions,pagedQuery}` —
+  `planGating`'s `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
+  specifically, not `hasPlatformIntegrations`
+- `store/slices` — `s.integrations.connections` (read by `BusinessEbayGate.tsx`,
+  hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
+  Dropshipping/Integrations use)
 - `lib/integrations/{authGuard,tokenStore,ebay}` — server-only, used by the
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU

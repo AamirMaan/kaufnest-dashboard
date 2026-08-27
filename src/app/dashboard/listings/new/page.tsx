@@ -2,7 +2,12 @@
 "use client";
 
 import { ListingWizard } from "../_components/ListingWizard";
+import { BusinessEbayGate } from "../_components/BusinessEbayGate";
 
 export default function NewListingPage() {
-  return <ListingWizard draftId={null} />;
+  return (
+    <BusinessEbayGate>
+      <ListingWizard draftId={null} />
+    </BusinessEbayGate>
+  );
 }
