@@ -318,6 +318,53 @@ update above) is still pending a sync + log check, independent of this round.
 
 ---
 
+**Update 2026-08-27, fourth round — CreationDate root cause found and fixed.**
+The next sync attempt came back `{ exchangeBlocks: 0, messagesParsed: 0 }` —
+a dead end, but a diagnostic one: direct DB query showed all 46 stored rows
+had `ebay_created_at` within milliseconds of each other (not just per-thread
+as first observed — every message, across unrelated items/buyers). That's
+the fallback firing on literally every row, and it explained the zero: sync's
+`since` cursor is `MAX(ebay_created_at)` from storage, which had become
+"basically now," so eBay correctly returned nothing newer. The bug had
+poisoned its own diagnostic. Broke the loop with a one-off manual `UPDATE`
+against `tenant_kaufnest.ebay_messages` (`ebay_created_at = now() - interval
+'90 days'`, confirmed with the user first since it's a direct production
+data write, not a migration) to reset the cursor to the same 90-day fallback
+that found these messages originally. Next sync came back
+`{ exchangeBlocks: 46, messagesParsed: 46 }` with the `redactedStructure()`
+skeleton finally populated:
+
+```
+<MemberMessageExchange><Item>…</Item><Question>…</Question><MessageStatus>…</MessageStatus><CreationDate>…</CreationDate><LastModifiedDate>…</LastModifiedDate></MemberMessageExchange>
+```
+
+Both `<CreationDate>` and `<MessageStatus>` are siblings of `<Question>` at
+the exchange level — not nested inside it, which was the original (untested)
+assumption for both. This also explained a second bug nobody had reported
+yet: `is_read` was `false` on all 46 rows, because the `MessageStatus ===
+"Answered"` check was reading from inside `<Question>` too, where it never
+existed. Fixed `parseExchangeBlock` to read both from `exchangeXml` once per
+exchange (same place `itemTitle`/`itemPrice`/`itemUrl` already were), removed
+the now-fulfilled `redactedStructure()` diagnostic (it was explicitly a
+one-time tool to answer this exact question, unlike the permanent
+exchange-count/schema-mismatch logs), and updated `messages.test.ts`'s
+fixtures to the confirmed real shape. **Still needed**: one more manual
+90-day cursor reset after this fix deploys, since the last sync ran with the
+still-broken parser and re-poisoned `ebay_created_at` back to "now" one more
+time — the sync after that should self-heal permanently. Full detail in the
+new gotcha in `dashboard/messages/SKILL.md`.
+
+Second item from this round — "my message is missing" — turned out not to be
+a bug at all: the user had replied via eBay's own site, not this app's Reply
+box. `GetMemberMessages` (what this app polls) never returns the seller's own
+sent replies — eBay has no such endpoint — so a reply sent outside this app
+is structurally invisible to it. Confirmed via the same zero-outbound-rows/
+zero-audit-log check as the prior round, this time with the user's own report
+of *where* they'd sent it explaining the gap instead of pointing at a
+rendering bug.
+
+---
+
 ## Docs to update when done (mandatory per `AGENTS.md`)
 
 - `src/app/dashboard/messages/SKILL.md` — replace the two "unverified" gotchas

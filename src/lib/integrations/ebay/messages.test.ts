@@ -19,11 +19,14 @@ const ONE_PAGE = `<?xml version="1.0" encoding="utf-8"?>
     <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
   </GetMemberMessagesResponse>`;
 
-// Real shape confirmed live 2026-08-26 against tenant_kaufnest's connected
+// Real shape confirmed live 2026-08-26/27 against tenant_kaufnest's connected
 // account — see the schema-mismatch gotcha in dashboard/messages/SKILL.md.
 // <Question> is the message wrapper (not <MemberMessage>, which never
 // appears in a real response), ItemID nests under <Item>, and there is no
 // <Incoming> tag at all — every message here is inbound by construction.
+// <CreationDate> and <MessageStatus> are siblings of <Question>, at the
+// <MemberMessageExchange> level — NOT nested inside <Question>, confirmed
+// via the redactedStructure diagnostic 2026-08-27.
 const REAL_SHAPE_EXCHANGE = `
   <MemberMessageExchange>
     <Item>
@@ -39,9 +42,9 @@ const REAL_SHAPE_EXCHANGE = `
       <Subject>Question about item</Subject>
       <Body>Is this still available?</Body>
       <QuestionType>General</QuestionType>
-      <MessageStatus>Unanswered</MessageStatus>
-      <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
     </Question>
+    <MessageStatus>Unanswered</MessageStatus>
+    <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
   </MemberMessageExchange>`;
 
 describe("fetchMemberMessages", () => {
@@ -85,9 +88,9 @@ describe("fetchMemberMessages", () => {
             <MessageID>msg-no-item-details</MessageID>
             <SenderID>buyer1</SenderID>
             <Body>No item details on this one</Body>
-            <MessageStatus>Unanswered</MessageStatus>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
           </Question>
+          <MessageStatus>Unanswered</MessageStatus>
+          <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
         </MemberMessageExchange>
       </GetMemberMessagesResponse>`);
 
@@ -124,9 +127,9 @@ describe("fetchMemberMessages", () => {
             <MessageID>msg-answered</MessageID>
             <SenderID>buyer1</SenderID>
             <Body>Already answered</Body>
-            <MessageStatus>Answered</MessageStatus>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
           </Question>
+          <MessageStatus>Answered</MessageStatus>
+          <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
         </MemberMessageExchange>
       </GetMemberMessagesResponse>`);
 
@@ -145,9 +148,9 @@ describe("fetchMemberMessages", () => {
             <MessageID>msg-3</MessageID>
             <SenderID>buyer1</SenderID>
             <Body>Price &amp; shipping &lt;fast&gt;?</Body>
-            <MessageStatus>Unanswered</MessageStatus>
-            <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
           </Question>
+          <MessageStatus>Unanswered</MessageStatus>
+          <CreationDate>2026-07-20T10:00:00.000Z</CreationDate>
         </MemberMessageExchange>
       </GetMemberMessagesResponse>`);
 
@@ -266,12 +269,12 @@ describe("fetchMemberMessages", () => {
     warnSpy.mockRestore();
   });
 
-  it("logs a redacted structural skeleton of the exchange XML — tag names/nesting kept, all text content stripped", async () => {
-    // Needed to see WHERE a field actually lives in a real response (e.g.
-    // CreationDate) without a captured fixture and without logging any
-    // buyer content. This is the mechanism, not a claim about the real
-    // shape — that's still unconfirmed, which is exactly why it exists.
-    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
+  it("reads CreationDate/MessageStatus from the exchange level, not from inside Question", async () => {
+    // Regression guard for the 2026-08-27 fix: both fields are siblings of
+    // <Question> at the <MemberMessageExchange> level (confirmed live via
+    // the now-removed redactedStructure diagnostic), not nested inside
+    // <Question> as originally assumed — which previously made ebayCreatedAt
+    // fall back to "now" and isRead always false.
     mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
       <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
         <Ack>Success</Ack>
@@ -279,49 +282,8 @@ describe("fetchMemberMessages", () => {
         ${REAL_SHAPE_EXCHANGE}
       </GetMemberMessagesResponse>`);
 
-    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
-
-    const call = infoSpy.mock.calls.find(
-      ([msg]) => typeof msg === "string" && msg.includes("exchange structure")
-    )!;
-    const skeleton = call[1] as string;
-    expect(skeleton).toContain("<MemberMessageExchange>");
-    expect(skeleton).toContain("<Question>");
-    expect(skeleton).toContain("<CreationDate>…</CreationDate>");
-    // Structure preserved, content redacted — no buyer data leaks into logs.
-    expect(skeleton).not.toContain("buyer1");
-    expect(skeleton).not.toContain("Is this still available?");
-    infoSpy.mockRestore();
-  });
-
-  it("redacts every leaf value uniformly — including short, non-sensitive-looking ones like an id — rather than selectively picking which fields to hide", async () => {
-    // Redaction is deliberately all-or-nothing: no per-field allowlist to
-    // maintain or accidentally miss. The point is tag structure, not values.
-    const infoSpy = jest.spyOn(console, "info").mockImplementation(() => {});
-    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
-      <GetMemberMessagesResponse xmlns="urn:ebay:apis:eBLBaseComponents">
-        <Ack>Success</Ack>
-        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
-        <MemberMessageExchange>
-          <Item>
-            <ItemID>123456789</ItemID>
-          </Item>
-        </MemberMessageExchange>
-      </GetMemberMessagesResponse>`);
-
-    await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
-
-    const call = infoSpy.mock.calls.find(
-      ([msg]) => typeof msg === "string" && msg.includes("exchange structure")
-    )!;
-    const skeleton = call[1] as string;
-    expect(skeleton).toContain("<Item>");
-    expect(skeleton).toContain("<ItemID>…</ItemID>");
-    expect(skeleton).not.toContain("123456789");
-    // Pure indentation whitespace between <MemberMessageExchange> and <Item>
-    // must be left alone, not turned into its own "…" — only genuine text
-    // nodes (like ItemID's value above) get redacted.
-    expect(skeleton).not.toMatch(/<MemberMessageExchange>\s*…/);
-    infoSpy.mockRestore();
+    const [message] = await fetchMemberMessages("token", "2026-01-01T00:00:00.000Z");
+    expect(message.ebayCreatedAt).toBe("2026-07-20T10:00:00.000Z");
+    expect(message.isRead).toBe(false);
   });
 });
