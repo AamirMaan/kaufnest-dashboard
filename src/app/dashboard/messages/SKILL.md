@@ -27,6 +27,31 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **The sync upsert's `ON CONFLICT` target was a PARTIAL index — fixed in
+  migration `033_ebay_messages_full_unique_index.sql`, confirmed live
+  2026-08-27.** Once parsing was fixed (next gotcha), sync got past
+  `fetchMemberMessages` cleanly (`{ exchangeBlocks: 46, messagesParsed: 46 }`
+  in the logs) and failed one step later, at the Supabase write, with the
+  route's deliberately generic `{ error: "Failed to save synced messages" }`
+  (a raw Postgres error is never shown to the client — see the 502-vs-500
+  gotcha below). The real cause, from `console.error` server-side: `026`
+  created `idx_ebay_messages_external_id` as **partial**
+  (`WHERE external_message_id IS NOT NULL`), but `sync/route.ts`'s
+  `.upsert(rows, { onConflict: "external_message_id" })` compiles to a plain
+  `ON CONFLICT (external_message_id)` with no predicate — Postgres will not
+  infer a partial unique index for that, and Supabase's `.upsert()` has no
+  way to express the predicate that would let it. Every sync failed at this
+  step 100% of the time, unconditional on data — confirmed identical across
+  all 5 tenant schemas (not drift) via direct schema inspection, which also
+  showed `ebay_messages` was still empty everywhere (the failed `ON CONFLICT`
+  clause means the whole upsert statement fails before writing any row, so
+  converting the index carried zero duplicate-data risk). `033` drops and
+  recreates it as a full unique index — functionally identical for the
+  outbound rows it was trying to protect, since Postgres never treats two
+  `NULL`s as conflicting under a plain `UNIQUE` index either. **If you ever
+  add another partial unique index that an `.upsert()` call targets via
+  `onConflict`, it will fail the same way** — Supabase's JS client cannot
+  express a partial-index predicate in that option.
 - **`parseExchangeBlock`'s wrapper tag and field names — CONFIRMED against a
   real response, fixed 2026-08-26.** A real sync against `tenant_kaufnest`'s
   connected account returned `{ exchangeBlocks: 46, messagesParsed: 0 }` —

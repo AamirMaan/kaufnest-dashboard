@@ -31,6 +31,23 @@ now actually populate messages; this needs the user to confirm on the next
 real attempt.** The diagnostic logging is kept permanently as defense
 against a future eBay schema change, not removed post-fix.
 
+**Update 2026-08-27:** parsing now works (`{ exchangeBlocks: 46,
+messagesParsed: 46 }`), but sync then failed one step later at the Supabase
+write: `{ error: "Failed to save synced messages" }`. Checked the live
+schema directly rather than asking for another log round-trip — found it
+immediately: `idx_ebay_messages_external_id` (from `026_ebay_messages.sql`)
+is a PARTIAL unique index (`WHERE external_message_id IS NOT NULL`), but
+`sync/route.ts`'s `.upsert(rows, { onConflict: "external_message_id" })`
+compiles to a plain `ON CONFLICT (external_message_id)` with no predicate —
+Postgres won't infer a partial index for that, and Supabase's `.upsert()`
+has no way to supply the missing predicate. Confirmed identical (not tenant
+drift) and confirmed the table was still empty in all 5 schemas (a failed
+`ON CONFLICT` clause fails the whole statement before writing anything, so
+converting the index carried zero duplicate-data risk). Migration `033`
+drops and recreates it as a full unique index — this needs the user to
+apply it, then re-sync to confirm messages actually land in the table this
+time. No application code changed; this is a pure schema fix.
+
 ---
 
 ## What we actually know
