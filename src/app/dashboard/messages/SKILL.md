@@ -47,28 +47,43 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
-- **`<CreationDate>` is not found inside `<Question>` — every message
-  synced in one call lands with the identical fallback timestamp.
-  CONFIRMED live 2026-08-27, root cause not yet identified.** Checked
-  directly against the database: nearly every multi-message thread has
-  exactly ONE distinct `ebay_created_at` regardless of message count (one
-  thread has 8 messages, one timestamp) — the fingerprint of
-  `tagText(block, "CreationDate") ?? new Date().toISOString()` in
-  `parseExchangeBlock` hitting its fallback for every message parsed within
-  the same sync. `<CreationDate>` DOES appear somewhere in a real exchange
-  block (it showed up in the flat tag-name diagnostic from the prior
-  investigation), just not where `parseExchangeBlock` looks for it — most
-  likely a sibling of `<Question>` under `<MemberMessageExchange>`
-  (exchange-level, not per-message) rather than a child of `<Question>`
-  itself. **Do not guess the fix.** `fetchMemberMessages` now logs a fully
-  redacted structural skeleton of one exchange block on every sync
-  (`redactedStructure()` — tag names and nesting preserved, ALL leaf text
-  replaced with `…`, so no buyer content or field values reach a log) —
-  get that line from the next sync's logs and find where `<CreationDate>`
-  actually sits before touching `parseExchangeBlock` again. This blocks the
-  day-separator feature from being meaningful (it's built and correct, but
-  will show one separator per synced-thread today, not real per-message
-  days) until this is fixed.
+- **`<CreationDate>` and `<MessageStatus>` are siblings of `<Question>`, not
+  nested inside it — CONFIRMED live 2026-08-27, fixed.** A one-time
+  diagnostic (`redactedStructure()`, since removed — its job was done)
+  logged a fully redacted tag skeleton of a real exchange block, which
+  showed:
+  ```
+  <MemberMessageExchange><Item>…</Item><Question>…</Question><MessageStatus>…</MessageStatus><CreationDate>…</CreationDate><LastModifiedDate>…</LastModifiedDate></MemberMessageExchange>
+  ```
+  Both fields live at the `<MemberMessageExchange>` level, alongside
+  `<Question>`, not inside it. Reading them via `tagText(block, ...)` (where
+  `block` is the `<Question>...</Question>` substring) always returned
+  `null` — silently, since `parseExchangeBlock`'s message-id/body guard
+  still passed. Confirmed the blast radius via direct DB query before
+  fixing: **every** synced row (not just repeats within one thread) had
+  `ebay_created_at` within milliseconds of its sync time, and `is_read` was
+  `false` on all 46 rows. `parseExchangeBlock` now reads `creationDate`/
+  `messageStatus` once from `exchangeXml` (same place `itemTitle`/
+  `itemPrice`/`itemUrl` were already read from), not from the per-message
+  `block`.
+  - **Self-poisoning consequence, worth knowing if this class of bug ever
+    recurs**: `sync/route.ts` computes its `since` cursor as
+    `MAX(ebay_created_at)` from what's already stored. Because every
+    existing row had `ebay_created_at ≈ now`, the very next sync's `since`
+    became "basically now," and eBay correctly returned zero exchange
+    blocks — which also meant the diagnostic couldn't produce a sample to
+    log, since it only fires when at least one exchange block comes back.
+    Broke the loop with a one-off `UPDATE tenant_kaufnest.ebay_messages SET
+    ebay_created_at = now() - interval '90 days' WHERE direction =
+    'inbound'` (run manually against Project B, not a migration) to reset
+    the cursor back to the same 90-day `DEFAULT_LOOKBACK_MS` fallback that
+    found these messages the first time. **After deploying this fix, the
+    same reset is needed once more** before the corrected parser can
+    re-fetch and correctly overwrite these rows' `ebay_created_at` — the
+    last (pre-fix) sync ran with the still-broken parser and re-poisoned the
+    cursor again. One more sync after that reset should self-heal
+    permanently, since real historical timestamps stop drifting toward
+    "now" once parsing is correct.
 - **`--color-surface-hover` does not exist anywhere in `globals.css` — was
   never a real token, fixed 2026-08-27.** Both `ThreadList.tsx` (the row
   hover state) and `ThreadView.tsx` (the original inbound-answered bubble

@@ -12,13 +12,23 @@
 // real response. <ItemID> is nested one level deeper under <Item>, but
 // `tagText` searches the whole exchange block regardless of depth, so that
 // part needed no change. Fields inside <Question>: SenderID (not Sender),
-// Body (not Text), MessageStatus (Answered/Unanswered — not a Read boolean).
-// There is no <Incoming> tag at all: per eBay's own docs, GetMemberMessages
-// only ever returns messages BUYERS have posted, never the seller's own
-// replies (AddMemberMessageRTQ has no response payload to sync back either
-// — see replyToMessage below and reply/route.ts, which writes the outbound
-// row locally instead). So every message this function returns is inbound,
-// unconditionally — there is no direction to infer.
+// Body (not Text). There is no <Incoming> tag at all: per eBay's own docs,
+// GetMemberMessages only ever returns messages BUYERS have posted, never
+// the seller's own replies (AddMemberMessageRTQ has no response payload to
+// sync back either — see replyToMessage below and reply/route.ts, which
+// writes the outbound row locally instead). So every message this function
+// returns is inbound, unconditionally — there is no direction to infer.
+//
+// CONFIRMED live again 2026-08-27 (via the redactedStructure diagnostic
+// below, against a real GetMemberMessages response): <CreationDate> and
+// <MessageStatus> are SIBLINGS of <Question>, at the <MemberMessageExchange>
+// level — not nested inside <Question> as originally assumed. Reading them
+// from the Question substring silently found nothing: ebayCreatedAt's `??`
+// fallback fired for every single message (all 46 synced rows landed with
+// the same sync-time timestamp, confirmed via direct DB query), and isRead
+// was always false (MessageStatus === "Answered" never matched). Both are
+// now read from the exchange-level XML, once per exchange, same as
+// itemTitle/itemPrice/itemUrl below.
 
 import { tradingApiCall, tagText, decodeXml, escapeXml } from "./tradingApi";
 
@@ -61,18 +71,6 @@ function buildGetMemberMessagesRequest(sinceISO: string, pageNumber: number): st
   );
 }
 
-/**
- * Replaces every leaf text node with "…", keeping all tag names and nesting
- * intact — reveals the real shape of an eBay response (which field lives
- * where) without exposing any buyer content in a log. Deliberately
- * all-or-nothing: no per-field allowlist of "safe" tags to maintain or
- * accidentally get wrong. Whitespace-only spans between tags (pretty-printed
- * indentation) are left alone — only genuine text content is redacted.
- */
-function redactedStructure(xml: string): string {
-  return xml.replace(/>([^<]*[^\s<][^<]*)</g, ">…<");
-}
-
 // <CurrentPrice currencyID="EUR">12.99</CurrentPrice> — same eBay Trading API
 // MoneyType shape listings.ts already parses for GetMyeBaySelling; reused
 // verbatim since GetMemberMessages' <Item> block uses the same convention.
@@ -86,6 +84,9 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
   const itemTitle = tagText(exchangeXml, "Title");
   const priceMatch = CURRENT_PRICE.exec(exchangeXml);
   const itemUrl = tagText(exchangeXml, "ViewItemURL");
+  // Exchange-level, not inside <Question> — see the header comment.
+  const creationDate = tagText(exchangeXml, "CreationDate");
+  const messageStatus = tagText(exchangeXml, "MessageStatus");
   const messages: EbayMemberMessage[] = [];
 
   const messageBlocks = exchangeXml.match(/<Question>[\s\S]*?<\/Question>/g) ?? [];
@@ -108,8 +109,8 @@ function parseExchangeBlock(exchangeXml: string): EbayMemberMessage[] {
       // No true read/unread signal exists in this response. MessageStatus
       // (Answered/Unanswered) is the closest real proxy — a question the
       // seller has already answered is treated as read.
-      isRead: tagText(block, "MessageStatus") === "Answered",
-      ebayCreatedAt: tagText(block, "CreationDate") ?? new Date().toISOString(),
+      isRead: messageStatus === "Answered",
+      ebayCreatedAt: creationDate ?? new Date().toISOString(),
       itemTitle: itemTitle ? decodeXml(itemTitle) : null,
       itemPrice: priceMatch ? Number(priceMatch[2]) : null,
       itemCurrency: priceMatch ? priceMatch[1] : null,
@@ -152,18 +153,6 @@ export async function fetchMemberMessages(
     });
 
     const [sample] = exchangeBlocks;
-    if (sample) {
-      // Every message in a thread with >1 message has been landing with the
-      // exact same ebayCreatedAt (confirmed live 2026-08-27 across nearly
-      // every multi-message thread) — the `?? new Date().toISOString()`
-      // fallback on line below is firing for every message, meaning
-      // <CreationDate> isn't actually inside <Question> the way it's
-      // currently read. Logged unconditionally (not just on a parse
-      // mismatch) because this failure is silent otherwise: the row still
-      // "succeeds" per parseExchangeBlock's messageId/text guard, so nothing
-      // else would ever surface it.
-      console.info(`[ebay/messages] exchange structure (redacted, page ${page}):`, redactedStructure(sample));
-    }
     if (sample && pageMessages.length < exchangeBlocks.length) {
       // Exchange blocks exist but some/all failed parseExchangeBlock's
       // messageId/text guard — the real XML nests differently than
