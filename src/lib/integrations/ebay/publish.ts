@@ -26,6 +26,39 @@ async function throwIfNotOk(res: Response, action: string): Promise<void> {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// eBay's Inventory API can take a few seconds to index a freshly PUT/replaced
+// inventory item before POST /offer can reference it by SKU. Confirmed
+// against a real failure 2026-08-28: createOrReplaceInventoryItem returned
+// 2xx, then the immediately-following createOffer call failed with errorId
+// 25751 ("<SKU> could not be found or is not available in the system for
+// the marketplace <X>") — eBay's documented signal for exactly this lag, not
+// a real payload/data problem. Retries a couple of times with a short delay
+// before giving up; any other createOffer failure (bad payload, missing
+// category aspects, etc.) still fails on the first attempt.
+const OFFER_INDEXING_RETRY_DELAYS_MS = [2000, 4000];
+
+async function createOfferWithRetry(
+  path: string,
+  accessToken: string,
+  body: string
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await ebayFetch(path, accessToken, { method: "POST", body });
+    if (res.ok) return res;
+
+    const bodyText = await res.text();
+    const isIndexingLag = res.status === 400 && bodyText.includes('"errorId":25751');
+    if (!isIndexingLag || attempt >= OFFER_INDEXING_RETRY_DELAYS_MS.length) {
+      throw new Error(`eBay createOffer failed: ${res.status} ${bodyText.slice(0, 500)}`);
+    }
+    await sleep(OFFER_INDEXING_RETRY_DELAYS_MS[attempt]);
+  }
+}
+
 // ─── Category search (Taxonomy API) ────────────────────────────────────────────
 
 export interface CategorySuggestion {
@@ -162,11 +195,11 @@ export async function publishListing(
     });
     await throwIfNotOk(updateRes, "updateOffer");
   } else {
-    const createRes = await ebayFetch("/sell/inventory/v1/offer", accessToken, {
-      method: "POST",
-      body: JSON.stringify(offerPayload),
-    });
-    await throwIfNotOk(createRes, "createOffer");
+    const createRes = await createOfferWithRetry(
+      "/sell/inventory/v1/offer",
+      accessToken,
+      JSON.stringify(offerPayload)
+    );
     const created = (await createRes.json()) as { offerId: string };
     offerId = created.offerId;
     if (onOfferCreated) await onOfferCreated(offerId);

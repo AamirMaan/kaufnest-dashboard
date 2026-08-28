@@ -7,6 +7,13 @@ import { publishListing } from "@/lib/integrations/ebay/publish";
 import { generateListingSku } from "@/lib/integrations/ebay/generateSku";
 import type { EbayListingDraft, Profile } from "@/types";
 
+// publishListing can retry createOffer up to twice (2s + 4s delays) to ride
+// out eBay's Inventory API indexing lag — see publish.ts's
+// OFFER_INDEXING_RETRY_DELAYS_MS. Default serverless timeouts on some plans
+// are as low as 10s, which the eBay calls alone can approach; this gives the
+// retries room without risking a mid-retry timeout.
+export const maxDuration = 30;
+
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;

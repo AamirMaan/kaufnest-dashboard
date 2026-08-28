@@ -46,6 +46,26 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   page's "New Listing" button was correctly hidden from them. Don't
   reintroduce a route that renders `ListingWizard` without wrapping it in
   `BusinessEbayGate`.
+- **`createOffer` can fail with `errorId 25751` right after a successful
+  `createOrReplaceInventoryItem` — eBay's own indexing lag, not a real
+  problem — fixed 2026-08-28 with a bounded retry.** Real failure:
+  `"<SKU> could not be found or is not available in the system for the
+  marketplace EBAY_DE"`, even though the PUT to `/inventory_item/{sku}`
+  had just returned 2xx. Checked our own request code first (SKU reused
+  identically between the PUT and the offer payload, correct marketplace,
+  policies present) — no bug found there; this is eBay's documented
+  eventual-consistency window between writing an inventory item and being
+  able to reference it in an offer. `publish.ts`'s `createOfferWithRetry`
+  retries up to twice (2s, 4s) **only** when the response is exactly `400`
+  with `"errorId":25751` in the body — any other `createOffer` failure
+  still fails on the first attempt, since retrying a genuinely bad payload
+  would just waste the delay before failing anyway. If this error still
+  shows up in `publish_error` after this fix, the lag exceeded ~6 seconds
+  for that attempt — don't add more retry rounds speculatively; ask the
+  user to hit Retry (the SKU/inventory item already exist, `existingOfferId`
+  stays null, so a retry re-runs the same PUT-then-createOffer path) and
+  treat a second manual retry succeeding as confirmation it's still the
+  same lag, or check for a genuinely different cause if it doesn't.
 - **Category search needs an application token, not the seller's user
   token — fixed.** `searchCategories` (Taxonomy API,
   `lib/integrations/ebay/publish.ts`) used to be called with the tenant's

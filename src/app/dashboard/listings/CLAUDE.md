@@ -87,6 +87,18 @@ to `ebay_sku` before the first eBay call, then reused on every retry. See
 `src/lib/integrations/SKILL.md`'s equivalent section for the eBay OAuth
 scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 
+**`createOffer` retries on eBay's own indexing lag (added 2026-08-28,
+real failure)**: a freshly `createOrReplaceInventoryItem`'d SKU isn't always
+immediately visible to `createOffer` — eBay returns `400 errorId 25751`
+("`<SKU>` could not be found or is not available in the system for the
+marketplace `<X>`") even though the PUT just succeeded. `publish.ts`'s
+`createOfferWithRetry` retries up to twice (2s, then 4s delay) **only** for
+that specific errorId; any other `createOffer` failure (bad payload, missing
+category aspects, etc.) still fails immediately, same as before. The route
+now sets `export const maxDuration = 30` to give the retries room — some
+Vercel plans default to a 10s serverless timeout, which the eBay calls alone
+could approach even without retries.
+
 ## Shared dependencies
 
 - `components/ui/{Modal is NOT used — dedicated pages instead, FormFields,
@@ -119,4 +131,7 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 ## Tests
 
 `npx jest dashboard/listings` runs `_store/listingsSlice.test.ts` and
-`_lib/wizardValidation.test.ts`.
+`_lib/wizardValidation.test.ts`. `publish.ts`'s `createOffer` retry logic
+is tested separately at `src/lib/integrations/ebay/publish.test.ts` (not
+under `dashboard/listings/`, so not picked up by that command) — run with
+`npx jest src/lib/integrations/ebay/publish.test.ts`.
