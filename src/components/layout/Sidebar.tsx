@@ -159,7 +159,7 @@ export function Sidebar({
       <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-(--color-sidebar-border) shrink-0">
         <div>
           <span className="text-xl font-bold text-(--color-sidebar-text-strong) tracking-tight">
-            Kauf<span className="text-(--color-primary-hover)">Nest</span>
+            Bought<span className="text-(--color-primary-hover)">opia</span>
           </span>
           <p className="text-xs text-(--color-sidebar-text) mt-0.5">Business Dashboard</p>
         </div>

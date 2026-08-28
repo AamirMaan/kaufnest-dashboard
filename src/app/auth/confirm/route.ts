@@ -14,7 +14,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
  * Routing through our own domain first avoids that.
  *
  * Configure in Supabase Dashboard → Authentication → URL Configuration:
- *   Redirect URLs: https://dashboard.kaufnest.com/auth/confirm**
+ *   Redirect URLs: https://app.boughtopia.com/auth/confirm**
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);

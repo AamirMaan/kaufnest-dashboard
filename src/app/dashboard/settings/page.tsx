@@ -123,7 +123,7 @@ export default function SettingsPage() {
               Company Profile
             </h2>
             <p className="text-xs text-[var(--color-text-muted)]">
-              Shared organization details for your KaufNest workspace.
+              Shared organization details for your Boughtopia workspace.
               {!canEditCompanyProfile && " Only admins can make changes."}
             </p>
 

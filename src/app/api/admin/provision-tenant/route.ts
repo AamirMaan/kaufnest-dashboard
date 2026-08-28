@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.boughtopia.com";
 
   try {
     // 1. Create tenant schema in Data Plane

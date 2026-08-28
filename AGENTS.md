@@ -43,7 +43,7 @@ New shared code from the migration:
   the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
 - `src/lib/stripe.ts` + `src/lib/utils/planGating.ts` — billing helpers
-- `src/app/admin/` — KaufNest platform admin panel (`/admin`)
+- `src/app/admin/` — Boughtopia platform admin panel (`/admin`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — Stripe checkout + webhook routes
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
@@ -209,7 +209,7 @@ Two things that are still manual:
 
 # Project structure: feature folders
 
-KaufNest Dashboard is a Next.js App Router app (Supabase + Redux Toolkit). To
+Boughtopia Dashboard is a Next.js App Router app (Supabase + Redux Toolkit). To
 keep changes isolated and cheap to make, **each feature's page, components,
 state, and tests are colocated in one folder** under `src/app/...`, using
 Next.js private folders (`_components/`, `_store/` — the leading underscore

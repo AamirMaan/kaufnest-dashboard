@@ -162,7 +162,7 @@ export default async function DashboardLayout({
   const cookieStore = await cookies();
   const impersonatingTenant = cookieStore.get("kaufnest_impersonating")?.value ?? null;
 
-  // KaufNest platform admin? Drives the "Admin Panel" + "Dropshipping" sidebar links.
+  // Boughtopia platform admin? Drives the "Admin Panel" + "Dropshipping" sidebar links.
   const isAdmin = await isAdminPromise;
 
   // Tenant's subscription plan — drives platform-integrations gating.

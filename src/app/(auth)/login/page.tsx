@@ -40,7 +40,7 @@ function LoginForm() {
       {/* Logo / Brand */}
       <div className="mb-8 text-center">
         <span className="text-3xl font-bold text-white tracking-tight">
-          Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
+          Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
         <p className="mt-2 text-sm text-slate-400">Business Dashboard</p>
       </div>

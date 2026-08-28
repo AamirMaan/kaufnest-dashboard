@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KaufNest Dashboard",
+  title: "Boughtopia Dashboard",
   description: "Business bookkeeping dashboard for multi-platform sales in Germany",
 };
 
