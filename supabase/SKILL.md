@@ -86,6 +86,7 @@ Two Supabase projects:
 | `control-plane/001_schema.sql` | `control` (Project A) | ✅ applied |
 | `control-plane/002_grants.sql` | `control` (Project A) | ⏳ **apply now** — `service_role`/`sb_secret_*` needs explicit `USAGE`/table grants on `control` (CREATE SCHEMA grants nothing by default); fixes `42501 permission denied for schema control` on `createControlClient()` |
 | `control-plane/003_add_admin_email.sql` | `control.tenants` (Project A) | ⏳ **apply now** — adds nullable `admin_email` column, shown in `/admin`'s tenants table |
+| `control-plane/005_tenants_admin_email_unique.sql` | `control.tenants` (Project A) | ⏳ **pending** — unique index on `admin_email`; the idempotency lock for self-serve signup's provisioning route, which claims its tenant row before doing expensive work so a refresh or concurrent request collides (23505) instead of creating a second schema. Plain (non-partial) index: Postgres treats multiple NULLs as distinct, so existing rows without an `admin_email` are unaffected. Verified live 2026-08-28 — no duplicate non-null values, applies cleanly. |
 | `control-plane/004_admin_audit_log.sql` | `control` (Project A) | ⏳ **pending** — creates `control.admin_audit_log`, written to by `/api/admin/impersonate` on every impersonation |
 
 **`dropship_listings` is still missing from four of the five tenant

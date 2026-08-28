@@ -239,7 +239,13 @@ export interface CompanyProfile {
 // ─── SaaS / Multi-Tenant ──────────────────────────────────────────────────────
 
 export type TenantPlan = "trial" | "starter" | "pro" | "business";
-export type TenantStatus = "active" | "invited" | "deactivated";
+// "provisioning" is a transient state written by /api/signup/provision before
+// it creates the tenant schema, so a crash mid-provision leaves a visible row
+// in /admin rather than an invisible half-tenant. It flips to "active" on
+// success. Self-serve signups never pass through "invited" — that state
+// belongs to the admin invite flow, where the tenant exists before the
+// person accepts.
+export type TenantStatus = "active" | "invited" | "deactivated" | "provisioning";
 
 export interface Tenant {
   id: string;
