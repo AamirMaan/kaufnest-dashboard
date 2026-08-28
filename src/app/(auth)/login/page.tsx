@@ -108,6 +108,13 @@ function LoginForm() {
         >
           {loading ? "Signing in…" : "Sign in"}
         </button>
+
+        <p className="text-center text-xs text-slate-400">
+          Don&rsquo;t have an account?{" "}
+          <Link href="/signup" className="text-slate-200 hover:text-white transition-colors">
+            Start a free trial
+          </Link>
+        </p>
       </form>
     </div>
   );

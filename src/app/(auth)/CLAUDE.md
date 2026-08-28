@@ -8,6 +8,18 @@ each page is a self-contained Supabase Auth form.
 
 - `layout.tsx` — shared centered-card shell for all auth pages.
 - `login/page.tsx` — email/password sign-in (`supabase.auth.signInWithPassword`).
+- `signup/page.tsx` — self-serve signup (2026-08-28). Calls
+  `supabase.auth.signUp()` directly from the browser with `company_name` and
+  `full_name` in `options.data` (i.e. `user_metadata`). This creates an
+  **unconfirmed auth user and nothing else** — no tenant, no schema, no
+  Supabase Management API call — which is the whole point: anonymous traffic
+  must never be able to trigger tenant provisioning (see
+  `src/app/api/signup/provision/route.ts` for why that path is dangerous).
+  On success it swaps to a "check your email" panel rather than redirecting.
+  **The `company_name`/`full_name` metadata keys are load-bearing** — read by
+  `app/auth/confirm/route.ts` to detect a self-serve signup and by
+  `api/signup/provision/route.ts` to name the tenant. Renaming them in one
+  place silently breaks the flow.
 - `forgot-password/page.tsx` — sends a password-reset email
   (`supabase.auth.resetPasswordForEmail`).
 - `set-password/page.tsx` — lets an invited user (or someone resetting their
