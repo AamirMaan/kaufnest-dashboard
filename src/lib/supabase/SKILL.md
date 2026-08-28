@@ -90,11 +90,10 @@ inserts that follow (`company_profile`, `profiles` via
 - Project ref is derived from `NEXT_PUBLIC_SUPABASE_URL`
   (`https://<ref>.supabase.co`) — no separate ref env var.
 - Idempotent: no-ops if `schemaName` is already in `db_schema`.
-- **Gotcha**: after a successful `PATCH`, PostgREST reloads its schema cache
-  asynchronously. `addExposedSchema` adds a fixed ~2s delay before returning to
-  avoid the very next request racing the reload. If provisioning still 404s on
-  `company_profile`/`profiles` right after this step, the reload may need more
-  time — don't remove the delay without a retry/backoff in its place.
+- **Gotcha**: PostgREST reloads its schema cache asynchronously after a
+  `PATCH`, and the update itself is a read-modify-write race across
+  concurrent provisions — see the "Gotchas" section below for the current
+  retry-with-readback behavior this requires.
 
 ## control.ts
 
