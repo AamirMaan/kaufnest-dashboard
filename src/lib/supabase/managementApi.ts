@@ -20,6 +20,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function readExposedSchemas(endpoint: string, headers: Record<string, string>): Promise<string[]> {
+  const getRes = await fetch(endpoint, { headers });
+  if (!getRes.ok) {
+    throw new Error(`Failed to read PostgREST config: ${getRes.status} ${await getRes.text()}`);
+  }
+  const config = (await getRes.json()) as PostgrestConfig;
+  return config.db_schema.split(",").map((s) => s.trim());
+}
+
 /**
  * Adds `schemaName` to Project B's PostgREST "Exposed schemas" list via the
  * Supabase Management API, so `db.schema`/`.schema()` calls against a newly
@@ -55,12 +64,7 @@ export async function addExposedSchema(schemaName: string): Promise<void> {
   };
 
   for (let attempt = 1; attempt <= EXPOSE_MAX_ATTEMPTS; attempt++) {
-    const getRes = await fetch(endpoint, { headers });
-    if (!getRes.ok) {
-      throw new Error(`Failed to read PostgREST config: ${getRes.status} ${await getRes.text()}`);
-    }
-    const config = (await getRes.json()) as PostgrestConfig;
-    const schemas = config.db_schema.split(",").map((s) => s.trim());
+    const schemas = await readExposedSchemas(endpoint, headers);
 
     // Verified present — either it already was, or our previous attempt's
     // PATCH survived. Safe to return.
@@ -81,6 +85,15 @@ export async function addExposedSchema(schemaName: string): Promise<void> {
     // change. This also gives a racing writer time to settle before we
     // re-read and check whether our entry survived.
     await sleep(POSTGREST_RELOAD_MS);
+  }
+
+  // The loop's own GETs only ever verify the PREVIOUS iteration's PATCH (GET2
+  // checks PATCH1, GET3 checks PATCH2, ...) — there's no 5th iteration to
+  // verify attempt 4's PATCH. Without this final read, a PATCH that actually
+  // stuck on the last attempt would still be reported as a failure.
+  const finalSchemas = await readExposedSchemas(endpoint, headers);
+  if (finalSchemas.includes(schemaName)) {
+    return;
   }
 
   throw new Error(

@@ -144,9 +144,14 @@ client for the auth-guard/data-hydration pass.
   append, the second PATCH wins and the first schema is silently never
   exposed, leaving that tenant's whole app returning 404/406 with nothing in
   any log. The function now re-reads after PATCHing and retries until it sees
-  its own schema (4 attempts, 2s apart), which converges because each attempt
-  re-reads the current value. **Do not "simplify" this back into a single
-  read-then-PATCH.** Note the blast radius that makes this worth the care:
+  its own schema (up to 4 PATCH attempts, 2s apart, plus one final read after
+  the loop to verify the 4th attempt — without that last read, only 3 of the
+  4 PATCHes would ever get checked, since each loop iteration's GET verifies
+  the *previous* iteration's PATCH), which converges because each read sees
+  the current value. **Do not "simplify" this back into a single
+  read-then-PATCH**, and don't drop the trailing read either — see
+  `managementApi.test.ts` for the regression test covering that exact
+  off-by-one. Note the blast radius that makes this worth the care:
   `removeExposedSchema`'s own docs record that a malformed list makes
   PostgREST fail its schema-cache load (`3F000`) and return `PGRST002` for
   *every* tenant.
