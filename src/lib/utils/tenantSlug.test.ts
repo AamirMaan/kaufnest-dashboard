@@ -22,6 +22,12 @@ describe("sanitizeSlug", () => {
     expect(sanitizeSlug("a".repeat(60))).toHaveLength(40);
   });
 
+  it("passes through 40-char input unchanged and truncates 41-char by exactly one", () => {
+    const input40 = "a".repeat(40);
+    expect(sanitizeSlug(input40)).toBe(input40);
+    expect(sanitizeSlug("a".repeat(41))).toHaveLength(40);
+  });
+
   it("returns an empty string when nothing survives", () => {
     expect(sanitizeSlug("株式会社")).toBe("");
   });
@@ -70,5 +76,10 @@ describe("nextAvailableSlug", () => {
   it("throws rather than looping forever", () => {
     const taken = ["acme", ...Array.from({ length: 100 }, (_, i) => `acme_${i + 2}`)];
     expect(() => nextAvailableSlug("acme", taken)).toThrow(/no available slug/i);
+  });
+
+  it("succeeds at exactly the boundary (acme_100 is free, acme_2..acme_99 taken)", () => {
+    const taken = ["acme", ...Array.from({ length: 98 }, (_, i) => `acme_${i + 2}`)];
+    expect(nextAvailableSlug("acme", taken)).toBe("acme_100");
   });
 });
