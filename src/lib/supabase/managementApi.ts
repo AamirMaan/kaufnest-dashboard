@@ -13,6 +13,13 @@ interface PostgrestConfig {
   [key: string]: unknown;
 }
 
+const EXPOSE_MAX_ATTEMPTS = 4;
+const POSTGREST_RELOAD_MS = 2000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Adds `schemaName` to Project B's PostgREST "Exposed schemas" list via the
  * Supabase Management API, so `db.schema`/`.schema()` calls against a newly
@@ -20,7 +27,19 @@ interface PostgrestConfig {
  *
  * No-op if the schema is already exposed. Requires `SUPABASE_ACCESS_TOKEN`
  * (a personal access token from supabase.com/dashboard/account/tokens) —
- * server-only, used by /api/admin/provision-tenant.
+ * server-only.
+ *
+ * This is a read-modify-write on a SINGLE GLOBAL config string shared by
+ * every tenant, so two concurrent provisions can lose one another's update:
+ * both read the same list, both append their own schema, and the second PATCH
+ * overwrites the first. The loser's schema is silently never exposed and
+ * their entire app returns 404/406 with no error logged anywhere.
+ *
+ * Rather than assume the PATCH stuck, this re-reads the config and retries
+ * until it can see its own schema in the list. That converges under
+ * concurrency because every attempt re-reads the current value. Self-serve
+ * signup (2026-08-28) made concurrent provisions realistic; the same race was
+ * always present in admin provisioning, just far less likely to fire.
  */
 export async function addExposedSchema(schemaName: string): Promise<void> {
   const token = process.env.SUPABASE_ACCESS_TOKEN;
@@ -35,29 +54,39 @@ export async function addExposedSchema(schemaName: string): Promise<void> {
     "Content-Type": "application/json",
   };
 
-  const getRes = await fetch(endpoint, { headers });
-  if (!getRes.ok) {
-    throw new Error(`Failed to read PostgREST config: ${getRes.status} ${await getRes.text()}`);
-  }
-  const config = (await getRes.json()) as PostgrestConfig;
+  for (let attempt = 1; attempt <= EXPOSE_MAX_ATTEMPTS; attempt++) {
+    const getRes = await fetch(endpoint, { headers });
+    if (!getRes.ok) {
+      throw new Error(`Failed to read PostgREST config: ${getRes.status} ${await getRes.text()}`);
+    }
+    const config = (await getRes.json()) as PostgrestConfig;
+    const schemas = config.db_schema.split(",").map((s) => s.trim());
 
-  const schemas = config.db_schema.split(",").map((s) => s.trim());
-  if (schemas.includes(schemaName)) {
-    return;
+    // Verified present — either it already was, or our previous attempt's
+    // PATCH survived. Safe to return.
+    if (schemas.includes(schemaName)) {
+      return;
+    }
+
+    const patchRes = await fetch(endpoint, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ db_schema: [...schemas, schemaName].join(",") }),
+    });
+    if (!patchRes.ok) {
+      throw new Error(`Failed to update PostgREST config: ${patchRes.status} ${await patchRes.text()}`);
+    }
+
+    // PostgREST reloads its schema cache asynchronously after a config
+    // change. This also gives a racing writer time to settle before we
+    // re-read and check whether our entry survived.
+    await sleep(POSTGREST_RELOAD_MS);
   }
 
-  const patchRes = await fetch(endpoint, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ db_schema: [...schemas, schemaName].join(",") }),
-  });
-  if (!patchRes.ok) {
-    throw new Error(`Failed to update PostgREST config: ${patchRes.status} ${await patchRes.text()}`);
-  }
-
-  // PostgREST reloads its schema cache asynchronously after a config change —
-  // give it a moment before the caller starts querying the new schema.
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  throw new Error(
+    `Failed to expose schema "${schemaName}" after ${EXPOSE_MAX_ATTEMPTS} attempts — ` +
+      `a concurrent provision may be repeatedly overwriting the exposed-schema list`
+  );
 }
 
 /**

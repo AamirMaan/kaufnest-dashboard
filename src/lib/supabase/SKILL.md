@@ -135,3 +135,19 @@ Every feature that reads/writes Supabase imports one of these — pages and
 while `app/auth/confirm/route.ts` and `app/api/users/invite/route.ts` use
 `server.ts`. `DashboardShell` and `dashboard/layout.tsx` also use the server
 client for the auth-guard/data-hydration pass.
+
+## Gotchas
+
+- **`addExposedSchema` is a read-modify-write on one global string, and it
+  self-verifies for that reason (hardened 2026-08-28).** Project B's PostgREST
+  "Exposed schemas" setting is a single comma-separated list shared by every
+  tenant. Two concurrent provisions can lose an update — both read, both
+  append, the second PATCH wins and the first schema is silently never
+  exposed, leaving that tenant's whole app returning 404/406 with nothing in
+  any log. The function now re-reads after PATCHing and retries until it sees
+  its own schema (4 attempts, 2s apart), which converges because each attempt
+  re-reads the current value. **Do not "simplify" this back into a single
+  read-then-PATCH.** Note the blast radius that makes this worth the care:
+  `removeExposedSchema`'s own docs record that a malformed list makes
+  PostgREST fail its schema-cache load (`3F000`) and return `PGRST002` for
+  *every* tenant.
