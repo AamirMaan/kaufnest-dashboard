@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.boughtopia.com";
   const tenantService = createServiceClientForTenant(tenantSchema);
 
   // 3b. Reject duplicate invites up front. inviteUserByEmail silently resends

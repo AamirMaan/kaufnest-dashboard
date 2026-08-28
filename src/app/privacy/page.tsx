@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — KaufNest Dashboard",
-  description: "How KaufNest Dashboard collects, uses, and protects your data.",
+  title: "Privacy Policy — Boughtopia Dashboard",
+  description: "How Boughtopia Dashboard collects, uses, and protects your data.",
 };
 
 export default function PrivacyPolicyPage() {
@@ -11,7 +11,7 @@ export default function PrivacyPolicyPage() {
     <main className="min-h-screen bg-[var(--color-surface-subtle)]">
       <div className="mx-auto max-w-3xl px-6 py-12 text-[var(--color-text-base)]">
         <Link href="/" className="text-sm font-medium text-[var(--color-primary)] hover:underline">
-          ← Back to KaufNest
+          ← Back to Boughtopia
         </Link>
 
         <h1 className="mt-6 text-2xl font-bold text-[var(--color-text-strong)]">
@@ -23,11 +23,11 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-base font-semibold text-[var(--color-text-strong)]">1. Who we are</h2>
             <p className="mt-2">
-              KaufNest Dashboard (&quot;KaufNest&quot;, &quot;we&quot;, &quot;us&quot;) is a business
+              Boughtopia Dashboard (&quot;Boughtopia&quot;, &quot;we&quot;, &quot;us&quot;) is a business
               bookkeeping and operations dashboard for sellers operating across
               multiple sales platforms (eBay, Amazon, Etsy, Shopify, and others).
               This policy explains what data we collect when you and your team use
-              KaufNest, why we collect it, and how it is stored and protected.
+              Boughtopia, why we collect it, and how it is stored and protected.
             </p>
             <p className="mt-2">
               [Legal entity name, registered address, and company registration
@@ -99,7 +99,7 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="text-base font-semibold text-[var(--color-text-strong)]">5. Third-party processors</h2>
             <p className="mt-2">
-              We use the following sub-processors to operate KaufNest. Each
+              We use the following sub-processors to operate Boughtopia. Each
               only receives the data necessary to perform its function:
             </p>
             <ul className="mt-2 list-disc space-y-2 pl-5">
@@ -150,8 +150,8 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-base font-semibold text-[var(--color-text-strong)]">9. Contact</h2>
             <p className="mt-2">
               Questions about this policy or your data can be sent to{" "}
-              <a className="text-[var(--color-primary)] hover:underline" href="mailto:privacy@kaufnest.example">
-                privacy@kaufnest.example
+              <a className="text-[var(--color-primary)] hover:underline" href="mailto:privacy@boughtopia.example">
+                privacy@boughtopia.example
               </a>
               . [Replace with your actual support/privacy contact address.]
             </p>

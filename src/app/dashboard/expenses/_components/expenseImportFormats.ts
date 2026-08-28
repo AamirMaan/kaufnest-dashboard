@@ -84,7 +84,7 @@ const col = (key: string, required = false): ColumnSpec => ({
 export const EXPENSE_IMPORT_FORMATS: Record<ExpenseImportFormatId, ExpenseImportFormat> = {
   generic: {
     id: "generic",
-    label: "Generic (KaufNest template)",
+    label: "Generic (Boughtopia template)",
     classifiesSkips: false,
     columns: [
       col("date", true), col("title", true), col("amount", true),

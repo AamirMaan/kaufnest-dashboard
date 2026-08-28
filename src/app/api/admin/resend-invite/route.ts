@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.boughtopia.com";
 
   // Look up the existing profile to get full_name (stored at invite time)
   const { createServiceClientForTenant } = await import("@/lib/supabase/server");

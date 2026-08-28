@@ -53,7 +53,7 @@ export default function AdminPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-(--color-text-strong)">Tenant Management</h1>
-          <p className="text-sm text-(--color-text-muted) mt-1">Provision and manage KaufNest tenants</p>
+          <p className="text-sm text-(--color-text-muted) mt-1">Provision and manage Boughtopia tenants</p>
         </div>
         <Button onClick={() => setAddOpen(true)}>
           <Plus size={15} />

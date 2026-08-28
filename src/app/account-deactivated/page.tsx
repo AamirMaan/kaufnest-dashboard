@@ -6,8 +6,8 @@ export default function AccountDeactivatedPage() {
           Account Deactivated
         </h1>
         <p className="text-sm text-(--color-text-muted)">
-          Your organisation&apos;s KaufNest account has been deactivated.
-          Please contact KaufNest support if you believe this is an error.
+          Your organisation&apos;s Boughtopia account has been deactivated.
+          Please contact Boughtopia support if you believe this is an error.
         </p>
       </div>
     </div>

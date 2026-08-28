@@ -2,7 +2,7 @@
  * CSV import format registry for the Sales import (`ImportSalesModal`).
  *
  * Three formats: "generic" (the original template, back-compat), "amazon"
- * and "ebay" (richer KaufNest-defined templates whose rows carry an
+ * and "ebay" (richer Boughtopia-defined templates whose rows carry an
  * `order_id` → `external_order_id`, a gross `total`, and per-order fees;
  * the platform is forced by the format).
  *
@@ -127,7 +127,7 @@ const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "
 export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
   generic: {
     id: "generic",
-    label: "Generic (KaufNest template)",
+    label: "Generic (Boughtopia template)",
     forcedPlatform: null,
     columns: [
       col("date", true),

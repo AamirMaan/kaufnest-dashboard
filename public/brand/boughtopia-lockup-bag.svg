@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 110" width="520" height="110" role="img" aria-label="Boughtopia">
+  <g transform="translate(8,15) scale(0.8)">
+    <path d="M35 36 V28 a15 15 0 0 1 30 0 V36" fill="none" stroke="#14243D" stroke-width="7" stroke-linecap="round"/>
+    <rect x="16" y="34" width="68" height="54" rx="13" fill="#14243D"/>
+    <rect x="30" y="66" width="9" height="12" rx="3" fill="#10B981"/>
+    <rect x="45.5" y="58" width="9" height="20" rx="3" fill="#10B981"/>
+    <rect x="61" y="50" width="9" height="28" rx="3" fill="#10B981"/>
+  </g>
+  <text x="104" y="53" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="40" font-weight="700" letter-spacing="-1.1" fill="#14243D">Boughtopia</text>
+  <text x="106" y="79" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="500" letter-spacing="0.9" fill="#7C8698">BOOKKEEPING FOR MULTI-PLATFORM SELLERS</text>
+</svg>

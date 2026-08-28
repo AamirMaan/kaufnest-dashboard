@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 
-// Shared helper: verify caller is a KaufNest platform admin via session
+// Shared helper: verify caller is a Boughtopia platform admin via session
 export async function verifyPlatformAdmin(): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

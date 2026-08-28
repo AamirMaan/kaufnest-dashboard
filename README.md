@@ -1,4 +1,4 @@
-# KaufNest Dashboard
+# Boughtopia Dashboard
 
 Multi-tenant SaaS bookkeeping dashboard for multi-platform product sales in
 Germany. Each customer ("tenant") gets an isolated Postgres schema, role-based
@@ -10,7 +10,7 @@ tracking, and an eBay listing wizard — gated by subscription plan (Stripe).
 Two Supabase projects:
 
 - **Control plane** ("Project A") — tracks tenants (`control.tenants`) and
-  KaufNest platform staff (`control.admin_users`). Never holds tenant
+  Boughtopia platform staff (`control.admin_users`). Never holds tenant
   business data.
 - **Data plane** ("Project B") — one Postgres schema per tenant
   (`tenant_<slug>`), each with its own `sales`/`expenses`/`purchases`/
@@ -49,11 +49,11 @@ etc.).
 - Full audit log of user actions
 - eBay/Amazon OAuth integrations with a manual order-review/import flow
 - eBay listing creation wizard (Pro/Business plans)
-- Dropshipping supplier-price tracking (KaufNest's own platform-admin tenant
+- Dropshipping supplier-price tracking (Boughtopia's own platform-admin tenant
   only, not a general tenant feature)
 - Profit planner (client-side calculator, Pro/Business plans)
 - Stripe-backed plan gating and billing
-- KaufNest platform admin panel (`/admin`) — provision tenants, impersonate
+- Boughtopia platform admin panel (`/admin`) — provision tenants, impersonate
   tenant admins, manage plan/status
 
 ## Local Development

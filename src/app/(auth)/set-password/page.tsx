@@ -59,8 +59,9 @@ export default function SetPasswordPage() {
     return (
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
+          <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
           <span className="text-3xl font-bold text-white tracking-tight">
-            Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
+            Bought<span className="text-[var(--color-primary-hover)]">opia</span>
           </span>
         </div>
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-4">
@@ -81,8 +82,9 @@ export default function SetPasswordPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 text-center">
+        <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
         <span className="text-3xl font-bold text-white tracking-tight">
-          Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
+          Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
         <p className="mt-2 text-sm text-slate-400">Business Dashboard</p>
       </div>

@@ -150,6 +150,11 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   Project A, server-only. `isPlatformAdmin(email)` is also called from
   `dashboard/layout.tsx` to decide whether to show the sidebar's "Admin Panel"
   link (see `src/app/dashboard/CLAUDE.md`).
+- `src/components/layout/BrandMark.tsx` — the theme-switching Boughtopia icon
+  next to the header wordmark; `layout.tsx` (a server component) renders it
+  as a child even though it's a client component, same as any other
+  server-renders-client-child composition. See `dashboard/CLAUDE.md`'s
+  "Shared shell components" section for the full theming rationale.
 - `src/proxy.ts` — Next.js request middleware. Updated to query `control.tenants`
   and check each authenticated user's tenant `status` (lines 58–71). If a user
   whose tenant is `"deactivated"` tries to access `/dashboard/*`, they are

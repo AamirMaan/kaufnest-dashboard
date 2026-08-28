@@ -14,7 +14,7 @@ export function createControlClient() {
 }
 
 /**
- * True if `email` is a KaufNest platform admin (control.admin_users).
+ * True if `email` is a Boughtopia platform admin (control.admin_users).
  * Shared by /admin's auth guard, the api/admin/* route checks, and the
  * dashboard sidebar's "Admin Panel" link gating.
  */

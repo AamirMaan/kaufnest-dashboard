@@ -6,6 +6,7 @@ import { Menu, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
+import { BrandMark } from "./BrandMark";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
@@ -53,7 +54,7 @@ export function DashboardShell({ userId, role, fullName, email, children, impers
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-surface-subtle)]">
-      {/* Impersonation banner — only shown when a KaufNest admin is viewing a tenant */}
+      {/* Impersonation banner — only shown when a Boughtopia admin is viewing a tenant */}
       {impersonatingTenant && (
         <div className="shrink-0 bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center justify-between z-20">
           <span>Impersonating tenant: <strong>{impersonatingTenant}</strong></span>
@@ -76,8 +77,9 @@ export function DashboardShell({ userId, role, fullName, email, children, impers
           >
             <Menu size={20} />
           </button>
+          <BrandMark size={22} />
           <span className="text-base font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
-            Kauf<span className="text-[var(--color-primary-hover)]">Nest</span>
+            Bought<span className="text-[var(--color-primary-hover)]">opia</span>
           </span>
         </div>
 

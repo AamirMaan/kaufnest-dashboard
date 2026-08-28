@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://dashboard.kaufnest.com";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.boughtopia.com";
 
   const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${siteUrl}/auth/confirm?next=/set-password`,

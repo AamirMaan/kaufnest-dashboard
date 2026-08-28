@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Boughtopia">
+  <path d="M35 36 V28 a15 15 0 0 1 30 0 V36" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <rect x="16" y="34" width="68" height="54" rx="13" fill="#FFFFFF"/>
+  <rect x="30" y="66" width="9" height="12" rx="3" fill="#10B981"/>
+  <rect x="45.5" y="58" width="9" height="20" rx="3" fill="#10B981"/>
+  <rect x="61" y="50" width="9" height="28" rx="3" fill="#10B981"/>
+</svg>
