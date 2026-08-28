@@ -42,6 +42,12 @@ each page is a self-contained Supabase Auth form.
   no Redux here, these run before any session/store exists)
 - `email-templates/` (project root) — the branded invite/reset email HTML sent
   by Supabase, separate from these in-app pages
+- `public/brand/boughtopia-icon-bag-mono-light.svg` — referenced directly via
+  a plain `<img>` (not the theme-aware `BrandMark` component dashboard/admin
+  chrome uses) since `layout.tsx` here hardcodes `bg-slate-950` regardless of
+  the app's light/dark theme setting — the white-mono icon is always correct
+  here, no switching needed. If this layout's fixed dark background ever
+  changes, revisit whether these pages should switch to `BrandMark` instead.
 
 ## Tests
 

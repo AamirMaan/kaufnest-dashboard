@@ -121,7 +121,14 @@ forwards `isPlatformAdmin` to `Sidebar`; now takes a `userId` prop, sourced
 from `layout.tsx`'s `profile.id`, that it forwards to `NotificationBell`),
 `Sidebar` (nav + role-based links + collapse; renders an "Admin Panel" link
 to `/admin` when `role === "super_admin" && isPlatformAdmin`), `PageHeader`
-(page title/description/actions row used by every feature page),
+(page title/description/actions row used by every feature page), `BrandMark`
+(2026-08-28 — the Boughtopia bag-icon mark next to the wordmark in
+`DashboardShell`'s header, `Sidebar`'s mobile header, and `admin/layout.tsx`'s
+header; a client component that reads `useTheme()` to switch between the
+navy and white-mono SVG under `public/brand/`, since those three surfaces'
+background/text color both flip with the light/dark theme toggle — the
+always-dark `(auth)/` pages use the white-mono SVG directly instead, no
+theme-switching needed there since their background never changes),
 `NotificationBell` (the bell icon in the header — client component, not a
 route/feature of its own; polls `fetchNotifications({ userId })` every 60s
 via `setInterval`, no push/realtime). **Visibility is decided entirely by

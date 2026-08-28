@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/supabase/control";
 import { ToastProvider } from "@/components/ui/Toast";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -19,6 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="min-h-screen bg-[var(--color-surface-subtle)]">
         <header className="sticky top-0 z-10 bg-[var(--color-sidebar-bg)] border-b border-[var(--color-sidebar-border)] px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <BrandMark size={20} />
             <span className="text-base font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
               Bought<span className="text-[var(--color-primary-hover)]">opia</span>
             </span>

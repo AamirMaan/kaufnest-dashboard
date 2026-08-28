@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandMark } from "./BrandMark";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -158,9 +159,12 @@ export function Sidebar({
       {/* Mobile-only header */}
       <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-(--color-sidebar-border) shrink-0">
         <div>
-          <span className="text-xl font-bold text-(--color-sidebar-text-strong) tracking-tight">
-            Bought<span className="text-(--color-primary-hover)">opia</span>
-          </span>
+          <div className="flex items-center gap-2">
+            <BrandMark size={20} />
+            <span className="text-xl font-bold text-(--color-sidebar-text-strong) tracking-tight">
+              Bought<span className="text-(--color-primary-hover)">opia</span>
+            </span>
+          </div>
           <p className="text-xs text-(--color-sidebar-text) mt-0.5">Business Dashboard</p>
         </div>
         <button

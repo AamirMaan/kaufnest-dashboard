@@ -39,6 +39,7 @@ function LoginForm() {
     <div className="w-full max-w-sm">
       {/* Logo / Brand */}
       <div className="mb-8 text-center">
+        <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
         <span className="text-3xl font-bold text-white tracking-tight">
           Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>

@@ -6,6 +6,7 @@ import { Menu, User, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
+import { BrandMark } from "./BrandMark";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
@@ -76,6 +77,7 @@ export function DashboardShell({ userId, role, fullName, email, children, impers
           >
             <Menu size={20} />
           </button>
+          <BrandMark size={22} />
           <span className="text-base font-bold text-[var(--color-sidebar-text-strong)] tracking-tight">
             Bought<span className="text-[var(--color-primary-hover)]">opia</span>
           </span>
