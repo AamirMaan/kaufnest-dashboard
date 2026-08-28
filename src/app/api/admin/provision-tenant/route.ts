@@ -3,6 +3,7 @@ import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { addExposedSchema } from "@/lib/supabase/managementApi";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { sanitizeSlug, schemaNameFor } from "@/lib/utils/tenantSlug";
 
 async function verifyPlatformAdmin() {
   const supabase = await createClient();
@@ -28,12 +29,8 @@ export async function POST(req: NextRequest) {
 
   const { name, plan, adminEmail, adminName = "" } = body;
 
-  const safeSlug = body.slug
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-/g, "_")
-    .slice(0, 40);
-  const schemaName = `tenant_${safeSlug}`;
+  const safeSlug = sanitizeSlug(body.slug);
+  const schemaName = schemaNameFor(safeSlug);
 
   const control = createControlClient();
 
