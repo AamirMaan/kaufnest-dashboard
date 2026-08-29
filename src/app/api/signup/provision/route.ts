@@ -36,8 +36,14 @@ export async function POST() {
     return NextResponse.json({ ok: true, alreadyProvisioned: true });
   }
 
-  const companyName = (user.user_metadata?.company_name as string | undefined)?.trim();
-  const fullName = (user.user_metadata?.full_name as string | undefined)?.trim() ?? "";
+  const companyName =
+    typeof user.user_metadata?.company_name === "string"
+      ? user.user_metadata.company_name.trim()
+      : undefined;
+  const fullName =
+    typeof user.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name.trim()
+      : "";
 
   if (!companyName) {
     // Not a self-serve signup (an admin-invited user has no company_name),
