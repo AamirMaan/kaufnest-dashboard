@@ -1,16 +1,16 @@
-# Graph Report - kaufnest-dashboard  (2026-08-29)
+# Graph Report - kaufnest-dashboard  (2026-08-27)
 
 ## Corpus Check
-- 434 files · ~351,686 words
+- 408 files · ~320,638 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2422 nodes · 4962 edges · 173 communities (165 shown, 8 thin omitted)
+- 2318 nodes · 4797 edges · 165 communities (149 shown, 16 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 29 edges (avg confidence: 0.77)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `06c1b756`
+- Built from commit: `d3f2f2d0`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -159,7 +159,6 @@
 - @types/react
 - typescript
 - postcss.config.mjs
-- page.tsx
 - createControlClient
 - route.ts
 - importAliases.ts
@@ -170,13 +169,7 @@
 - ebay.ts
 - parseExcelBuffer
 - stripe.ts
-- stripe.ts
 - vatPreservation.ts
-- importAliases.ts
-- Marketing feature
-- expenseCategory.ts
-- Marketing feature playbook
-- README.md
 
 ## God Nodes (most connected - your core abstractions)
 1. `useAppDispatch` - 64 edges
@@ -184,11 +177,11 @@
 3. `useToast()` - 47 edges
 4. `Button` - 43 edges
 5. `createTenantClient()` - 37 edges
-6. `createControlClient()` - 34 edges
-7. `createClient()` - 34 edges
-8. `Currency` - 34 edges
-9. `formatCurrency()` - 33 edges
-10. `Sale` - 31 edges
+6. `Currency` - 34 edges
+7. `formatCurrency()` - 33 edges
+8. `createControlClient()` - 32 edges
+9. `Sale` - 31 edges
+10. `createClient()` - 30 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `main()` --calls--> `repo_root()`  [INFERRED]
@@ -207,31 +200,31 @@
 - 1-file cycle: `src/components/ui/dialog.tsx -> src/components/ui/dialog.tsx`
 - 1-file cycle: `src/components/ui/input.tsx -> src/components/ui/input.tsx`
 
-## Communities (173 total, 8 thin omitted)
+## Communities (165 total, 16 thin omitted)
 
 ### Community 0 - "Dropshipping Listing Pipeline"
-Cohesion: 0.07
-Nodes (40): EditSourceModal(), EditSourceModalProps, PlatformBadge(), MarginFilterBand, matchesListingSearch(), matchesMarginFilter(), canCheckSupplierPrice(), ListingsTable() (+32 more)
+Cohesion: 0.08
+Nodes (39): EditSourceModalProps, SourceBadge(), resolveInitialSourceUrl(), Dialog(), DialogContent(), DialogDescription(), DialogFooter(), DialogHeader() (+31 more)
 
 ### Community 1 - "Design Refresh Token System"
 Cohesion: 0.08
-Nodes (56): Plan, Props, Props, blankForm, CATEGORIES, CURRENCIES, AddProductModal(), defaults (+48 more)
+Nodes (49): CATEGORIES, CURRENCIES, makeDefaults(), Props, today(), blankForm, CATEGORIES, CURRENCIES (+41 more)
 
 ### Community 2 - "Tenant Edit & Admin Auth"
-Cohesion: 0.28
-Nodes (8): POST(), verifyPlatformAdmin(), POST(), POST(), GET(), IntegrationAuthContext, createClient(), createServiceClientForTenant()
+Cohesion: 0.12
+Nodes (29): AdminLayout(), POST(), verifyCanImpersonate(), errorMessage(), POST(), verifyPlatformAdmin(), POST(), verifyPlatformAdmin() (+21 more)
 
 ### Community 3 - "Planner VAT & Break-even Logic"
-Cohesion: 0.08
-Nodes (38): RecordTransferModal(), today(), DropshippingPage(), EditExpenseModal(), expenseToForm(), EditProductModal(), productToForm(), InventoryPage() (+30 more)
+Cohesion: 0.06
+Nodes (48): AuditLogDetailModal(), Props, AUDIT_ACTIONS, AuditLogsPage(), AddProductModal(), EditProductModal(), productToForm(), InventoryPage() (+40 more)
 
 ### Community 4 - "Integration Order Review"
-Cohesion: 0.09
-Nodes (29): ImportExpensesModal(), CATEGORIES, ExpensesPage(), fetchExpensesPage, Props, ImportPurchasesModal(), ParsedRow, PurchasesPage() (+21 more)
+Cohesion: 0.12
+Nodes (41): RecordTransferModal(), today(), AddExpenseModal(), EditExpenseModal(), expenseToForm(), ImportExpensesModal(), CATEGORIES, ExpensesPage() (+33 more)
 
 ### Community 5 - "Planner Fee Calculation Engine"
-Cohesion: 0.16
-Nodes (12): aggregateSaleRevenue(), computePending(), DashboardPage(), describeRange(), FALLBACK_COLORS, PLATFORM_COLORS, platformColor(), RANGE_PRESETS (+4 more)
+Cohesion: 0.12
+Nodes (17): aggregateSaleRevenue(), computePending(), DashboardPage(), describeRange(), FALLBACK_COLORS, PLATFORM_COLORS, platformColor(), RANGE_PRESETS (+9 more)
 
 ### Community 6 - "Planner Custom Charges & Freight"
 Cohesion: 0.45
@@ -242,24 +235,24 @@ Cohesion: 0.05
 Nodes (42): Architecture summary, Checklist — phase completion gates, KaufNest — Multi-Tenant SaaS Migration, Key rules for all future Claude Code sessions, Phase 1, Phase 1 — Control Plane (new Supabase project), Phase 2, Phase 2 — Schema-per-tenant isolation (Data Plane) (+34 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.06
-Nodes (35): @base-ui/react, class-variance-authority, clsx, jspdf-autotable, lucide-react, next, dependencies, @base-ui/react (+27 more)
+Cohesion: 0.05
+Nodes (40): @base-ui/react, class-variance-authority, clsx, jspdf-autotable, lucide-react, next, dependencies, @base-ui/react (+32 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.06
-Nodes (34): State, SetPasswordPage(), State, BusinessEbayGate(), Props, DetailsStep(), Props, ImagesStep() (+26 more)
+Nodes (38): PlatformBadge(), BusinessEbayGate(), Props, CategoryStep(), CategorySuggestion, Props, DetailsStep(), Props (+30 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.09
 Nodes (31): AmazonPlanner(), ChargeType, DEFAULT_FORM, FormState, parse(), ChargeType, DEFAULT_FORM, EbayPlanner() (+23 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.13
-Nodes (20): classifySkip(), IMPORT_FORMAT_IDS, IMPORT_FORMATS, NON_SALE_STATUSES, normalizePlatform(), normalizeStatus(), ParsedRow, RICH_COLUMNS (+12 more)
+Cohesion: 0.06
+Nodes (51): classifySkip(), EXPENSE_IMPORT_FORMAT_IDS, EXPENSE_IMPORT_FORMATS, ExpenseImportData, ExpenseImportFormat, ExpenseImportFormatId, ParsedExpenseRow, round2() (+43 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.24
-Nodes (14): AuditLogFilters, DEFAULT_AUDIT_LOG_FILTERS, DEFAULT_EXPENSE_FILTERS, DEFAULT_PURCHASE_FILTERS, DEFAULT_SALES_FILTERS, filterExpenses(), filterPurchases(), filterSales() (+6 more)
+Cohesion: 0.19
+Nodes (17): WriteAuditLogParams, AuditLogFilters, DEFAULT_AUDIT_LOG_FILTERS, DEFAULT_EXPENSE_FILTERS, DEFAULT_PURCHASE_FILTERS, DEFAULT_SALES_FILTERS, filterExpenses(), filterPurchases() (+9 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.13
@@ -270,20 +263,20 @@ Cohesion: 0.07
 Nodes (28): dom, dom.iterable, esnext, **/*.mts, .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts, node_modules (+20 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.11
-Nodes (27): Props, ReplyBox(), Props, ThreadList(), displayCurrency(), Props, ThreadView(), AVATAR_CLASSES (+19 more)
+Cohesion: 0.10
+Nodes (25): Props, ReplyBox(), Props, ThreadList(), displayCurrency(), Props, ThreadView(), AVATAR_CLASSES (+17 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.12
-Nodes (22): getApplicationToken(), EbayPublicKeyResponse, fetchEbayPublicKey(), PUBLIC_KEY_URL(), publicKeyCache, BusinessPolicies, BusinessPolicySummary, CategorySuggestion (+14 more)
+Cohesion: 0.13
+Nodes (20): GET(), Props, BusinessPolicies, BusinessPolicySummary, CategorySuggestion, ebayFetch(), fetchPolicyList(), publishListing() (+12 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.12
-Nodes (24): Props, initialState, InventoryState, AddSaleModal(), CURRENCIES, FormState, makeDefaults(), PLATFORMS (+16 more)
+Cohesion: 0.09
+Nodes (33): Props, FormState, FormState, Props, FormState, FormState, CURRENCIES, FormState (+25 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.10
-Nodes (18): Features, Hero(), IntegrationsBar(), LOGOS, MarketingFooter(), MarketingNav(), Pricing(), TrialInfo() (+10 more)
+Cohesion: 0.30
+Nodes (12): NotificationBell(), buildFeed(), isSynthetic(), isUnread(), latestStoredTimestamp(), NOTIFICATION_LABELS, synthesizeLowStock(), base (+4 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.08
@@ -294,16 +287,16 @@ Cohesion: 0.08
 Nodes (24): Architecture, Behaviour, Constraints, Data Model, DB migration — `supabase/migrations/016_platform_payouts.sql`, Error handling, Fields, Files Changed (+16 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.17
-Nodes (12): EMPTY_OPTS, ExpenseInvoiceProps, Props, SalesInvoiceProps, salesTotalsByCurrency(), simpleTotalsByCurrency(), InvoiceOptions, BulkTotals (+4 more)
+Cohesion: 0.18
+Nodes (11): EMPTY_OPTS, Props, PurchaseInvoiceProps, salesTotalsByCurrency(), simpleTotalsByCurrency(), InvoiceOptions, BulkTotals, computeBulkTotals() (+3 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.26
-Nodes (15): POST(), GET(), GET(), GET(), POST(), POST(), POST(), IntegrationAuthResult (+7 more)
+Cohesion: 0.11
+Nodes (27): POST(), GET(), POST(), POST(), POST(), basicAuthHeader(), ebayAdapter, EbayLineItem (+19 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.20
-Nodes (8): purchasesSlice, initialState, platformPayoutsSlice, PlatformPayoutsState, AppDispatch, AppStore, RootState, PlatformPayout
+Cohesion: 0.16
+Nodes (7): initialState, usersSlice, UsersState, auditLogsSlice, AppDispatch, AppStore, RootState
 
 ### Community 24 - "Community 24"
 Cohesion: 0.09
@@ -334,32 +327,32 @@ Cohesion: 0.10
 Nodes (19): Core simplification, Decisions taken, with rationale, Docs to update in the same commit, Extensibility to email and push, In-app notifications, Low stock fires only on the crossing, Migration checklist, Out of scope for v1 (+11 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.31
-Nodes (8): RFC-4180, CsvValue, Delimiter, detectDelimiter(), escapeField(), parseCsvText(), parseLine(), splitRows()
+Cohesion: 0.17
+Nodes (13): RFC-4180, Props, TEMPLATE_EXAMPLE, TEMPLATE_HEADERS, VALID_CURRENCIES, validateRow(), CsvValue, Delimiter (+5 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.11
 Nodes (18): Average cost comes from a read-only DB view, Costing method: weighted average only (req 14), Currency forced a grouping decision, Data model, Decisions taken, Docs to update in the same commit, Fulfillment charges are recorded, not capitalised (req 12), Inventory batch fields + weighted-average cost (+10 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.10
-Nodes (20): AuditLogDetailModal(), Props, AUDIT_ACTIONS, AuditLogsPage(), ACTION_VARIANTS, ActionBadge(), BadgeProps, BadgeVariant (+12 more)
+Cohesion: 0.30
+Nodes (6): MarginFilterBand, matchesListingSearch(), matchesMarginFilter(), SupplierPriceCell(), computeMarginPct(), marginBadgeVariant()
 
 ### Community 34 - "Community 34"
 Cohesion: 0.22
 Nodes (14): buildGetMyeBaySellingRequest(), EbayListing, fetchActiveListings(), parseItem(), buildAddMemberMessageRTQRequest(), buildGetMemberMessagesRequest(), EbayMemberMessage, fetchMemberMessages() (+6 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.10
-Nodes (20): audit.ts, csv.ts, currency.ts, date.ts, detectPlatform.ts, excel.ts, filters.ts, generateInvoice.ts (+12 more)
+Cohesion: 0.11
+Nodes (18): audit.ts, csv.ts, currency.ts, date.ts, detectPlatform.ts, excel.ts, filters.ts, generateInvoice.ts (+10 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.44
-Nodes (7): GET(), redirectToIntegrations(), redirectToIntegrationsWithError(), GET(), ADAPTERS, getAdapter(), isIntegrationPlatform()
+Cohesion: 0.21
+Nodes (17): GET(), redirectToIntegrations(), redirectToIntegrationsWithError(), GET(), POST(), GET(), PLATFORMS, ReviewOrder (+9 more)
 
 ### Community 37 - "Community 37"
-Cohesion: 0.17
-Nodes (9): Props, Props, initialState, usersSlice, UsersState, currentUserSlice, CurrentUserState, initialState (+1 more)
+Cohesion: 0.11
+Nodes (22): ListingsTableProps, dropshippingSlice, DropshippingState, initialState, Props, Props, currentUserSlice, CurrentUserState (+14 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.12
@@ -370,16 +363,16 @@ Cohesion: 0.12
 Nodes (15): 1. Status Vocabulary, 2. Lifecycle Transitions, 3. Database Migration, 4. First-Login Auto-Activation (`auth/confirm`), 5. Proxy Enforcement (`proxy.ts`), 6. New Page: `/account-deactivated`, 7. Admin UI Changes, 8. Files Touched (+7 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.09
-Nodes (33): AddTenantModal(), DeleteTenantModal(), Props, EditTenantModal(), Props, Props, TenantActions(), PLAN_VARIANT (+25 more)
+Cohesion: 0.08
+Nodes (35): AddTenantModal(), Plan, Props, DeleteTenantModal(), Props, EditTenantModal(), Props, Props (+27 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.19
-Nodes (8): Props, computeGrossProfit(), computeNetProceeds(), initialState, salesSlice, SalesState, SalesFilters, Sale
+Cohesion: 0.24
+Nodes (7): Props, initialState, salesSlice, SalesState, SalesInvoiceProps, SalesFilters, Sale
 
 ### Community 42 - "Community 42"
-Cohesion: 0.15
-Nodes (13): WriteAuditLogParams, companyProfileSlice, CompanyProfileState, initialState, AuditEntity, CompanyProfile, DashboardStats, ListingStatus (+5 more)
+Cohesion: 0.43
+Nodes (4): companyProfileSlice, CompanyProfileState, initialState, CompanyProfile
 
 ### Community 43 - "Community 43"
 Cohesion: 0.13
@@ -398,16 +391,16 @@ Cohesion: 0.13
 Nodes (14): Call site (inside each generate function), Files Changed, Invoice Custom Fields — Design Spec, Layout (below existing records summary card), New helper, Out of Scope, Passing to generate functions, PDF — generateInvoice (`src/lib/utils/generateInvoice.ts`) (+6 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.06
-Nodes (33): eslint, eslint-config-next, husky, jest, jest-environment-jsdom, devDependencies, eslint, eslint-config-next (+25 more)
+Cohesion: 0.13
+Nodes (15): eslint, jest, jest-environment-jsdom, devDependencies, eslint, jest, jest-environment-jsdom, @tailwindcss/postcss (+7 more)
 
 ### Community 48 - "Community 48"
-Cohesion: 0.17
-Nodes (15): POST(), CURRENCIES, normalizeCurrency(), normalizedOrderToSaleRow(), ReviewOrderFees, SaleInsert, mergeImportedSale(), PLATFORM_OWNED (+7 more)
+Cohesion: 0.07
+Nodes (30): POST(), amazonAdapter, AmazonMoney, AmazonOrder, AmazonOrderItem, AmazonOrderItemsResponse, AmazonOrdersResponse, AmazonTokenResponse (+22 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.18
-Nodes (19): POST(), PriceCheckResult, sleep(), BlockedError, createScrapeSession(), fetchAndParse(), parseJsonLd(), parseOgMeta() (+11 more)
+Cohesion: 0.31
+Nodes (5): LowStockProduct, initialState, notificationsSlice, NotificationsState, Notification
 
 ### Community 50 - "Community 50"
 Cohesion: 0.14
@@ -422,8 +415,8 @@ Cohesion: 0.14
 Nodes (14): scripts, build, create-tenant-user, dev, encrypt-existing-tokens, lint, prepare, scrape:aliexpress (+6 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.29
-Nodes (6): Props, fetchListingsPage, initialState, listingsSlice, ListingsState, EbayListingDraft
+Cohesion: 0.32
+Nodes (4): fetchListingsPage, initialState, listingsSlice, ListingsState
 
 ### Community 54 - "Community 54"
 Cohesion: 0.14
@@ -446,8 +439,8 @@ Cohesion: 0.15
 Nodes (12): 1. `src/lib/utils/filters.ts`, 2. `src/components/ui/FilterBar.tsx`, 3. Each slice thunk (`fetchSalesPage` / `fetchPurchasesPage` / `fetchExpensesPage`), 4. Each `page.tsx` (sales, purchases, expenses), Components & data flow, Files changed, Out of scope, Problem (+4 more)
 
 ### Community 59 - "Community 59"
-Cohesion: 0.21
-Nodes (8): Props, expensesSlice, ExpensesState, initialState, ExpenseFilters, PageRequest, rangeFor(), Expense
+Cohesion: 0.19
+Nodes (9): Props, expensesSlice, ExpensesState, initialState, ExpenseInvoiceProps, ExpenseFilters, PageRequest, rangeFor() (+1 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.15
@@ -462,8 +455,8 @@ Cohesion: 0.17
 Nodes (11): Backend, `EditTenantModal`, Files touched, Frontend, Out of scope, `page.tsx`, Problem, Route: `PATCH /api/admin/tenants/[id]` (+3 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.20
-Nodes (15): errorMessage(), POST(), verifyPlatformAdmin(), errorMessage(), POST(), addExposedSchema(), PostgrestConfig, projectRefFromUrl() (+7 more)
+Cohesion: 0.25
+Nodes (6): fetchInventoryPage, fetchInventorySelectors, initialState, inventorySlice, InventoryState, ProductSelector
 
 ### Community 64 - "Community 64"
 Cohesion: 0.17
@@ -498,8 +491,8 @@ Cohesion: 0.20
 Nodes (9): CSV import/export, Data flow (the pattern every mutation follows), Delete gating (super_admin + permission overrides), Expenses feature, Files in this folder, Pagination data flow, Shared dependencies (live outside this folder on purpose), Tests (+1 more)
 
 ### Community 72 - "Community 72"
-Cohesion: 0.14
-Nodes (15): hydrateExpenses, fetchInventorySelectors, hydrateProducts, inventorySlice, ProductSelector, hydrateListingDrafts, hydrateMessages, hydratePurchases (+7 more)
+Cohesion: 0.38
+Nodes (9): hydrateExpenses, hydrateProducts, hydrateListingDrafts, hydrateMessages, hydratePurchases, hydrateSales, hydrateAuditLogs, makeStore() (+1 more)
 
 ### Community 73 - "Community 73"
 Cohesion: 0.22
@@ -538,8 +531,8 @@ Cohesion: 0.22
 Nodes (8): Data flow, Deactivate/reactivate (revoke access, never a hard delete), Files in this folder, Permission overrides (additive per-user grants), Related files outside this folder (cannot be colocated), Shared dependencies (live outside this folder on purpose), Tests, Users feature
 
 ### Community 82 - "Community 82"
-Cohesion: 0.33
-Nodes (5): accountant, admin, deactivatedAccountant, superAdmin1, superAdmin2
+Cohesion: 0.22
+Nodes (8): canDeactivateUser(), DeactivateGuardResult, GuardProfile, accountant, admin, deactivatedAccountant, superAdmin1, superAdmin2
 
 ### Community 83 - "Community 83"
 Cohesion: 0.25
@@ -558,12 +551,12 @@ Cohesion: 0.25
 Nodes (7): API routes, Data flow (different from other features), Files in this folder, Integrations feature, Plan gating, Shared dependencies, Tests
 
 ### Community 88 - "Community 88"
-Cohesion: 0.49
-Nodes (7): COMPANY_PROFILE_ROLES, DEMO_SALE, SettingsPage(), validateEmail(), validateIBAN(), validateVATId(), validateVATRate()
+Cohesion: 0.50
+Nodes (6): COMPANY_PROFILE_ROLES, SettingsPage(), validateEmail(), validateIBAN(), validateVATId(), validateVATRate()
 
 ### Community 89 - "Community 89"
-Cohesion: 0.22
-Nodes (8): client.ts, control.ts, Gotcha: `src/proxy.ts` doesn't use either of these, Gotchas, managementApi.ts, server.ts, Supabase clients (`src/lib/supabase/`), Where these are used
+Cohesion: 0.25
+Nodes (7): client.ts, control.ts, Gotcha: `src/proxy.ts` doesn't use either of these, managementApi.ts, server.ts, Supabase clients (`src/lib/supabase/`), Where these are used
 
 ### Community 90 - "Community 90"
 Cohesion: 0.25
@@ -587,7 +580,7 @@ Nodes (6): name, overrides, postcss, sharp, private, version
 
 ### Community 95 - "Community 95"
 Cohesion: 0.29
-Nodes (6): Architecture, Boughtopia Dashboard, Features, Local Development, Stack, Testing
+Nodes (6): Architecture, Features, KaufNest Dashboard, Local Development, Stack, Testing
 
 ### Community 96 - "Community 96"
 Cohesion: 0.29
@@ -604,10 +597,6 @@ Nodes (6): Data flow, Files in this folder, Listings feature, Publish flow, Shar
 ### Community 99 - "Community 99"
 Cohesion: 0.29
 Nodes (6): Data flow, Files in this folder, Messages feature, Shared dependencies, Tests, v1 scope: reply-only, no new conversations
-
-### Community 100 - "Community 100"
-Cohesion: 0.17
-Nodes (17): classifySkip(), EXPENSE_IMPORT_FORMATS, ExpenseImportData, ExpenseImportFormat, round2(), SkipReason, vorsteuerRow, VALID_CATEGORIES (+9 more)
 
 ### Community 101 - "Community 101"
 Cohesion: 0.47
@@ -644,10 +633,6 @@ Nodes (5): Auth feature, Files in this folder, Related files outside this folder
 ### Community 109 - "Community 109"
 Cohesion: 0.33
 Nodes (5): Audit Logs feature, Files in this folder, Important: the slice lives elsewhere — on purpose, Shared dependencies, Tests
-
-### Community 110 - "Community 110"
-Cohesion: 0.19
-Nodes (13): AdminLayout(), PATCH(), GET(), DashboardLayout(), ToastProvider(), isPlatformAdmin(), verifyPlatformAdmin(), isTrialExpired() (+5 more)
 
 ### Community 111 - "Community 111"
 Cohesion: 0.33
@@ -739,11 +724,7 @@ Nodes (14): Categorisation, Column mapping (`vorsteuer`), Credit notes → negat
 
 ### Community 139 - "@types/react"
 Cohesion: 0.08
-Nodes (37): FormState, FormState, geistMono, geistSans, metadata, BrandMark(), Props, DashboardShell() (+29 more)
-
-### Community 140 - "typescript"
-Cohesion: 0.11
-Nodes (18): 1. Landing page, 2. Signup, 3. Provisioning, 4. Trial lifecycle, Architecture, Context — what exists today, Data model changes, Decisions (+10 more)
+Nodes (22): State, SetPasswordPage(), State, FormState, FormState, geistMono, geistSans, metadata (+14 more)
 
 ### Community 141 - "page.tsx"
 Cohesion: 0.14
@@ -754,28 +735,16 @@ Cohesion: 0.14
 Nodes (13): Expenses Import Formats Implementation Plan, File structure, Global Constraints, Known limitations, carried from the spec, Task 1: Fix embedded newlines in CSV parsing, Task 2: Shared header vocabulary, Task 3: Allow negative expense amounts, Task 4: Multilingual category mapping (+5 more)
 
 ### Community 143 - "typescript"
-Cohesion: 0.13
-Nodes (12): xlsx, ImportFormatId, formatIsoHuman(), ImportSummary, MONTH_NAMES, ParsedSource, Props, cellToString() (+4 more)
-
-### Community 148 - "page.tsx"
-Cohesion: 0.12
-Nodes (15): Global Constraints, Notes for the executor, Public Landing Page + Self-Serve Signup Implementation Plan, Task 10: Pricing module, Task 11: Landing page, Task 12: Final wiring check, Task 1: Trial plan limits + expiry predicate, Task 2: Trial lockout page + proxy enforcement (+7 more)
+Cohesion: 0.17
+Nodes (10): Props, ParsedRow, fetchPurchasesPage, initialState, purchasesSlice, PurchasesState, computeGrossProfit(), computeNetProceeds() (+2 more)
 
 ### Community 154 - "createControlClient"
-Cohesion: 0.39
-Nodes (9): POST(), verifyCanImpersonate(), DELETE(), errorMessage(), makeServiceClient(), PATCH(), GET(), verifyPlatformAdmin() (+1 more)
+Cohesion: 0.32
+Nodes (10): DELETE(), errorMessage(), makeServiceClient(), PATCH(), verifyPlatformAdmin(), addExposedSchema(), PostgrestConfig, projectRefFromUrl() (+2 more)
 
 ### Community 155 - "route.ts"
-Cohesion: 0.36
-Nodes (5): cleanupEbayUser(), POST(), ParsedEbaySignatureHeader, parseSignatureHeader(), verifySignature()
-
-### Community 156 - "importAliases.ts"
-Cohesion: 0.17
-Nodes (10): PLATFORMS, ReviewOrder, ReviewResponse, IntegrationsContent(), PLATFORM_LABELS, PLATFORMS, canAddUser(), hasPlatformIntegrations() (+2 more)
-
-### Community 157 - "ThemeProvider.tsx"
-Cohesion: 0.12
-Nodes (8): amazonAdapter, AmazonMoney, AmazonOrder, AmazonOrderItem, AmazonOrderItemsResponse, AmazonOrdersResponse, AmazonTokenResponse, PlatformAdapter
+Cohesion: 0.21
+Nodes (10): cleanupEbayUser(), POST(), getApplicationToken(), EbayPublicKeyResponse, fetchEbayPublicKey(), PUBLIC_KEY_URL(), publicKeyCache, ParsedEbaySignatureHeader (+2 more)
 
 ### Community 158 - "File structure"
 Cohesion: 0.22
@@ -785,65 +754,29 @@ Nodes (8): CSV Import Date Order Implementation Plan, File structure, Global Con
 Cohesion: 0.22
 Nodes (8): Amazon Refunds Implementation Plan, File structure, Global Constraints, Known limitations, carried from the spec, Task 1: Schema, type and badge, Task 2: Invert the skip set and parse REFUND rows, Task 3: Modal — replace return machinery with refunds, Task 4: Documentation
 
-### Community 160 - "route.ts"
-Cohesion: 0.31
-Nodes (9): POST(), decryptToken(), encryptToken(), getKey(), isEncryptedToken(), ConnectionRow, upsertConnection(), IntegrationsClient (+1 more)
-
-### Community 161 - "ebay.ts"
-Cohesion: 0.22
-Nodes (5): EXPENSE_IMPORT_FORMAT_IDS, ExpenseImportFormatId, ParsedExpenseRow, ParsedSource, Props
-
-### Community 162 - "parseExcelBuffer"
-Cohesion: 0.25
-Nodes (7): basicAuthHeader(), EbayLineItem, EbayMoney, EbayOrder, EbayOrdersResponse, EbayTokenResponse, requestToken()
-
-### Community 163 - "stripe.ts"
-Cohesion: 0.31
-Nodes (7): ALL_PERMISSIONS, canAccessRoute(), hasMinimumRole(), Permission, PERMISSION_LABELS, PERMISSIONS, ROLE_HIERARCHY
-
-### Community 164 - "stripe.ts"
-Cohesion: 0.43
-Nodes (5): POST(), POST(), getStripe(), PlanKey, PLANS
-
 ### Community 165 - "vatPreservation.ts"
-Cohesion: 0.16
-Nodes (17): AddExpenseModal(), CATEGORIES, CURRENCIES, FormState, makeDefaults(), Props, today(), FormState (+9 more)
-
-### Community 166 - "importAliases.ts"
-Cohesion: 0.46
-Nodes (6): ImportFormat, ALIASES, canonicalizeRow(), ColumnSpec, normalizeHeader(), resolveHeaders()
-
-### Community 167 - "Marketing feature"
-Cohesion: 0.29
-Nodes (6): Accent colour is page-scoped, not the app's `--color-primary` (2026-08-29), Files in this folder, Marketing feature, Pricing is derived, not transcribed, Shared dependencies, Tests
-
-### Community 168 - "expenseCategory.ts"
-Cohesion: 0.60
-Nodes (3): categoryFor(), matches(), RULES
-
-### Community 169 - "Marketing feature playbook"
-Cohesion: 0.50
-Nodes (3): Gotchas, Marketing feature playbook, Minimal file set per change type
+Cohesion: 0.80
+Nodes (3): resolveVatAmount(), VatFormSnapshot, vatInputsUnchanged()
 
 ## Knowledge Gaps
-- **1070 isolated node(s):** `supabase-data`, `supabase-control`, `npx`, `@playwright/mcp`, `$schema` (+1065 more)
+- **1023 isolated node(s):** `supabase-data`, `supabase-control`, `npx`, `@playwright/mcp`, `$schema` (+1018 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `dependencies` connect `Community 8` to `typescript`, `Community 94`, `Planner Custom Charges & Freight`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `Community 8` to `Community 94`, `Planner Custom Charges & Freight`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **Why does `jspdf` connect `Planner Custom Charges & Freight` to `Community 8`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Why does `formatCurrency()` connect `Integration Order Review` to `Design Refresh Token System`, `Community 33`, `Planner VAT & Break-even Logic`, `Planner Fee Calculation Engine`, `Community 40`, `Community 9`, `Community 10`, `Community 15`, `Community 17`, `Community 21`?**
+  _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **What connects `supabase-data`, `supabase-control`, `npx` to the rest of the system?**
-  _1070 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1023 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Dropshipping Listing Pipeline` be split into smaller, more focused modules?**
-  _Cohesion score 0.0701484895033282 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07662337662337662 - nodes in this community are weakly interconnected._
 - **Should `Design Refresh Token System` be split into smaller, more focused modules?**
-  _Cohesion score 0.07689678742310321 - nodes in this community are weakly interconnected._
-- **Should `Planner VAT & Break-even Logic` be split into smaller, more focused modules?**
-  _Cohesion score 0.08067375886524823 - nodes in this community are weakly interconnected._
-- **Should `Integration Order Review` be split into smaller, more focused modules?**
-  _Cohesion score 0.09446693657219973 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08202323991797676 - nodes in this community are weakly interconnected._
+- **Should `Tenant Edit & Admin Auth` be split into smaller, more focused modules?**
+  _Cohesion score 0.12234042553191489 - nodes in this community are weakly interconnected._
