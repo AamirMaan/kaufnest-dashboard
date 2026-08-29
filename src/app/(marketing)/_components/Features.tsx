@@ -37,17 +37,17 @@ export function Features() {
   return (
     <section className="border-t border-(--color-border) bg-(--color-surface)">
       <div className="mx-auto max-w-5xl px-6 py-20">
-        <h2 className="text-center text-2xl font-bold text-(--color-text-strong)">
+        <h2 className="text-center text-3xl font-bold text-(--color-text-strong)">
           Everything the books need
         </h2>
         <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feature) => (
             <div key={feature.title}>
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100">
-                <feature.icon size={20} className="text-emerald-600" aria-hidden="true" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-100">
+                <feature.icon size={22} className="text-emerald-600" aria-hidden="true" />
               </div>
-              <h3 className="mt-4 text-sm font-semibold text-(--color-text-strong)">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-(--color-text-muted)">{feature.body}</p>
+              <h3 className="mt-4 text-base font-semibold text-(--color-text-strong)">{feature.title}</h3>
+              <p className="mt-2 text-base leading-7 text-(--color-text-muted)">{feature.body}</p>
             </div>
           ))}
         </div>

@@ -16,17 +16,24 @@ signed-in state.
 ## Files in this folder
 
 - `layout.tsx` — full-height page background. No app chrome (no sidebar,
-  no `DashboardShell`).
+  no `DashboardShell`). Uses a literal `bg-white`, not a `--color-*` token
+  (2026-08-29) — `--color-bg` is undefined project-wide (a pre-existing
+  quirk shared with `/account-deactivated`/`/account-suspended`), so it was
+  silently inert here: sections with no background of their own (nav,
+  footer, pricing) were falling through to `<body>`'s dark-mode-default
+  background. A literal white background on this wrapper guarantees no dark
+  bleed-through regardless of the app-wide theme, on top of the
+  `data-theme="light"` already forcing every *token-driven* section
+  (Features, TrialInfo) light.
 - `page.tsx` — Server Component. Auth redirect, then composes the sections.
 - `_components/MarketingNav.tsx` — logo + "Sign in" + "Start free trial".
 - `_components/Hero.tsx` — headline, CTA, the "14 days free · no credit
   card" pill.
 - `_components/IntegrationsBar.tsx` (2026-08-29) — "Sync with the platforms
   you already sell on" trust bar, right under the hero. Real logo assets for
-  eBay/Amazon (`public/brand/e-bay-logo.svg`, `amazon-logo.svg`); Etsy and
-  Shopify are plain text wordmarks since no licensed logo assets for those
-  exist in the repo — don't fabricate/recreate their logos from scratch, add
-  real assets first if that's ever wanted.
+  all four: `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
+  `shopify-logo2.svg`. All four render grayscale/muted at rest and reveal
+  full colour on hover, for a consistent row.
 - `_components/Features.tsx` — six feature cards from a local `FEATURES`
   array, each with a `lucide-react` icon in an emerald badge. **Only
   describe things that actually ship.**
@@ -65,8 +72,8 @@ same brand mark shown everywhere else (login, emails, dashboard header).
 - `public/brand/boughtopia-icon-bag.svg` — the navy icon, used directly
   rather than via `BrandMark`, because this page has a fixed light
   background and no theme toggle.
-- `public/brand/e-bay-logo.svg`, `amazon-logo.svg` — real logo assets, used
-  by `IntegrationsBar.tsx` only.
+- `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
+  `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
 - `lib/utils/planGating` (`getPlanLimits`) — via `_lib/pricing.ts`.
 - `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/

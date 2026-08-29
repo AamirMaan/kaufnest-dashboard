@@ -21,8 +21,8 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
   next to the markup, not in a shared constants file.
 - **Add a platform to the `IntegrationsBar`**: only add a real `<img>` logo
   if a licensed SVG asset exists in `public/brand/` — otherwise add it as a
-  plain text wordmark (same pattern as Etsy/Shopify today) rather than
-  recreating the logo yourself.
+  plain text wordmark rather than recreating the logo yourself. All four
+  current entries (eBay/Amazon/Etsy/Shopify) use real assets.
 
 ## Gotchas
 

@@ -8,10 +8,10 @@ export function Pricing() {
   return (
     <section id="pricing" className="border-t border-(--color-border)">
       <div className="mx-auto max-w-5xl px-6 py-20">
-        <h2 className="text-center text-2xl font-bold text-(--color-text-strong)">
+        <h2 className="text-center text-3xl font-bold text-(--color-text-strong)">
           Simple monthly pricing
         </h2>
-        <p className="mt-3 text-center text-sm text-(--color-text-muted)">
+        <p className="mt-3 text-center text-base text-(--color-text-muted)">
           Every plan starts with the same 14-day free trial.
         </p>
 
@@ -30,16 +30,16 @@ export function Pricing() {
                   Most popular
                 </span>
               )}
-              <h3 className="text-base font-bold text-(--color-text-strong)">{plan.name}</h3>
-              <p className="mt-1 text-sm text-(--color-text-muted)">{plan.tagline}</p>
+              <h3 className="text-lg font-bold text-(--color-text-strong)">{plan.name}</h3>
+              <p className="mt-1 text-base text-(--color-text-muted)">{plan.tagline}</p>
 
               <p className="mt-5">
-                <span className="text-3xl font-bold text-(--color-text-strong)">
+                <span className="text-4xl font-bold text-(--color-text-strong)">
                   €{plan.monthlyEur}
                 </span>
-                <span className="text-sm text-(--color-text-muted)"> / month</span>
+                <span className="text-base text-(--color-text-muted)"> / month</span>
               </p>
-              <p className="mt-1 text-sm font-medium text-(--color-text-base)">{plan.users}</p>
+              <p className="mt-1 text-base font-medium text-(--color-text-base)">{plan.users}</p>
 
               <Link
                 href="/signup"
@@ -54,7 +54,7 @@ export function Pricing() {
 
               <ul className="mt-6 space-y-2.5">
                 {plan.features.map((feature) => (
-                  <li key={feature.label} className="flex items-start gap-2 text-sm">
+                  <li key={feature.label} className="flex items-start gap-2 text-base">
                     {feature.included ? (
                       <Check size={16} className="mt-0.5 shrink-0 text-(--color-success)" aria-hidden="true" />
                     ) : (
