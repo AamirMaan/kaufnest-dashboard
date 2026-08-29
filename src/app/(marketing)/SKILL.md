@@ -19,6 +19,10 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
   `page.tsx`. Keep it a Server Component unless it genuinely needs state.
 - **Change marketing copy**: the relevant `_components/*.tsx` — copy lives
   next to the markup, not in a shared constants file.
+- **Add a platform to the `IntegrationsBar`**: only add a real `<img>` logo
+  if a licensed SVG asset exists in `public/brand/` — otherwise add it as a
+  plain text wordmark (same pattern as Etsy/Shopify today) rather than
+  recreating the logo yourself.
 
 ## Gotchas
 
@@ -28,6 +32,12 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
   `app_metadata.tenant_schema` not yet), who goes to `/welcome` instead so
   they aren't stranded (2026-08-29). Don't add signed-in header states;
   they are unreachable either way.
+- **This page's accent colour (`emerald-*`/`amber-*`) is deliberately NOT
+  the app's `--color-primary` (indigo).** (2026-08-29) Chosen for a bolder,
+  more energetic first-look page than the in-app chrome. Don't "fix" this
+  back to `--color-primary` — it's intentional. The one exception is the
+  "opia" wordmark accent in `MarketingNav.tsx`, which stays indigo since
+  it's the same brand mark used everywhere else.
 - **Never claim a feature the plan matrix gates off.** The ✓/✗ marks are
   derived from `PLAN_LIMITS` precisely so this can't happen by accident, but
   the hero and feature copy are free text — those you have to keep honest

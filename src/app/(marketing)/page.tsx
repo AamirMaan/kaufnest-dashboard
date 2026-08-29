@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MarketingNav } from "./_components/MarketingNav";
 import { Hero } from "./_components/Hero";
+import { IntegrationsBar } from "./_components/IntegrationsBar";
 import { Features } from "./_components/Features";
 import { Pricing } from "./_components/Pricing";
 import { TrialInfo } from "./_components/TrialInfo";
@@ -26,6 +27,7 @@ export default async function HomePage() {
       <MarketingNav />
       <main>
         <Hero />
+        <IntegrationsBar />
         <Features />
         <Pricing />
         <TrialInfo />

@@ -16,7 +16,7 @@ export function MarketingNav() {
           </Link>
           <Link
             href="/signup"
-            className="rounded-(--radius-btn) bg-(--color-primary) px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-(--color-primary-hover)"
+            className="rounded-(--radius-btn) bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
           >
             Start free trial
           </Link>

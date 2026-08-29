@@ -18,7 +18,7 @@ export function TrialInfo() {
         </p>
         <Link
           href="/signup"
-          className="mt-8 inline-block rounded-(--radius-btn) bg-(--color-primary) px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-(--color-primary-hover)"
+          className="mt-8 inline-block rounded-(--radius-btn) bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition-colors hover:bg-emerald-700"
         >
           Start your free trial
         </Link>
