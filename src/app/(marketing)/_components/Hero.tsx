@@ -33,12 +33,17 @@ export function Hero() {
             Start your free trial
             <ArrowRight size={18} aria-hidden="true" />
           </Link>
-          <Link
+          {/* Plain <a>, not next/link's <Link>: this is a same-page hash
+              link, and Link only re-scrolls on an actual URL change — a
+              second click when the hash is already #pricing (e.g. after
+              scrolling away and back) silently does nothing. A native
+              anchor always re-triggers the browser's scroll-to-anchor. */}
+          <a
             href="#pricing"
             className="text-base font-semibold text-(--color-text-base) transition-colors hover:text-(--color-text-strong)"
           >
             See pricing
-          </Link>
+          </a>
         </div>
       </div>
 
