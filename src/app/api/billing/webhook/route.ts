@@ -69,6 +69,14 @@ export async function POST(req: NextRequest) {
           .from("tenants")
           .update({ status: "deactivated" })
           .eq("stripe_customer_id", sub.customer as string)
+          // Guard against a late/reordered deletion event for an OLD
+          // subscription incorrectly deactivating a tenant who has since
+          // resubscribed (a newer subscription's created/updated event
+          // already overwrote stripe_subscription_id). Stripe does not
+          // guarantee webhook delivery order, and this app explicitly
+          // supports cancel-then-resubscribe, so this is a real, expected
+          // race — not a hypothetical one.
+          .eq("stripe_subscription_id", sub.id)
           .select("id"),
         sub.customer as string
       );
