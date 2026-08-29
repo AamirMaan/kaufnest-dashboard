@@ -16,7 +16,12 @@ added (this happened once already — see the 2026-07-24 audit — and the fix
 was to stop maintaining two lists instead of just re-syncing them). That
 table itself is **unverified against the live databases** (this repo has no
 migration ledger yet); confirm actual apply-status there directly before
-relying on it for anything load-bearing. Stripe is also outstanding.
+relying on it for anything load-bearing.
+
+Stripe billing (2026-08-29) is wired end-to-end — self-serve checkout,
+plan changes, and cancellation, with the webhook as the sole writer of
+`plan`/`status`. See `src/app/api/billing/` and
+`docs/superpowers/specs/2026-08-29-stripe-billing-design.md`.
 
 **Key rules that apply once Phase 3 DB migration is live:**
 1. Never query `public.*` — all tenant data lives in `tenant_<slug>` schemas.
@@ -42,10 +47,19 @@ New shared code from the migration:
   middleware equivalent — do NOT add `src/middleware.ts`, having both crashes
   the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
-- `src/lib/stripe.ts` + `src/lib/utils/planGating.ts` — billing helpers
+- `src/lib/stripe.ts` (Stripe client + `PLANS` price-ID map) +
+  `src/lib/utils/planGating.ts` (feature gates) +
+  `src/lib/utils/pricing.ts` (the three paid plans' prices/copy, feature
+  ticks derived from `planGating.ts`) — billing helpers
 - `src/app/admin/` — Boughtopia platform admin panel (`/admin`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
-- `src/app/api/billing/` — Stripe checkout + webhook routes
+- `src/app/api/billing/` — checkout, change-plan, cancel, status, and
+  webhook routes. The webhook is the only writer of `control.tenants.plan`/
+  `status`; the other four only talk to Stripe.
+- `src/components/billing/PlanPicker.tsx` — shared plan-picker cards, used
+  by `/trial-expired` and Settings' Billing section
+- `src/lib/billing/authGuard.ts` — `requireBillingAdmin()`, gates the
+  mutating billing routes to `admin`/`super_admin`
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
   (server-only, never imported client-side — see its `SKILL.md`)
 - `src/app/api/integrations/` — connect/callback/disconnect/review/import
