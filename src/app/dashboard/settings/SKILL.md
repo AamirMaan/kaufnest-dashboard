@@ -30,6 +30,12 @@ from `CompanyProfile`.
 - **Add/change field validation**: `src/lib/utils/validation.ts` (pure helpers)
   AND `src/lib/utils/validation.test.ts` (colocated tests) AND `page.tsx`
   (import + inline `{validator(field) && <p>…</p>}` warning).
+- **Change billing behavior (plans, checkout, cancellation)**: this
+  feature's `_components/BillingSection.tsx` is presentation only — the
+  actual logic lives in `src/app/api/billing/*` (routes) and
+  `src/components/billing/PlanPicker.tsx` (shared with `/trial-expired`).
+  Changing what a plan costs or includes is `src/lib/utils/pricing.ts` +
+  `src/lib/utils/planGating.ts`, not this folder.
 
 ## Test command
 

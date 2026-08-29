@@ -40,7 +40,20 @@ values.
   companyForm)` — available to every role (read-only users can still preview
   the PDF using the saved profile).
 
-This feature has **no private `_components`**. `_store/companyProfileSlice.test.ts`
+This feature has one private component: `_components/BillingSection.tsx`
+(2026-08-29) — fetches `GET /api/billing/status` and renders `PlanPicker`
+(`src/components/billing/`, shared with `/trial-expired`). No subscription
+yet → picking a plan calls `POST /api/billing/checkout` and redirects to
+Stripe. Has a subscription → `PlanPicker`'s `currentPlan` is set, so picking
+a *different* plan calls `POST /api/billing/change-plan` instead
+(`PlanPicker` itself doesn't know which — its caller decides), plus a
+"Cancel subscription" action (`POST /api/billing/cancel`, sets
+`cancel_at_period_end` rather than cancelling immediately). Rendered above
+the Company Profile form, not merged into it — billing is a separate
+concern with its own loading state, independent of whether
+`companyProfile.profile` has loaded.
+
+`_store/companyProfileSlice.test.ts`
 does not live here — `companyProfileSlice` itself is a shared slice (see
 below); only its test was added as part of this feature's work.
 
