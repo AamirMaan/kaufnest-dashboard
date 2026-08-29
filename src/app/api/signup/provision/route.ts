@@ -96,7 +96,10 @@ export async function POST() {
 
     // 23505 = unique_violation on admin_email. Either a concurrent request,
     // or an earlier attempt that died partway. Resume that row rather than
-    // reporting success for a workspace that was never finished.
+    // reporting success for a workspace that was never finished. A `status`
+    // other than provisioning/active means this email already belongs to a
+    // tenant relationship this flow didn't create (an admin invite, a
+    // deactivated tenant) — refuse rather than resume.
     const { data: existing } = await control
       .schema("control")
       .from("tenants")
@@ -109,6 +112,19 @@ export async function POST() {
     }
     if (existing.status === "active") {
       return NextResponse.json({ ok: true, alreadyProvisioned: true });
+    }
+    if (existing.status !== "provisioning") {
+      // "invited" (admin-created tenant, not yet accepted) or "deactivated" —
+      // this email already belongs to a tenant relationship this self-serve
+      // flow did not create. Resuming/reactivating it here would be wrong
+      // regardless of how it was reached, so refuse rather than guess.
+      console.error(
+        `[signup/provision] admin_email collision with existing status="${existing.status}" — refusing to resume`
+      );
+      return NextResponse.json(
+        { error: "This email is already associated with an existing workspace. Please contact support." },
+        { status: 409 }
+      );
     }
     schemaName = existing.schema_name;
   }
