@@ -23,8 +23,11 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
 ## Gotchas
 
 - **The page renders only for logged-out visitors.** `page.tsx` redirects
-  authenticated users to `/dashboard`. Don't add signed-in header states;
-  they are unreachable.
+  authenticated users to `/dashboard` — except an incompletely-provisioned
+  self-serve signup (`user_metadata.company_name` set,
+  `app_metadata.tenant_schema` not yet), who goes to `/welcome` instead so
+  they aren't stranded (2026-08-29). Don't add signed-in header states;
+  they are unreachable either way.
 - **Never claim a feature the plan matrix gates off.** The ✓/✗ marks are
   derived from `PLAN_LIMITS` precisely so this can't happen by accident, but
   the hero and feature copy are free text — those you have to keep honest

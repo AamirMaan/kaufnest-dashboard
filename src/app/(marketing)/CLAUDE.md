@@ -5,8 +5,12 @@ than a bare `src/app/page.tsx` so the page, its sections and its pricing
 logic sit together, mirroring how `(auth)` is organised.
 
 Renders **only for logged-out visitors**: `page.tsx` redirects an
-authenticated user to `/dashboard`, preserving what the old
-`src/app/page.tsx` redirect did. That is why no component here has a
+authenticated user to `/dashboard` — preserving what the old
+`src/app/page.tsx` redirect did — unless they're a self-serve signup whose
+provisioning never finished (`user_metadata.company_name` set,
+`app_metadata.tenant_schema` not yet), in which case it sends them to
+`/welcome` instead so they aren't stranded (2026-08-29, same check
+`auth/confirm/route.ts` uses). That is why no component here has a
 signed-in state.
 
 ## Files in this folder
