@@ -50,7 +50,7 @@ each page is a self-contained Supabase Auth form.
 
 ## Shared dependencies
 
-- `lib/supabase/client` (all three pages use the browser client directly —
+- `lib/supabase/client` (all four pages use the browser client directly —
   no Redux here, these run before any session/store exists)
 - `email-templates/` (project root) — the branded invite/reset email HTML sent
   by Supabase, separate from these in-app pages
