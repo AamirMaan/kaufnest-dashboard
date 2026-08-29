@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { canAccessRoute } from "@/lib/utils/permissions";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
-import type { UserRole } from "@/types";
+import { isTrialExpired } from "@/lib/utils/trial";
+import type { UserRole, TenantPlan } from "@/types";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -80,15 +81,23 @@ export async function proxy(request: NextRequest) {
     const { data: tenantRow } = await control
       .schema("control")
       .from("tenants")
-      .select("status")
+      .select("status, plan, trial_ends_at")
       .eq("schema_name", tenantSchema)
-      .single<{ status: string }>();
+      .single<{ status: string; plan: TenantPlan; trial_ends_at: string | null }>();
 
     // Fail-open: if control plane is unreachable or tenant row missing,
     // tenantRow is null and the check passes — user proceeds to RBAC.
     if (tenantRow?.status === "deactivated") {
       const url = request.nextUrl.clone();
       url.pathname = "/account-deactivated";
+      return NextResponse.redirect(url);
+    }
+
+    // Expired trial — same lockout shape as deactivation. Reuses the row
+    // already fetched above, so this costs no extra round-trip.
+    if (tenantRow && isTrialExpired(tenantRow.plan, tenantRow.trial_ends_at)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/trial-expired";
       return NextResponse.redirect(url);
     }
 

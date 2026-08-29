@@ -8,6 +8,18 @@ each page is a self-contained Supabase Auth form.
 
 - `layout.tsx` — shared centered-card shell for all auth pages.
 - `login/page.tsx` — email/password sign-in (`supabase.auth.signInWithPassword`).
+- `signup/page.tsx` — self-serve signup (2026-08-28). Calls
+  `supabase.auth.signUp()` directly from the browser with `company_name` and
+  `full_name` in `options.data` (i.e. `user_metadata`). This creates an
+  **unconfirmed auth user and nothing else** — no tenant, no schema, no
+  Supabase Management API call — which is the whole point: anonymous traffic
+  must never be able to trigger tenant provisioning (see
+  `src/app/api/signup/provision/route.ts` for why that path is dangerous).
+  On success it swaps to a "check your email" panel rather than redirecting.
+  **The `company_name`/`full_name` metadata keys are load-bearing** — read by
+  `app/auth/confirm/route.ts` to detect a self-serve signup and by
+  `api/signup/provision/route.ts` to name the tenant. Renaming them in one
+  place silently breaks the flow.
 - `forgot-password/page.tsx` — sends a password-reset email
   (`supabase.auth.resetPasswordForEmail`).
 - `set-password/page.tsx` — lets an invited user (or someone resetting their
@@ -35,10 +47,20 @@ each page is a self-contained Supabase Auth form.
   `(auth)/SKILL.md`).
 - `src/proxy.ts` — route-level access control using `lib/utils/permissions.ts`;
   redirects unauthenticated users to `/login`.
+- `src/app/welcome/page.tsx` — where a self-serve signup lands after
+  confirming their email. Calls `POST /api/signup/provision`, then
+  **`supabase.auth.refreshSession()`**, then redirects to `/dashboard`. The
+  refresh is not optional: `set_user_tenant` writes
+  `app_metadata.tenant_schema`, but every RLS policy reads that claim from
+  the JWT, and this browser's JWT predates the write — without a refresh the
+  dashboard loads with a stale token and every query fails. Deliberately
+  outside `proxy.ts`'s matcher: a user here has a session but no tenant yet,
+  so the proxy's tenant lookup would bounce them and make provisioning
+  unreachable.
 
 ## Shared dependencies
 
-- `lib/supabase/client` (all three pages use the browser client directly —
+- `lib/supabase/client` (all four pages use the browser client directly —
   no Redux here, these run before any session/store exists)
 - `email-templates/` (project root) — the branded invite/reset email HTML sent
   by Supabase, separate from these in-app pages

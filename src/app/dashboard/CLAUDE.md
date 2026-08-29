@@ -155,3 +155,11 @@ synthetic items from the badge count since their timestamp is regenerated
 on every read). See
 `AGENTS.md` (repo root) → "Project structure" for the full
 shared-vs-feature-private map.
+
+**Trial expiry (2026-08-28):** `src/proxy.ts` locks out expired trials by
+reusing the same `control.tenants` row it already fetches for the
+deactivation check — the `select` carries `status, plan, trial_ends_at` and
+feeds `isTrialExpired` (`lib/utils/trial.ts`). Expired trials land on
+`/trial-expired`. That page, like `/account-deactivated`, **must stay out of
+`proxy.ts`'s matcher** or it redirects to itself forever. Tenant data is
+never touched at expiry; restoring access is a plan change in `/admin`.

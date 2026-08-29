@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm your Boughtopia account</title>
+</head>
+<body style="margin:0;padding:0;background-color:#020817;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#020817;">
+    <tr>
+      <td align="center" style="padding:48px 16px;">
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:36px;">
+              <span style="font-size:28px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                Bought<span style="color:#6366f1;">opia</span>
+              </span>
+              <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Business Dashboard</p>
+            </td>
+          </tr>
+
+          <!-- Body card -->
+          <tr>
+            <td style="background-color:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:40px 40px 36px;">
+
+              <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#f1f5f9;line-height:1.3;">
+                Confirm your email
+              </h1>
+              <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;line-height:1.6;">
+                Welcome to Boughtopia. Confirm your email address and we&rsquo;ll set up your
+                workspace — your 14-day free trial starts right away, with no credit card needed.
+              </p>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 28px;">
+                <tr>
+                  <td style="border-radius:8px;background-color:#6366f1;">
+                    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup"
+                       target="_blank"
+                       style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
+                      Confirm and get started &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <hr style="border:none;border-top:1px solid #1e293b;margin:0 0 20px;" />
+
+              <p style="margin:0 0 6px;font-size:12px;color:#475569;">
+                If the button doesn&rsquo;t work, copy and paste this link into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;word-break:break-all;">
+                <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup" style="color:#6366f1;text-decoration:none;">
+                  {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup
+                </a>
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:28px;">
+              <p style="margin:0;font-size:12px;color:#334155;line-height:1.6;">
+                This email was sent from Boughtopia.
+                If you didn&rsquo;t create an account, you can safely ignore it.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

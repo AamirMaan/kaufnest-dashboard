@@ -11,8 +11,12 @@ interface PlanLimits {
 }
 
 const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
-  trial:    { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, messagingAndListings: false },
-  starter:  { maxUsers: 1,        platformIntegrations: false, aiFeatures: false, messagingAndListings: false },
+  // Trial mirrors business: the product is sold as multi-platform
+  // bookkeeping, so a trial that cannot connect eBay/Amazon cannot
+  // demonstrate the product. Safe only because proxy.ts enforces
+  // trial_ends_at — see isTrialExpired in lib/utils/trial.ts.
+  trial:    { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  messagingAndListings: true  },
+  starter:  { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, messagingAndListings: false },
   pro:      { maxUsers: 5,        platformIntegrations: true,  aiFeatures: false, messagingAndListings: false },
   business: { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  messagingAndListings: true  },
 };

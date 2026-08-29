@@ -26,6 +26,16 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
+      // Self-serve signup: confirmed, but no tenant exists yet. Provisioning
+      // takes ~10s (schema + RLS + triggers + a PostgREST cache wait), which
+      // would risk a serverless timeout inside this redirect handler with no
+      // way to tell the user what happened — so /welcome does it instead.
+      const pendingCompany = user?.user_metadata?.company_name as string | undefined;
+      const alreadyProvisioned = user?.app_metadata?.tenant_schema as string | undefined;
+      if (!alreadyProvisioned && pendingCompany) {
+        return NextResponse.redirect(`${origin}/welcome`);
+      }
+
       // Auto-activate tenant on first login: flip invited → active
       const tenantSchema = user?.app_metadata?.tenant_schema as string | undefined;
       if (tenantSchema) {

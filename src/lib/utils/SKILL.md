@@ -275,6 +275,43 @@ testable. Covered by `invoiceMath.test.ts`.
   only; bulk invoices use the random `generateInvoiceNumber` inside
   `generateInvoice.ts`.
 
+## tenantSlug.ts
+
+Tenant slug generation and sanitization — pure functions, fully tested. Used by
+admin provisioning (explicit slug input) and self-serve signup (company name +
+email fallback) to ensure both paths produce byte-identical schema names.
+
+- `sanitizeSlug(input: string) → string` — the exact sanitization the admin
+  provisioning route has always applied. Lowercases, strips anything outside
+  `[a-z0-9-]`, converts hyphens to underscores, truncates to 40 characters.
+  **Order matters**: characters are stripped BEFORE hyphen conversion, so spaces
+  vanish rather than becoming separators (`"Acme GmbH"` → `"acmegmbh"`). May
+  return an empty string when the input has no ASCII alphanumerics.
+- `slugForCompany(companyName: string, email: string) → string` — guaranteed
+  non-empty slug for self-serve signup. Tries the company name, falls back to
+  email local part, then to the constant `"tenant"`. **Critical gotcha**: a
+  company name with no ASCII alphanumerics sanitizes to empty, which would build
+  the schema name `tenant_` — and that passes `provision_tenant_schema`'s
+  `LIKE 'tenant_%'` guard, silently creating a real, wrongly-named schema that
+  every subsequent unusable-name signup would collide with. This function exists
+  to prevent that. Admin provisioning deliberately does NOT use this function
+  (calls `sanitizeSlug` directly instead) — an admin supplies the slug
+  explicitly, and a silent fallback would hide their typo.
+- `schemaNameFor(slug: string) → string` — prefixes the slug with `"tenant_"`.
+- `nextAvailableSlug(base: string, taken: readonly string[]) → string` — finds
+  the first free slug in the `base`, `base_2`, `base_3` … sequence, checked
+  against a `taken` list. Bounded to 100 attempts to prevent infinite loops on
+  pathological inputs; throws an `Error` if exhausted.
+
+### Gotchas
+
+- **Empty slug danger** — `sanitizeSlug("株式会社")` → `""`, which would build
+  `tenant_` and pass the Postgres guard. Always use `slugForCompany` for
+  user-supplied company names in self-serve flows, never `sanitizeSlug` alone.
+- **Admin vs. self-serve** — admin provisioning uses `sanitizeSlug +
+  schemaNameFor` only (explicit slug, no fallback). Self-serve uses
+  `slugForCompany` (company name with fallback chain). Do not mix them.
+
 ## generateInvoice.ts
 
 Client-side PDF generation via `jspdf`/`jspdf-autotable`, **dynamically

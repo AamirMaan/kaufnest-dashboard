@@ -16,9 +16,10 @@ const PLAN_VARIANT: Record<TenantPlan, "info" | "success" | "warning" | "danger"
 };
 
 const STATUS_VARIANT: Record<TenantStatus, "success" | "warning" | "danger" | "default"> = {
-  active:      "success",
-  invited:     "warning",
-  deactivated: "danger",
+  active:       "success",
+  invited:      "warning",
+  provisioning: "warning",
+  deactivated:  "danger",
 };
 
 export default function AdminPage() {

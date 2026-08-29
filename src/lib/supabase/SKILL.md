@@ -75,8 +75,10 @@ Handlers.
 
 ## managementApi.ts
 
-`export async function addExposedSchema(schemaName: string)` — the only
-caller is `/api/admin/provision-tenant`. Uses the Supabase **Management API**
+`export async function addExposedSchema(schemaName: string)` — called by
+both `/api/admin/provision-tenant` (admin-invited tenants) and
+`/api/signup/provision` (self-serve signup, 2026-08-28). Uses the Supabase
+**Management API**
 (`api.supabase.com`, not the project's own PostgREST endpoint) to add
 `schemaName` to Project B's "Exposed schemas" (`db_schema`) config, so the
 inserts that follow (`company_profile`, `profiles` via
@@ -90,11 +92,10 @@ inserts that follow (`company_profile`, `profiles` via
 - Project ref is derived from `NEXT_PUBLIC_SUPABASE_URL`
   (`https://<ref>.supabase.co`) — no separate ref env var.
 - Idempotent: no-ops if `schemaName` is already in `db_schema`.
-- **Gotcha**: after a successful `PATCH`, PostgREST reloads its schema cache
-  asynchronously. `addExposedSchema` adds a fixed ~2s delay before returning to
-  avoid the very next request racing the reload. If provisioning still 404s on
-  `company_profile`/`profiles` right after this step, the reload may need more
-  time — don't remove the delay without a retry/backoff in its place.
+- **Gotcha**: PostgREST reloads its schema cache asynchronously after a
+  `PATCH`, and the update itself is a read-modify-write race across
+  concurrent provisions — see the "Gotchas" section below for the current
+  retry-with-readback behavior this requires.
 
 ## control.ts
 
@@ -135,3 +136,24 @@ Every feature that reads/writes Supabase imports one of these — pages and
 while `app/auth/confirm/route.ts` and `app/api/users/invite/route.ts` use
 `server.ts`. `DashboardShell` and `dashboard/layout.tsx` also use the server
 client for the auth-guard/data-hydration pass.
+
+## Gotchas
+
+- **`addExposedSchema` is a read-modify-write on one global string, and it
+  self-verifies for that reason (hardened 2026-08-28).** Project B's PostgREST
+  "Exposed schemas" setting is a single comma-separated list shared by every
+  tenant. Two concurrent provisions can lose an update — both read, both
+  append, the second PATCH wins and the first schema is silently never
+  exposed, leaving that tenant's whole app returning 404/406 with nothing in
+  any log. The function now re-reads after PATCHing and retries until it sees
+  its own schema (up to 4 PATCH attempts, 2s apart, plus one final read after
+  the loop to verify the 4th attempt — without that last read, only 3 of the
+  4 PATCHes would ever get checked, since each loop iteration's GET verifies
+  the *previous* iteration's PATCH), which converges because each read sees
+  the current value. **Do not "simplify" this back into a single
+  read-then-PATCH**, and don't drop the trailing read either — see
+  `managementApi.test.ts` for the regression test covering that exact
+  off-by-one. Note the blast radius that makes this worth the care:
+  `removeExposedSchema`'s own docs record that a malformed list makes
+  PostgREST fail its schema-cache load (`3F000`) and return `PGRST002` for
+  *every* tenant.
