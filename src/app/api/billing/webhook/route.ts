@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   const control = createControlClient();
+  let writeFailed = false;
 
   switch (event.type) {
     case "customer.subscription.created":
@@ -50,20 +51,31 @@ export async function POST(req: NextRequest) {
         patch.status = "deactivated";
       }
 
-      await logIfUnmatched(
-        control
-          .schema("control")
-          .from("tenants")
-          .update(patch)
-          .eq("stripe_customer_id", sub.customer as string)
-          .select("id"),
-        sub.customer as string
-      );
+      let query = control
+        .schema("control")
+        .from("tenants")
+        .update(patch)
+        .eq("stripe_customer_id", sub.customer as string);
+
+      // A DEACTIVATING update is only allowed to apply if this subscription
+      // is still the one on file — same reordering guard as the deleted
+      // case below, same reason: a delayed/retried event for an OLD,
+      // superseded subscription must never deactivate a tenant who has
+      // since moved to a new, active subscription. Deliberately NOT applied
+      // when patch.status is "active" (or left unset) — a promoting update
+      // must always be allowed to take over stripe_subscription_id, since
+      // that's exactly what a legitimate resubscribe's created event does.
+      if (patch.status === "deactivated") {
+        query = query.eq("stripe_subscription_id", sub.id);
+      }
+
+      const failed = await logIfUnmatched(query.select("id"), sub.customer as string, "created/updated");
+      if (failed) writeFailed = true;
       break;
     }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
-      await logIfUnmatched(
+      const failed = await logIfUnmatched(
         control
           .schema("control")
           .from("tenants")
@@ -78,25 +90,51 @@ export async function POST(req: NextRequest) {
           // race — not a hypothetical one.
           .eq("stripe_subscription_id", sub.id)
           .select("id"),
-        sub.customer as string
+        sub.customer as string,
+        "deleted"
       );
+      if (failed) writeFailed = true;
       break;
     }
   }
 
-  // Always 200 to Stripe, even when nothing matched — a stripe_customer_id
-  // with no tenant row is not a transient failure Stripe should retry.
+  // A genuine DB write failure is retry-worthy — both writes above are
+  // idempotent, so letting Stripe retry is safe and is what actually fixes
+  // a transient failure instead of silently losing the event. A
+  // stripe_customer_id with no matching tenant row (or a benign stale event
+  // correctly skipped by the guards above) is NOT a transient failure and
+  // stays 200 — see logIfUnmatched.
+  if (writeFailed) {
+    return NextResponse.json({ error: "Failed to process event" }, { status: 500 });
+  }
+
   return NextResponse.json({ received: true });
 }
 
+/**
+ * Awaits the query and logs the outcome. Returns `true` only for a genuine
+ * database error (caller should surface this to Stripe as retry-worthy);
+ * a zero-row match is logged but returns `false`, since it covers two
+ * benign cases — a stripe_customer_id with no tenant row, or (for the
+ * deactivating branches above) a stale/reordered event correctly skipped
+ * because a newer subscription has since superseded it.
+ */
 async function logIfUnmatched(
   query: PromiseLike<{ data: { id: string }[] | null; error: { message: string } | null }>,
-  stripeCustomerId: string
-): Promise<void> {
+  stripeCustomerId: string,
+  eventLabel: string
+): Promise<boolean> {
   const { data, error } = await query;
   if (error) {
-    console.error("[billing/webhook] update failed:", error.message);
-  } else if (!data || data.length === 0) {
-    console.error(`[billing/webhook] no tenant found for stripe_customer_id=${stripeCustomerId}`);
+    console.error(`[billing/webhook] ${eventLabel} update failed:`, error.message);
+    return true;
   }
+  if (!data || data.length === 0) {
+    console.error(
+      `[billing/webhook] ${eventLabel}: no tenant row matched stripe_customer_id=${stripeCustomerId} — ` +
+        "either no tenant exists for this customer, or (for a deactivating event) a newer " +
+        "subscription has already superseded this one, which is benign."
+    );
+  }
+  return false;
 }
