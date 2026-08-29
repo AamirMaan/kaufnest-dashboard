@@ -162,4 +162,6 @@ deactivation check — the `select` carries `status, plan, trial_ends_at` and
 feeds `isTrialExpired` (`lib/utils/trial.ts`). Expired trials land on
 `/trial-expired`. That page, like `/account-deactivated`, **must stay out of
 `proxy.ts`'s matcher** or it redirects to itself forever. Tenant data is
-never touched at expiry; restoring access is a plan change in `/admin`.
+never touched at expiry; restoring access is a plan change in `/admin` OR
+(2026-08-29) a real Stripe checkout from `/trial-expired`'s own `PlanPicker`
+— the webhook flips `plan`/`status` once the subscription is created.
