@@ -47,6 +47,16 @@ each page is a self-contained Supabase Auth form.
   `(auth)/SKILL.md`).
 - `src/proxy.ts` — route-level access control using `lib/utils/permissions.ts`;
   redirects unauthenticated users to `/login`.
+- `src/app/welcome/page.tsx` — where a self-serve signup lands after
+  confirming their email. Calls `POST /api/signup/provision`, then
+  **`supabase.auth.refreshSession()`**, then redirects to `/dashboard`. The
+  refresh is not optional: `set_user_tenant` writes
+  `app_metadata.tenant_schema`, but every RLS policy reads that claim from
+  the JWT, and this browser's JWT predates the write — without a refresh the
+  dashboard loads with a stale token and every query fails. Deliberately
+  outside `proxy.ts`'s matcher: a user here has a session but no tenant yet,
+  so the proxy's tenant lookup would bounce them and make provisioning
+  unreachable.
 
 ## Shared dependencies
 
