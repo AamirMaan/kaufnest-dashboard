@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + 14);
 
-    await control.schema("control").from("tenants").insert({
+    const { error: tenantInsertError } = await control.schema("control").from("tenants").insert({
       name,
       slug: safeSlug,
       schema_name: schemaName,
@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
       status: "invited",
       trial_ends_at: trialEnd.toISOString(),
     });
+    if (tenantInsertError) throw tenantInsertError;
 
     return NextResponse.json({ ok: true, schemaName });
   } catch (err: unknown) {
