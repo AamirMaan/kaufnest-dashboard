@@ -56,19 +56,8 @@ export function BillingSection() {
   const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
   const [canceling, setCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Read client-side only, as lazy initial state rather than inside an
-  // effect — an effect that calls setState synchronously in its body (not
-  // inside an async callback) trips this repo's react-hooks/set-state-in-effect
-  // lint rule, and a lazy initializer is the recommended fix for "compute
-  // this once, from something only available on the client" rather than
-  // "sync with an external system." See the Gotcha in SKILL.md on why this
-  // also avoids next/navigation's useSearchParams() (Suspense-boundary
-  // requirement in this Next.js version).
-  const [justSubscribed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return new URLSearchParams(window.location.search).get("billing") === "success";
-  });
-  const [confirmingCheckout, setConfirmingCheckout] = useState(justSubscribed);
+  const [justSubscribed, setJustSubscribed] = useState(false);
+  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -89,16 +78,30 @@ export function BillingSection() {
   }, []);
 
   useEffect(() => {
-    if (!justSubscribed) return;
-    void pollBillingStatus(
-      (data) => data.hasSubscription,
-      (data) => {
-        if (mountedRef.current) setStatus(data);
-      }
-    ).then(() => {
-      if (mountedRef.current) setConfirmingCheckout(false);
+    // Deferred via a microtask rather than called directly: a synchronous
+    // setState as the first statement in an effect body trips this repo's
+    // react-hooks/set-state-in-effect lint rule — same pattern as
+    // src/app/welcome/page.tsx's auto-sync. This MUST be a real effect, not
+    // a lazy useState initializer: Stripe's success_url redirect is a full
+    // browser navigation, so this component is server-rendered first (no
+    // `window`), and hydration does not re-invoke a useState initializer —
+    // a lazy initializer here would permanently read `false` for exactly
+    // the real-world case this feature exists to handle.
+    Promise.resolve().then(() => {
+      const isSuccess = new URLSearchParams(window.location.search).get("billing") === "success";
+      setJustSubscribed(isSuccess);
+      if (!isSuccess) return;
+      setConfirmingCheckout(true);
+      void pollBillingStatus(
+        (data) => data.hasSubscription,
+        (data) => {
+          if (mountedRef.current) setStatus(data);
+        }
+      ).then(() => {
+        if (mountedRef.current) setConfirmingCheckout(false);
+      });
     });
-  }, [justSubscribed]);
+  }, []);
 
   async function handleSelectPlan(plan: PaidPlan) {
     if (!status) return;
