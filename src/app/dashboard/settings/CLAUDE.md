@@ -53,6 +53,30 @@ the Company Profile form, not merged into it — billing is a separate
 concern with its own loading state, independent of whether
 `companyProfile.profile` has loaded.
 
+Three more things this component handles that aren't obvious from the routes
+alone:
+
+- **Role gating is done in the component, not just the routes.** `status` has
+  no role gate (a read, safe for anyone), but `checkout`/`change-plan`/`cancel`
+  all require `requireBillingAdmin`. `BillingSection` reads
+  `currentUser.profile?.role` itself (`admin`/`super_admin` only) and renders a
+  read-only summary sentence for everyone else instead of live Subscribe/
+  Switch/Cancel controls — same "read-only, not hidden or broken" precedent as
+  `canEditCompanyProfile` below, since a non-admin clicking a button that 403s
+  is a worse experience than not showing the button.
+- **Checkout-return confirmation.** `checkout/route.ts`'s `success_url` sends
+  the browser back to `/dashboard/settings?billing=success`. On mount,
+  `BillingSection` reads that query param off `window.location.search`
+  directly (not `next/navigation`'s `useSearchParams()` — see the Gotcha in
+  `SKILL.md` for why) and, if present, shows a "Payment received — setting up
+  your subscription…" message while polling `status` until
+  `hasSubscription` flips true.
+- **Bounded reconciliation polling**, not a single optimistic write. After
+  `change-plan` succeeds, the new plan is set locally right away for instant
+  feedback, then `status` is re-fetched up to 3 times (1.5s apart) until the
+  fetched plan matches — see `SKILL.md`'s Gotcha for why a single one-shot
+  check was worse than not reconciling at all.
+
 `_store/companyProfileSlice.test.ts`
 does not live here — `companyProfileSlice` itself is a shared slice (see
 below); only its test was added as part of this feature's work.

@@ -67,3 +67,30 @@ from `CompanyProfile`.
 - `vat_rate`, `invoice_prefix`, and `payment_terms` are NOT NULL with DB
   defaults (`19`, `'INV-'`, `'30 days'`) — every provisioned tenant has a
   usable value even before the user visits this page.
+- **`BillingSection` optimistic-then-reconcile pattern**: after `change-plan`
+  succeeds, the component sets the new plan locally immediately (instant
+  feedback), then polls `GET /api/billing/status` up to 3 times, 1.5s apart,
+  stopping as soon as the fetched plan matches. A single one-shot re-check
+  (an earlier version of this fix) was worse than doing nothing: if the
+  webhook hadn't written `control.tenants.plan` yet by that one check, it
+  would silently overwrite the *correct* optimistic value with the *stale*
+  DB one, with no further attempt to catch up. The same pattern (poll until
+  a condition, not a single check) is reused for the post-checkout
+  `?billing=success` confirmation, polling until `hasSubscription` is true
+  instead of until `plan` matches.
+- **Billing route auth is split, and the component re-implements the split.**
+  `GET /api/billing/status` has no role gate (a read, safe for any
+  authenticated tenant member). `POST /api/billing/checkout` /
+  `change-plan` / `cancel` all require `requireBillingAdmin`
+  (`admin`/`super_admin`). Because of that split, `BillingSection` cannot
+  just render whatever the routes allow — it has to compute
+  `canManageBilling` from `currentUser.profile?.role` itself and swap in a
+  read-only summary sentence for other roles, or a non-admin would see live
+  Subscribe/Switch/Cancel buttons that 403 with a raw `"Forbidden"` string
+  on click.
+- **Reading `?billing=success` uses `window.location.search` in a `useEffect`,
+  not `next/navigation`'s `useSearchParams()`.** This Next.js version has a
+  Suspense-boundary requirement around `useSearchParams()` in some
+  configurations (see AGENTS.md's "This is NOT the Next.js you know" note) —
+  reading the query string via `window.location` sidesteps that entirely
+  since it's plain client-side code with no App Router hook involved.
