@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
 import { createClient } from "@/lib/supabase/server";
-import type { TenantPlan } from "@/types";
+import type { TenantPlan, UserRole } from "@/types";
 
 export async function GET() {
   const supabase = await createClient();
@@ -57,5 +57,12 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ plan: tenant.plan, hasSubscription, cancelAtPeriodEnd });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single<{ role: UserRole }>();
+  const canManageBilling = profile?.role === "admin" || profile?.role === "super_admin";
+
+  return NextResponse.json({ plan: tenant.plan, hasSubscription, cancelAtPeriodEnd, canManageBilling });
 }

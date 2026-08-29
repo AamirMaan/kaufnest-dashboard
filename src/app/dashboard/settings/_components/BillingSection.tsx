@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PlanPicker } from "@/components/billing/PlanPicker";
-import { useAppSelector } from "@/store/hooks";
 import type { PaidPlan } from "@/lib/utils/pricing";
 import type { TenantPlan } from "@/types";
 
@@ -10,6 +9,7 @@ interface BillingStatus {
   plan: TenantPlan;
   hasSubscription: boolean;
   cancelAtPeriodEnd: boolean;
+  canManageBilling: boolean;
 }
 
 const RECONCILE_ATTEMPTS = 3;
@@ -49,9 +49,6 @@ async function pollBillingStatus(
 }
 
 export function BillingSection() {
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const canManageBilling = role === "admin" || role === "super_admin";
-
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
   const [canceling, setCanceling] = useState(false);
@@ -191,7 +188,7 @@ export function BillingSection() {
         </p>
       )}
 
-      {canManageBilling ? (
+      {status.canManageBilling ? (
         <>
           <PlanPicker
             onSelectPlan={handleSelectPlan}

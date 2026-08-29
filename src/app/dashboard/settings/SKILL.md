@@ -35,7 +35,11 @@ from `CompanyProfile`.
   actual logic lives in `src/app/api/billing/*` (routes) and
   `src/components/billing/PlanPicker.tsx` (shared with `/trial-expired`).
   Changing what a plan costs or includes is `src/lib/utils/pricing.ts` +
-  `src/lib/utils/planGating.ts`, not this folder.
+  `src/lib/utils/planGating.ts`, not this folder. `src/app/trial-expired/
+  page.tsx` (outside this folder) duplicates `BillingSection`'s
+  checkout-success-confirmation and `canManageBilling` gating patterns
+  against the same `GET /api/billing/status` response shape — if you change
+  that response shape or those UI patterns, check both files.
 
 ## Test command
 
@@ -78,16 +82,22 @@ from `CompanyProfile`.
   a condition, not a single check) is reused for the post-checkout
   `?billing=success` confirmation, polling until `hasSubscription` is true
   instead of until `plan` matches.
-- **Billing route auth is split, and the component re-implements the split.**
-  `GET /api/billing/status` has no role gate (a read, safe for any
-  authenticated tenant member). `POST /api/billing/checkout` /
-  `change-plan` / `cancel` all require `requireBillingAdmin`
-  (`admin`/`super_admin`). Because of that split, `BillingSection` cannot
-  just render whatever the routes allow — it has to compute
-  `canManageBilling` from `currentUser.profile?.role` itself and swap in a
-  read-only summary sentence for other roles, or a non-admin would see live
-  Subscribe/Switch/Cancel buttons that 403 with a raw `"Forbidden"` string
-  on click.
+- **Billing route auth is split; `status` now exposes the split as a field
+  instead of each caller re-deriving it.** `GET /api/billing/status` itself
+  has no role gate (a read, safe for any authenticated tenant member), but
+  `POST /api/billing/checkout` / `change-plan` / `cancel` all require
+  `requireBillingAdmin` (`admin`/`super_admin`). Rather than each consumer
+  re-computing that role check from Redux, `status` computes
+  `canManageBilling: boolean` server-side the same way `requireBillingAdmin`
+  does (`src/lib/billing/authGuard.ts`) and returns it in the response.
+  `BillingSection` reads `status.canManageBilling` directly (it dropped its
+  old `useAppSelector((s) => s.currentUser.profile?.role)` check) and swaps
+  in a read-only summary sentence for non-admins, so a non-admin never sees
+  live Subscribe/Switch/Cancel buttons that would 403 with a raw
+  `"Forbidden"` string on click. `/trial-expired/page.tsx` reads the same
+  field for the same reason — it has no Redux store to read a role from at
+  all (`StoreProvider` only wraps `/dashboard`), so before this fix its
+  `PlanPicker` had no role gate whatsoever.
 - **Reading `?billing=success` uses `window.location.search` in a `useEffect`,
   not `next/navigation`'s `useSearchParams()`.** This Next.js version has a
   Suspense-boundary requirement around `useSearchParams()` in some
