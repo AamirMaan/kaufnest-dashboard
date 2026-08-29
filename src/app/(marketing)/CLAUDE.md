@@ -16,16 +16,36 @@ signed-in state.
 ## Files in this folder
 
 - `layout.tsx` — full-height page background. No app chrome (no sidebar,
-  no `DashboardShell`).
+  no `DashboardShell`). Uses a literal `bg-white`, not a `--color-*` token
+  (2026-08-29) — `--color-bg` is undefined project-wide (a pre-existing
+  quirk shared with `/account-deactivated`/`/account-suspended`), so it was
+  silently inert here: sections with no background of their own (nav,
+  footer, pricing) were falling through to `<body>`'s dark-mode-default
+  background. A literal white background on this wrapper guarantees no dark
+  bleed-through regardless of the app-wide theme, on top of the
+  `data-theme="light"` already forcing every *token-driven* section
+  (Features, TrialInfo) light.
 - `page.tsx` — Server Component. Auth redirect, then composes the sections.
 - `_components/MarketingNav.tsx` — logo + "Sign in" + "Start free trial".
 - `_components/Hero.tsx` — headline, CTA, the "14 days free · no credit
-  card" line.
+  card" pill, two `animate-pulse` blurred gradient blobs behind the text
+  (pure CSS, no client component needed), and a framed product screenshot
+  (`public/brand/Boughtopia-dashboard.png`) below the CTAs.
+- `_components/IntegrationsBar.tsx` (2026-08-29) — "Sync with the platforms
+  you already sell on" trust bar, right under the hero. Real logo assets for
+  all four: `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
+  `shopify-logo2.svg`. All four render grayscale/muted at rest and reveal
+  full colour on hover, for a consistent row.
 - `_components/Features.tsx` — six feature cards from a local `FEATURES`
-  array. **Only describe things that actually ship.**
+  array, each with a `lucide-react` icon in an emerald badge. **Only
+  describe things that actually ship.**
 - `_components/Pricing.tsx` — three plan cards, rendered from
   `_lib/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
-  to it).
+  to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
+  every card equally (not tied to `plan.highlighted`) — only the "Most
+  popular" badge and the CTA button's solid-vs-outline styling are still
+  keyed off `plan.highlighted`. Don't restore a permanent highlighted
+  border on Pro; that was the thing this was changed away from.
 - `_components/TrialInfo.tsx` — what the trial includes and what happens
   when it ends.
 - `_components/MarketingFooter.tsx` — copyright, privacy, sign in.
@@ -41,14 +61,30 @@ matrix and the page follows. `pricing.test.ts` pins the two together.
 **To change a price:** edit `MONTHLY_EUR` in `_lib/pricing.ts`, nothing else.
 **To change what a plan includes:** edit `PLAN_LIMITS`, not this folder.
 
+## Accent colour is page-scoped, not the app's `--color-primary` (2026-08-29)
+
+The rest of the app (dashboard, emails, `BrandMark`) uses the indigo
+`--color-primary` token. This page deliberately uses plain Tailwind
+`emerald-*`/`amber-*` classes for its CTAs, feature icons, and the
+"Most popular" badge instead — a bolder, more energetic palette than the
+app chrome, chosen because a first-look marketing page and an in-app tool
+don't need to look identical. **This is intentional, not a drift bug** —
+don't "fix" it back to `--color-primary`. The logotype's "opia" accent in
+`MarketingNav.tsx` is the one exception: it stays indigo, since it's the
+same brand mark shown everywhere else (login, emails, dashboard header).
+
 ## Shared dependencies
 
 - `public/brand/boughtopia-icon-bag.svg` — the navy icon, used directly
   rather than via `BrandMark`, because this page has a fixed light
   background and no theme toggle.
+- `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
+  `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
+- `public/brand/Boughtopia-dashboard.png` — the hero's product screenshot.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
 - `lib/utils/planGating` (`getPlanLimits`) — via `_lib/pricing.ts`.
-- `lucide-react` — `Check`/`X` for the pricing table.
+- `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/
+  `Package`/`MessageSquare`/`Users` (Features), `Check`/`X` (Pricing).
 
 ## Tests
 
