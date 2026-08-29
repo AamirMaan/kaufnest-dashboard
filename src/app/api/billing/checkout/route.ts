@@ -11,12 +11,21 @@ const VALID_PLANS: readonly PaidPlan[] = ["starter", "pro", "business"] as const
 // exists, rather than trusting `control.tenants.status`, which lags Stripe
 // and conflates tenant lifecycle with billing state (see the 409 guard
 // below).
+//
+// Deliberately excludes "incomplete": that status means the customer's
+// FIRST payment attempt hasn't succeeded yet (declined card, abandoned 3DS,
+// etc.) — nothing has been charged, so there's no established paid
+// relationship to protect. Blocking retry on "incomplete" would 409 a
+// customer immediately after a card decline and lock them out of paying
+// for up to ~23h, until Stripe auto-expires the stuck subscription to
+// "incomplete_expired" — a guaranteed, not-rare revenue-blocking failure
+// mode that's worse than the narrow residual double-subscription risk from
+// allowing the retry.
 const LIVE_SUBSCRIPTION_STATUSES = [
   "active",
   "trialing",
   "past_due",
   "unpaid",
-  "incomplete",
   "paused",
 ] as const;
 
@@ -56,6 +65,9 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (tenantError) {
+    if (tenantError.code === "PGRST116") {
+      return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+    }
     console.error("[billing/checkout] tenant lookup failed:", tenantError.message);
     return NextResponse.json(
       { error: "Could not start checkout. Please try again." },
@@ -79,6 +91,7 @@ export async function POST(req: NextRequest) {
       const existingSubs = await stripe.subscriptions.list({
         customer: tenant.stripe_customer_id as string,
         status: "all",
+        limit: 100,
       });
       const hasLiveSubscription = existingSubs.data.some((sub) =>
         (LIVE_SUBSCRIPTION_STATUSES as readonly string[]).includes(sub.status)
