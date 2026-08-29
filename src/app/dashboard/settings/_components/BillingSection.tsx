@@ -56,7 +56,6 @@ export function BillingSection() {
   const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
   const [canceling, setCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [justSubscribed, setJustSubscribed] = useState(false);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const mountedRef = useRef(true);
 
@@ -89,7 +88,6 @@ export function BillingSection() {
     // the real-world case this feature exists to handle.
     Promise.resolve().then(() => {
       const isSuccess = new URLSearchParams(window.location.search).get("billing") === "success";
-      setJustSubscribed(isSuccess);
       if (!isSuccess) return;
       setConfirmingCheckout(true);
       void pollBillingStatus(
