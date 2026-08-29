@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Check, X } from "lucide-react";
-import { pricedPlans } from "../_lib/pricing";
+import { pricedPlans } from "@/lib/utils/pricing";
 
 export function Pricing() {
   const plans = pricedPlans();
