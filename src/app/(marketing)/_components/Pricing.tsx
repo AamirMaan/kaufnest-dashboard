@@ -19,11 +19,7 @@ export function Pricing() {
           {plans.map((plan) => (
             <div
               key={plan.plan}
-              className={`rounded-(--radius-card) border bg-(--color-surface) p-6 ${
-                plan.highlighted
-                  ? "border-emerald-500 shadow-xl shadow-emerald-500/10"
-                  : "border-(--color-border)"
-              }`}
+              className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6 transition-all duration-200 hover:border-emerald-500 hover:shadow-xl hover:shadow-emerald-500/10"
             >
               {plan.highlighted && (
                 <span className="mb-3 inline-block rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">

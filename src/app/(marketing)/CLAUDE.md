@@ -28,7 +28,9 @@ signed-in state.
 - `page.tsx` — Server Component. Auth redirect, then composes the sections.
 - `_components/MarketingNav.tsx` — logo + "Sign in" + "Start free trial".
 - `_components/Hero.tsx` — headline, CTA, the "14 days free · no credit
-  card" pill.
+  card" pill, two `animate-pulse` blurred gradient blobs behind the text
+  (pure CSS, no client component needed), and a framed product screenshot
+  (`public/brand/Boughtopia-dashboard.png`) below the CTAs.
 - `_components/IntegrationsBar.tsx` (2026-08-29) — "Sync with the platforms
   you already sell on" trust bar, right under the hero. Real logo assets for
   all four: `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
@@ -39,7 +41,11 @@ signed-in state.
   describe things that actually ship.**
 - `_components/Pricing.tsx` — three plan cards, rendered from
   `_lib/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
-  to it).
+  to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
+  every card equally (not tied to `plan.highlighted`) — only the "Most
+  popular" badge and the CTA button's solid-vs-outline styling are still
+  keyed off `plan.highlighted`. Don't restore a permanent highlighted
+  border on Pro; that was the thing this was changed away from.
 - `_components/TrialInfo.tsx` — what the trial includes and what happens
   when it ends.
 - `_components/MarketingFooter.tsx` — copyright, privacy, sign in.
@@ -74,6 +80,7 @@ same brand mark shown everywhere else (login, emails, dashboard header).
   background and no theme toggle.
 - `public/brand/e-bay-logo.svg`, `amazon-logo.svg`, `etsy.svg`,
   `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
+- `public/brand/Boughtopia-dashboard.png` — the hero's product screenshot.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
 - `lib/utils/planGating` (`getPlanLimits`) — via `_lib/pricing.ts`.
 - `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/
