@@ -284,7 +284,8 @@ RULES: list[Rule] = [
         message=(
             "Route handler touches Supabase but calls no auth guard. Expected "
             "one of: supabase.auth.getUser(), verifyPlatformAdmin, "
-            "requireIntegrationAdmin, or a webhook signature check."
+            "requireIntegrationAdmin, requireBillingAdmin, or a webhook "
+            "signature check."
         ),
         why=(
             "Audit 2.1: the one route that skipped its authenticity check was "
@@ -388,7 +389,7 @@ def _suppressed(lines: list[str], index: int, rule_id: str) -> bool:
 
 # Any one of these is accepted as "this handler authenticates its caller".
 _AUTH_MARKERS = re.compile(
-    r"auth\.getUser\(\)|verifyPlatformAdmin|requireIntegrationAdmin"
+    r"auth\.getUser\(\)|verifyPlatformAdmin|requireIntegrationAdmin|requireBillingAdmin"
     r"|requirePermission|verifySignature|constructEvent|verifyNotificationSignature"
 )
 # Only routes that actually reach data need a guard; a cookie-clearing route
