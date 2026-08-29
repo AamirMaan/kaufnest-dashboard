@@ -40,7 +40,7 @@ signed-in state.
   array, each with a `lucide-react` icon in an emerald badge. **Only
   describe things that actually ship.**
 - `_components/Pricing.tsx` — three plan cards, rendered from
-  `_lib/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
+  `src/lib/utils/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
   to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
   every card equally (not tied to `plan.highlighted`) — only the "Most
   popular" badge and the CTA button's solid-vs-outline styling are still
@@ -81,7 +81,7 @@ same brand mark shown everywhere else (login, emails, dashboard header).
   `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
 - `public/brand/Boughtopia-dashboard.png` — the hero's product screenshot.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
-- `lib/utils/planGating` (`getPlanLimits`) — via `_lib/pricing.ts`.
+- `lib/utils/planGating` (`getPlanLimits`) — via `lib/utils/pricing.ts`.
 - `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/
   `Package`/`MessageSquare`/`Users` (Features), `Check`/`X` (Pricing).
 
