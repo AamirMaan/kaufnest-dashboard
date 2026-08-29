@@ -38,6 +38,8 @@ etc.).
 
 ## Features
 
+- Public landing page (`/`) with self-serve signup and a 14-day full-access
+  free trial — no credit card, no admin involvement
 - Login with email/password (Supabase Auth), per-tenant team invites
 - Role-based access (`super_admin`, `admin`, `accountant`) plus additive
   per-user permission overrides (see the Users feature's Permissions modal)
