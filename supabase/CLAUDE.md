@@ -247,8 +247,9 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
 
 - `src/lib/supabase/{client,server,control}.ts` + their `SKILL.md` — the
   schema-aware Supabase clients these migrations support.
-- `src/app/api/admin/provision-tenant/route.ts` — calls
-  `provision_tenant_schema` via RPC for new tenants.
+- `src/app/api/admin/provision-tenant/route.ts` and
+  `src/app/api/signup/provision/route.ts` (2026-08-28, self-serve signup) —
+  both call `provision_tenant_schema` and `addExposedSchema` for new tenants.
 - `src/lib/integrations/` + `src/app/dashboard/integrations/` — read/write
   `platform_connections` and `sales.external_order_id` from migration 008.
 - `SAAS_MIGRATION.md` — the full migration narrative/checklist.

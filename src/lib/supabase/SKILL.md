@@ -75,8 +75,10 @@ Handlers.
 
 ## managementApi.ts
 
-`export async function addExposedSchema(schemaName: string)` — the only
-caller is `/api/admin/provision-tenant`. Uses the Supabase **Management API**
+`export async function addExposedSchema(schemaName: string)` — called by
+both `/api/admin/provision-tenant` (admin-invited tenants) and
+`/api/signup/provision` (self-serve signup, 2026-08-28). Uses the Supabase
+**Management API**
 (`api.supabase.com`, not the project's own PostgREST endpoint) to add
 `schemaName` to Project B's "Exposed schemas" (`db_schema`) config, so the
 inserts that follow (`company_profile`, `profiles` via
