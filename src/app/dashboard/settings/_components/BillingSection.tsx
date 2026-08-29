@@ -11,6 +11,11 @@ interface BillingStatus {
   cancelAtPeriodEnd: boolean;
 }
 
+async function fetchBillingStatus(): Promise<BillingStatus> {
+  const res = await fetch("/api/billing/status");
+  return (await res.json()) as BillingStatus;
+}
+
 export function BillingSection() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
@@ -18,9 +23,8 @@ export function BillingSection() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/billing/status")
-      .then((res) => res.json())
-      .then((data: BillingStatus) => setStatus(data))
+    fetchBillingStatus()
+      .then(setStatus)
       .catch(() => setError("Could not load billing status."));
   }, []);
 
@@ -45,9 +49,18 @@ export function BillingSection() {
         window.location.href = body.url;
         return;
       }
-      // change-plan succeeded (no redirect) — reflect the new plan locally.
+      // change-plan succeeded (no redirect). Optimistic update for immediate
+      // feedback, then a background reconciliation shortly after — only the
+      // webhook actually writes control.tenants.plan (AGENTS.md rule 4), so
+      // there's a brief window where the DB hasn't caught up yet. Without this,
+      // a reload in that window would show the OLD plan again, looking like the
+      // change reverted even though it didn't. The reconciliation is silent on
+      // failure — the optimistic value stays displayed either way.
       setStatus({ ...status, plan });
       setLoadingPlan(null);
+      setTimeout(() => {
+        fetchBillingStatus().then(setStatus).catch(() => {});
+      }, 1500);
     } catch {
       setError("Network error — please try again.");
       setLoadingPlan(null);
