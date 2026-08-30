@@ -112,28 +112,20 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   flagged during Task 7's review as an intentional tradeoff — eBay needs
   public image URLs, and this codebase doesn't yet have a public image-CDN
   pattern to reuse — not a bug. Don't put anything sensitive in this bucket.
-- **`createOffer` can 400 with errorId 25751 — real cause was a hardcoded
-  `Content-Language: en-US`, not propagation lag — fixed 2026-08-30.** First
-  fix attempt added `createOfferWithPropagationRetry` (still in place, up to
-  3 retries on errorId 25751 with 1s/2s/3s backoff) on the assumption this
-  was eBay's documented eventual-consistency gap between
-  `createOrReplaceInventoryItem` and `createOffer`. **That assumption was
-  wrong** — the same draft still failed identically after all 3 retries,
-  which a genuine timing race wouldn't do. The actual cause: `ebayFetch`
-  hardcoded `Content-Language: "en-US"` for every call, while
-  `MARKETPLACE_ID` defaults to `EBAY_DE`, which requires `de-DE`. An
-  inventory item written with a mismatched language can never be associated
-  with that marketplace by `createOffer`, no matter how long you wait —
-  hence identical failure on every retry. Fixed via a
-  `MARKETPLACE_LANGUAGE` lookup table keyed by marketplace ID, used for both
-  `Accept-Language` and `Content-Language`. The propagation-retry fix is
-  harmless and stays as a real, independently-documented eBay behavior, but
-  it was never the actual bug here — a lesson in verifying a hypothesis
-  against the retry actually working, not just against it being
-  plausible-sounding. If you change `EBAY_MARKETPLACE_ID` to a marketplace
-  not in `MARKETPLACE_LANGUAGE`'s map, add its locale there too — the
-  fallback is `en-US`, which will silently reproduce this exact bug for any
-  non-English marketplace.
+- **`createOffer` can 400 with errorId 25751 on a brand-new SKU — fixed
+  2026-08-30.** eBay's Inventory API has a documented eventual-consistency
+  gap: a successful `createOrReplaceInventoryItem` PUT doesn't guarantee the
+  SKU is immediately queryable by `createOffer` — a same-second `createOffer`
+  call can fail with `"{sku} could not be found or is not available in the
+  system for the marketplace {marketplace}"` purely from propagation lag, not
+  a bad payload. This only shows up on a SKU's *first* publish attempt
+  (update via `updateOffer` isn't affected, since the offer already exists).
+  Fixed in `publish.ts`'s `createOfferWithPropagationRetry` — retries up to 3
+  times (1s/2s/3s backoff) specifically when the 400 body's `errorId` is
+  25751; any other error in that body fails immediately instead of wasting
+  the retry budget on a request that will never succeed (bad category ID,
+  missing policy IDs, etc.). Don't bypass this by calling
+  `ebayFetch("/sell/inventory/v1/offer", ...)` directly for a new offer.
 - **Unsaved-draft image orphaning**: `ImagesStep.tsx` uploads under a
   `"unsaved"` folder when `draftId` is null (new draft, not yet saved). If
   the user uploads images then abandons the wizard without ever clicking
