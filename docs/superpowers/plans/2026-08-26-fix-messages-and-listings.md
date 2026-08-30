@@ -375,6 +375,22 @@ rendering bug.
 
 ---
 
+**Update 2026-08-30 — Path C (Publish) diagnosed and fixed, separately from
+everything above.** Symptom: `createOffer failed: 400 {"errors":[{"errorId":
+25751,...,"message":"{sku} could not be found or is not available in the
+system for the marketplace EBAY_DE."}]}` on a draft's first-ever publish
+attempt. Confirmed this is unrelated to the messages/`tradingApi.ts` bugs
+above — Path C uses the REST Inventory API, not the Trading API, and the
+`createOrReplaceInventoryItem` PUT immediately before it returned success
+(no error), ruling out a bad payload. This is eBay's own documented
+eventual-consistency gap between writing an inventory item and that SKU
+being queryable by `createOffer` — confirmed against the exact errorId
+(25751) rather than guessed. Fixed with a bounded retry
+(`createOfferWithPropagationRetry` in `lib/integrations/ebay/publish.ts`,
+1s/2s/3s backoff, only for errorId 25751 specifically — any other error in
+the body fails immediately). See `dashboard/listings/SKILL.md`'s gotcha for
+the full detail.
+
 ## Open questions
 
 1. **Did this ever work?** If messages sync succeeded even once, the cause is a
