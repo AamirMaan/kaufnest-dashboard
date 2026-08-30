@@ -7,13 +7,13 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
 
 ## Minimal file set per change type
 
-- **Change a price**: `_lib/pricing.ts` → `MONTHLY_EUR`. Nothing else. The
+- **Change a price**: `src/lib/utils/pricing.ts` → `MONTHLY_EUR`. Nothing else. The
   cards read it.
 - **Change what a plan includes**: `src/lib/utils/planGating.ts` →
-  `PLAN_LIMITS`. Do **not** hand-edit the ✓/✗ list in `_lib/pricing.ts` —
+  `PLAN_LIMITS`. Do **not** hand-edit the ✓/✗ list in `src/lib/utils/pricing.ts` —
   it is derived, and `pricing.test.ts` will fail if the two disagree.
 - **Add a feature bullet to the pricing cards**: add it to the `features`
-  array in `_lib/pricing.ts`, sourcing `included` from a `limits.*` field so
+  array in `src/lib/utils/pricing.ts`, sourcing `included` from a `limits.*` field so
   it stays derived. Add a matching assertion in `pricing.test.ts`.
 - **Add a page section**: a new component in `_components/`, composed into
   `page.tsx`. Keep it a Server Component unless it genuinely needs state.

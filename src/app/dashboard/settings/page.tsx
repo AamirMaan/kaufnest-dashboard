@@ -16,6 +16,7 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { FileDown } from "lucide-react";
+import { BillingSection } from "./_components/BillingSection";
 import type { CompanyProfile, Currency, Sale } from "@/types";
 
 const DEMO_SALE: Sale = {
@@ -115,6 +116,10 @@ export default function SettingsPage() {
         title="Settings"
         description="Configure your company and invoice details"
       />
+
+      <div className="mb-8">
+        <BillingSection />
+      </div>
 
       {companyForm && (
         <form onSubmit={handleCompanyProfileSubmit} className="max-w-2xl space-y-8">

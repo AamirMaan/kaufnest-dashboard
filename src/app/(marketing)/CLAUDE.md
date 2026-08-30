@@ -40,7 +40,7 @@ signed-in state.
   array, each with a `lucide-react` icon in an emerald badge. **Only
   describe things that actually ship.**
 - `_components/Pricing.tsx` — three plan cards, rendered from
-  `_lib/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
+  `src/lib/utils/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
   to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
   every card equally (not tied to `plan.highlighted`) — only the "Most
   popular" badge and the CTA button's solid-vs-outline styling are still
@@ -49,16 +49,15 @@ signed-in state.
 - `_components/TrialInfo.tsx` — what the trial includes and what happens
   when it ends.
 - `_components/MarketingFooter.tsx` — copyright, privacy, sign in.
-- `_lib/pricing.ts` (+ colocated test) — prices and plan copy. See below.
 
 ## Pricing is derived, not transcribed
 
-`_lib/pricing.ts` declares the € amounts, but every ✓/✗ in the table is
+`src/lib/utils/pricing.ts` declares the € amounts, but every ✓/✗ in the table is
 computed from `PLAN_LIMITS` (`lib/utils/planGating.ts`). The page therefore
 **cannot advertise a feature the application gates off** — change the plan
 matrix and the page follows. `pricing.test.ts` pins the two together.
 
-**To change a price:** edit `MONTHLY_EUR` in `_lib/pricing.ts`, nothing else.
+**To change a price:** edit `MONTHLY_EUR` in `src/lib/utils/pricing.ts`, nothing else.
 **To change what a plan includes:** edit `PLAN_LIMITS`, not this folder.
 
 ## Accent colour is page-scoped, not the app's `--color-primary` (2026-08-29)
@@ -82,10 +81,13 @@ same brand mark shown everywhere else (login, emails, dashboard header).
   `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
 - `public/brand/Boughtopia-dashboard.png` — the hero's product screenshot.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
-- `lib/utils/planGating` (`getPlanLimits`) — via `_lib/pricing.ts`.
+- `lib/utils/planGating` (`getPlanLimits`) — via `lib/utils/pricing.ts`.
 - `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/
   `Package`/`MessageSquare`/`Users` (Features), `Check`/`X` (Pricing).
 
 ## Tests
 
-`npx jest marketing` runs `_lib/pricing.test.ts`.
+Pricing's derivation logic is tested at `src/lib/utils/pricing.test.ts`
+(moved out of this folder 2026-08-29 once Settings and `/trial-expired`
+became consumers too — run `npx jest lib/utils/pricing`). This folder no
+longer has a `_lib/` of its own.

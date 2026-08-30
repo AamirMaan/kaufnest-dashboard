@@ -15,6 +15,7 @@
     "scrape:aliexpress:test": "node --test scripts/aliexpress/parsePrice.test.mjs",
     "encrypt-existing-tokens": "node --env-file=.env.local scripts/encrypt-existing-tokens.mjs",
     "create-tenant-user": "node --env-file=.env.local scripts/create-tenant-user.mjs",
+    "stripe:setup": "node --env-file=.env.local scripts/stripe-setup.mjs",
     "prepare": "husky"
   },
   "dependencies": {

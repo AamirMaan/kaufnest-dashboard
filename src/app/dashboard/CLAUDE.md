@@ -162,4 +162,24 @@ deactivation check — the `select` carries `status, plan, trial_ends_at` and
 feeds `isTrialExpired` (`lib/utils/trial.ts`). Expired trials land on
 `/trial-expired`. That page, like `/account-deactivated`, **must stay out of
 `proxy.ts`'s matcher** or it redirects to itself forever. Tenant data is
-never touched at expiry; restoring access is a plan change in `/admin`.
+never touched at expiry; restoring access is a plan change in `/admin` OR
+(2026-08-29) a real Stripe checkout from `/trial-expired`'s own `PlanPicker`
+— the webhook flips `plan`/`status` once the subscription is created.
+
+`/trial-expired` has no `StoreProvider` (it's outside `/dashboard`), so it
+can't read a Redux role for gating `PlanPicker` the way
+`dashboard/settings/_components/BillingSection.tsx` does. Instead
+(2026-08-29 final-review fix) both read `canManageBilling` off `GET
+/api/billing/status`'s response — computed server-side there the same way
+`requireBillingAdmin` computes it — so a non-admin never sees live
+Subscribe controls on either surface. `/trial-expired` also mirrors
+`BillingSection`'s `?billing=success` confirmation-and-poll pattern: since a
+first-time subscriber's Stripe `success_url` redirect lands on
+`/dashboard/settings?billing=success` but `proxy.ts` bounces any
+`/dashboard/*` request straight back to `/trial-expired` (carrying the query
+string) until the webhook lands `plan`/`status`, `/trial-expired` detects
+that param itself, shows a "setting up your subscription" message, polls
+`status` until `hasSubscription` is true, then redirects to `/dashboard`
+(which now works, since the webhook has landed by then). See
+`dashboard/settings/CLAUDE.md`'s Billing section for the full detail — both
+pages share this logic against the same response shape.

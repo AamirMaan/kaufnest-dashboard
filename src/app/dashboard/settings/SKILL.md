@@ -30,6 +30,16 @@ from `CompanyProfile`.
 - **Add/change field validation**: `src/lib/utils/validation.ts` (pure helpers)
   AND `src/lib/utils/validation.test.ts` (colocated tests) AND `page.tsx`
   (import + inline `{validator(field) && <p>…</p>}` warning).
+- **Change billing behavior (plans, checkout, cancellation)**: this
+  feature's `_components/BillingSection.tsx` is presentation only — the
+  actual logic lives in `src/app/api/billing/*` (routes) and
+  `src/components/billing/PlanPicker.tsx` (shared with `/trial-expired`).
+  Changing what a plan costs or includes is `src/lib/utils/pricing.ts` +
+  `src/lib/utils/planGating.ts`, not this folder. `src/app/trial-expired/
+  page.tsx` (outside this folder) duplicates `BillingSection`'s
+  checkout-success-confirmation and `canManageBilling` gating patterns
+  against the same `GET /api/billing/status` response shape — if you change
+  that response shape or those UI patterns, check both files.
 
 ## Test command
 
@@ -61,3 +71,36 @@ from `CompanyProfile`.
 - `vat_rate`, `invoice_prefix`, and `payment_terms` are NOT NULL with DB
   defaults (`19`, `'INV-'`, `'30 days'`) — every provisioned tenant has a
   usable value even before the user visits this page.
+- **`BillingSection` optimistic-then-reconcile pattern**: after `change-plan`
+  succeeds, the component sets the new plan locally immediately (instant
+  feedback), then polls `GET /api/billing/status` up to 3 times, 1.5s apart,
+  stopping as soon as the fetched plan matches. A single one-shot re-check
+  (an earlier version of this fix) was worse than doing nothing: if the
+  webhook hadn't written `control.tenants.plan` yet by that one check, it
+  would silently overwrite the *correct* optimistic value with the *stale*
+  DB one, with no further attempt to catch up. The same pattern (poll until
+  a condition, not a single check) is reused for the post-checkout
+  `?billing=success` confirmation, polling until `hasSubscription` is true
+  instead of until `plan` matches.
+- **Billing route auth is split; `status` now exposes the split as a field
+  instead of each caller re-deriving it.** `GET /api/billing/status` itself
+  has no role gate (a read, safe for any authenticated tenant member), but
+  `POST /api/billing/checkout` / `change-plan` / `cancel` all require
+  `requireBillingAdmin` (`admin`/`super_admin`). Rather than each consumer
+  re-computing that role check from Redux, `status` computes
+  `canManageBilling: boolean` server-side the same way `requireBillingAdmin`
+  does (`src/lib/billing/authGuard.ts`) and returns it in the response.
+  `BillingSection` reads `status.canManageBilling` directly (it dropped its
+  old `useAppSelector((s) => s.currentUser.profile?.role)` check) and swaps
+  in a read-only summary sentence for non-admins, so a non-admin never sees
+  live Subscribe/Switch/Cancel buttons that would 403 with a raw
+  `"Forbidden"` string on click. `/trial-expired/page.tsx` reads the same
+  field for the same reason — it has no Redux store to read a role from at
+  all (`StoreProvider` only wraps `/dashboard`), so before this fix its
+  `PlanPicker` had no role gate whatsoever.
+- **Reading `?billing=success` uses `window.location.search` in a `useEffect`,
+  not `next/navigation`'s `useSearchParams()`.** This Next.js version has a
+  Suspense-boundary requirement around `useSearchParams()` in some
+  configurations (see AGENTS.md's "This is NOT the Next.js you know" note) —
+  reading the query string via `window.location` sidesteps that entirely
+  since it's plain client-side code with no App Router hook involved.

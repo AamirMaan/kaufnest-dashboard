@@ -190,6 +190,26 @@ Stripe webhook (`AGENTS.md` key rule 4) — never write it from UI. This is the
 one module here with **no colocated test**; add `planGating.test.ts` if you
 extend it.
 
+## pricing.ts
+
+`export function pricedPlans(): PricedPlan[]` — the three paid plans' prices
+and marketing copy. Every ✓/✗ feature mark is **derived from `PLAN_LIMITS`**
+(`planGating.ts`) rather than hand-written, so the page physically cannot
+advertise a capability the application gates off. If you change the plan
+matrix, the marketing page follows automatically. Colocated `pricing.test.ts`
+pins the two together (`pricedPlans()` must match `getPlanLimits()` — the test
+will fail if they drift). Moved here from the marketing page's private `_lib/`
+(2026-08-29) once Settings and `/trial-expired` became consumers too — 3+
+features is this project's own threshold for promoting a feature-private file
+to shared.
+
+- `export type PaidPlan` — `Exclude<TenantPlan, "trial">`, i.e. the three
+  purchasable plans.
+- `export interface PricedPlan` — one row in the pricing table: plan name, €
+  price, tagline, user cap, and feature ticks.
+- `export interface PlanFeature` — a single ✓/✗ line item: `label: string` +
+  `included: boolean`.
+
 ## validation.ts
 
 Pure field validators for the settings forms. Every function returns `null` when

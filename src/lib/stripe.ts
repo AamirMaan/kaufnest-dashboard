@@ -1,10 +1,10 @@
 import Stripe from "stripe";
+import type { PaidPlan } from "@/lib/utils/pricing";
 
 let stripeClient: Stripe | null = null;
 
 // Lazily constructed so `next build` doesn't fail evaluating this module
-// before STRIPE_SECRET_KEY is configured (see SAAS_MIGRATION.md — Stripe
-// project setup is still pending).
+// before STRIPE_SECRET_KEY is configured.
 export function getStripe(): Stripe {
   if (!stripeClient) {
     stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -14,10 +14,13 @@ export function getStripe(): Stripe {
   return stripeClient;
 }
 
-export const PLANS = {
-  starter:  { monthly: "price_starter_monthly",  annual: "price_starter_annual"  },
-  pro:      { monthly: "price_pro_monthly",       annual: "price_pro_annual"       },
-  business: { monthly: "price_business_monthly",  annual: "price_business_annual"  },
-} as const;
-
-export type PlanKey = keyof typeof PLANS;
+// Real Stripe price IDs, not hardcoded literals: test-mode and live-mode
+// price IDs are different values for the same-looking product, so hardcoding
+// them here would force a code change on every mode switch. Populated by
+// `npm run stripe:setup` (scripts/stripe-setup.mjs) — see that script and
+// .env.local.example.
+export const PLANS: Record<PaidPlan, string> = {
+  starter: process.env.STRIPE_PRICE_STARTER!,
+  pro: process.env.STRIPE_PRICE_PRO!,
+  business: process.env.STRIPE_PRICE_BUSINESS!,
+};
