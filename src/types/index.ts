@@ -332,6 +332,7 @@ export interface EbayListingDraft {
   fulfillment_policy_id: string | null;
   payment_policy_id: string | null;
   return_policy_id: string | null;
+  merchant_location_key: string | null;
   ebay_sku: string | null;
   status: ListingStatus;
   ebay_offer_id: string | null;

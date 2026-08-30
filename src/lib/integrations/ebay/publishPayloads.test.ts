@@ -20,6 +20,7 @@ function makeDraft(overrides: Partial<EbayListingDraft> = {}): EbayListingDraft 
     fulfillment_policy_id: "fp-1",
     payment_policy_id: "pp-1",
     return_policy_id: "rp-1",
+    merchant_location_key: "loc-1",
     ebay_sku: "KNabc123def456",
     status: "draft",
     ebay_offer_id: null,

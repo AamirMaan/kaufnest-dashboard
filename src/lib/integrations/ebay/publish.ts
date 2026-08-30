@@ -111,12 +111,6 @@ interface TaxonomySuggestionsResponse {
 // "out of scope"), so there's no per-request tree lookup.
 const CATEGORY_TREE_ID = process.env.EBAY_CATEGORY_TREE_ID || "77";
 
-// No sensible cross-tenant default exists — this is seller-account-specific
-// (must already exist as an inventory location in the tenant's eBay Seller
-// Hub). Read from env with an empty-string fallback, same as other
-// required-but-unvalidated eBay fields in this file.
-const MERCHANT_LOCATION_KEY = process.env.EBAY_MERCHANT_LOCATION_KEY || "";
-
 // Taxonomy API category trees are global eBay catalog data, not scoped to
 // any seller — uses an application token (getApplicationToken()), not the
 // tenant's user token, which lacks the base https://api.ebay.com/oauth/api_scope
@@ -170,6 +164,46 @@ async function fetchPolicyList(
   }));
 }
 
+// ─── Inventory locations (Inventory API) ───────────────────────────────────────
+
+export interface InventoryLocationSummary {
+  key: string;
+  name: string;
+  hasCountry: boolean;
+}
+
+interface InventoryLocationResponse {
+  merchantLocationKey: string;
+  merchantLocationStatus?: string;
+  name?: string;
+  location?: { address?: { country?: string } };
+}
+interface InventoryLocationsListResponse {
+  locations?: InventoryLocationResponse[];
+}
+
+// Seller-account-specific, same as business policies below — fetched live
+// per-tenant via the tenant's own connection token (sell.inventory scope,
+// already granted, no new OAuth consent needed) rather than configured once
+// globally. `hasCountry` lets the caller warn about/exclude a location
+// that's missing a country, since offering one would just reproduce the
+// "no Item.Country exists" publishOffer failure this replaces.
+export async function fetchInventoryLocations(
+  accessToken: string
+): Promise<InventoryLocationSummary[]> {
+  const res = await ebayFetch("/sell/inventory/v1/location", accessToken);
+  await throwIfNotOk(res, "getInventoryLocations");
+
+  const json = (await res.json()) as InventoryLocationsListResponse;
+  return (json.locations ?? [])
+    .filter((loc) => (loc.merchantLocationStatus ?? "ENABLED") === "ENABLED")
+    .map((loc) => ({
+      key: loc.merchantLocationKey,
+      name: loc.name ?? loc.merchantLocationKey,
+      hasCountry: Boolean(loc.location?.address?.country),
+    }));
+}
+
 export async function fetchBusinessPolicies(accessToken: string): Promise<BusinessPolicies> {
   const [fulfillment, payment, returnPolicies] = await Promise.all([
     fetchPolicyList(
@@ -217,7 +251,7 @@ export async function publishListing(
   const offerPayload = buildOfferPayload(
     { ...draft, ebay_sku: sku },
     MARKETPLACE_ID,
-    MERCHANT_LOCATION_KEY
+    draft.merchant_location_key ?? ""
   );
 
   let offerId = existingOfferId;

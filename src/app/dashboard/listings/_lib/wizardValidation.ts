@@ -19,6 +19,7 @@ export interface DraftFormState {
   fulfillment_policy_id: string;
   payment_policy_id: string;
   return_policy_id: string;
+  merchant_location_key: string;
 }
 
 function isValidUrl(value: string): boolean {
@@ -56,9 +57,13 @@ export function validateImagesStep(draft: DraftFormState): string | null {
 }
 
 export function validatePoliciesStep(draft: DraftFormState): string | null {
-  const { fulfillment_policy_id, payment_policy_id, return_policy_id } = draft;
+  const { fulfillment_policy_id, payment_policy_id, return_policy_id, merchant_location_key } =
+    draft;
   if (!fulfillment_policy_id || !payment_policy_id || !return_policy_id) {
     return "Select a fulfillment, payment, and return policy.";
+  }
+  if (!merchant_location_key) {
+    return "Select an inventory location.";
   }
   return null;
 }

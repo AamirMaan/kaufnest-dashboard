@@ -242,6 +242,18 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   missing them until the next drift-reconciliation pass. Backs the Sales
   feature (`src/app/dashboard/sales/`) — see its SKILL.md's fee-fields
   gotcha for the full story.
+- `migrations/036_ebay_listing_drafts_merchant_location.sql` — adds nullable
+  `merchant_location_key text` to `ebay_listing_drafts` via
+  `run_on_all_tenant_schemas`; also mirrored into
+  `provision_tenant_schema()` in the same commit. Replaces a single global
+  `EBAY_MERCHANT_LOCATION_KEY` env var that only ever worked for one
+  tenant's eBay account (seller-account-specific, confirmed broken live
+  2026-08-30) — now fetched live per-tenant
+  (`fetchInventoryLocations`/`GET /api/listings/ebay/locations`) and chosen
+  per-draft in the wizard, same pattern as the existing fulfillment/payment/
+  return policy IDs. Backs the Listings feature
+  (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for the full
+  story.
 
 ## Related code
 

@@ -64,6 +64,7 @@ const EMPTY_DRAFT: DraftFormState = {
   fulfillment_policy_id: "",
   payment_policy_id: "",
   return_policy_id: "",
+  merchant_location_key: "",
 };
 
 function toFormState(row: EbayListingDraft): DraftFormState {
@@ -83,6 +84,7 @@ function toFormState(row: EbayListingDraft): DraftFormState {
     fulfillment_policy_id: row.fulfillment_policy_id ?? "",
     payment_policy_id: row.payment_policy_id ?? "",
     return_policy_id: row.return_policy_id ?? "",
+    merchant_location_key: row.merchant_location_key ?? "",
   };
 }
 
@@ -168,6 +170,7 @@ export function ListingWizard({ draftId }: Props) {
       fulfillment_policy_id: draft.fulfillment_policy_id || null,
       payment_policy_id: draft.payment_policy_id || null,
       return_policy_id: draft.return_policy_id || null,
+      merchant_location_key: draft.merchant_location_key || null,
     };
   }
 
