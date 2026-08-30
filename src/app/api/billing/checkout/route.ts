@@ -142,6 +142,14 @@ export async function POST(req: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "subscription",
+      // Stripe's Managed Payments (merchant-of-record tax handling) is
+      // opt-in via a Dashboard setup flow, but the API still enforces its
+      // Product tax-code requirement by default on new accounts even before
+      // that setup is completed. This app already collects its own VAT
+      // details per tenant (CompanyProfile), so Managed Payments is out of
+      // scope — disable it explicitly rather than depend on Products having
+      // tax codes assigned.
+      managed_payments: { enabled: false },
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=success`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?billing=cancelled`,
