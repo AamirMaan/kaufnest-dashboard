@@ -24,6 +24,7 @@ function makeDraft(overrides: Partial<DraftFormState> = {}): DraftFormState {
     fulfillment_policy_id: "fp-1",
     payment_policy_id: "pp-1",
     return_policy_id: "rp-1",
+    merchant_location_key: "loc-1",
     ...overrides,
   };
 }
@@ -127,6 +128,12 @@ describe("validatePoliciesStep", () => {
   it("fails when return_policy_id is missing", () => {
     expect(validatePoliciesStep(makeDraft({ return_policy_id: "" }))).toBe(
       "Select a fulfillment, payment, and return policy."
+    );
+  });
+
+  it("fails when merchant_location_key is missing", () => {
+    expect(validatePoliciesStep(makeDraft({ merchant_location_key: "" }))).toBe(
+      "Select an inventory location."
     );
   });
 });

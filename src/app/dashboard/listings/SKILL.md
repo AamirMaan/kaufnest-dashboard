@@ -27,6 +27,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `app/api/listings/[id]/publish/route.ts` — read both together, the route
   owns the `status`/`ebay_sku`/`ebay_offer_id` persistence, `publishListing`
   owns the actual eBay calls.
+- **Changing what a seller-account-specific eBay field is fetched from**
+  (business policies, inventory location): add the fetch function to
+  `lib/integrations/ebay/publish.ts` using the tenant's own connection
+  token (never a global env var — see the merchant-location gotcha below
+  for why that broke for every tenant but one), add a
+  `GET /api/listings/ebay/<thing>/route.ts` mirroring `locations`/
+  `policies`'s shape exactly, add the picker to `PoliciesStep.tsx`, add the
+  chosen value to `DraftFormState`/`EbayListingDraft`/the DB column (2
+  places rule) and `ListingWizard.tsx`'s `EMPTY_DRAFT`/`toFormState`/
+  `toPayload`, and validate it in `validatePoliciesStep`.
 - **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
@@ -155,15 +165,26 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `EBAY_MARKETPLACE_ID` points at — mismatched tree/marketplace IDs return
   category suggestions that `createOffer` then rejects as invalid for that
   marketplace.
-- **`EBAY_MERCHANT_LOCATION_KEY` env var — required, no default.** Every
-  eBay Offer must reference a `merchantLocationKey` pointing at an existing
-  inventory location in the seller's eBay account, or `publishOffer` fails.
-  Unlike `EBAY_MARKETPLACE_ID`/`EBAY_CATEGORY_TREE_ID` this has no sensible
-  cross-tenant default (it's seller-account-specific), so it falls back to
-  `""` when unset — the tenant's eBay seller account must already have at
-  least one inventory location configured via eBay Seller Hub before
-  publishing will succeed. There's no in-app UI to create or select one in
-  v1.
+- **Merchant location is per-tenant, fetched live — fixed 2026-08-30, was a
+  global env var before.** Every eBay Offer must reference a
+  `merchantLocationKey` pointing at an existing inventory location in the
+  seller's own eBay account, or `publishOffer` fails with errorId 25002
+  ("no Item.Country exists") — a location has no country to build the
+  listing from otherwise. This used to be a single `EBAY_MERCHANT_LOCATION_KEY`
+  env var, which is seller-account-specific and therefore could only ever
+  be correct for one tenant — every other tenant's publish would fail the
+  same way. Confirmed live 2026-08-30 against `tenant_kaufnest`'s first real
+  publish attempt. Fixed the same way business policies already work:
+  `fetchInventoryLocations` (`publish.ts`) calls `GET
+  /sell/inventory/v1/location` with the tenant's own token (`sell.inventory`
+  scope, already granted — no reconnect needed), `PoliciesStep.tsx` lets the
+  tenant pick one (auto-selected if they have exactly one usable location),
+  and the choice is stored on `ebay_listing_drafts.merchant_location_key`
+  (migration `036`). Locations missing a `country` are filtered out of the
+  picker entirely — offering one would just reproduce this same bug. If the
+  tenant has zero usable locations, they still need to create one in eBay
+  Seller Hub first; there's no in-app way to create one, only to select an
+  existing one.
 
 ## Tests
 

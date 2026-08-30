@@ -45,7 +45,10 @@ listings is a separate, not-yet-built follow-up (see
 - `_components/{Source,Details,Category,Images,Policies,Review}Step.tsx` —
   one component per wizard step, each taking `{ draft, setDraft }` (Images
   also takes `draftId`, since uploads need a storage path). `PoliciesStep`
-  fetches `/api/listings/ebay/policies` on mount; `CategoryStep` hits
+  fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
+  on mount (in parallel) — the latter lets the tenant pick their own eBay
+  inventory location (`merchant_location_key`), auto-selected when they have
+  exactly one usable (has a country set) location. `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
 - `_components/ListingsTable.tsx` — the table on `page.tsx`, via the shared
@@ -82,8 +85,11 @@ flow (`src/lib/integrations/ebay/publish.ts`'s `publishListing`):
 exists) → `publishOffer`. A first-time `createOffer` call retries up to 3
 times (1s/2s/3s backoff) if eBay returns errorId 25751 — an eventual-
 consistency gap where the SKU isn't immediately queryable right after the
-PUT above (see `SKILL.md`'s gotcha) — before giving up. `status` moves
-`draft → publishing → published`, or
+PUT above (see `SKILL.md`'s gotcha) — before giving up. The offer's
+`merchantLocationKey` comes from the draft's own `merchant_location_key`
+field (chosen per-tenant in the wizard's Policies step, not a global env
+var — see `SKILL.md`'s gotcha for why that used to be broken for every
+tenant but one). `status` moves `draft → publishing → published`, or
 `→ failed` with `publish_error` set on any error — the draft stays editable
 and re-publishable after a failure. The SKU is generated once
 (`generateListingSku()`, `KN` + 12 random alphanumeric chars) and persisted
@@ -109,7 +115,8 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
-  (`searchCategories`, `fetchBusinessPolicies`, `publishListing`).
+  (`searchCategories`, `fetchBusinessPolicies`, `fetchInventoryLocations`,
+  `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's
   gotcha. Note: `lib/integrations/ebay/listings.ts` (Trading API

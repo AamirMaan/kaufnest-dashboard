@@ -26,6 +26,7 @@ const makeDraft = (overrides: Partial<EbayListingDraft> = {}): EbayListingDraft 
   fulfillment_policy_id: null,
   payment_policy_id: null,
   return_policy_id: null,
+  merchant_location_key: null,
   ebay_sku: null,
   status: "draft",
   ebay_offer_id: null,

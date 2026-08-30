@@ -319,6 +319,7 @@ BEGIN
       fulfillment_policy_id  text,
       payment_policy_id      text,
       return_policy_id       text,
+      merchant_location_key  text,
       ebay_sku               text,
       status                 text NOT NULL DEFAULT 'draft'
                                CHECK (status IN ('draft', 'publishing', 'published', 'failed')),
