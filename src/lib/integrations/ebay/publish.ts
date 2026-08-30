@@ -6,14 +6,34 @@ const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
 const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_DE";
 
+// eBay's Inventory API requires Content-Language to be one of the target
+// marketplace's actual supported locales — an inventory item written with a
+// mismatched language (e.g. en-US content for EBAY_DE) can't be associated
+// with that marketplace by createOffer at all, regardless of how long you
+// wait or retry. This previously hardcoded "en-US" while defaulting to
+// EBAY_DE, which requires "de-DE" — a deterministic mismatch, not the
+// propagation race createOfferWithPropagationRetry guards against.
+const MARKETPLACE_LANGUAGE: Record<string, string> = {
+  EBAY_DE: "de-DE",
+  EBAY_AT: "de-AT",
+  EBAY_US: "en-US",
+  EBAY_GB: "en-GB",
+  EBAY_CA: "en-CA",
+  EBAY_AU: "en-AU",
+  EBAY_FR: "fr-FR",
+  EBAY_IT: "it-IT",
+  EBAY_ES: "es-ES",
+};
+const CONTENT_LANGUAGE = MARKETPLACE_LANGUAGE[MARKETPLACE_ID] ?? "en-US";
+
 async function ebayFetch(path: string, accessToken: string, init?: RequestInit): Promise<Response> {
   return fetch(`${EBAY_BASE}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "Accept-Language": "en-US",
-      "Content-Language": "en-US",
+      "Accept-Language": CONTENT_LANGUAGE,
+      "Content-Language": CONTENT_LANGUAGE,
       ...init?.headers,
     },
   });
