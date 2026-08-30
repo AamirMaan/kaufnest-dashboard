@@ -26,6 +26,52 @@ async function throwIfNotOk(res: Response, action: string): Promise<void> {
   }
 }
 
+// eBay's Inventory API has a documented eventual-consistency gap: a
+// successful createOrReplaceInventoryItem PUT doesn't guarantee the SKU is
+// immediately queryable by createOffer — a same-second createOffer call can
+// 400 with errorId 25751 ("{sku} could not be found or is not available in
+// the system for the marketplace") purely because the write hasn't
+// propagated yet, not because anything is actually wrong. Retrying a few
+// times with a short delay is eBay's own recommended workaround; anything
+// else in the 400 body (bad category/policy IDs, etc.) fails immediately
+// instead of wasting the retry budget on a request that will never succeed.
+const INVENTORY_PROPAGATION_ERROR_ID = 25751;
+const INVENTORY_PROPAGATION_RETRY_DELAYS_MS = [1000, 2000, 3000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createOfferWithPropagationRetry(
+  accessToken: string,
+  body: string
+): Promise<Response> {
+  let res = await ebayFetch("/sell/inventory/v1/offer", accessToken, { method: "POST", body });
+
+  for (const delay of INVENTORY_PROPAGATION_RETRY_DELAYS_MS) {
+    if (res.ok) return res;
+
+    const bodyText = await res.text();
+    let isPropagationError = false;
+    try {
+      const parsed = JSON.parse(bodyText) as { errors?: { errorId?: number }[] };
+      isPropagationError =
+        parsed.errors?.some((e) => e.errorId === INVENTORY_PROPAGATION_ERROR_ID) ?? false;
+    } catch {
+      // Not JSON — not the propagation error, fall through to fail below.
+    }
+
+    if (!isPropagationError) {
+      throw new Error(`eBay createOffer failed: ${res.status} ${bodyText.slice(0, 500)}`);
+    }
+
+    await sleep(delay);
+    res = await ebayFetch("/sell/inventory/v1/offer", accessToken, { method: "POST", body });
+  }
+
+  return res;
+}
+
 // ─── Category search (Taxonomy API) ────────────────────────────────────────────
 
 export interface CategorySuggestion {
@@ -162,10 +208,10 @@ export async function publishListing(
     });
     await throwIfNotOk(updateRes, "updateOffer");
   } else {
-    const createRes = await ebayFetch("/sell/inventory/v1/offer", accessToken, {
-      method: "POST",
-      body: JSON.stringify(offerPayload),
-    });
+    const createRes = await createOfferWithPropagationRetry(
+      accessToken,
+      JSON.stringify(offerPayload)
+    );
     await throwIfNotOk(createRes, "createOffer");
     const created = (await createRes.json()) as { offerId: string };
     offerId = created.offerId;

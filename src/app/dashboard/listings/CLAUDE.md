@@ -79,7 +79,11 @@ tenant's stored eBay OAuth token (`src/lib/integrations/ebay/publish.ts`).
 flow (`src/lib/integrations/ebay/publish.ts`'s `publishListing`):
 `createOrReplaceInventoryItem` (idempotent by SKU, via `PUT`) →
 `createOffer`/`updateOffer` (depending on whether `ebay_offer_id` already
-exists) → `publishOffer`. `status` moves `draft → publishing → published`, or
+exists) → `publishOffer`. A first-time `createOffer` call retries up to 3
+times (1s/2s/3s backoff) if eBay returns errorId 25751 — an eventual-
+consistency gap where the SKU isn't immediately queryable right after the
+PUT above (see `SKILL.md`'s gotcha) — before giving up. `status` moves
+`draft → publishing → published`, or
 `→ failed` with `publish_error` set on any error — the draft stays editable
 and re-publishable after a failure. The SKU is generated once
 (`generateListingSku()`, `KN` + 12 random alphanumeric chars) and persisted

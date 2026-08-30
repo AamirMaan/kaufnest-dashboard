@@ -112,6 +112,20 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   flagged during Task 7's review as an intentional tradeoff — eBay needs
   public image URLs, and this codebase doesn't yet have a public image-CDN
   pattern to reuse — not a bug. Don't put anything sensitive in this bucket.
+- **`createOffer` can 400 with errorId 25751 on a brand-new SKU — fixed
+  2026-08-30.** eBay's Inventory API has a documented eventual-consistency
+  gap: a successful `createOrReplaceInventoryItem` PUT doesn't guarantee the
+  SKU is immediately queryable by `createOffer` — a same-second `createOffer`
+  call can fail with `"{sku} could not be found or is not available in the
+  system for the marketplace {marketplace}"` purely from propagation lag, not
+  a bad payload. This only shows up on a SKU's *first* publish attempt
+  (update via `updateOffer` isn't affected, since the offer already exists).
+  Fixed in `publish.ts`'s `createOfferWithPropagationRetry` — retries up to 3
+  times (1s/2s/3s backoff) specifically when the 400 body's `errorId` is
+  25751; any other error in that body fails immediately instead of wasting
+  the retry budget on a request that will never succeed (bad category ID,
+  missing policy IDs, etc.). Don't bypass this by calling
+  `ebayFetch("/sell/inventory/v1/offer", ...)` directly for a new offer.
 - **Unsaved-draft image orphaning**: `ImagesStep.tsx` uploads under a
   `"unsaved"` folder when `draftId` is null (new draft, not yet saved). If
   the user uploads images then abandons the wizard without ever clicking
