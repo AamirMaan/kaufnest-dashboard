@@ -6,6 +6,14 @@ import { fetchActiveListings } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { Profile } from "@/types";
 
+// PostgREST caps unbounded .select() reads at its configured db.max_rows
+// (typically 1000) — past that many rows a plain .select() silently
+// truncates instead of erroring. Both origin-scoped reads below page
+// through .range() until a page comes back short, same pattern
+// fetchActiveListings (lib/integrations/ebay/listings.ts) already uses for
+// GetMyeBaySelling's pagination.
+const PAGE_SIZE = 1000;
+
 export async function POST() {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
@@ -43,13 +51,22 @@ export async function POST() {
     // Never let this sync overwrite a listing the app itself published —
     // GetMyeBaySelling's summary carries none of its aspects/policies/
     // merchant_location_key, so upserting over it would blank them out.
-    const { data: appOwned, error: appOwnedError } = await client
-      .from("ebay_listing_drafts")
-      .select("ebay_listing_id")
-      .eq("origin", "app")
-      .not("ebay_listing_id", "is", null);
-    if (appOwnedError) throw appOwnedError;
-    const appOwnedIds = new Set((appOwned ?? []).map((r) => r.ebay_listing_id));
+    // Paginated (PAGE_SIZE at a time) since a plain .select() silently
+    // truncates past PostgREST's row cap — see the PAGE_SIZE comment above.
+    const appOwnedIds = new Set<string>();
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: appOwnedError } = await client
+        .from("ebay_listing_drafts")
+        .select("ebay_listing_id")
+        .eq("origin", "app")
+        .not("ebay_listing_id", "is", null)
+        .range(from, from + PAGE_SIZE - 1);
+      if (appOwnedError) throw appOwnedError;
+      for (const row of page ?? []) {
+        if (row.ebay_listing_id) appOwnedIds.add(row.ebay_listing_id);
+      }
+      if (!page || page.length < PAGE_SIZE) break;
+    }
 
     const importable = listings.filter((l) => !appOwnedIds.has(l.ebayListingId));
 
@@ -90,16 +107,22 @@ export async function POST() {
     // gets pruned here. Scoped strictly to origin="ebay_import" — never
     // touches an app-created draft, which can legitimately be draft/failed
     // with no active eBay listing yet.
-    const { data: existingImported, error: existingError } = await client
-      .from("ebay_listing_drafts")
-      .select("ebay_listing_id")
-      .eq("origin", "ebay_import");
-    if (existingError) throw existingError;
+    const existingImportedIds: (string | null)[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: existingError } = await client
+        .from("ebay_listing_drafts")
+        .select("ebay_listing_id")
+        .eq("origin", "ebay_import")
+        .range(from, from + PAGE_SIZE - 1);
+      if (existingError) throw existingError;
+      for (const row of page ?? []) existingImportedIds.push(row.ebay_listing_id);
+      if (!page || page.length < PAGE_SIZE) break;
+    }
 
     const fetchedIds = new Set(listings.map((l) => l.ebayListingId));
-    const staleIds = (existingImported ?? [])
-      .map((r) => r.ebay_listing_id)
-      .filter((id): id is string => id !== null && !fetchedIds.has(id));
+    const staleIds = existingImportedIds.filter(
+      (id): id is string => id !== null && !fetchedIds.has(id)
+    );
 
     let removed = 0;
     if (staleIds.length > 0) {

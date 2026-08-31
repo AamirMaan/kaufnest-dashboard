@@ -82,6 +82,7 @@ describe("fetchListingDetail", () => {
       categoryId: "9355",
       categoryName: "Cell Phones",
       aspects: { Brand: "Acme", Type: "Wireless" },
+      multiValueAspectNames: [],
     });
   });
 
@@ -103,6 +104,7 @@ describe("fetchListingDetail", () => {
 
     const detail = await fetchListingDetail("token", "2");
     expect(detail.aspects).toEqual({ Color: "Red" });
+    expect(detail.multiValueAspectNames).toEqual(["Color"]);
   });
 
   it("defaults quantity to 1 and condition to used when absent", async () => {

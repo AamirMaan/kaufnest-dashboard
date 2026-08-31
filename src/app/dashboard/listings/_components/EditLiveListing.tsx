@@ -26,6 +26,7 @@ interface LiveDetail {
   categoryId: string;
   categoryName: string;
   aspects: Record<string, string>;
+  multiValueAspectNames: string[];
 }
 
 interface RequiredAspect {
@@ -231,6 +232,13 @@ export function EditLiveListing({ draftId }: Props) {
         {(required ?? []).map((aspect) => {
           const value = aspects[aspect.name] ?? "";
           const isNotApplicable = value === notApplicableText;
+          const isMultiValue = detail.multiValueAspectNames.includes(aspect.name);
+          const multiValueWarning = isMultiValue && (
+            <p className="mt-1.5 text-xs text-(--color-danger-text)">
+              eBay has multiple values for this — editing anything on this listing will
+              reduce it to just what&apos;s shown here.
+            </p>
+          );
 
           if (aspect.isProductIdentifier && aspect.values.length === 0) {
             return (
@@ -253,6 +261,7 @@ export function EditLiveListing({ draftId }: Props) {
                   />
                   This product doesn&apos;t have a {aspect.name}
                 </label>
+                {multiValueWarning}
               </Field>
             );
           }
@@ -275,6 +284,7 @@ export function EditLiveListing({ draftId }: Props) {
                   onChange={(e) => setAspects((prev) => ({ ...prev, [aspect.name]: e.target.value }))}
                 />
               )}
+              {multiValueWarning}
             </Field>
           );
         })}

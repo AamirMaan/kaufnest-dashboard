@@ -281,6 +281,29 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   scheduled job, anything else that writes `ebay_listing_drafts` from
   external data), it must do the same exclusion; there is nothing at the
   DB layer stopping a naive upsert from wiping an app-created listing.
+- **Multi-value aspects are also silently destroyed on the WRITE side, not
+  just collapsed on read (2026-08-31 final review, mitigated not fixed).**
+  `fetchListingDetail`'s read-side collapse (see the test above) was an
+  accepted v1 limitation for reading, but it is NOT symmetric for writing:
+  if a real eBay listing has `Color: Red, Blue` and a tenant edits ANY field
+  in `EditLiveListing.tsx` (even just price), the `aspects` state only ever
+  held `{ Color: "Red" }` — that's all `fetchListingDetail` gave it — so on
+  Save, `reviseListing` sends `<NameValueList><Name>Color</Name><Value>Red</Value></NameValueList>`.
+  `ReviseItem`'s `ItemSpecifics` is replace-all, so eBay now believes Color's
+  only value is Red — "Blue" is gone from the live listing permanently, even
+  though the tenant never touched Color. `fetchListingDetail` now also
+  returns `multiValueAspectNames: string[]` (names of any aspect eBay
+  reported with >1 `<Value>`), and `EditLiveListing.tsx` renders a warning
+  next to any *required* (visible) field whose name appears there — but this
+  is a UI warning only, not a guard: nothing stops the save, and an aspect
+  that isn't in the category's required-aspect list is never rendered as a
+  field at all, so a multi-value aspect outside that list gets no warning
+  either, even though it's silently collapsed the same way. A full fix means
+  redesigning `EbayListingDetail`/`ReviseListingInput`'s `aspects` shape from
+  `Record<string, string>` to something multi-value-aware end-to-end (fetch,
+  diff in `buildAspectsForRevise`, the UI, and the `ReviseItem` XML builder)
+  — that's a properly-scoped follow-up task, not done here. Don't mistake the
+  warning for the fix.
 - **`revise`'s `ItemSpecifics` omission depends on the frontend never
   submitting stale/empty aspects (2026-08-31) — the two halves of this
   contract live in different files and must be kept in sync.**

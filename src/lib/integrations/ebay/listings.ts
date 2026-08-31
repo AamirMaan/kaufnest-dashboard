@@ -135,6 +135,12 @@ export interface EbayListingDetail {
   categoryId: string;
   categoryName: string;
   aspects: Record<string, string>;
+  // Names of aspects eBay reported with more than one <Value> — v1 only
+  // keeps the first (see the loop below), so any name here is a signal
+  // that saving ANY change on this listing will silently drop the rest.
+  // Surfaced as a UI warning only; not preserved end-to-end (see
+  // dashboard/listings/SKILL.md's gotcha).
+  multiValueAspectNames: string[];
 }
 
 function buildGetItemRequest(itemId: string): string {
@@ -171,11 +177,16 @@ export async function fetchListingDetail(
   );
 
   const aspects: Record<string, string> = {};
+  const multiValueAspectNames: string[] = [];
   const nameValueBlocks = itemSpecifics.match(/<NameValueList>[\s\S]*?<\/NameValueList>/g) ?? [];
   for (const block of nameValueBlocks) {
     const name = tagText(block, "Name");
     const value = tagText(block, "Value");
-    if (name && value) aspects[decodeXml(name)] = decodeXml(value);
+    if (name && value) {
+      aspects[decodeXml(name)] = decodeXml(value);
+      const valueTagCount = (block.match(/<Value(?:\s[^>]*)?>/g) ?? []).length;
+      if (valueTagCount > 1) multiValueAspectNames.push(decodeXml(name));
+    }
   }
 
   return {
@@ -190,6 +201,7 @@ export async function fetchListingDetail(
     categoryId: tagText(primaryCategory, "CategoryID") ?? "",
     categoryName: categoryName ? decodeXml(categoryName) : "",
     aspects,
+    multiValueAspectNames,
   };
 }
 
