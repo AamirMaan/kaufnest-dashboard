@@ -330,6 +330,7 @@ export interface EbayListingDraft {
   category_name: string | null;
   image_urls: string[];
   aspects: Record<string, string>;
+  origin: "app" | "ebay_import";
   fulfillment_policy_id: string | null;
   payment_policy_id: string | null;
   return_policy_id: string | null;

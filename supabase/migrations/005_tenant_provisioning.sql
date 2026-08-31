@@ -317,6 +317,7 @@ BEGIN
       category_name          text,
       image_urls             text[] NOT NULL DEFAULT '{}',
       aspects                jsonb NOT NULL DEFAULT '{}'::jsonb,
+      origin                 text NOT NULL DEFAULT 'app' CHECK (origin IN ('app', 'ebay_import')),
       fulfillment_policy_id  text,
       payment_policy_id      text,
       return_policy_id       text,
