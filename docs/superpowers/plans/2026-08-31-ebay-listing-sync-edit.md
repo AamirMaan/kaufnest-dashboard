@@ -35,7 +35,7 @@
 - Consumes: nothing new.
 - Produces: `EbayListingDraft.origin: "app" | "ebay_import"` — every later task that reads/writes an `EbayListingDraft` row relies on this field existing.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 ```sql
 -- supabase/migrations/038_ebay_listing_drafts_origin.sql
@@ -68,7 +68,7 @@ select public.run_on_all_tenant_schemas($$
 $$);
 ```
 
-- [ ] **Step 2: Mirror the column into `provision_tenant_schema()`**
+- [x] **Step 2: Mirror the column into `provision_tenant_schema()`**
 
 In `supabase/migrations/005_tenant_provisioning.sql`, find the `ebay_listing_drafts` `CREATE TABLE` block (it has `merchant_location_key` and `aspects` columns near the bottom of its column list) and add `origin` right after `aspects`:
 
@@ -79,7 +79,7 @@ In `supabase/migrations/005_tenant_provisioning.sql`, find the `ebay_listing_dra
       fulfillment_policy_id  text,
 ```
 
-- [ ] **Step 3: Add the field to the TypeScript type**
+- [x] **Step 3: Add the field to the TypeScript type**
 
 In `src/types/index.ts`, find the `EbayListingDraft` interface and add `origin` right after `aspects`:
 
@@ -90,7 +90,7 @@ In `src/types/index.ts`, find the `EbayListingDraft` interface and add `origin` 
   fulfillment_policy_id: string | null;
 ```
 
-- [ ] **Step 4: Update the two test fixtures that construct a full `EbayListingDraft`**
+- [x] **Step 4: Update the two test fixtures that construct a full `EbayListingDraft`**
 
 In `src/lib/integrations/ebay/publishPayloads.test.ts`, find `makeDraft()` and add `origin: "app",` right after `aspects: { Brand: "Acme" },`:
 
@@ -108,7 +108,7 @@ In `src/app/dashboard/listings/_store/listingsSlice.test.ts`, find `makeDraft()`
     ebay_sku: null,
 ```
 
-- [ ] **Step 5: Verify everything still type-checks and passes**
+- [x] **Step 5: Verify everything still type-checks and passes**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
@@ -116,7 +116,7 @@ Expected: no errors.
 Run: `npx jest lib/integrations/ebay/publishPayloads dashboard/listings/_store`
 Expected: all passing (these two suites are the only ones constructing a full `EbayListingDraft` literal).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/038_ebay_listing_drafts_origin.sql supabase/migrations/005_tenant_provisioning.sql src/types/index.ts src/lib/integrations/ebay/publishPayloads.test.ts src/app/dashboard/listings/_store/listingsSlice.test.ts
@@ -137,7 +137,7 @@ git commit -m "feat(listings): add origin column for imported eBay listings"
 
 **Note on the GetItem/ReviseItem/EndItem XML shapes below:** unlike `messages.ts`'s fixtures (confirmed against a real synced account during an earlier investigation), these follow eBay's long-stable, publicly documented Trading API schema for these three calls — the most heavily used and least-changed calls in the whole API. If a real response ever doesn't match, fix it the same way `messages.ts` was fixed: add a diagnostic log, get a real response, update the fixture and the parser together.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/lib/integrations/ebay/listings.test.ts`:
 
@@ -356,12 +356,12 @@ describe("endListing", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx jest lib/integrations/ebay/listings -v`
 Expected: FAIL — `fetchListingDetail`, `reviseListing`, `endListing`, `buildAspectsForRevise`, `conditionIdToListingCondition` are not exported yet.
 
-- [ ] **Step 3: Implement the functions**
+- [x] **Step 3: Implement the functions**
 
 In `src/lib/integrations/ebay/listings.ts`, add `escapeXml` to the existing import and append everything below the existing `fetchActiveListings` function:
 
@@ -561,17 +561,17 @@ export async function endListing(accessToken: string, itemId: string): Promise<v
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx jest lib/integrations/ebay/listings -v`
 Expected: PASS, all tests green.
 
-- [ ] **Step 5: Type-check and lint**
+- [x] **Step 5: Type-check and lint**
 
 Run: `npx tsc --noEmit && npx eslint src/lib/integrations/ebay/listings.ts src/lib/integrations/ebay/listings.test.ts`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/integrations/ebay/listings.ts src/lib/integrations/ebay/listings.test.ts
@@ -591,7 +591,7 @@ git commit -m "feat(listings): add GetItem/ReviseItem/EndItem Trading API functi
 
 **Critical correctness requirement:** the upsert must never touch a row whose `origin` is already `"app"` — if eBay's active list happens to include a listing this app published, upserting over it by `ebay_listing_id` would silently blank out its `aspects`/policies/`merchant_location_key` (a `GetMyeBaySelling` summary carries none of that). Skip any fetched listing whose `ebay_listing_id` already exists as an `origin = "app"` row before upserting anything.
 
-- [ ] **Step 1: Write the route**
+- [x] **Step 1: Write the route**
 
 ```ts
 // src/app/api/listings/ebay/sync/route.ts
@@ -718,12 +718,12 @@ export async function POST() {
 }
 ```
 
-- [ ] **Step 2: Type-check and lint**
+- [x] **Step 2: Type-check and lint**
 
 Run: `npx tsc --noEmit && npx eslint src/app/api/listings/ebay/sync/route.ts`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/api/listings/ebay/sync/route.ts
@@ -743,7 +743,7 @@ git commit -m "feat(listings): add POST /api/listings/ebay/sync route"
 - Consumes: `fetchListingDetail`, `reviseListing`, `endListing`, `buildAspectsForRevise` (Task 2, `@/lib/integrations/ebay/listings`); `requireIntegrationAdmin`, `getConnection`/`ensureValidAccessToken`, `ebayAdapter`, `hasPermission`.
 - Produces: `GET /api/listings/[id]/ebay-detail` → `EbayListingDetail`; `POST /api/listings/[id]/revise` (body: `{ title, description, price, quantity, condition, imageUrls, aspects }`) → the updated `EbayListingDraft` row; `POST /api/listings/[id]/end` → `{ ok: true }`. Task 6's frontend calls all three.
 
-- [ ] **Step 1: Write `GET /api/listings/[id]/ebay-detail`**
+- [x] **Step 1: Write `GET /api/listings/[id]/ebay-detail`**
 
 ```ts
 // src/app/api/listings/[id]/ebay-detail/route.ts
@@ -808,7 +808,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 ```
 
-- [ ] **Step 2: Write `POST /api/listings/[id]/revise`**
+- [x] **Step 2: Write `POST /api/listings/[id]/revise`**
 
 ```ts
 // src/app/api/listings/[id]/revise/route.ts
@@ -916,7 +916,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 ```
 
-- [ ] **Step 3: Write `POST /api/listings/[id]/end`**
+- [x] **Step 3: Write `POST /api/listings/[id]/end`**
 
 ```ts
 // src/app/api/listings/[id]/end/route.ts
@@ -991,12 +991,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 }
 ```
 
-- [ ] **Step 4: Type-check and lint**
+- [x] **Step 4: Type-check and lint**
 
 Run: `npx tsc --noEmit && npx eslint src/app/api/listings/[id]/ebay-detail/route.ts src/app/api/listings/[id]/revise/route.ts src/app/api/listings/[id]/end/route.ts`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "src/app/api/listings/[id]/ebay-detail/route.ts" "src/app/api/listings/[id]/revise/route.ts" "src/app/api/listings/[id]/end/route.ts"
@@ -1015,7 +1015,7 @@ git commit -m "feat(listings): add ebay-detail, revise, and end routes"
 - Consumes: `POST /api/listings/ebay/sync` (Task 3); `fetchListingsPage` (existing thunk, `../_store/listingsSlice`) to refresh the table after a sync; `useToast` (`@/components/ui/Toast`).
 - Produces: nothing new consumed elsewhere — this is the last piece other than Task 6's edit page, which Task 6 links to directly by route path.
 
-- [ ] **Step 1: Add the "Sync from eBay" button to `page.tsx`**
+- [x] **Step 1: Add the "Sync from eBay" button to `page.tsx`**
 
 ```tsx
 // src/app/dashboard/listings/page.tsx
@@ -1102,7 +1102,7 @@ export default function ListingsPage() {
 }
 ```
 
-- [ ] **Step 2: Make the table origin-aware**
+- [x] **Step 2: Make the table origin-aware**
 
 In `src/app/dashboard/listings/_components/ListingsTable.tsx`, the "Source" column currently always renders based on `source_type` — for an imported row, `source_type` is an arbitrary default (see Task 3's note) and must never be shown. The "Title" link and "Actions" column also need to route to the new edit page instead of the wizard once `status === "published"`.
 
@@ -1201,7 +1201,7 @@ export function ListingsTable({ listings }: Props) {
 
 Note: the "View on eBay →" external-link action that used to appear for published rows is dropped from the Actions column here, since the new edit page (Task 6) is a strictly more useful destination for a published listing than an external link — it shows everything the old link showed (via `ebay_listing_id`) plus lets you act on it.
 
-- [ ] **Step 3: Type-check, lint, and run the existing listings test suite**
+- [x] **Step 3: Type-check, lint, and run the existing listings test suite**
 
 Run: `npx tsc --noEmit && npx eslint src/app/dashboard/listings/page.tsx src/app/dashboard/listings/_components/ListingsTable.tsx`
 Expected: no errors.
@@ -1209,7 +1209,7 @@ Expected: no errors.
 Run: `npx jest dashboard/listings`
 Expected: all passing (no test in this suite renders `ListingsTable`/`page.tsx` directly today, so this is a smoke check that nothing else broke).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/dashboard/listings/page.tsx src/app/dashboard/listings/_components/ListingsTable.tsx
@@ -1228,7 +1228,7 @@ git commit -m "feat(listings): add Sync from eBay action and origin-aware table"
 - Consumes: `GET /api/listings/[id]/ebay-detail`, `POST /api/listings/[id]/revise`, `POST /api/listings/[id]/end` (Task 4); `GET /api/listings/ebay/aspects?categoryId=` (existing route, reused as-is); `DeleteConfirmModal` (`@/components/modals/DeleteConfirmModal`); `updateListingDraft`/`removeListingDraft` (existing actions, `../_store/listingsSlice`); `writeAuditLog` (`@/lib/utils/audit`); `BusinessEbayGate` (existing).
 - Produces: the route `/dashboard/listings/[id]/live`, linked from Task 5's table.
 
-- [ ] **Step 1: Write the thin route wrapper**
+- [x] **Step 1: Write the thin route wrapper**
 
 ```tsx
 // src/app/dashboard/listings/[id]/live/page.tsx
@@ -1248,7 +1248,7 @@ export default function LiveListingPage({ params }: { params: Promise<{ id: stri
 }
 ```
 
-- [ ] **Step 2: Write `EditLiveListing.tsx`**
+- [x] **Step 2: Write `EditLiveListing.tsx`**
 
 This mirrors `AspectsStep.tsx`'s fetch-and-render pattern for item specifics, and `PoliciesStep.tsx`'s inline-form pattern, but against the Trading API detail shape instead of a wizard draft.
 
@@ -1564,12 +1564,12 @@ export function EditLiveListing({ draftId }: Props) {
 }
 ```
 
-- [ ] **Step 3: Type-check and lint**
+- [x] **Step 3: Type-check and lint**
 
 Run: `npx tsc --noEmit && npx eslint src/app/dashboard/listings/_components/EditLiveListing.tsx "src/app/dashboard/listings/[id]/live/page.tsx"`
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add "src/app/dashboard/listings/[id]/live/page.tsx" src/app/dashboard/listings/_components/EditLiveListing.tsx
@@ -1580,7 +1580,7 @@ git commit -m "feat(listings): add live listing edit page (Trading API)"
 
 ## Final wiring check (unnumbered — run after all 6 tasks)
 
-- [ ] **Step 1: Full verification suite**
+- [x] **Step 1: Full verification suite**
 
 Run, in order:
 ```bash
@@ -1592,15 +1592,17 @@ npx next build
 Expected: all tests pass, no type errors, no new lint errors beyond the pre-existing 16 warnings, and the build succeeds with the new routes listed exactly once:
 `POST /api/listings/ebay/sync`, `GET /api/listings/[id]/ebay-detail`, `POST /api/listings/[id]/revise`, `POST /api/listings/[id]/end`, and the new page `GET /dashboard/listings/[id]/live`.
 
-- [ ] **Step 2: Update `dashboard/listings/CLAUDE.md`**
+- [x] **Step 2: Update `dashboard/listings/CLAUDE.md`**
 
 Add a new paragraph after the "Publish flow" section describing: the `origin` column and what it means; the "Sync from eBay" action and its reconciliation behavior; the split between the wizard (draft/failed, Inventory API) and the new live-edit page (published, Trading API); the new files (`listings.ts`'s additions, the four new routes, `EditLiveListing.tsx`).
 
-- [ ] **Step 3: Update `dashboard/listings/SKILL.md`**
+- [x] **Step 3: Update `dashboard/listings/SKILL.md`**
 
 Add a gotcha entry for: the sync-must-never-overwrite-`origin=app` correctness requirement (Task 3); the `ItemSpecifics`/`PictureDetails` replace-vs-diff semantics (Task 2); the fact that `fetchListingDetail`'s GetItem fixtures are based on documented schema, not a confirmed-live account, unlike `messages.ts`'s.
 
 - [ ] **Step 4: Manual verification**
+
+**Before this**: migration `038_ebay_listing_drafts_origin.sql` must be applied to the live Supabase project (Supabase SQL Editor, Project B — same manual-apply process as every other migration in this repo) — the sync route's upsert has no unique index to target without it. See `supabase/SKILL.md`'s file-map table (rows for 036/037/038 added during the final-review fix wave).
 
 Since route handlers and the network-calling parts of `listings.ts` are untested per this project's convention, ask the user to manually verify against a real eBay test-mode (or real) account:
 1. Click "Sync from eBay" on `/dashboard/listings` — confirm imported listings appear with an "Imported" badge.
@@ -1609,7 +1611,7 @@ Since route handlers and the network-calling parts of `listings.ts` are untested
 4. Click Delete, confirm with a reason — confirm the listing is ended on eBay and disappears from the table.
 5. Re-run Sync — confirm it doesn't re-import the just-ended listing, and confirm an app-created published listing (if any exist) is untouched by Sync.
 
-- [ ] **Step 5: Commit the docs**
+- [x] **Step 5: Commit the docs**
 
 ```bash
 git add src/app/dashboard/listings/CLAUDE.md src/app/dashboard/listings/SKILL.md
