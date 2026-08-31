@@ -1,25 +1,33 @@
 # Listings feature
 
-Route: `/dashboard/listings`, `/dashboard/listings/new`, `/dashboard/listings/[id]`.
+Route: `/dashboard/listings`, `/dashboard/listings/new`, `/dashboard/listings/[id]`,
+`/dashboard/listings/[id]/live`.
 Lets an admin/super_admin build an eBay listing from an Inventory item or a
 third-party (dropship) source, save it as a draft, and publish it to eBay via
 the eBay Inventory API. Gated on the **Business plan** (not Pro — changed
 2026-08-27, see `_components/BusinessEbayGate.tsx`) **and** a connected eBay
-account, applied to all three routes, plus a dedicated `manage_listings`
+account, applied to all four routes, plus a dedicated `manage_listings`
 permission (admin/super_admin only — nav entry is visible to all roles, but
-Save Draft/Publish/category-search/policy-fetch all require the permission).
+Save Draft/Publish/category-search/policy-fetch/Sync/live-edit/Delete all
+require the permission).
 
-Sub-project 1 of a two-part feature — editing/ending/relisting *published*
-listings is a separate, not-yet-built follow-up (see
-`docs/superpowers/specs/2026-07-20-ebay-listing-creation-design.md`).
+**Two-part feature, both parts now built (2026-08-31).** Part 1 is the
+create/publish wizard described below (Inventory API, unchanged since). Part
+2 is syncing in a tenant's full eBay listing history (including listings this
+app never created) and editing/ending any of them via the Trading API — see
+"Sync & live-edit flow" below. `docs/superpowers/specs/2026-07-20-ebay-listing-creation-design.md`
+covers only Part 1; Part 2's design is
+`docs/superpowers/specs/2026-08-31-ebay-listing-sync-edit-design.md`.
 
 ## Files in this folder
 
 - `page.tsx` — paginated listings table (`fetchListingsPage` thunk, same
-  pagination architecture as Sales/Purchases/Expenses). "New Listing" button
-  gated on `manage_listings`. Wrapped in `_components/BusinessEbayGate.tsx`
-  for the plan/connection gate (see below) — `page.tsx` itself no longer
-  reads `tenantPlan`/`connections` directly.
+  pagination architecture as Sales/Purchases/Expenses). "New Listing" and
+  "Sync from eBay" (2026-08-31 — `POST /api/listings/ebay/sync`, then
+  re-fetches page 1) buttons, both gated on `manage_listings`. Wrapped in
+  `_components/BusinessEbayGate.tsx` for the plan/connection gate (see
+  below) — `page.tsx` itself no longer reads `tenantPlan`/`connections`
+  directly.
 - `new/page.tsx` / `[id]/page.tsx` — thin client-component wrappers around
   `_components/ListingWizard.tsx` (draftId `null` vs the route param, read via
   React's `use(params)`), each also wrapped in `_components/BusinessEbayGate.tsx`
@@ -65,10 +73,23 @@ listings is a separate, not-yet-built follow-up (see
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
 - `_components/ListingsTable.tsx` — the table on `page.tsx`, via the shared
-  `DataTable`. Shows image thumbnail, title (links to `[id]`), source badge
-  (Inventory vs. dropship platform), price, status badge, and an action link
-  that's "View on eBay →" for published rows or "Edit"/"Retry" (failed) for
-  everything else.
+  `DataTable`. Shows image thumbnail, title (links via `editHref(row)`),
+  source badge, price, status badge, and an action link. `editHref(row)`
+  (2026-08-31) routes `status === "published"` rows to `[id]/live` (Trading
+  API edit page) and everything else to `[id]` (the wizard) — used by both
+  the Title and Actions columns. The Source column checks `row.origin ===
+  "ebay_import"` FIRST and shows an "Imported" badge in that case, before
+  ever falling through to the `source_type`-based Inventory/Dropship badge
+  — an imported row's `source_type` is an arbitrary default the sync route
+  sets (see "Sync & live-edit flow" below), never a real source, and must
+  never be shown as one. The old "View on eBay →" external link for
+  published rows was removed in favor of the in-app live-edit page, which
+  supersedes it.
+- `[id]/live/page.tsx` / `_components/EditLiveListing.tsx` (2026-08-31) —
+  the Trading-API-based edit page for any already-published listing,
+  whether this app created it or it was imported. See "Sync & live-edit
+  flow" below for the full data flow; this is a completely separate code
+  path from the wizard/Inventory API, not a mode of `ListingWizard.tsx`.
 - `_lib/wizardValidation.ts` — pure per-step validators + `DraftFormState`
   type, colocated test. These validators only run when the wizard's own
   "Next" button is clicked — see the SKILL.md gotcha on Save Draft/Publish
@@ -88,6 +109,10 @@ then dispatch the local slice action — no refetch. The two eBay-read calls
 (category search, business policies) and the publish action are the only
 server round-trips, via `src/app/api/listings/`, since only those need the
 tenant's stored eBay OAuth token (`src/lib/integrations/ebay/publish.ts`).
+`EditLiveListing.tsx` (Part 2, below) follows the same dispatch-local-action-
+after-server-write pattern for its own save/delete, via `listingsSlice`'s
+existing `updateListingDraft`/`removeListingDraft` actions — no new slice
+actions were needed.
 
 ## Publish flow
 
@@ -115,6 +140,71 @@ to `ebay_sku` before the first eBay call, then reused on every retry. See
 `src/lib/integrations/SKILL.md`'s equivalent section for the eBay OAuth
 scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 
+## Sync & live-edit flow (Part 2, 2026-08-31)
+
+`ebay_listing_drafts` gained an `origin` column (`"app"` default, or
+`"ebay_import"` — migration `038`): a listing this app published vs. one
+pulled in from the tenant's existing eBay account. This is orthogonal to
+`status`; only `status` decides which edit path a row uses (see
+`ListingsTable.tsx`'s `editHref` above) — `origin` only decides what the
+Source column shows and which rows `POST /api/listings/ebay/sync` is
+allowed to touch.
+
+**Sync** (`POST /api/listings/ebay/sync`): calls the pre-existing
+`fetchActiveListings` (Trading API `GetMyeBaySelling`, already used by the
+Dropshipping feature) and merges the result into `ebay_listing_drafts`.
+Two correctness-critical things this route does, in this order:
+1. **Never overwrites an `origin="app"` row.** Before upserting, it reads
+   every existing `origin="app"` row's `ebay_listing_id` and excludes those
+   from the batch — `GetMyeBaySelling`'s summary carries none of a listing's
+   `aspects`/policies/`merchant_location_key`, so upserting over an
+   app-published listing would silently blank all of that.
+2. **Reconciles stale imports.** After upserting, any existing
+   `origin="ebay_import"` row whose `ebay_listing_id` is no longer in the
+   fresh active list gets deleted — scoped strictly to `origin="ebay_import"`
+   on both the read and the delete, so an app-created `draft`/`failed` row
+   (which has no active eBay listing yet by design) is never touched. This
+   is also what cleans up a listing ended via this app's own Delete action,
+   if that action's local-row cleanup ever failed.
+
+Newly-imported rows get placeholder `source_type: "inventory"`/
+`quantity: 1`/`condition: "used"` — `GetMyeBaySelling`'s summary doesn't
+carry real quantity/condition, and `source_type` doesn't meaningfully apply
+to an imported listing at all (see `ListingsTable.tsx`'s note above on why
+the Source column never shows it). These self-correct the first time
+someone opens the listing's live-edit page, which does a full `GetItem`
+fetch and writes the real values back on save.
+
+**Live edit** (`EditLiveListing.tsx`, reached via `[id]/live` for any
+`status="published"` row): fetches full detail via `GET
+/api/listings/[id]/ebay-detail` (Trading API `GetItem`), lets the tenant
+edit title/description/price/quantity/condition/images/aspects (category is
+read-only — eBay restricts category changes on active listings), saves via
+`POST /api/listings/[id]/revise` (`ReviseItem`), deletes via `POST
+/api/listings/[id]/end` (`EndItem`, then deletes the local row). The
+aspects picker reuses the wizard's own `GET /api/listings/ebay/aspects`
+route — required-aspect names are category-driven, not creation-method-
+driven, so the same Taxonomy API answer applies whether or not the wizard
+originally created the listing.
+
+**The single most important correctness property in this flow**: `revise`
+never blindly resends `ItemSpecifics` to eBay. It re-fetches the listing's
+CURRENT live aspects via `fetchListingDetail` (never trusting anything the
+client submitted as "the original"), then `buildAspectsForRevise(current,
+submitted)` decides whether to include `aspects` in the `ReviseItem` call at
+all — omitted entirely when nothing changed, per eBay's own guidance that
+resending unchanged `ItemSpecifics` risks "attribute version problems." This
+only works correctly because `EditLiveListing.tsx` always submits the real
+`aspects` state it fetched (seeded from `ebay-detail`'s response, merged on
+every field edit, never reset) — see this folder's `SKILL.md` gotcha if
+you're touching either side of this contract.
+
+New Trading API functions live in `lib/integrations/ebay/listings.ts`
+alongside the pre-existing `fetchActiveListings`: `fetchListingDetail`,
+`reviseListing`, `endListing`, `buildAspectsForRevise`,
+`conditionIdToListingCondition`. See that file's own `listings.test.ts` for
+the XML shapes.
+
 ## Shared dependencies
 
 - `components/ui/{Modal is NOT used — dedicated pages instead, FormFields,
@@ -137,15 +227,20 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
   `fetchInventoryLocations`, `createInventoryLocation`, `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's
-  gotcha. Note: `lib/integrations/ebay/listings.ts` (Trading API
-  `fetchActiveListings`) is a pre-existing file used by the Dropshipping
-  feature, not this one — only referenced here in a comment in
-  `generateSku.ts` explaining the SKU charset choice.
+  gotcha.
+- `lib/integrations/ebay/listings.ts` — Trading API functions. Pre-existing
+  `fetchActiveListings` is shared with the Dropshipping feature (which uses
+  it independently, for its own `dropship_listings` table); everything else
+  in the file (`fetchListingDetail`, `reviseListing`, `endListing`,
+  `buildAspectsForRevise`, `conditionIdToListingCondition`, 2026-08-31) is
+  this feature's own, used only by the four `/api/listings/[id]/*` and
+  `/api/listings/ebay/sync` routes.
 - Supabase Storage bucket `listing-images` (new — see `supabase/SKILL.md`)
-- `types` (`EbayListingDraft`, `ListingSourceType`, `ListingCondition`,
-  `ListingStatus`)
+- `types` (`EbayListingDraft` — includes `origin: "app" | "ebay_import"`,
+  2026-08-31 — `ListingSourceType`, `ListingCondition`, `ListingStatus`)
 
 ## Tests
 
 `npx jest dashboard/listings` runs `_store/listingsSlice.test.ts` and
-`_lib/wizardValidation.test.ts`.
+`_lib/wizardValidation.test.ts`. `npx jest lib/integrations/ebay/listings`
+covers the Trading API functions this feature added to that shared file.

@@ -79,7 +79,6 @@ export function EditLiveListing({ draftId }: Props) {
         setLoading(false);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftId]);
 
   function setField<K extends keyof LiveDetail>(key: K, value: LiveDetail[K]) {
