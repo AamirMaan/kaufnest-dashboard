@@ -14,6 +14,12 @@ const STATUS_VARIANTS: Record<ListingStatus, "default" | "success" | "warning" |
   failed: "danger",
 };
 
+function editHref(row: EbayListingDraft): string {
+  return row.status === "published"
+    ? `/dashboard/listings/${row.id}/live`
+    : `/dashboard/listings/${row.id}`;
+}
+
 interface Props {
   listings: EbayListingDraft[];
 }
@@ -23,7 +29,7 @@ export function ListingsTable({ listings }: Props) {
     <DataTable<EbayListingDraft>
       keyField="id"
       rows={listings}
-      emptyMessage="No listings yet. Click “New Listing” to create one."
+      emptyMessage="No listings yet. Click &quot;New Listing&quot; to create one, or &quot;Sync from eBay&quot; to import existing ones."
       columns={[
         {
           header: "Image",
@@ -40,7 +46,7 @@ export function ListingsTable({ listings }: Props) {
         {
           header: "Title",
           render: (row) => (
-            <Link href={`/dashboard/listings/${row.id}`} className="font-medium text-(--color-primary) hover:underline">
+            <Link href={editHref(row)} className="font-medium text-(--color-primary) hover:underline">
               {row.title}
             </Link>
           ),
@@ -48,7 +54,9 @@ export function ListingsTable({ listings }: Props) {
         {
           header: "Source",
           render: (row) =>
-            row.source_type === "inventory" ? (
+            row.origin === "ebay_import" ? (
+              <Badge label="Imported" variant="default" />
+            ) : row.source_type === "inventory" ? (
               <Badge label="Inventory" variant="info" />
             ) : (
               <Badge label={row.source_platform ?? "Dropship"} variant="default" />
@@ -66,17 +74,12 @@ export function ListingsTable({ listings }: Props) {
         {
           header: "Actions",
           render: (row) =>
-            row.status === "published" && row.ebay_listing_id ? (
-              <a
-                href={`https://www.ebay.com/itm/${row.ebay_listing_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-(--color-primary) hover:underline"
-              >
-                View on eBay →
-              </a>
+            row.status === "published" ? (
+              <Link href={editHref(row)} className="text-sm text-(--color-primary) hover:underline">
+                Edit →
+              </Link>
             ) : (
-              <Link href={`/dashboard/listings/${row.id}`} className="text-sm text-(--color-primary) hover:underline">
+              <Link href={editHref(row)} className="text-sm text-(--color-primary) hover:underline">
                 {row.status === "failed" ? "Retry" : "Edit"} →
               </Link>
             ),
