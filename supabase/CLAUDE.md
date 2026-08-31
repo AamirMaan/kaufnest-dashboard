@@ -254,6 +254,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   return policy IDs. Backs the Listings feature
   (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for the full
   story.
+- `migrations/037_ebay_listing_drafts_aspects.sql` — adds nullable-by-default
+  `aspects jsonb NOT NULL DEFAULT '{}'::jsonb` to `ebay_listing_drafts` via
+  `run_on_all_tenant_schemas`; also mirrored into
+  `provision_tenant_schema()` in the same commit. Stores the tenant's chosen
+  values for whichever item aspects (e.g. Brand/"Marke") eBay's Taxonomy API
+  says are required for a draft's category — confirmed live 2026-08-31 that
+  `publishOffer` 400s (errorId 25002) one missing required aspect at a time,
+  with no fixed list since it varies per category. Backs the Listings
+  feature (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for
+  the full story.
 
 ## Related code
 

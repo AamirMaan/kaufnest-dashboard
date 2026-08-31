@@ -42,9 +42,17 @@ listings is a separate, not-yet-built follow-up (see
   is set only on the insert path (`{ ...toPayload(), created_by: user.id }`),
   never on update — this file previously had a bug where update also
   overwrote `created_by`, since fixed.
-- `_components/{Source,Details,Category,Images,Policies,Review}Step.tsx` —
+- `_components/{Source,Details,Category,Aspects,Images,Policies,Review}Step.tsx` —
   one component per wizard step, each taking `{ draft, setDraft }` (Images
-  also takes `draftId`, since uploads need a storage path). `PoliciesStep`
+  also takes `draftId`, since uploads need a storage path). `AspectsStep`
+  (2026-08-31) fetches `/api/listings/ebay/aspects?categoryId=` whenever
+  `draft.category_id` changes, and renders one field per item aspect eBay's
+  Taxonomy API says is required for that category (e.g. Brand/"Marke") —
+  `publishOffer` otherwise rejects with errorId 25002 one missing aspect at
+  a time. Stores the fetched required-names list on
+  `draft.required_aspect_names` (wizard-only, never persisted — see
+  `wizardValidation.ts`) so `validateAspectsStep` can check completeness
+  without re-fetching. `PoliciesStep`
   fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
   on mount (in parallel) — the latter lets the tenant pick their own eBay
   inventory location (`merchant_location_key`), auto-selected when they have
@@ -94,7 +102,10 @@ PUT above (see `SKILL.md`'s gotcha) — before giving up. The offer's
 `merchantLocationKey` comes from the draft's own `merchant_location_key`
 field (chosen per-tenant in the wizard's Policies step, not a global env
 var — see `SKILL.md`'s gotcha for why that used to be broken for every
-tenant but one). `status` moves `draft → publishing → published`, or
+tenant but one). The inventory item's `product.aspects` comes from the
+draft's `aspects` field (chosen per-category in the wizard's Item Specifics
+step — see `SKILL.md`'s gotcha for why this can't be a fixed field list).
+`status` moves `draft → publishing → published`, or
 `→ failed` with `publish_error` set on any error — the draft stays editable
 and re-publishable after a failure. The SKU is generated once
 (`generateListingSku()`, `KN` + 12 random alphanumeric chars) and persisted
@@ -120,8 +131,8 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
-  (`searchCategories`, `fetchBusinessPolicies`, `fetchInventoryLocations`,
-  `createInventoryLocation`, `publishListing`).
+  (`searchCategories`, `fetchRequiredAspects`, `fetchBusinessPolicies`,
+  `fetchInventoryLocations`, `createInventoryLocation`, `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's
   gotcha. Note: `lib/integrations/ebay/listings.ts` (Trading API

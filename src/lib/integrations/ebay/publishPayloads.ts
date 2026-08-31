@@ -9,10 +9,20 @@ const CONDITION_ENUM: Record<ListingCondition, string> = {
 export interface InventoryItemPayload {
   availability: { shipToLocationAvailability: { quantity: number } };
   condition: string;
-  product: { title: string; description: string; imageUrls: string[] };
+  product: {
+    title: string;
+    description: string;
+    imageUrls: string[];
+    aspects: Record<string, string[]>;
+  };
 }
 
 export function buildInventoryItemPayload(draft: EbayListingDraft): InventoryItemPayload {
+  const aspects: Record<string, string[]> = {};
+  for (const [name, value] of Object.entries(draft.aspects ?? {})) {
+    if (value) aspects[name] = [value];
+  }
+
   return {
     availability: { shipToLocationAvailability: { quantity: draft.quantity } },
     condition: CONDITION_ENUM[draft.condition],
@@ -20,6 +30,7 @@ export function buildInventoryItemPayload(draft: EbayListingDraft): InventoryIte
       title: draft.title,
       description: draft.description ?? "",
       imageUrls: draft.image_urls,
+      aspects,
     },
   };
 }

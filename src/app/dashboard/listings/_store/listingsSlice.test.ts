@@ -23,6 +23,7 @@ const makeDraft = (overrides: Partial<EbayListingDraft> = {}): EbayListingDraft 
   category_id: null,
   category_name: null,
   image_urls: [],
+  aspects: {},
   fulfillment_policy_id: null,
   payment_policy_id: null,
   return_policy_id: null,

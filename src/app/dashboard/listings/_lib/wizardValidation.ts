@@ -16,6 +16,11 @@ export interface DraftFormState {
   category_id: string;
   category_name: string;
   image_urls: string[];
+  aspects: Record<string, string>;
+  /** Wizard-only, not persisted: which aspect names AspectsStep fetched as
+   * required for the current category, so its validator can check them
+   * without re-fetching. Refreshed whenever category_id changes. */
+  required_aspect_names: string[];
   fulfillment_policy_id: string;
   payment_policy_id: string;
   return_policy_id: string;
@@ -54,6 +59,14 @@ export function validateCategoryStep(draft: DraftFormState): string | null {
 
 export function validateImagesStep(draft: DraftFormState): string | null {
   return draft.image_urls.length > 0 ? null : "Add at least one image.";
+}
+
+export function validateAspectsStep(draft: DraftFormState): string | null {
+  const missing = draft.required_aspect_names.filter((name) => !draft.aspects[name]?.trim());
+  if (missing.length > 0) {
+    return `Fill in required details: ${missing.join(", ")}.`;
+  }
+  return null;
 }
 
 export function validatePoliciesStep(draft: DraftFormState): string | null {

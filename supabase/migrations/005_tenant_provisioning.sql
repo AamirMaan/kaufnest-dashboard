@@ -316,6 +316,7 @@ BEGIN
       category_id            text,
       category_name          text,
       image_urls             text[] NOT NULL DEFAULT '{}',
+      aspects                jsonb NOT NULL DEFAULT '{}'::jsonb,
       fulfillment_policy_id  text,
       payment_policy_id      text,
       return_policy_id       text,

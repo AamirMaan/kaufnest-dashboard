@@ -329,6 +329,7 @@ export interface EbayListingDraft {
   category_id: string | null;
   category_name: string | null;
   image_urls: string[];
+  aspects: Record<string, string>;
   fulfillment_policy_id: string | null;
   payment_policy_id: string | null;
   return_policy_id: string | null;
