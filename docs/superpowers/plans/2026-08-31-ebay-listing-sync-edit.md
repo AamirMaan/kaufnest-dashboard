@@ -143,7 +143,6 @@ Create `src/lib/integrations/ebay/listings.test.ts`:
 
 ```ts
 import {
-  fetchActiveListings,
   fetchListingDetail,
   reviseListing,
   endListing,
@@ -355,10 +354,6 @@ describe("endListing", () => {
     expect(sentBody).toMatch(/<EndingReason>NotAvailable<\/EndingReason>/);
   });
 });
-
-// fetchActiveListings already has coverage via manual verification per the
-// existing SKILL.md; this file adds coverage for the new functions only.
-void fetchActiveListings;
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -565,23 +560,6 @@ export async function endListing(accessToken: string, itemId: string): Promise<v
   await tradingApiCall("EndItem", buildEndItemRequest(itemId), accessToken);
 }
 ```
-
-Remove the placeholder `void fetchActiveListings;` line from the test file now that it's unnecessary (it was only there to satisfy the unused-import lint rule during the failing-test step; once the test file has real assertions using the other imports, `fetchActiveListings` is the only import not otherwise used — delete both that import and the `void` line):
-
-```ts
-// Remove this import line entirely:
-// import { fetchActiveListings, ... } from "./listings";
-// Replace with:
-import {
-  fetchListingDetail,
-  reviseListing,
-  endListing,
-  buildAspectsForRevise,
-  conditionIdToListingCondition,
-} from "./listings";
-```
-
-And delete the trailing `void fetchActiveListings;` line at the bottom of the test file.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
