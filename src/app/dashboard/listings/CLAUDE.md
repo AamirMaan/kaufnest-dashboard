@@ -48,7 +48,12 @@ listings is a separate, not-yet-built follow-up (see
   fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
   on mount (in parallel) — the latter lets the tenant pick their own eBay
   inventory location (`merchant_location_key`), auto-selected when they have
-  exactly one usable (has a country set) location. `CategoryStep` hits
+  exactly one usable (has a country set) location. If they have zero, an
+  inline form (name/city/state/postal/country) posts to the same
+  `/api/listings/ebay/locations` route to create one via eBay's
+  `createInventoryLocation`, instead of sending them to Seller Hub —
+  `country` is always typed by the tenant, never guessed from
+  `company_profile` (see `SKILL.md`'s gotcha for why). `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
 - `_components/ListingsTable.tsx` — the table on `page.tsx`, via the shared
@@ -116,7 +121,7 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
   (`searchCategories`, `fetchBusinessPolicies`, `fetchInventoryLocations`,
-  `publishListing`).
+  `createInventoryLocation`, `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's
   gotcha. Note: `lib/integrations/ebay/listings.ts` (Trading API

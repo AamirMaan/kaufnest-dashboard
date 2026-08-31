@@ -204,6 +204,63 @@ export async function fetchInventoryLocations(
     }));
 }
 
+export interface CreateInventoryLocationInput {
+  name: string;
+  addressLine1?: string;
+  city: string;
+  stateOrProvince?: string;
+  postalCode: string;
+  country: string;
+}
+
+// Same alphanumeric-only rationale as generateListingSku (see
+// generateSku.ts) — merchantLocationKey is fully under our control here, so
+// keep it simple and safe rather than risk a format eBay's account-wide
+// reads choke on.
+const LOCATION_KEY_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+function generateLocationKey(): string {
+  let suffix = "";
+  for (let i = 0; i < 12; i++) {
+    suffix += LOCATION_KEY_CHARS[Math.floor(Math.random() * LOCATION_KEY_CHARS.length)];
+  }
+  return `LOC${suffix}`;
+}
+
+// Lets a tenant create a real eBay inventory location without leaving the
+// wizard, instead of being sent to Seller Hub. Deliberately does NOT guess
+// `country` from anything already on file (company_profile.address is
+// freeform text, no structured country field) — the tenant types it
+// themselves here, since a silently-wrong guess would recreate the exact
+// "no Item.Country exists" bug this whole feature exists to prevent, just
+// one step removed. `locationTypes: ["WAREHOUSE"]` needs city + country
+// (no full street address required) per eBay's own location-type rules.
+export async function createInventoryLocation(
+  accessToken: string,
+  input: CreateInventoryLocationInput
+): Promise<InventoryLocationSummary> {
+  const key = generateLocationKey();
+  const res = await ebayFetch(`/sell/inventory/v1/location/${encodeURIComponent(key)}`, accessToken, {
+    method: "POST",
+    body: JSON.stringify({
+      location: {
+        address: {
+          addressLine1: input.addressLine1 || undefined,
+          city: input.city,
+          stateOrProvince: input.stateOrProvince || undefined,
+          postalCode: input.postalCode,
+          country: input.country,
+        },
+      },
+      name: input.name,
+      locationTypes: ["WAREHOUSE"],
+      merchantLocationStatus: "ENABLED",
+    }),
+  });
+  await throwIfNotOk(res, "createInventoryLocation");
+  return { key, name: input.name, hasCountry: true };
+}
+
 export async function fetchBusinessPolicies(accessToken: string): Promise<BusinessPolicies> {
   const [fulfillment, payment, returnPolicies] = await Promise.all([
     fetchPolicyList(

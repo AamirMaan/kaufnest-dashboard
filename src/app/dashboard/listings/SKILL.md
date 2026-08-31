@@ -181,10 +181,23 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   tenant pick one (auto-selected if they have exactly one usable location),
   and the choice is stored on `ebay_listing_drafts.merchant_location_key`
   (migration `036`). Locations missing a `country` are filtered out of the
-  picker entirely — offering one would just reproduce this same bug. If the
-  tenant has zero usable locations, they still need to create one in eBay
-  Seller Hub first; there's no in-app way to create one, only to select an
-  existing one.
+  picker entirely — offering one would just reproduce this same bug.
+- **Location creation is in-app now (2026-08-31), but `country` is never
+  auto-filled — deliberately.** When a tenant has zero usable locations,
+  `PoliciesStep.tsx` shows an inline create form (POST to the same
+  `/api/listings/ebay/locations` route, `createInventoryLocation` in
+  `publish.ts`) instead of sending them to Seller Hub. `locationTypes:
+  ["WAREHOUSE"]` is hardcoded (needs only city + country, no full street
+  address, per eBay's location-type rules) and `merchantLocationKey` is
+  generated the same way `generateListingSku()` is (alphanumeric-only,
+  `LOC` + 12 chars — same "avoid an eBay-account-wide bad-format failure"
+  rationale). The tempting shortcut — auto-filling `country` from
+  `company_profile` — was rejected on purpose: `company_profile.address` is
+  a single freeform text column with no structured `country` field, so any
+  auto-fill would be a guess, and a wrong guess here wouldn't error, it'd
+  silently create a listing targeted at the wrong country — a worse,
+  harder-to-notice version of the exact bug this whole feature exists to
+  prevent. The tenant always types `country` themselves.
 
 ## Tests
 
