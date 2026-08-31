@@ -1,3 +1,4 @@
+-- ============================================================
 -- 038 — origin column on ebay_listing_drafts, for imported eBay listings
 --
 -- Listings this app didn't create (imported via a new "Sync from eBay"
@@ -14,6 +15,7 @@
 -- for the exact mistake this avoids repeating for a different table.
 --
 -- Also mirrored into provision_tenant_schema() (005) — the 2-places rule.
+-- ============================================================
 
 select public.run_on_all_tenant_schemas($$
   alter table {{schema}}.ebay_listing_drafts
