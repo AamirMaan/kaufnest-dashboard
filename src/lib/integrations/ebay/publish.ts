@@ -132,6 +132,49 @@ export async function searchCategories(query: string): Promise<CategorySuggestio
   }));
 }
 
+// ─── Required item aspects (Taxonomy API) ──────────────────────────────────────
+
+export interface RequiredAspect {
+  name: string;
+  values: string[];
+}
+
+interface TaxonomyAspectValue {
+  localizedValue: string;
+}
+interface TaxonomyAspect {
+  localizedAspectName: string;
+  aspectConstraint?: { aspectRequired?: boolean };
+  aspectValues?: TaxonomyAspectValue[];
+}
+interface TaxonomyAspectsResponse {
+  aspects?: TaxonomyAspect[];
+}
+
+// Which item aspects (e.g. Brand — "Marke" on EBAY_DE, per the localized
+// Content-Language this app sends) a category requires varies per category
+// and is only knowable by asking eBay — publishOffer rejects with errorId
+// 25002 one missing aspect at a time otherwise, discovered live 2026-08-31
+// on "Vitamine & Mineralien" requiring Brand. Same application-token
+// rationale as searchCategories: category metadata isn't seller-specific.
+export async function fetchRequiredAspects(categoryId: string): Promise<RequiredAspect[]> {
+  const accessToken = await getApplicationToken();
+  const params = new URLSearchParams({ category_id: categoryId });
+  const res = await ebayFetch(
+    `/commerce/taxonomy/v1/category_tree/${CATEGORY_TREE_ID}/get_item_aspects_for_category?${params.toString()}`,
+    accessToken
+  );
+  await throwIfNotOk(res, "getItemAspectsForCategory");
+
+  const json = (await res.json()) as TaxonomyAspectsResponse;
+  return (json.aspects ?? [])
+    .filter((a) => a.aspectConstraint?.aspectRequired === true)
+    .map((a) => ({
+      name: a.localizedAspectName,
+      values: (a.aspectValues ?? []).map((v) => v.localizedValue),
+    }));
+}
+
 // ─── Business policies (Account API) ───────────────────────────────────────────
 
 export interface BusinessPolicySummary {

@@ -3,6 +3,7 @@ import {
   validateDetailsStep,
   validateCategoryStep,
   validateImagesStep,
+  validateAspectsStep,
   validatePoliciesStep,
   type DraftFormState,
 } from "./wizardValidation";
@@ -21,6 +22,8 @@ function makeDraft(overrides: Partial<DraftFormState> = {}): DraftFormState {
     category_id: "9355",
     category_name: "Cell Phones",
     image_urls: ["https://example.com/img.jpg"],
+    aspects: { Brand: "Acme" },
+    required_aspect_names: ["Brand"],
     fulfillment_policy_id: "fp-1",
     payment_policy_id: "pp-1",
     return_policy_id: "rp-1",
@@ -105,6 +108,30 @@ describe("validateImagesStep", () => {
     expect(validateImagesStep(makeDraft({ image_urls: [] }))).toBe(
       "Add at least one image."
     );
+  });
+});
+
+describe("validateAspectsStep", () => {
+  it("passes when every required aspect has a value", () => {
+    expect(validateAspectsStep(makeDraft())).toBeNull();
+  });
+
+  it("passes when the category has no required aspects", () => {
+    expect(
+      validateAspectsStep(makeDraft({ required_aspect_names: [], aspects: {} }))
+    ).toBeNull();
+  });
+
+  it("fails and names the missing aspect when a required value is blank", () => {
+    expect(validateAspectsStep(makeDraft({ aspects: { Brand: "" } }))).toBe(
+      "Fill in required details: Brand."
+    );
+  });
+
+  it("fails and names the missing aspect when it's absent from aspects entirely", () => {
+    expect(
+      validateAspectsStep(makeDraft({ required_aspect_names: ["Brand", "Type"], aspects: {} }))
+    ).toBe("Fill in required details: Brand, Type.");
   });
 });
 

@@ -95,7 +95,8 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   already persisted `ebay_offer_id` earlier in the same request, not on
   writing it itself.
 - **Save Draft / Publish skip the step validators.** `_lib/wizardValidation.ts`'s
-  five validators (`validateSourceStep` … `validatePoliciesStep`) only run
+  six validators (`validateSourceStep` … `validatePoliciesStep`, plus
+  `validateAspectsStep`) only run
   from `ListingWizard.tsx`'s `goNext()`, when the user clicks "Next" within
   the wizard. `handleSaveDraft`/`handlePublish` call `saveDraft()` directly
   with no validation pass, so a user can click Save Draft on step 1 with an
@@ -198,6 +199,28 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   silently create a listing targeted at the wrong country — a worse,
   harder-to-notice version of the exact bug this whole feature exists to
   prevent. The tenant always types `country` themselves.
+- **Required item aspects (Brand, etc.) are category-specific — fixed
+  2026-08-31.** `publishOffer` can 400 with errorId 25002 for a missing
+  required aspect (e.g. "Das Artikelmerkmal Marke fehlt" — the aspect name
+  is localized to whatever `Content-Language` this app sends, so "Brand" on
+  EBAY_US is "Marke" on EBAY_DE), one missing aspect at a time, confirmed
+  live 2026-08-31 on "Vitamine & Mineralien". There's no fixed list — every
+  category has its own required-aspect set, only knowable via eBay's
+  Taxonomy API. Fixed with a new wizard step (`AspectsStep.tsx`, inserted
+  between Category and Images in `ListingWizard.tsx`'s `STEPS`) that fetches
+  `fetchRequiredAspects(categoryId)` (`publish.ts`, Taxonomy API
+  `get_item_aspects_for_category`, application token like
+  `searchCategories` — category metadata isn't seller-specific) whenever
+  `draft.category_id` changes, and renders a Select (if eBay returned
+  suggested values) or free-text Input per required aspect. Stored on
+  `ebay_listing_drafts.aspects` (migration `037`, `jsonb`, flat
+  `name -> value` map — this app doesn't support eBay's MULTI-cardinality
+  aspects in v1) and sent as `product.aspects` in
+  `buildInventoryItemPayload`, each value wrapped in a single-element array
+  per eBay's schema. If you add a new required-field-fetching step like
+  this one, see the gotcha above about `merchant_location_key` for the
+  general "fetch live from eBay, never guess" pattern this now follows
+  twice.
 
 ## Tests
 

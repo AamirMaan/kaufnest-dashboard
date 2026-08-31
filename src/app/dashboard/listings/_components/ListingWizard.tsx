@@ -17,6 +17,7 @@ import {
   validateDetailsStep,
   validateCategoryStep,
   validateImagesStep,
+  validateAspectsStep,
   validatePoliciesStep,
   type DraftFormState,
 } from "../_lib/wizardValidation";
@@ -24,17 +25,19 @@ import { SourceStep } from "./SourceStep";
 import { DetailsStep } from "./DetailsStep";
 import { CategoryStep } from "./CategoryStep";
 import { ImagesStep } from "./ImagesStep";
+import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
 import { ReviewStep } from "./ReviewStep";
 import type { EbayListingDraft } from "@/types";
 
-const STEPS = ["source", "details", "category", "images", "policies", "review"] as const;
+const STEPS = ["source", "details", "category", "aspects", "images", "policies", "review"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
   source: "Source",
   details: "Details",
   category: "Category",
+  aspects: "Item Specifics",
   images: "Images",
   policies: "Policies",
   review: "Review",
@@ -44,6 +47,7 @@ const VALIDATORS: Record<Exclude<Step, "review">, (draft: DraftFormState) => str
   source: validateSourceStep,
   details: validateDetailsStep,
   category: validateCategoryStep,
+  aspects: validateAspectsStep,
   images: validateImagesStep,
   policies: validatePoliciesStep,
 };
@@ -61,6 +65,8 @@ const EMPTY_DRAFT: DraftFormState = {
   category_id: "",
   category_name: "",
   image_urls: [],
+  aspects: {},
+  required_aspect_names: [],
   fulfillment_policy_id: "",
   payment_policy_id: "",
   return_policy_id: "",
@@ -81,6 +87,8 @@ function toFormState(row: EbayListingDraft): DraftFormState {
     category_id: row.category_id ?? "",
     category_name: row.category_name ?? "",
     image_urls: row.image_urls,
+    aspects: row.aspects ?? {},
+    required_aspect_names: [],
     fulfillment_policy_id: row.fulfillment_policy_id ?? "",
     payment_policy_id: row.payment_policy_id ?? "",
     return_policy_id: row.return_policy_id ?? "",
@@ -167,6 +175,7 @@ export function ListingWizard({ draftId }: Props) {
       category_id: draft.category_id || null,
       category_name: draft.category_name || null,
       image_urls: draft.image_urls,
+      aspects: draft.aspects,
       fulfillment_policy_id: draft.fulfillment_policy_id || null,
       payment_policy_id: draft.payment_policy_id || null,
       return_policy_id: draft.return_policy_id || null,
@@ -278,6 +287,7 @@ export function ListingWizard({ draftId }: Props) {
         {step === "source" && <SourceStep draft={draft} setDraft={setDraft} />}
         {step === "details" && <DetailsStep draft={draft} setDraft={setDraft} />}
         {step === "category" && <CategoryStep draft={draft} setDraft={setDraft} />}
+        {step === "aspects" && <AspectsStep draft={draft} setDraft={setDraft} />}
         {step === "images" && <ImagesStep draft={draft} setDraft={setDraft} draftId={existingRow?.id ?? null} />}
         {step === "policies" && <PoliciesStep draft={draft} setDraft={setDraft} />}
         {step === "review" && <ReviewStep draft={draft} />}

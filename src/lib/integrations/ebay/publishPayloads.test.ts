@@ -17,6 +17,7 @@ function makeDraft(overrides: Partial<EbayListingDraft> = {}): EbayListingDraft 
     category_id: "9355",
     category_name: "Cell Phones",
     image_urls: ["https://example.com/img.jpg"],
+    aspects: { Brand: "Acme" },
     fulfillment_policy_id: "fp-1",
     payment_policy_id: "pp-1",
     return_policy_id: "rp-1",
@@ -43,8 +44,26 @@ describe("buildInventoryItemPayload", () => {
         title: "Wireless Mouse",
         description: "A great mouse.",
         imageUrls: ["https://example.com/img.jpg"],
+        aspects: { Brand: ["Acme"] },
       },
     });
+  });
+
+  it("maps multiple required aspects, each wrapped in a single-element array", () => {
+    const payload = buildInventoryItemPayload(
+      makeDraft({ aspects: { Brand: "Acme", Type: "Wireless" } })
+    );
+    expect(payload.product.aspects).toEqual({ Brand: ["Acme"], Type: ["Wireless"] });
+  });
+
+  it("omits an aspect with an empty value rather than sending an empty string", () => {
+    const payload = buildInventoryItemPayload(makeDraft({ aspects: { Brand: "" } }));
+    expect(payload.product.aspects).toEqual({});
+  });
+
+  it("sends no aspects when the category has none required", () => {
+    const payload = buildInventoryItemPayload(makeDraft({ aspects: {} }));
+    expect(payload.product.aspects).toEqual({});
   });
 
   it("maps used and refurbished conditions to their eBay enum values", () => {
