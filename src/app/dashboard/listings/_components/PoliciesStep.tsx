@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Field, Select } from "@/components/ui/FormFields";
+import { Field, Select, Input } from "@/components/ui/FormFields";
+import { Button } from "@/components/ui/Button";
 import type { DraftFormState } from "../_lib/wizardValidation";
 
 interface PolicySummary {
@@ -24,11 +25,23 @@ interface Props {
   setDraft: (patch: Partial<DraftFormState>) => void;
 }
 
+const EMPTY_NEW_LOCATION = {
+  name: "",
+  addressLine1: "",
+  city: "",
+  stateOrProvince: "",
+  postalCode: "",
+  country: "",
+};
+
 export function PoliciesStep({ draft, setDraft }: Props) {
   const [policies, setPolicies] = useState<BusinessPolicies | null>(null);
   const [locations, setLocations] = useState<InventoryLocation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [newLocation, setNewLocation] = useState(EMPTY_NEW_LOCATION);
+  const [creatingLocation, setCreatingLocation] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -60,6 +73,28 @@ export function PoliciesStep({ draft, setDraft }: Props) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleCreateLocation() {
+    setCreateError(null);
+    setCreatingLocation(true);
+    try {
+      const res = await fetch("/api/listings/ebay/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newLocation),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to create inventory location");
+      const created: InventoryLocation = json.location;
+      setLocations((prev) => [...(prev ?? []), created]);
+      setDraft({ merchant_location_key: created.key });
+      setNewLocation(EMPTY_NEW_LOCATION);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create inventory location");
+    } finally {
+      setCreatingLocation(false);
+    }
+  }
 
   if (loading) return <p className="text-sm text-(--color-text-muted)">Loading business policies…</p>;
   if (error) return <p className="text-sm text-(--color-danger-text)">{error}</p>;
@@ -103,13 +138,74 @@ export function PoliciesStep({ draft, setDraft }: Props) {
         </Select>
       </Field>
 
-      <Field label="Inventory Location" required>
-        {locations.length === 0 ? (
-          <p className="text-sm text-(--color-danger-text)">
-            No usable inventory location found in your eBay account. Create one with a
-            complete address (including country) in Seller Hub, then come back to this step.
+      {locations.length === 0 ? (
+        <div className="space-y-3 rounded-(--radius-btn) border border-(--color-border) p-4">
+          <p className="text-sm text-(--color-text-muted)">
+            No inventory location found in your eBay account yet. Create one below — it
+            will be used as the ship-from address on your listings.
           </p>
-        ) : (
+          {createError && <p className="text-sm text-(--color-danger-text)">{createError}</p>}
+
+          <Field label="Location Name" required>
+            <Input
+              value={newLocation.name}
+              onChange={(e) => setNewLocation((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Main Warehouse"
+            />
+          </Field>
+          <Field label="City" required>
+            <Input
+              value={newLocation.city}
+              onChange={(e) => setNewLocation((prev) => ({ ...prev, city: e.target.value }))}
+              placeholder="Berlin"
+            />
+          </Field>
+          <Field label="State / Province">
+            <Input
+              value={newLocation.stateOrProvince}
+              onChange={(e) =>
+                setNewLocation((prev) => ({ ...prev, stateOrProvince: e.target.value }))
+              }
+              placeholder="Optional"
+            />
+          </Field>
+          <Field label="Postal Code" required>
+            <Input
+              value={newLocation.postalCode}
+              onChange={(e) =>
+                setNewLocation((prev) => ({ ...prev, postalCode: e.target.value }))
+              }
+              placeholder="10115"
+            />
+          </Field>
+          <Field label="Country" required>
+            <Input
+              value={newLocation.country}
+              onChange={(e) =>
+                setNewLocation((prev) => ({ ...prev, country: e.target.value.toUpperCase() }))
+              }
+              placeholder="DE"
+              maxLength={2}
+            />
+          </Field>
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleCreateLocation}
+            disabled={
+              creatingLocation ||
+              !newLocation.name.trim() ||
+              !newLocation.city.trim() ||
+              !newLocation.postalCode.trim() ||
+              !/^[A-Z]{2}$/.test(newLocation.country)
+            }
+          >
+            {creatingLocation ? "Creating…" : "Create location"}
+          </Button>
+        </div>
+      ) : (
+        <Field label="Inventory Location" required>
           <Select
             value={draft.merchant_location_key}
             onChange={(e) => setDraft({ merchant_location_key: e.target.value })}
@@ -119,8 +215,8 @@ export function PoliciesStep({ draft, setDraft }: Props) {
               <option key={loc.key} value={loc.key}>{loc.name}</option>
             ))}
           </Select>
-        )}
-      </Field>
+        </Field>
+      )}
     </div>
   );
 }
