@@ -137,6 +137,7 @@ export async function searchCategories(query: string): Promise<CategorySuggestio
 export interface RequiredAspect {
   name: string;
   values: string[];
+  isProductIdentifier: boolean;
 }
 
 interface TaxonomyAspectValue {
@@ -144,19 +145,39 @@ interface TaxonomyAspectValue {
 }
 interface TaxonomyAspect {
   localizedAspectName: string;
-  aspectConstraint?: { aspectRequired?: boolean };
+  aspectConstraint?: { aspectRequired?: boolean; aspectUsage?: string };
   aspectValues?: TaxonomyAspectValue[];
 }
 interface TaxonomyAspectsResponse {
   aspects?: TaxonomyAspect[];
 }
 
+// Product identifiers (GTIN family: EAN/UPC/ISBN, plus MPN) are a
+// documented eBay concept distinct from ordinary category aspects — many
+// categories require at least one of them (a GTIN, OR a Brand+MPN pair),
+// per eBay's own publishing-offers docs. The trap: eBay's Taxonomy API
+// commonly reports these as aspectUsage "RECOMMENDED" rather than
+// aspectRequired: true, even when publishOffer treats them as mandatory —
+// confirmed live 2026-08-31: "Brand" was correctly caught by
+// `aspectRequired === true`, but "EAN" was NOT, and still made
+// publishOffer 400 with errorId 25002 once Brand was fixed. Recognizing
+// this named, finite set by name (rather than loosening the required-filter
+// to "anything not explicitly OPTIONAL", which would flood every category's
+// step with cosmetic aspects like Color/Style/Material) closes this whole
+// class of failure going forward, not just for EAN.
+const PRODUCT_IDENTIFIER_NAMES = new Set(["ean", "upc", "isbn", "gtin", "mpn"]);
+
+function isProductIdentifierAspect(name: string): boolean {
+  return PRODUCT_IDENTIFIER_NAMES.has(name.trim().toLowerCase());
+}
+
 // Which item aspects (e.g. Brand — "Marke" on EBAY_DE, per the localized
 // Content-Language this app sends) a category requires varies per category
 // and is only knowable by asking eBay — publishOffer rejects with errorId
 // 25002 one missing aspect at a time otherwise, discovered live 2026-08-31
-// on "Vitamine & Mineralien" requiring Brand. Same application-token
-// rationale as searchCategories: category metadata isn't seller-specific.
+// on "Vitamine & Mineralien" requiring Brand, then EAN. Same
+// application-token rationale as searchCategories: category metadata isn't
+// seller-specific.
 export async function fetchRequiredAspects(categoryId: string): Promise<RequiredAspect[]> {
   const accessToken = await getApplicationToken();
   const params = new URLSearchParams({ category_id: categoryId });
@@ -168,11 +189,38 @@ export async function fetchRequiredAspects(categoryId: string): Promise<Required
 
   const json = (await res.json()) as TaxonomyAspectsResponse;
   return (json.aspects ?? [])
-    .filter((a) => a.aspectConstraint?.aspectRequired === true)
+    .filter(
+      (a) =>
+        a.aspectConstraint?.aspectRequired === true ||
+        isProductIdentifierAspect(a.localizedAspectName)
+    )
     .map((a) => ({
       name: a.localizedAspectName,
       values: (a.aspectValues ?? []).map((v) => v.localizedValue),
+      isProductIdentifier: isProductIdentifierAspect(a.localizedAspectName),
     }));
+}
+
+// eBay's sanctioned "no identifier available" placeholder — using it
+// instead of the field is a real, documented mechanism (not a workaround),
+// but the exact text is marketplace-specific: "Does not apply" on
+// English-language sites, "Nicht zutreffend" on EBAY_DE/AT, etc. Sending
+// the wrong site's text is silently treated as an invalid real identifier
+// rather than the "not applicable" sentinel.
+const MARKETPLACE_NOT_APPLICABLE_TEXT: Record<string, string> = {
+  EBAY_DE: "Nicht zutreffend",
+  EBAY_AT: "Nicht zutreffend",
+  EBAY_US: "Does not apply",
+  EBAY_GB: "Does not apply",
+  EBAY_CA: "Does not apply",
+  EBAY_AU: "Does not apply",
+  EBAY_FR: "Non applicable",
+  EBAY_IT: "Non applicabile",
+  EBAY_ES: "No aplicable",
+};
+
+export function getProductIdentifierNotApplicableText(): string {
+  return MARKETPLACE_NOT_APPLICABLE_TEXT[MARKETPLACE_ID] ?? "Does not apply";
 }
 
 // ─── Business policies (Account API) ───────────────────────────────────────────

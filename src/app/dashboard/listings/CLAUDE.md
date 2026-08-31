@@ -104,8 +104,10 @@ field (chosen per-tenant in the wizard's Policies step, not a global env
 var — see `SKILL.md`'s gotcha for why that used to be broken for every
 tenant but one). The inventory item's `product.aspects` comes from the
 draft's `aspects` field (chosen per-category in the wizard's Item Specifics
-step — see `SKILL.md`'s gotcha for why this can't be a fixed field list).
-`status` moves `draft → publishing → published`, or
+step — see `SKILL.md`'s gotcha for why this can't be a fixed field list,
+and its follow-up gotcha for why product identifiers like EAN needed a
+second fix the same day even after Brand was handled). `status` moves
+`draft → publishing → published`, or
 `→ failed` with `publish_error` set on any error — the draft stays editable
 and re-publishable after a failure. The SKU is generated once
 (`generateListingSku()`, `KN` + 12 random alphanumeric chars) and persisted

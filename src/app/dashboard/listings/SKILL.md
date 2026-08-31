@@ -221,6 +221,35 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   this one, see the gotcha above about `merchant_location_key` for the
   general "fetch live from eBay, never guess" pattern this now follows
   twice.
+- **Product identifiers (EAN/UPC/ISBN/GTIN/MPN) are a separate class from
+  ordinary aspects, and eBay's Taxonomy API under-reports them as
+  "required" — fixed 2026-08-31, same day as the Brand fix above.** After
+  Brand was fixed, the *same* draft still failed identically at
+  `publishOffer` with errorId 25002, this time for EAN — proof it wasn't a
+  timing issue, it was a second, structurally different gap. eBay's own
+  docs: many categories need at least one product identifier (a GTIN, or a
+  Brand+MPN pair) — a documented, *separate* requirement from generic
+  aspects — but the Taxonomy API commonly reports these as `aspectUsage:
+  "RECOMMENDED"` rather than `aspectRequired: true`, even though
+  `publishOffer` treats them as mandatory. `fetchRequiredAspects` now also
+  includes any aspect whose name matches a fixed, known set (`ean`, `upc`,
+  `isbn`, `gtin`, `mpn` — case-insensitive, see `PRODUCT_IDENTIFIER_NAMES`
+  in `publish.ts`) regardless of what `aspectRequired`/`aspectUsage` say,
+  rather than loosening the filter to "everything not explicitly OPTIONAL"
+  (which would flood every category's step with cosmetic aspects like
+  Color/Style/Material that genuinely are optional). Each `RequiredAspect`
+  now carries an `isProductIdentifier` flag; `AspectsStep.tsx` uses it to
+  show a "This product doesn't have a {name}" checkbox next to that field,
+  which fills in eBay's own sanctioned placeholder text instead of leaving
+  it blank — `getProductIdentifierNotApplicableText()` (`publish.ts`) is
+  marketplace-specific ("Does not apply" on English sites, "Nicht
+  zutreffend" on EBAY_DE/AT, etc. — sending the wrong site's text is
+  silently treated as an invalid real identifier, not recognized as "N/A").
+  **This is a finite, named list, not a general "when in doubt, include it"
+  rule** — if a *third* category of quiet-failure field turns up beyond
+  aspects and identifiers, add it as its own recognized case here rather
+  than broadening the filter further; the goal is closing named gaps eBay
+  documents, not guessing at every possible one.
 
 ## Tests
 

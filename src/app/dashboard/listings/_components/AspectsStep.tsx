@@ -7,6 +7,7 @@ import type { DraftFormState } from "../_lib/wizardValidation";
 interface RequiredAspect {
   name: string;
   values: string[];
+  isProductIdentifier: boolean;
 }
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export function AspectsStep({ draft, setDraft }: Props) {
   const [required, setRequired] = useState<RequiredAspect[] | null>(null);
+  const [notApplicableText, setNotApplicableText] = useState("Does not apply");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +40,7 @@ export function AspectsStep({ draft, setDraft }: Props) {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Failed to load required item details");
         setRequired(json.aspects);
+        setNotApplicableText(json.notApplicableText);
         setDraft({ required_aspect_names: json.aspects.map((a: RequiredAspect) => a.name) });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load required item details");
@@ -65,30 +68,64 @@ export function AspectsStep({ draft, setDraft }: Props) {
       <p className="text-sm text-(--color-text-muted)">
         eBay requires these details for the category you selected.
       </p>
-      {required.map((aspect) => (
-        <Field key={aspect.name} label={aspect.name} required>
-          {aspect.values.length > 0 ? (
-            <Select
-              value={draft.aspects[aspect.name] ?? ""}
-              onChange={(e) =>
-                setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
-              }
-            >
-              <option value="">Select…</option>
-              {aspect.values.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </Select>
-          ) : (
-            <Input
-              value={draft.aspects[aspect.name] ?? ""}
-              onChange={(e) =>
-                setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
-              }
-            />
-          )}
-        </Field>
-      ))}
+      {required.map((aspect) => {
+        const value = draft.aspects[aspect.name] ?? "";
+        const isNotApplicable = value === notApplicableText;
+
+        if (aspect.isProductIdentifier && aspect.values.length === 0) {
+          return (
+            <Field key={aspect.name} label={aspect.name} required>
+              <Input
+                value={isNotApplicable ? "" : value}
+                disabled={isNotApplicable}
+                onChange={(e) =>
+                  setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
+                }
+              />
+              <label className="mt-1.5 flex items-center gap-2 text-xs text-(--color-text-muted)">
+                <input
+                  type="checkbox"
+                  checked={isNotApplicable}
+                  onChange={(e) =>
+                    setDraft({
+                      aspects: {
+                        ...draft.aspects,
+                        [aspect.name]: e.target.checked ? notApplicableText : "",
+                      },
+                    })
+                  }
+                />
+                This product doesn&apos;t have a {aspect.name}
+              </label>
+            </Field>
+          );
+        }
+
+        return (
+          <Field key={aspect.name} label={aspect.name} required>
+            {aspect.values.length > 0 ? (
+              <Select
+                value={value}
+                onChange={(e) =>
+                  setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
+                }
+              >
+                <option value="">Select…</option>
+                {aspect.values.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                value={value}
+                onChange={(e) =>
+                  setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
+                }
+              />
+            )}
+          </Field>
+        );
+      })}
     </div>
   );
 }
