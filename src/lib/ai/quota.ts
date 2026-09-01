@@ -36,12 +36,16 @@ export function callsByUser(rows: UsageRow[]): Record<string, number> {
 /** Every usage row for this tenant in the current period. */
 export async function readTenantUsage(tenantId: string): Promise<UsageRow[]> {
   const control = createControlClient();
-  const { data } = await control
+  const { data, error } = await control
     .schema("control")
     .from("tenant_ai_usage")
     .select("user_id, kind, calls")
     .eq("tenant_id", tenantId)
     .eq("period", currentPeriod());
+
+  if (error) {
+    throw new Error(`Failed to read AI usage: ${error.message}`);
+  }
 
   return (data as UsageRow[] | null) ?? [];
 }
@@ -61,7 +65,7 @@ export async function recordUsage(args: {
   const control = createControlClient();
   const period = currentPeriod();
 
-  const { data: existing } = await control
+  const { data: existing, error: readError } = await control
     .schema("control")
     .from("tenant_ai_usage")
     .select("calls, input_tokens, output_tokens")
@@ -71,11 +75,15 @@ export async function recordUsage(args: {
     .eq("kind", args.kind)
     .maybeSingle();
 
+  if (readError) {
+    throw new Error(`Failed to read existing AI usage: ${readError.message}`);
+  }
+
   const prev = (existing as
     | { calls: number; input_tokens: number; output_tokens: number }
     | null) ?? { calls: 0, input_tokens: 0, output_tokens: 0 };
 
-  await control
+  const { error: upsertError } = await control
     .schema("control")
     .from("tenant_ai_usage")
     .upsert(
@@ -91,4 +99,8 @@ export async function recordUsage(args: {
       },
       { onConflict: "tenant_id,user_id,period,kind" }
     );
+
+  if (upsertError) {
+    throw new Error(`Failed to record AI usage: ${upsertError.message}`);
+  }
 }
