@@ -78,3 +78,26 @@ No test suite targets these pages — they're thin wrappers over
   provisioning/invite) is present. Without this, `dashboard/layout.tsx`'s
   `createClient()` falls back to the public schema, the `profiles` lookup
   returns no row, and the new user is bounced straight back to `/login`.
+- **`/api/signup/provision` fully rolls back on failure (2026-09-01) —
+  it does NOT leave a resumable half-provisioned state anymore.** Before
+  this date, a failure left the `control.tenants` claim row in
+  `status="provisioning"` for `/welcome`'s "Try again" button (or a
+  concurrent request) to resume — but a real incident (an undocumented DB
+  constraint rejecting `status="provisioning"` outright, see
+  `supabase/CLAUDE.md`'s `control-plane/006` entry) showed this leaves a
+  **confirmed auth user with no tenant and no self-service way out**:
+  `proxy.ts` bounces them to `/login` forever since no `profiles` row will
+  ever exist for them. The catch block now best-effort rolls back
+  everything the successful path could have created — unexposes and drops
+  the schema (`drop_tenant_schema` RPC, same one `DELETE
+  /api/admin/tenants/[id]` uses), deletes the `control.tenants` row, and
+  deletes the auth user itself — so a failed attempt leaves no trace and
+  the person can just sign up again. This also closes a subtler bug the
+  old resumable design had: once a `provisioning` row's slug/schema name
+  becomes reusable, a LATER, unrelated signup landing on that same schema
+  name would have silently inherited the FIRST company's `company_profile`
+  row via the `existingProfileRow` check (`CREATE TABLE IF NOT EXISTS`-style
+  idempotency working against you) — full rollback prevents the schema
+  from ever surviving to collide with a future attempt. Each rollback step
+  is independently best-effort (logged, not thrown) so a cleanup failure
+  never masks the original error or blocks the response.

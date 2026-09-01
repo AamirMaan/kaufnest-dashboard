@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
-import { addExposedSchema } from "@/lib/supabase/managementApi";
+import { addExposedSchema, removeExposedSchema } from "@/lib/supabase/managementApi";
 import { slugForCompany, nextAvailableSlug, schemaNameFor } from "@/lib/utils/tenantSlug";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
@@ -198,11 +198,50 @@ export async function POST() {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    // Row stays 'provisioning' — visible in /admin, and the retry path above
-    // resumes it. Detail is logged, never returned (project verifier rule).
     console.error("[signup/provision] failed:", errorMessage(err));
+
+    // Full rollback rather than leaving a resumable-but-broken state.
+    // Confirmed live 2026-09-01: an undocumented DB constraint made every
+    // self-serve signup fail here, leaving a confirmed auth user with no
+    // tenant and no way to ever complete provisioning — permanently stuck
+    // on /login with no self-service recovery. Worse, once this schema's
+    // slug is freed up (below), a LATER, unrelated signup could land on
+    // the exact same schema name and silently inherit this attempt's
+    // `company_profile` row via the existingProfileRow check above, if the
+    // schema itself weren't also dropped. Best-effort: log each step but
+    // never let a cleanup failure mask the original error or block the
+    // response — a partially-rolled-back attempt is still strictly better
+    // than the pre-2026-09-01 permanently-wedged state.
+    try {
+      await removeExposedSchema(schemaName);
+    } catch (cleanupErr) {
+      console.error("[signup/provision] rollback: unexpose schema failed:", errorMessage(cleanupErr));
+    }
+    try {
+      const { error: dropError } = await service.rpc("drop_tenant_schema", { schema_name: schemaName });
+      if (dropError) throw dropError;
+    } catch (cleanupErr) {
+      console.error("[signup/provision] rollback: drop schema failed:", errorMessage(cleanupErr));
+    }
+    try {
+      const { error: deleteUserError } = await service.auth.admin.deleteUser(user.id);
+      if (deleteUserError) throw deleteUserError;
+    } catch (cleanupErr) {
+      console.error("[signup/provision] rollback: delete auth user failed:", errorMessage(cleanupErr));
+    }
+    try {
+      const { error: deleteTenantError } = await control
+        .schema("control")
+        .from("tenants")
+        .delete()
+        .eq("schema_name", schemaName);
+      if (deleteTenantError) throw deleteTenantError;
+    } catch (cleanupErr) {
+      console.error("[signup/provision] rollback: delete tenants row failed:", errorMessage(cleanupErr));
+    }
+
     return NextResponse.json(
-      { error: "We couldn't finish setting up your workspace. Please try again." },
+      { error: "We couldn't finish setting up your workspace. Please sign up again." },
       { status: 500 }
     );
   }
