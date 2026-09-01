@@ -1,4 +1,4 @@
-import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser } from "./planGating";
+import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser, getAiGenerationLimit, hasAiFeatures } from "./planGating";
 
 describe("hasMessagingAndListings", () => {
   it("is true for business and for trial (trial mirrors business)", () => {
@@ -38,5 +38,23 @@ describe("canAddUser", () => {
   it("never caps business or trial", () => {
     expect(canAddUser("business", 9999)).toBe(true);
     expect(canAddUser("trial", 9999)).toBe(true);
+  });
+});
+
+describe("getAiGenerationLimit", () => {
+  it("gives business and trial the full monthly allowance", () => {
+    expect(getAiGenerationLimit("business")).toBe(300);
+    expect(getAiGenerationLimit("trial")).toBe(300);
+  });
+
+  it("gives plans without the AI feature no allowance at all", () => {
+    expect(getAiGenerationLimit("starter")).toBe(0);
+    expect(getAiGenerationLimit("pro")).toBe(0);
+  });
+
+  it("never grants an allowance to a plan that fails the feature gate", () => {
+    for (const plan of ["trial", "starter", "pro", "business"] as const) {
+      if (!hasAiFeatures(plan)) expect(getAiGenerationLimit(plan)).toBe(0);
+    }
   });
 });

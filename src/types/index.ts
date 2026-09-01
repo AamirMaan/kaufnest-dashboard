@@ -257,6 +257,9 @@ export interface Tenant {
   stripe_subscription_id: string | null;
   plan: TenantPlan;
   status: TenantStatus;
+  /** Platform-admin visibility switch for AI features. The plan grants AI;
+   * this revokes it per tenant. Defaults true (control-plane migration 007). */
+  ai_enabled: boolean;
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
