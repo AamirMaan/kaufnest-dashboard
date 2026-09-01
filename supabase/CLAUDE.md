@@ -26,6 +26,26 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   (admin_email, action, tenant_id, metadata, created_at). Written to by
   `/api/admin/impersonate` on every impersonation; not yet used by any other
   admin action.
+- `control-plane/005_tenants_admin_email_unique.sql` — unique index on
+  `control.tenants.admin_email` — the idempotency lock for self-serve
+  signup's provisioning route (`/api/signup/provision`), which claims its
+  tenant row before doing expensive work so a refresh or concurrent request
+  collides (23505) instead of creating a second schema.
+- `control-plane/006_tenants_provisioning_status.sql` — adds `'provisioning'`
+  to `control.tenants.status`'s CHECK constraint (`tenants_status_check`).
+  Root cause of self-serve trial signup being completely broken (confirmed
+  live 2026-09-01): this constraint exists live, allowing only
+  `'invited'/'active'/'deactivated'`, but was never tracked in any migration
+  file here — `005`'s own header comment explicitly (and, at the time,
+  correctly) documented "No CHECK constraint exists on
+  `control.tenants.status`", based on `001_schema.sql`'s plain `text not
+  null default 'active'` column. Someone added this constraint directly
+  against the live database afterward, outside any tracked migration,
+  without including `'provisioning'` — the status `/api/signup/provision`
+  has always written to its claim row first (see that route's own
+  comments). Every self-serve trial signup failed at that very first insert
+  until this was applied. See `(auth)/CLAUDE.md`/`SKILL.md` for the
+  signup→provision→welcome flow this backs.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,
