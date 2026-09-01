@@ -22,20 +22,24 @@ not tenant roles.
   both inline (red banner in the form) and via `useToast().error(...)`; on
   success shows a `useToast().success(...)` toast before closing.
 - `_components/EditTenantModal.tsx` — "Edit Tenant" modal: pre-filled form for
-  `plan`, `status`, and `admin_email`. Computes a partial diff against the
-  current tenant and sends only changed fields to `PATCH
-  /api/admin/tenants/[tenant.id]`. Shows inline note when email changes ("A
-  verification email will be sent to the new address."). Calls `onClose()` on
-  success (parent bumps `refreshKey`).
+  `plan`, `status`, `admin_email`, and `ai_enabled` (rendered as a `Checkbox`
+  from `@/components/ui/FormFields`, "AI features visible to this tenant").
+  Computes a partial diff against the current tenant and sends only changed
+  fields to `PATCH /api/admin/tenants/[tenant.id]`. Shows inline note when
+  email changes ("A verification email will be sent to the new address.").
+  Calls `onClose()` on success (parent bumps `refreshKey`).
 - `_components/TenantActions.tsx` — per-row action buttons. Accepts
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
-  (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
-  button (only shown when `tenant.status === "invited"`; posts to
-  `/api/admin/resend-invite`), an "Impersonate" button (confirm dialog naming
-  `tenant.admin_email`, posts `{ tenantId }` only to `/api/admin/impersonate`
-  — the target email is never client-supplied, see that route below —
-  redirects to the returned magic link), and a **"Delete" button** (danger
-  variant) that opens `DeleteTenantModal`.
+  (opens `EditTenantModal`; calls `onRefresh` on close), an **"AI: On"/"AI:
+  Off" toggle button** (PATCHes `{ ai_enabled: !tenant.ai_enabled }` to
+  `/api/admin/tenants/[tenant.id]`, toasts "AI enabled"/"AI hidden", then
+  calls `onRefresh`), a "Resend Invite" button (only shown when
+  `tenant.status === "invited"`; posts to `/api/admin/resend-invite`), an
+  "Impersonate" button (confirm dialog naming `tenant.admin_email`, posts
+  `{ tenantId }` only to `/api/admin/impersonate` — the target email is
+  never client-supplied, see that route below — redirects to the returned
+  magic link), and a **"Delete" button** (danger variant) that opens
+  `DeleteTenantModal`.
 - `_components/DeleteTenantModal.tsx` — destructive-confirmation modal for
   tenant deletion. Accepts `{ open, tenant, onClose, onDeleted }`. The user must
   **type the tenant's `schema_name` exactly** before the "Delete tenant" button
@@ -94,10 +98,14 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   admin via toast + inline banner.
 - **`tenants/route.ts`** (`GET`) — lists `control.tenants`, newest first.
 - **`tenants/[id]/route.ts`** (`PATCH`, `DELETE`) —
-  - `PATCH`: partial update for `{ plan?, status?, admin_email? }`. Steps: (1) fetch
-    current row — 404 on `PGRST116`; (2) if `admin_email` changed, scan Project B
-    Auth users and call `updateUserById`; (3) `.update(patch)` only changed fields.
-    Platform-admin override — writes `plan`/`status` directly, bypassing Stripe.
+  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled? }`.
+    Steps: (1) fetch current row — 404 on `PGRST116`; (2) if `admin_email`
+    changed, scan Project B Auth users and call `updateUserById`; (3)
+    `.update(patch)` only changed fields (`ai_enabled` uses a `!== undefined`
+    guard, not truthiness — `false` is a real value: a platform admin actually
+    revoking AI). Platform-admin override — writes `plan`/`status` directly,
+    bypassing Stripe. `ai_enabled` is the AI-visibility switch, not a plan
+    field — it doesn't touch the Stripe-owns-`plan`/`status` invariant.
   - `DELETE`: permanently destroys a tenant. Steps: (1) fetch tenant `schema_name`;
     (2a) `removeExposedSchema(schema_name)` — removes the schema from Project B's
     PostgREST "Exposed schemas" list via the Management API **before** dropping.
