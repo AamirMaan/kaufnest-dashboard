@@ -54,4 +54,23 @@ describe("pathFromPublicUrl", () => {
   it("strips a query string from a signed-looking URL", () => {
     expect(pathFromPublicUrl(`${base}/tenant_a/d1/x.jpg?token=abc`)).toBe("tenant_a/d1/x.jpg");
   });
+
+  it("returns null for a foreign host merely containing the bucket marker in its path — must not accept any host that happens to serve a matching path", () => {
+    expect(
+      pathFromPublicUrl("https://evil-attacker.com/storage/v1/object/public/listing-images/tenant_kaufnest/draft-1/x.jpg")
+    ).toBeNull();
+  });
+
+  it("returns null for the eBay CDN hostname even when its path contains the bucket marker as a prefix segment", () => {
+    expect(
+      pathFromPublicUrl("https://i.ebayimg.com/proxy/storage/v1/object/public/listing-images/tenant_kaufnest/draft-1/x.jpg")
+    ).toBeNull();
+  });
+
+  it("returns null instead of throwing on malformed percent-encoding", () => {
+    expect(() =>
+      pathFromPublicUrl(`${base}/tenant_a/d1/%2.jpg`)
+    ).not.toThrow();
+    expect(pathFromPublicUrl(`${base}/tenant_a/d1/%2.jpg`)).toBeNull();
+  });
 });

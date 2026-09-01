@@ -37,10 +37,24 @@ export function pathFromPublicUrl(url: string): string | null {
     return null;
   }
 
-  const marker = `/storage/v1/object/public/${LISTING_IMAGES_BUCKET}/`;
-  const index = parsed.pathname.indexOf(marker);
-  if (index === -1) return null;
+  // Reject anything not actually hosted on a Supabase project domain — a
+  // path that merely CONTAINS our bucket's marker string is not enough:
+  // a crafted or foreign URL (e.g. an eBay CDN URL) could otherwise be
+  // mistaken for one of our own object URLs and trigger a wrongful delete.
+  const host = parsed.hostname;
+  if (host !== "supabase.co" && !host.endsWith(".supabase.co")) {
+    return null;
+  }
 
-  const path = parsed.pathname.slice(index + marker.length);
-  return path.length > 0 ? decodeURIComponent(path) : null;
+  const marker = `/storage/v1/object/public/${LISTING_IMAGES_BUCKET}/`;
+  if (!parsed.pathname.startsWith(marker)) return null;
+
+  const path = parsed.pathname.slice(marker.length);
+  if (path.length === 0) return null;
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
 }
