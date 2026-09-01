@@ -88,7 +88,7 @@ export function EditLiveListing({ draftId }: Props) {
         setLoading(false);
       }
     });
-  }, [draftId]);
+  }, [draftId, dispatch, router, toastError]);
 
   function setField<K extends keyof LiveDetail>(key: K, value: LiveDetail[K]) {
     setDetail((prev) => (prev ? { ...prev, [key]: value } : prev));
