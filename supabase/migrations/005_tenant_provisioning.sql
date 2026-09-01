@@ -324,7 +324,7 @@ BEGIN
       merchant_location_key  text,
       ebay_sku               text,
       status                 text NOT NULL DEFAULT 'draft'
-                               CHECK (status IN ('draft', 'publishing', 'published', 'failed')),
+                               CHECK (status IN ('draft', 'publishing', 'published', 'failed', 'inactive')),
       ebay_offer_id          text,
       ebay_listing_id        text,
       publish_error          text,

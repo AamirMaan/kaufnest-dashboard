@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { EbayListingDraft } from "@/types";
+import type { EbayListingDraft, ListingStatus } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
+
+export type ListingStatusFilter = ListingStatus | "all";
 
 interface ListingsState {
   items: EbayListingDraft[];
@@ -25,16 +27,17 @@ const initialState: ListingsState = {
 
 export const fetchListingsPage = createAsyncThunk(
   "listings/fetchPage",
-  async (params: { page: number; pageSize: number }) => {
-    const { page, pageSize } = params;
+  async (params: { page: number; pageSize: number; status: ListingStatusFilter }) => {
+    const { page, pageSize, status } = params;
 
     const supabase = await createTenantClient();
     const [from, to] = rangeFor({ page, pageSize });
-    const { data, count, error } = await supabase
+    let query = supabase
       .from("ebay_listing_drafts")
       .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .order("created_at", { ascending: false });
+    if (status !== "all") query = query.eq("status", status);
+    const { data, count, error } = await query.range(from, to);
 
     if (error) throw error;
 

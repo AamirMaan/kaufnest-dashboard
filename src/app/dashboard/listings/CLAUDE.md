@@ -24,7 +24,13 @@ covers only Part 1; Part 2's design is
 - `page.tsx` — paginated listings table (`fetchListingsPage` thunk, same
   pagination architecture as Sales/Purchases/Expenses). "New Listing" and
   "Sync from eBay" (2026-08-31 — `POST /api/listings/ebay/sync`, then
-  re-fetches page 1) buttons, both gated on `manage_listings`. Wrapped in
+  re-fetches page 1) buttons, both gated on `manage_listings`. A Status
+  filter dropdown (2026-09-01 — `STATUS_FILTER_OPTIONS`, a plain `Select`
+  next to the header, not the shared `FilterBar` — a single dropdown didn't
+  need FilterBar's date/currency/search machinery) defaults to "Active"
+  (`status="published"`) and pushes into the fetch thunk's `status` param
+  server-side; see "Data flow" below for why this page needs one extra
+  mount-effect fetch that Sales/Expenses/Purchases don't. Wrapped in
   `_components/BusinessEbayGate.tsx` for the plan/connection gate (see
   below) — `page.tsx` itself no longer reads `tenantPlan`/`connections`
   directly.
@@ -49,7 +55,12 @@ covers only Part 1; Part 2's design is
   `toPayload()` builds the DB row shape shared by insert/update; `created_by`
   is set only on the insert path (`{ ...toPayload(), created_by: user.id }`),
   never on update — this file previously had a bug where update also
-  overwrote `created_by`, since fixed.
+  overwrote `created_by`, since fixed. On load, `status === "published"`
+  redirects to the live-edit page and `status === "inactive"` (2026-09-01)
+  redirects back to `/dashboard/listings` with a toast — the wizard has no
+  re-publish flow, so a direct URL hit on an ended listing's `[id]` route
+  bounces out instead of rendering an editable-looking form for a listing
+  that's actually gone.
 - `_components/{Source,Details,Category,Aspects,Images,Policies,Review}Step.tsx` —
   one component per wizard step, each taking `{ draft, setDraft }` (Images
   also takes `draftId`, since uploads need a storage path). `AspectsStep`
@@ -84,7 +95,10 @@ covers only Part 1; Part 2's design is
   sets (see "Sync & live-edit flow" below), never a real source, and must
   never be shown as one. The old "View on eBay →" external link for
   published rows was removed in favor of the in-app live-edit page, which
-  supersedes it.
+  supersedes it. `status === "inactive"` rows (2026-09-01) are read-only:
+  the Title cell renders plain text instead of a `Link`, and the Actions
+  cell renders `—` instead of an Edit/Retry link — there is nothing left to
+  edit on an ended eBay listing, so `editHref` is never called for them.
 - `[id]/live/page.tsx` / `_components/EditLiveListing.tsx` (2026-08-31) —
   the Trading-API-based edit page for any already-published listing,
   whether this app created it or it was imported. See "Sync & live-edit
@@ -98,7 +112,10 @@ covers only Part 1; Part 2's design is
   `pageSize`, `total`, `isFetching`). Actions: `hydratePage` (aliased
   `hydrateListingDrafts`), `addListingDraft`, `updateListingDraft`,
   `removeListingDraft`, `setFetching`. Thunk: `fetchListingsPage({ page,
-  pageSize })`. No filters in v1 (YAGNI).
+  pageSize, status })` — `status` is a `ListingStatusFilter`
+  (`ListingStatus | "all"`, 2026-09-01), pushed into the Supabase query via
+  `.eq("status", status)` when not `"all"` (same filter-pushdown pattern as
+  Sales' `fetchSalesPage`, not client-side filtering).
 
 ## Data flow
 
@@ -111,8 +128,17 @@ server round-trips, via `src/app/api/listings/`, since only those need the
 tenant's stored eBay OAuth token (`src/lib/integrations/ebay/publish.ts`).
 `EditLiveListing.tsx` (Part 2, below) follows the same dispatch-local-action-
 after-server-write pattern for its own save/delete, via `listingsSlice`'s
-existing `updateListingDraft`/`removeListingDraft` actions — no new slice
-actions were needed.
+existing `updateListingDraft` action — no new slice actions were needed
+(`removeListingDraft` is no longer used by this page — see the "inactive,
+not deleted" note in Part 2).
+
+`page.tsx`'s default view is filtered to `status="published"` ("Active" in
+the dropdown) — the layout's hydration always reads page 1 unfiltered
+(same contract every paginated feature's initial hydration follows), so
+`page.tsx` dispatches one extra `fetchListingsPage` on mount to apply that
+default. This differs from Sales/Expenses/Purchases, whose default filter
+is `"all"` and therefore already matches the unfiltered hydration with no
+extra fetch needed.
 
 ## Publish flow
 
@@ -159,22 +185,30 @@ Two correctness-critical things this route does, in this order:
    from the batch — `GetMyeBaySelling`'s summary carries none of a listing's
    `aspects`/policies/`merchant_location_key`, so upserting over an
    app-published listing would silently blank all of that.
-2. **Reconciles stale listings, both origins, via two separate deletes.**
-   After upserting, any existing `origin="ebay_import"` row whose
-   `ebay_listing_id` is no longer in the fresh active list gets deleted —
+2. **Reconciles stale listings, both origins, by marking them `inactive`
+   (2026-09-01 — previously deleted the row outright).** After upserting,
+   any existing `origin="ebay_import"` row whose `ebay_listing_id` is no
+   longer in the fresh active list gets `status` set to `"inactive"` —
    scoped strictly to `origin="ebay_import"` on both the read and the
-   delete, so an app-created `draft`/`failed` row (which has no active eBay
-   listing yet by design) is never touched by *this* delete. A SECOND delete
-   (2026-09-01) does the same for `origin="app"` rows, reusing the
-   `appOwnedIds` set already fetched for step 1 — a tenant's own published
-   listing ended outside the app (Seller Hub, or a duplicate Delete hitting
-   eBay errorCode 1047) would otherwise stay `status="published"` forever,
-   since nothing else ever revisits an `origin="app"` row. This is a
-   different operation from step 1's exclusion, not a contradiction of it:
-   step 1 protects against a blind *overwrite* of a still-active listing;
-   this only ever deletes a row confirmed gone from eBay's active list.
-   Both deletes also clean up a listing ended via this app's own Delete
-   action, if that action's local-row cleanup ever failed.
+   update, so an app-created `draft`/`failed` row (which has no active eBay
+   listing yet by design) is never touched by *this* update. A SECOND update
+   does the same for `origin="app"` rows, reusing the `appOwnedIds` set
+   already fetched for step 1 — a tenant's own published listing ended
+   outside the app (Seller Hub, or a duplicate Delete hitting eBay
+   errorCode 1047) would otherwise stay `status="published"` forever, since
+   nothing else ever revisits an `origin="app"` row. This is a different
+   operation from step 1's exclusion, not a contradiction of it: step 1
+   protects against a blind *overwrite* of a still-active listing; this
+   only ever flips the status of a row confirmed gone from eBay's active
+   list. Both updates also correct a listing ended via this app's own
+   Delete action, if that action's own local-row update ever failed. The
+   route's JSON response is `{ imported, deactivated }` (renamed from
+   `removed` when this switched from delete to update).
+   Marking `inactive` rather than deleting means a listing a tenant deletes,
+   or one eBay ends behind their back, stays visible as history under the
+   Listings page's "Inactive" filter instead of vanishing with no trace —
+   see `ListingStatus` in `src/types/index.ts` and migration
+   `039_ebay_listing_drafts_inactive_status.sql`.
 
 Newly-imported rows get placeholder `source_type: "inventory"`/
 `quantity: 1`/`condition: "used"` — `GetMyeBaySelling`'s summary doesn't
@@ -190,8 +224,10 @@ fetch and writes the real values back on save.
 edit title/description/price/quantity/condition/images/aspects (category is
 read-only — eBay restricts category changes on active listings), saves via
 `POST /api/listings/[id]/revise` (`ReviseItem`), deletes via `POST
-/api/listings/[id]/end` (`EndItem`, then deletes the local row). The
-aspects picker reuses the wizard's own `GET /api/listings/ebay/aspects`
+/api/listings/[id]/end` (`EndItem`, then marks the local row `inactive`
+rather than deleting it — 2026-09-01, see the "inactive, not deleted" note
+above; the row stays visible under the Listings page's "Inactive" filter).
+The aspects picker reuses the wizard's own `GET /api/listings/ebay/aspects`
 route — required-aspect names are category-driven, not creation-method-
 driven, so the same Taxonomy API answer applies whether or not the wizard
 originally created the listing.
@@ -200,14 +236,29 @@ originally created the listing.
 `SellingStatus.ListingStatus` (`EbayListingDetail.listingStatus`, added
 2026-09-01) is eBay's own ground truth for whether the listing is still
 live. When it's anything other than `"Active"` (ended in Seller Hub,
-expired, or ended here already with a failed local-row cleanup), the route
-deletes the local row itself and returns `410` with `{ error, ended: true }`
-instead of the normal detail payload — no need to wait for a Sync click or
-a failed Delete to discover it, since this is the exact same `GetItem` call
-already being made to load the edit form. `EditLiveListing.tsx` treats a
-`410` as a distinct case from a load failure: it removes the row from
-`listingsSlice`, toasts the message, and redirects to `/dashboard/listings`
-instead of rendering a dead edit form.
+expired, or ended here already with a failed local-row status update), the
+route marks the local row `inactive` itself and returns `410` with
+`{ error, ended: true, draft: <updated row | null> }` instead of the normal
+detail payload — no need to wait for a Sync click or a failed Delete to
+discover it, since this is the exact same `GetItem` call already being made
+to load the edit form. `EditLiveListing.tsx` treats a `410` as a distinct
+case from a load failure: it dispatches `updateListingDraft` with the
+returned row (when present), toasts the message, and redirects to
+`/dashboard/listings` instead of rendering a dead edit form.
+
+**Save Changes is a real `<form>` with native + computed validation
+(2026-09-01)** — this page used to let Save stay clickable with empty
+required fields (a bare `<div>`, `onClick={handleSave}`, no `required`
+attributes anywhere). Fixed to follow this project's standard form
+convention (see `AGENTS.md` → "Form conventions"): the fields are wrapped
+in `<form id="edit-live-listing-form" onSubmit={handleSave}>`, every
+required field carries a real `required` attribute (including the dynamic
+required-aspect fields, and the product-identifier "doesn't apply" case via
+`required={!isNotApplicable}`), and Save is `type="submit"
+form="edit-live-listing-form" disabled={saving || !isFormValid}` where
+`isFormValid` is computed inline from current field state. Saving shows a
+spinning `Loader2` icon next to "Saving…"; the initial page load shows one
+next to "Loading listing…" instead of bare text.
 
 **The single most important correctness property in this flow**: `revise`
 never blindly resends `ItemSpecifics` to eBay. It re-fetches the listing's

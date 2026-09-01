@@ -312,7 +312,7 @@ export interface DropshipListing {
 
 export type ListingSourceType = "inventory" | "dropship";
 export type ListingCondition = "new" | "used" | "refurbished";
-export type ListingStatus = "draft" | "publishing" | "published" | "failed";
+export type ListingStatus = "draft" | "publishing" | "published" | "failed" | "inactive";
 
 export interface EbayListingDraft {
   id: string;
