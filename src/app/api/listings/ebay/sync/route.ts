@@ -84,6 +84,7 @@ export async function POST() {
       if (!page || page.length < PAGE_SIZE) break;
     }
 
+    const fetchedIds = new Set(listings.map((l) => l.ebayListingId));
     const importable = listings.filter((l) => !appOwnedIds.has(l.ebayListingId));
 
     let imported = 0;
@@ -117,12 +118,12 @@ export async function POST() {
       imported = importable.length;
     }
 
-    // Reconcile: a previously-imported listing that's no longer in eBay's
-    // active list (sold out, expired, ended in Seller Hub, or ended via
-    // this app's own Delete action if its local-row cleanup ever failed)
-    // gets pruned here. Scoped strictly to origin="ebay_import" — never
-    // touches an app-created draft, which can legitimately be draft/failed
-    // with no active eBay listing yet.
+    // Reconcile imported listings: a previously-imported listing that's no
+    // longer in eBay's active list (sold out, expired, ended in Seller Hub,
+    // or ended via this app's own Delete action if its local-row cleanup
+    // ever failed) gets pruned here. Scoped strictly to origin="ebay_import"
+    // — never touches an app-created draft, which can legitimately be
+    // draft/failed with no active eBay listing yet.
     const existingImportedIds: (string | null)[] = [];
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: existingError } = await client
@@ -135,7 +136,6 @@ export async function POST() {
       if (!page || page.length < PAGE_SIZE) break;
     }
 
-    const fetchedIds = new Set(listings.map((l) => l.ebayListingId));
     const staleIds = existingImportedIds.filter(
       (id): id is string => id !== null && !fetchedIds.has(id)
     );
@@ -149,6 +149,31 @@ export async function POST() {
         .in("ebay_listing_id", staleIds);
       if (deleteError) throw deleteError;
       removed = staleIds.length;
+    }
+
+    // Reconcile app-published listings too: this app's own listing can be
+    // ended outside it (Seller Hub, expired, or ended once already via a
+    // duplicate Delete click) — confirmed live 2026-09-01, a tenant's own
+    // published listing stayed status="published" forever with nothing to
+    // ever correct it, since the upsert exclusion above deliberately never
+    // writes to origin="app" rows at all. This is a DIFFERENT operation
+    // from that exclusion: that guard is about never blindly overwriting
+    // an app row's rich data (aspects/policies/merchant_location_key) from
+    // a bare GetMyeBaySelling summary; this is a narrow delete once a
+    // listing is confirmed gone from eBay, using the appOwnedIds set
+    // already fetched above — no second query needed. Once ended there's
+    // nothing left to publish against, so deleting (not just flagging) it
+    // matches the exact reconciliation this feature already does for
+    // imported listings.
+    const staleAppIds = [...appOwnedIds].filter((id) => !fetchedIds.has(id));
+    if (staleAppIds.length > 0) {
+      const { error: deleteAppError } = await client
+        .from("ebay_listing_drafts")
+        .delete()
+        .eq("origin", "app")
+        .in("ebay_listing_id", staleAppIds);
+      if (deleteAppError) throw deleteAppError;
+      removed += staleAppIds.length;
     }
 
     return NextResponse.json({ imported, removed });

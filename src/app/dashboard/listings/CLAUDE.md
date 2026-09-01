@@ -159,13 +159,22 @@ Two correctness-critical things this route does, in this order:
    from the batch — `GetMyeBaySelling`'s summary carries none of a listing's
    `aspects`/policies/`merchant_location_key`, so upserting over an
    app-published listing would silently blank all of that.
-2. **Reconciles stale imports.** After upserting, any existing
-   `origin="ebay_import"` row whose `ebay_listing_id` is no longer in the
-   fresh active list gets deleted — scoped strictly to `origin="ebay_import"`
-   on both the read and the delete, so an app-created `draft`/`failed` row
-   (which has no active eBay listing yet by design) is never touched. This
-   is also what cleans up a listing ended via this app's own Delete action,
-   if that action's local-row cleanup ever failed.
+2. **Reconciles stale listings, both origins, via two separate deletes.**
+   After upserting, any existing `origin="ebay_import"` row whose
+   `ebay_listing_id` is no longer in the fresh active list gets deleted —
+   scoped strictly to `origin="ebay_import"` on both the read and the
+   delete, so an app-created `draft`/`failed` row (which has no active eBay
+   listing yet by design) is never touched by *this* delete. A SECOND delete
+   (2026-09-01) does the same for `origin="app"` rows, reusing the
+   `appOwnedIds` set already fetched for step 1 — a tenant's own published
+   listing ended outside the app (Seller Hub, or a duplicate Delete hitting
+   eBay errorCode 1047) would otherwise stay `status="published"` forever,
+   since nothing else ever revisits an `origin="app"` row. This is a
+   different operation from step 1's exclusion, not a contradiction of it:
+   step 1 protects against a blind *overwrite* of a still-active listing;
+   this only ever deletes a row confirmed gone from eBay's active list.
+   Both deletes also clean up a listing ended via this app's own Delete
+   action, if that action's local-row cleanup ever failed.
 
 Newly-imported rows get placeholder `source_type: "inventory"`/
 `quantity: 1`/`condition: "used"` — `GetMyeBaySelling`'s summary doesn't
