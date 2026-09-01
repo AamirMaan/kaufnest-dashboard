@@ -6,6 +6,19 @@ import { fetchListingDetail } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { EbayListingDraft, Profile } from "@/types";
 
+// Supabase's PostgrestError/AuthError carry a `.message` but aren't always
+// `instanceof Error` — the naive `err instanceof Error ? err.message :
+// "generic fallback"` pattern silently swallows the real message on those.
+// Confirmed live 2026-09-01 in the sibling sync route; same fix applied
+// everywhere in this feature's routes for consistency.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
@@ -43,7 +56,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    const message = errorMessage(err);
     console.error("[listings/ebay-detail] token refresh failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -52,7 +65,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const detail = await fetchListingDetail(accessToken, draft.ebay_listing_id);
     return NextResponse.json(detail);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch listing detail";
+    const message = errorMessage(err);
     console.error("[listings/ebay-detail] fetch failed:", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }

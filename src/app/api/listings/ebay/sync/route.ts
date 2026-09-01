@@ -6,6 +6,22 @@ import { fetchActiveListings } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { Profile } from "@/types";
 
+// Supabase's PostgrestError/AuthError carry a `.message` but aren't always
+// `instanceof Error` — `err instanceof Error ? err.message : "generic
+// fallback"` silently swallows the real message on those, replacing it with
+// the fallback string. Confirmed live 2026-09-01: a genuine Supabase error
+// in this route (missing migration 038's `origin` column/index) surfaced
+// only as the generic "Sync failed", with the real cause invisible until
+// this helper was added. Same fix already applied once in
+// `api/billing/checkout/route.ts` for the identical gotcha.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 // PostgREST caps unbounded .select() reads at its configured db.max_rows
 // (typically 1000) — past that many rows a plain .select() silently
 // truncates instead of erroring. Both origin-scoped reads below page
@@ -40,7 +56,7 @@ export async function POST() {
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    const message = errorMessage(err);
     console.error("[listings/ebay/sync] token refresh failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -137,7 +153,7 @@ export async function POST() {
 
     return NextResponse.json({ imported, removed });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sync failed";
+    const message = errorMessage(err);
     console.error("[listings/ebay/sync] failed:", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
