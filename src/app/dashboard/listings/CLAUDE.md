@@ -159,13 +159,22 @@ Two correctness-critical things this route does, in this order:
    from the batch — `GetMyeBaySelling`'s summary carries none of a listing's
    `aspects`/policies/`merchant_location_key`, so upserting over an
    app-published listing would silently blank all of that.
-2. **Reconciles stale imports.** After upserting, any existing
-   `origin="ebay_import"` row whose `ebay_listing_id` is no longer in the
-   fresh active list gets deleted — scoped strictly to `origin="ebay_import"`
-   on both the read and the delete, so an app-created `draft`/`failed` row
-   (which has no active eBay listing yet by design) is never touched. This
-   is also what cleans up a listing ended via this app's own Delete action,
-   if that action's local-row cleanup ever failed.
+2. **Reconciles stale listings, both origins, via two separate deletes.**
+   After upserting, any existing `origin="ebay_import"` row whose
+   `ebay_listing_id` is no longer in the fresh active list gets deleted —
+   scoped strictly to `origin="ebay_import"` on both the read and the
+   delete, so an app-created `draft`/`failed` row (which has no active eBay
+   listing yet by design) is never touched by *this* delete. A SECOND delete
+   (2026-09-01) does the same for `origin="app"` rows, reusing the
+   `appOwnedIds` set already fetched for step 1 — a tenant's own published
+   listing ended outside the app (Seller Hub, or a duplicate Delete hitting
+   eBay errorCode 1047) would otherwise stay `status="published"` forever,
+   since nothing else ever revisits an `origin="app"` row. This is a
+   different operation from step 1's exclusion, not a contradiction of it:
+   step 1 protects against a blind *overwrite* of a still-active listing;
+   this only ever deletes a row confirmed gone from eBay's active list.
+   Both deletes also clean up a listing ended via this app's own Delete
+   action, if that action's local-row cleanup ever failed.
 
 Newly-imported rows get placeholder `source_type: "inventory"`/
 `quantity: 1`/`condition: "used"` — `GetMyeBaySelling`'s summary doesn't
@@ -186,6 +195,19 @@ aspects picker reuses the wizard's own `GET /api/listings/ebay/aspects`
 route — required-aspect names are category-driven, not creation-method-
 driven, so the same Taxonomy API answer applies whether or not the wizard
 originally created the listing.
+
+`ebay-detail` self-corrects staleness on load, not just on Sync: `GetItem`'s
+`SellingStatus.ListingStatus` (`EbayListingDetail.listingStatus`, added
+2026-09-01) is eBay's own ground truth for whether the listing is still
+live. When it's anything other than `"Active"` (ended in Seller Hub,
+expired, or ended here already with a failed local-row cleanup), the route
+deletes the local row itself and returns `410` with `{ error, ended: true }`
+instead of the normal detail payload — no need to wait for a Sync click or
+a failed Delete to discover it, since this is the exact same `GetItem` call
+already being made to load the edit form. `EditLiveListing.tsx` treats a
+`410` as a distinct case from a load failure: it removes the row from
+`listingsSlice`, toasts the message, and redirects to `/dashboard/listings`
+instead of rendering a dead edit form.
 
 **The single most important correctness property in this flow**: `revise`
 never blindly resends `ItemSpecifics` to eBay. It re-fetches the listing's

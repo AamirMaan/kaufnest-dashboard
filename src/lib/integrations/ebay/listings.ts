@@ -141,6 +141,14 @@ export interface EbayListingDetail {
   // Surfaced as a UI warning only; not preserved end-to-end (see
   // dashboard/listings/SKILL.md's gotcha).
   multiValueAspectNames: string[];
+  // eBay's own ground truth for whether this listing is still live —
+  // "Active" | "Completed" | "Ended" | "CustomCode" per ListingStatusCodeType.
+  // A non-"Active" value here means the listing already ended on eBay
+  // (Seller Hub, expired, or ended via this app already), independent of
+  // Sync's own reconciliation — the caller can react immediately instead
+  // of waiting for the next Sync click, since this comes from the exact
+  // same GetItem call already being made to load the edit form.
+  listingStatus: string;
 }
 
 function buildGetItemRequest(itemId: string): string {
@@ -202,6 +210,7 @@ export async function fetchListingDetail(
     categoryName: categoryName ? decodeXml(categoryName) : "",
     aspects,
     multiValueAspectNames,
+    listingStatus: tagText(sellingStatus, "ListingStatus") ?? "Active",
   };
 }
 

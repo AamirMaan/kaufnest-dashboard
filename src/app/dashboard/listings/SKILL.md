@@ -281,6 +281,23 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   scheduled job, anything else that writes `ebay_listing_drafts` from
   external data), it must do the same exclusion; there is nothing at the
   DB layer stopping a naive upsert from wiping an app-created listing.
+- **"Never touch `origin="app"`" applies to the upsert, not to reconciliation
+  — these are two different operations with different rules (2026-09-01).**
+  Confirmed live: a tenant's own published listing was ended outside this
+  app (Seller Hub, or a duplicate Delete click hitting eBay errorCode 1047,
+  "The auction has already been closed") and stayed `status="published"`
+  forever, since Sync's reconciliation delete was originally scoped to
+  `origin="ebay_import"` only — the same scoping that correctly protects
+  `origin="app"` rows from the upsert was accidentally also protecting them
+  from ever being corrected. Fixed by adding a SECOND reconciliation delete,
+  scoped to `origin="app"` AND `ebay_listing_id` in the already-fetched
+  `appOwnedIds` set (no second query) AND not present in eBay's fresh active
+  list — this only ever fires for a row that's actually a full match on
+  `ebay_listing_id`, never a blind overwrite, so it doesn't reintroduce the
+  data-loss risk the upsert exclusion exists to prevent. The `end` route
+  also treats eBay errorCode 1047 specifically as success (not a 502) for
+  the same reason — clicking Delete on an already-ended listing should
+  clean up the local row, not leave it stale with an error toast.
 - **Multi-value aspects are also silently destroyed on the WRITE side, not
   just collapsed on read (2026-08-31 final review, mitigated not fixed).**
   `fetchListingDetail`'s read-side collapse (see the test above) was an
@@ -322,6 +339,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `<ItemSpecifics>` block, wiping real eBay listing data. Don't "simplify"
   the aspects state handling in that file without re-reading this gotcha
   first.
+
+- **`listingStatus` defaults to `"Active"` on purpose — never flip that
+  default without re-checking the reconciliation logic it feeds (2026-09-01).**
+  `fetchListingDetail` reads `SellingStatus.ListingStatus` and falls back to
+  `"Active"` if the tag is absent: `tagText(sellingStatus, "ListingStatus")
+  ?? "Active"`. `GET /api/listings/[id]/ebay-detail` treats any non-`"Active"`
+  value as "this listing ended on eBay" and deletes the local row. The
+  fail-safe direction matters: if eBay ever omitted the tag on a genuinely
+  active listing, defaulting to anything OTHER than `"Active"` would delete a
+  live, still-selling listing's local row on the next page load. Defaulting
+  to `"Active"` means the worst case of a missing tag is staleness lingering
+  one more Sync cycle, not data loss.
 
 ## Tests
 

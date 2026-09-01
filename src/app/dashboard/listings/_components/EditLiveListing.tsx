@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/FormFields";
@@ -59,6 +61,12 @@ export function EditLiveListing({ draftId }: Props) {
       try {
         const res = await fetch(`/api/listings/${draftId}/ebay-detail`);
         const json = await res.json();
+        if (res.status === 410) {
+          dispatch(removeListingDraft(draftId));
+          toastError(json.error ?? "This listing has already ended on eBay.");
+          router.push("/dashboard/listings");
+          return;
+        }
         if (!res.ok) throw new Error(json.error ?? "Failed to load listing");
         setDetail(json);
         setAspects(json.aspects);
@@ -80,7 +88,7 @@ export function EditLiveListing({ draftId }: Props) {
         setLoading(false);
       }
     });
-  }, [draftId]);
+  }, [draftId, dispatch, router, toastError]);
 
   function setField<K extends keyof LiveDetail>(key: K, value: LiveDetail[K]) {
     setDetail((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -171,6 +179,14 @@ export function EditLiveListing({ draftId }: Props) {
 
   return (
     <div>
+      <Link
+        href="/dashboard/listings"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-(--color-primary) hover:underline"
+      >
+        <ArrowLeft size={14} />
+        Back to Listings
+      </Link>
+
       <PageHeader title="Edit Listing" description="Changes save directly to your live eBay listing" />
 
       {error && (
@@ -290,13 +306,9 @@ export function EditLiveListing({ draftId }: Props) {
         })}
 
         <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setDeleteOpen(true)}
-            className="text-sm font-medium text-(--color-danger-text) hover:underline"
-          >
+          <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
             Delete listing
-          </button>
+          </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>

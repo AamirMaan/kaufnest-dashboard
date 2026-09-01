@@ -6,6 +6,19 @@ import { endListing } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { EbayListingDraft, Profile } from "@/types";
 
+// Supabase's PostgrestError/AuthError carry a `.message` but aren't always
+// `instanceof Error` — the naive `err instanceof Error ? err.message :
+// "generic fallback"` pattern silently swallows the real message on those.
+// Confirmed live 2026-09-01 in the sibling sync route; same fix applied
+// everywhere in this feature's routes for consistency.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
@@ -43,7 +56,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    const message = errorMessage(err);
     console.error("[listings/end] token refresh failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -51,9 +64,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     await endListing(accessToken, draft.ebay_listing_id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to end listing";
-    console.error("[listings/end] failed:", message);
-    return NextResponse.json({ error: message }, { status: 502 });
+    const message = errorMessage(err);
+    // eBay errorCode 1047 ("The auction has already been closed") means
+    // the listing was already ended outside this app (Seller Hub, expired,
+    // or ended once already) — confirmed live 2026-09-01. The desired
+    // end-state (not active on eBay) is already true, so treat this as
+    // success and fall through to the same local-row cleanup below,
+    // instead of leaving a permanently-stale status="published" row that
+    // no other path would ever correct on its own.
+    if (!message.includes("eBay Trading API error 1047")) {
+      console.error("[listings/end] failed:", message);
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+    console.warn("[listings/end] listing was already ended outside this app:", message);
   }
 
   // The listing is genuinely gone from eBay at this point regardless of

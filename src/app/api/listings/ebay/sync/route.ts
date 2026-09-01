@@ -6,6 +6,22 @@ import { fetchActiveListings } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { Profile } from "@/types";
 
+// Supabase's PostgrestError/AuthError carry a `.message` but aren't always
+// `instanceof Error` — `err instanceof Error ? err.message : "generic
+// fallback"` silently swallows the real message on those, replacing it with
+// the fallback string. Confirmed live 2026-09-01: a genuine Supabase error
+// in this route (missing migration 038's `origin` column/index) surfaced
+// only as the generic "Sync failed", with the real cause invisible until
+// this helper was added. Same fix already applied once in
+// `api/billing/checkout/route.ts` for the identical gotcha.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 // PostgREST caps unbounded .select() reads at its configured db.max_rows
 // (typically 1000) — past that many rows a plain .select() silently
 // truncates instead of erroring. Both origin-scoped reads below page
@@ -40,7 +56,7 @@ export async function POST() {
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    const message = errorMessage(err);
     console.error("[listings/ebay/sync] token refresh failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
@@ -68,6 +84,7 @@ export async function POST() {
       if (!page || page.length < PAGE_SIZE) break;
     }
 
+    const fetchedIds = new Set(listings.map((l) => l.ebayListingId));
     const importable = listings.filter((l) => !appOwnedIds.has(l.ebayListingId));
 
     let imported = 0;
@@ -101,12 +118,12 @@ export async function POST() {
       imported = importable.length;
     }
 
-    // Reconcile: a previously-imported listing that's no longer in eBay's
-    // active list (sold out, expired, ended in Seller Hub, or ended via
-    // this app's own Delete action if its local-row cleanup ever failed)
-    // gets pruned here. Scoped strictly to origin="ebay_import" — never
-    // touches an app-created draft, which can legitimately be draft/failed
-    // with no active eBay listing yet.
+    // Reconcile imported listings: a previously-imported listing that's no
+    // longer in eBay's active list (sold out, expired, ended in Seller Hub,
+    // or ended via this app's own Delete action if its local-row cleanup
+    // ever failed) gets pruned here. Scoped strictly to origin="ebay_import"
+    // — never touches an app-created draft, which can legitimately be
+    // draft/failed with no active eBay listing yet.
     const existingImportedIds: (string | null)[] = [];
     for (let from = 0; ; from += PAGE_SIZE) {
       const { data: page, error: existingError } = await client
@@ -119,7 +136,6 @@ export async function POST() {
       if (!page || page.length < PAGE_SIZE) break;
     }
 
-    const fetchedIds = new Set(listings.map((l) => l.ebayListingId));
     const staleIds = existingImportedIds.filter(
       (id): id is string => id !== null && !fetchedIds.has(id)
     );
@@ -135,9 +151,34 @@ export async function POST() {
       removed = staleIds.length;
     }
 
+    // Reconcile app-published listings too: this app's own listing can be
+    // ended outside it (Seller Hub, expired, or ended once already via a
+    // duplicate Delete click) — confirmed live 2026-09-01, a tenant's own
+    // published listing stayed status="published" forever with nothing to
+    // ever correct it, since the upsert exclusion above deliberately never
+    // writes to origin="app" rows at all. This is a DIFFERENT operation
+    // from that exclusion: that guard is about never blindly overwriting
+    // an app row's rich data (aspects/policies/merchant_location_key) from
+    // a bare GetMyeBaySelling summary; this is a narrow delete once a
+    // listing is confirmed gone from eBay, using the appOwnedIds set
+    // already fetched above — no second query needed. Once ended there's
+    // nothing left to publish against, so deleting (not just flagging) it
+    // matches the exact reconciliation this feature already does for
+    // imported listings.
+    const staleAppIds = [...appOwnedIds].filter((id) => !fetchedIds.has(id));
+    if (staleAppIds.length > 0) {
+      const { error: deleteAppError } = await client
+        .from("ebay_listing_drafts")
+        .delete()
+        .eq("origin", "app")
+        .in("ebay_listing_id", staleAppIds);
+      if (deleteAppError) throw deleteAppError;
+      removed += staleAppIds.length;
+    }
+
     return NextResponse.json({ imported, removed });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sync failed";
+    const message = errorMessage(err);
     console.error("[listings/ebay/sync] failed:", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }

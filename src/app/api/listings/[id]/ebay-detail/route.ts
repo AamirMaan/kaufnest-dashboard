@@ -6,6 +6,19 @@ import { fetchListingDetail } from "@/lib/integrations/ebay/listings";
 import { hasPermission } from "@/lib/utils/permissions";
 import type { EbayListingDraft, Profile } from "@/types";
 
+// Supabase's PostgrestError/AuthError carry a `.message` but aren't always
+// `instanceof Error` — the naive `err instanceof Error ? err.message :
+// "generic fallback"` pattern silently swallows the real message on those.
+// Confirmed live 2026-09-01 in the sibling sync route; same fix applied
+// everywhere in this feature's routes for consistency.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
@@ -43,16 +56,34 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     accessToken = await ensureValidAccessToken(client, conn, ebayAdapter);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to refresh eBay token";
+    const message = errorMessage(err);
     console.error("[listings/ebay-detail] token refresh failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
   try {
     const detail = await fetchListingDetail(accessToken, draft.ebay_listing_id);
+
+    // GetItem is ground truth for whether this listing is still live — no
+    // need to wait for the next Sync click or a failed Delete to discover
+    // it ended outside the app (Seller Hub, expired, or ended here already
+    // with a local-cleanup failure). Reconcile immediately, same as Sync's
+    // own origin="app" reconciliation, and tell the caller so it can bail
+    // out of rendering a dead edit form instead of a generic fetch error.
+    if (detail.listingStatus !== "Active") {
+      const { error: deleteError } = await client.from("ebay_listing_drafts").delete().eq("id", id);
+      if (deleteError) {
+        console.error("[listings/ebay-detail] stale-listing cleanup failed:", deleteError.message);
+      }
+      return NextResponse.json(
+        { error: "This listing has already ended on eBay.", ended: true },
+        { status: 410 }
+      );
+    }
+
     return NextResponse.json(detail);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch listing detail";
+    const message = errorMessage(err);
     console.error("[listings/ebay-detail] fetch failed:", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
