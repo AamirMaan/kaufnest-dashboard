@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/FormFields";
@@ -13,7 +13,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { useAppDispatch } from "@/store/hooks";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
-import { updateListingDraft, removeListingDraft } from "../_store/listingsSlice";
+import { updateListingDraft } from "../_store/listingsSlice";
 import type { ListingCondition } from "@/types";
 
 interface LiveDetail {
@@ -62,7 +62,7 @@ export function EditLiveListing({ draftId }: Props) {
         const res = await fetch(`/api/listings/${draftId}/ebay-detail`);
         const json = await res.json();
         if (res.status === 410) {
-          dispatch(removeListingDraft(draftId));
+          if (json.draft) dispatch(updateListingDraft(json.draft));
           toastError(json.error ?? "This listing has already ended on eBay.");
           router.push("/dashboard/listings");
           return;
@@ -94,7 +94,8 @@ export function EditLiveListing({ draftId }: Props) {
     setDetail((prev) => (prev ? { ...prev, [key]: value } : prev));
   }
 
-  async function handleSave() {
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
     if (!detail) return;
     setSaving(true);
     setError(null);
@@ -149,7 +150,12 @@ export function EditLiveListing({ draftId }: Props) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to end listing");
 
-      dispatch(removeListingDraft(draftId));
+      // The row is marked inactive rather than deleted (so it stays visible
+      // as history under the Listings page's "Inactive" filter) — the route
+      // returns the updated row when its own status update succeeded, or
+      // just { ok: true } when it didn't (display-only inconsistency, the
+      // next Sync corrects it — see the route's own comment).
+      if (json.id) dispatch(updateListingDraft(json));
 
       const supabase = await createTenantClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -173,9 +179,35 @@ export function EditLiveListing({ draftId }: Props) {
     }
   }
 
-  if (loading) return <div className="text-sm text-(--color-text-muted)">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-12 justify-center text-sm text-(--color-text-muted)">
+        <Loader2 size={16} className="animate-spin" />
+        Loading listing…
+      </div>
+    );
+  }
   if (error && !detail) return <p className="text-sm text-(--color-danger-text)">{error}</p>;
   if (!detail) return null;
+
+  // Basic client-side validation, in addition to each field's native
+  // `required` attribute (form submission is also blocked natively — this
+  // just keeps Save visibly disabled instead of letting the tenant click it
+  // and hit the browser's inline validation popup, or worse, a server 400).
+  const parsedImageUrls = imageUrlsText
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const requiredAspectsFilled = (required ?? []).every(
+    (aspect) => (aspects[aspect.name] ?? "").trim() !== ""
+  );
+  const isFormValid =
+    detail.title.trim() !== "" &&
+    detail.description.trim() !== "" &&
+    detail.price > 0 &&
+    detail.quantity >= 1 &&
+    parsedImageUrls.length > 0 &&
+    requiredAspectsFilled;
 
   return (
     <div>
@@ -196,28 +228,35 @@ export function EditLiveListing({ draftId }: Props) {
       )}
 
       <div className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6 space-y-4">
+        <form id="edit-live-listing-form" onSubmit={handleSave} className="space-y-4">
         <Field label="Category">
           <Input value={detail.categoryName || detail.categoryId} disabled />
         </Field>
 
         <Field label="Title" required>
-          <Input value={detail.title} onChange={(e) => setField("title", e.target.value)} />
+          <Input
+            value={detail.title}
+            onChange={(e) => setField("title", e.target.value)}
+            required
+          />
         </Field>
 
         <Field label="Description" required>
           <Textarea
             value={detail.description}
             onChange={(e) => setField("description", e.target.value)}
+            required
           />
         </Field>
 
         <Field label="Price" required>
           <Input
             type="number"
-            min="0"
+            min="0.01"
             step="0.01"
             value={detail.price}
             onChange={(e) => setField("price", Number(e.target.value))}
+            required
           />
         </Field>
 
@@ -227,6 +266,7 @@ export function EditLiveListing({ draftId }: Props) {
             min="1"
             value={detail.quantity}
             onChange={(e) => setField("quantity", Number(e.target.value))}
+            required
           />
         </Field>
 
@@ -234,6 +274,7 @@ export function EditLiveListing({ draftId }: Props) {
           <Select
             value={detail.condition}
             onChange={(e) => setField("condition", e.target.value as ListingCondition)}
+            required
           >
             <option value="new">New</option>
             <option value="used">Used</option>
@@ -242,7 +283,11 @@ export function EditLiveListing({ draftId }: Props) {
         </Field>
 
         <Field label="Image URLs (one per line)" required>
-          <Textarea value={imageUrlsText} onChange={(e) => setImageUrlsText(e.target.value)} />
+          <Textarea
+            value={imageUrlsText}
+            onChange={(e) => setImageUrlsText(e.target.value)}
+            required
+          />
         </Field>
 
         {(required ?? []).map((aspect) => {
@@ -262,6 +307,7 @@ export function EditLiveListing({ draftId }: Props) {
                 <Input
                   value={isNotApplicable ? "" : value}
                   disabled={isNotApplicable}
+                  required={!isNotApplicable}
                   onChange={(e) => setAspects((prev) => ({ ...prev, [aspect.name]: e.target.value }))}
                 />
                 <label className="mt-1.5 flex items-center gap-2 text-xs text-(--color-text-muted)">
@@ -288,6 +334,7 @@ export function EditLiveListing({ draftId }: Props) {
                 <Select
                   value={value}
                   onChange={(e) => setAspects((prev) => ({ ...prev, [aspect.name]: e.target.value }))}
+                  required
                 >
                   <option value="">Select…</option>
                   {aspect.values.map((v) => (
@@ -298,18 +345,21 @@ export function EditLiveListing({ draftId }: Props) {
                 <Input
                   value={value}
                   onChange={(e) => setAspects((prev) => ({ ...prev, [aspect.name]: e.target.value }))}
+                  required
                 />
               )}
               {multiValueWarning}
             </Field>
           );
         })}
+        </form>
 
         <div className="mt-6 flex items-center justify-between">
           <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
             Delete listing
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button type="submit" form="edit-live-listing-form" disabled={saving || !isFormValid}>
+            {saving && <Loader2 size={14} className="animate-spin" />}
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </div>

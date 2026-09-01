@@ -56,8 +56,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   outside the wizard** (e.g. a different platform's "existing listings"
   import): follow `/api/listings/ebay/sync/route.ts`'s pattern — always
   exclude `origin="app"` rows from any upsert, and scope any reconciliation
-  delete to the new origin value, never to `origin="app"`. See the gotcha
+  status update (`status: "inactive"`, not a delete — see the gotcha below)
+  to the new origin value, never to `origin="app"` at the same time as the
+  exclusion's own `origin="app"` rows unless it's the deliberate SECOND,
+  separate reconciliation pass the sync route already does. See the gotcha
   below for why this is load-bearing, not just a style preference.
+- **Adding a new required-looking field to `EditLiveListing.tsx` (or any
+  new create/edit form anywhere in the app)**: it MUST follow
+  `AGENTS.md`'s "Form conventions" section — real `<form>`, `required` on
+  the actual input (not just `<Field required>`'s label), and a computed
+  `isFormValid` disabling the submit button. `EditLiveListing.tsx` didn't
+  do this until 2026-09-01 (Save Changes stayed clickable with empty
+  required fields) — see the gotcha below.
 
 ## Gotchas
 
@@ -286,10 +296,10 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   Confirmed live: a tenant's own published listing was ended outside this
   app (Seller Hub, or a duplicate Delete click hitting eBay errorCode 1047,
   "The auction has already been closed") and stayed `status="published"`
-  forever, since Sync's reconciliation delete was originally scoped to
+  forever, since Sync's reconciliation was originally scoped to
   `origin="ebay_import"` only — the same scoping that correctly protects
   `origin="app"` rows from the upsert was accidentally also protecting them
-  from ever being corrected. Fixed by adding a SECOND reconciliation delete,
+  from ever being corrected. Fixed by adding a SECOND reconciliation pass,
   scoped to `origin="app"` AND `ebay_listing_id` in the already-fetched
   `appOwnedIds` set (no second query) AND not present in eBay's fresh active
   list — this only ever fires for a row that's actually a full match on
@@ -297,7 +307,26 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   data-loss risk the upsert exclusion exists to prevent. The `end` route
   also treats eBay errorCode 1047 specifically as success (not a 502) for
   the same reason — clicking Delete on an already-ended listing should
-  clean up the local row, not leave it stale with an error toast.
+  still mark the local row inactive, not leave it stale with an error toast.
+- **Reconciliation marks `status: "inactive"`, it does not delete
+  (2026-09-01 — a later change from the original design above, which did
+  delete).** `end`, both of `sync`'s reconciliation branches, and
+  `ebay-detail`'s self-correction all used to `.delete()` the local row once
+  a listing was confirmed gone from eBay — the user asked for this to
+  preserve history instead, so a tenant deleting a listing (or eBay ending
+  one behind their back) still shows up under the Listings page's
+  "Inactive" filter rather than vanishing. All three now
+  `.update({ status: "inactive" })` instead (migration
+  `039_ebay_listing_drafts_inactive_status.sql` adds `"inactive"` to the
+  `status` CHECK constraint, mirrored into `provision_tenant_schema()`).
+  `end`'s response shape changed from `{ ok: true }` to the updated
+  `EbayListingDraft` row (or `{ ok: true }` as a fallback if the status
+  update itself failed — same "display-only inconsistency, Sync corrects it
+  later" reasoning the original delete-failure handling used) — if you add
+  a new caller of `POST /api/listings/[id]/end`, don't assume `{ ok: true }`
+  is the only possible success shape. `sync`'s response key also renamed
+  `removed` → `deactivated` — a client reading the old key name will read
+  `undefined` and silently show "undefined removed" in a toast.
 - **Multi-value aspects are also silently destroyed on the WRITE side, not
   just collapsed on read (2026-08-31 final review, mitigated not fixed).**
   `fetchListingDetail`'s read-side collapse (see the test above) was an
@@ -345,12 +374,30 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `fetchListingDetail` reads `SellingStatus.ListingStatus` and falls back to
   `"Active"` if the tag is absent: `tagText(sellingStatus, "ListingStatus")
   ?? "Active"`. `GET /api/listings/[id]/ebay-detail` treats any non-`"Active"`
-  value as "this listing ended on eBay" and deletes the local row. The
-  fail-safe direction matters: if eBay ever omitted the tag on a genuinely
-  active listing, defaulting to anything OTHER than `"Active"` would delete a
-  live, still-selling listing's local row on the next page load. Defaulting
-  to `"Active"` means the worst case of a missing tag is staleness lingering
-  one more Sync cycle, not data loss.
+  value as "this listing ended on eBay" and marks the local row `inactive`.
+  The fail-safe direction matters: if eBay ever omitted the tag on a
+  genuinely active listing, defaulting to anything OTHER than `"Active"`
+  would mark a live, still-selling listing inactive on the next page load.
+  Defaulting to `"Active"` means the worst case of a missing tag is
+  staleness lingering one more Sync cycle, not a live listing wrongly
+  hidden from its own edit page.
+- **`EditLiveListing.tsx`'s Save button used to stay clickable with empty
+  required fields (found and fixed 2026-09-01) — any new form in this app
+  must not repeat it.** The page had no `<form>` element at all (a bare
+  `<div>`, Save was `type="button" onClick={handleSave}`) and none of its
+  `<Field required>`-marked inputs carried an actual `required` attribute
+  — `<Field required>` only draws the visual asterisk, it does not
+  propagate the attribute to the `<Input>`/`<Select>`/`<Textarea>` inside
+  it. Fixed to match every other Add/Edit form in the app: real
+  `<form id="edit-live-listing-form" onSubmit={handleSave}>`, `required` on
+  every actual control (including `required={!isNotApplicable}` on the
+  product-identifier "doesn't apply" case, and on both branches of the
+  generic required-aspect field), Save changed to
+  `type="submit" form="edit-live-listing-form" disabled={saving ||
+  !isFormValid}` with `isFormValid` computed inline from `detail`/
+  `imageUrlsText`/`aspects`. See `AGENTS.md` → "Form conventions" for the
+  full checklist this now follows — apply it to any NEW form, don't wait
+  for a bug report to retrofit it.
 
 ## Tests
 

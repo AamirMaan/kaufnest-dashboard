@@ -134,6 +134,48 @@ discovers any `src/**/*.test.ts(x)`. Keep tests pure (no Supabase/Redux deps whe
 possible) — the CSV helpers, `productOptions.ts`, `vatAmountFromGross`, etc. are all
 good examples of the kind of logic that deserves a test.
 
+## Form conventions — always enforced, not optional polish
+
+**A mutating button must never look clickable when it can't succeed, and
+must never look idle while its request is in flight.** This applies to
+every create/edit form in the app, existing or new — it was already the
+convention almost everywhere (every Add/Edit modal in Sales, Expenses,
+Purchases, Users, Inventory follows it); `EditLiveListing.tsx`
+(`dashboard/listings/`) was found not to (2026-09-01, Save Changes stayed
+clickable with empty required fields) and was fixed to match. Don't let a
+new page or modal be the next exception.
+
+Concretely, every such form does all of these:
+- **Wrap the fields in a real `<form id="..." onSubmit={handleSubmit}>`** —
+  never a bare `<div>` with the submit button's `onClick` calling the
+  handler directly. The `<form>` is what makes native HTML5 validation
+  (below) actually block submission.
+- **Every field marked `required` on its `<Field required>` label must ALSO
+  carry the `required` attribute on the underlying `<Input>`/`<Select>`/
+  `<Textarea>`.** `<Field required>` only draws the visual `*` — it does not
+  propagate `required` to the control inside it. Passing both is not
+  redundant; the label is cosmetic; the attribute is what blocks submission.
+- **The submit button is `type="submit" form="<id>"`, not `type="button"
+  onClick={...}`** — this is what lets it live outside the `<form>` (e.g.
+  next to a Cancel/Delete button) while still participating in its native
+  validation and submit event.
+- **The submit button is `disabled` both while saving AND while the form is
+  known-invalid** — compute a plain `isFormValid` boolean from current field
+  state (no library needed; see `EditLiveListing.tsx` for a real example:
+  title/description non-empty, price > 0, quantity ≥ 1, image URLs present,
+  every required aspect filled) and use `disabled={saving || !isFormValid}`.
+  Native `required` alone is not enough — it blocks the click from
+  submitting, but leaves the button rendered as if it were clickable, which
+  is exactly the bug this section exists to prevent.
+- **While a mutation is in flight, show it**: swap the button's label to a
+  busy verb ("Saving…", "Deleting…") and disable it (`disabled={saving}`,
+  matching the shared `DeleteConfirmModal`'s `confirmingLabel` pattern for
+  destructive actions). For a full-page load (not inside a modal), also
+  show a spinning icon next to the loading text —
+  `<Loader2 size={16} className="animate-spin" />` (or the page's own
+  action icon, e.g. `RefreshCw`, for an inline button's busy state) — not
+  bare "Loading…" text with no visual motion.
+
 ## Mandatory docs update — SKILL.md and CLAUDE.md
 
 **After every feature edit, you MUST update the affected feature's docs before

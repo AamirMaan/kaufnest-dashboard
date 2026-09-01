@@ -264,6 +264,25 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   with no fixed list since it varies per category. Backs the Listings
   feature (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for
   the full story.
+- `migrations/038_ebay_listing_drafts_origin.sql` — adds `origin text NOT
+  NULL DEFAULT 'app' CHECK (origin IN ('app', 'ebay_import'))` to
+  `ebay_listing_drafts`, plus a full (non-partial) unique index on
+  `ebay_listing_id`, via `run_on_all_tenant_schemas`; also mirrored into
+  `provision_tenant_schema()` in the same commit. Distinguishes listings
+  this app published from ones synced in from a tenant's existing eBay
+  account (`POST /api/listings/ebay/sync`). Backs the Listings feature
+  (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for the full
+  story.
+- `migrations/039_ebay_listing_drafts_inactive_status.sql` — drops and
+  recreates `ebay_listing_drafts_status_check` to add `'inactive'` to the
+  allowed `status` values, via `run_on_all_tenant_schemas`; also mirrored
+  into `provision_tenant_schema()` in the same commit. Backs the switch
+  (2026-09-01) from hard-deleting a local `ebay_listing_drafts` row once a
+  listing ends on eBay to marking it `inactive` instead — a tenant deleting
+  a listing, or eBay ending one behind their back, now stays visible as
+  history under the Listings page's "Inactive" filter. Backs the Listings
+  feature (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for
+  the full story.
 
 ## Related code
 

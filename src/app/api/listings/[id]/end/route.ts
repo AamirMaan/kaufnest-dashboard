@@ -80,13 +80,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 
   // The listing is genuinely gone from eBay at this point regardless of
-  // what happens next — a failed local delete is a display-only
-  // inconsistency (the next Sync's reconciliation step prunes it), not a
-  // reason to tell the tenant their delete failed.
-  const { error: deleteError } = await client.from("ebay_listing_drafts").delete().eq("id", id);
-  if (deleteError) {
-    console.error("[listings/end] local row cleanup failed:", deleteError.message);
+  // what happens next — a failed local status update is a display-only
+  // inconsistency (the next Sync's reconciliation step marks it inactive
+  // too), not a reason to tell the tenant their delete failed. Mark it
+  // inactive rather than deleting it — the row stays as history, visible
+  // under the Listings page's "Inactive" filter, instead of vanishing with
+  // no trace it ever existed.
+  const { data: updated, error: updateError } = await client
+    .from("ebay_listing_drafts")
+    .update({ status: "inactive" })
+    .eq("id", id)
+    .select()
+    .single<EbayListingDraft>();
+  if (updateError || !updated) {
+    console.error(
+      "[listings/end] local status update failed:",
+      updateError?.message ?? "no row returned"
+    );
+    return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(updated);
 }

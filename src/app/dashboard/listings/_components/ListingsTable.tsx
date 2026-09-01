@@ -12,6 +12,7 @@ const STATUS_VARIANTS: Record<ListingStatus, "default" | "success" | "warning" |
   publishing: "info",
   published: "success",
   failed: "danger",
+  inactive: "default",
 };
 
 function editHref(row: EbayListingDraft): string {
@@ -45,11 +46,14 @@ export function ListingsTable({ listings }: Props) {
         },
         {
           header: "Title",
-          render: (row) => (
-            <Link href={editHref(row)} className="font-medium text-(--color-primary) hover:underline">
-              {row.title}
-            </Link>
-          ),
+          render: (row) =>
+            row.status === "inactive" ? (
+              <span className="font-medium text-(--color-text-muted)">{row.title}</span>
+            ) : (
+              <Link href={editHref(row)} className="font-medium text-(--color-primary) hover:underline">
+                {row.title}
+              </Link>
+            ),
         },
         {
           header: "Source",
@@ -74,7 +78,9 @@ export function ListingsTable({ listings }: Props) {
         {
           header: "Actions",
           render: (row) =>
-            row.status === "published" ? (
+            row.status === "inactive" ? (
+              <span className="text-sm text-(--color-text-faint)">—</span>
+            ) : row.status === "published" ? (
               <Link href={editHref(row)} className="text-sm text-(--color-primary) hover:underline">
                 Edit →
               </Link>

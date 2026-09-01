@@ -102,7 +102,7 @@ describe("listingsSlice", () => {
   it("sets isFetching=true on fetchListingsPage.pending", () => {
     const state = reducer(
       undefined,
-      fetchListingsPage.pending("req-id", { page: 1, pageSize: 50 })
+      fetchListingsPage.pending("req-id", { page: 1, pageSize: 50, status: "all" })
     );
     expect(state.isFetching).toBe(true);
   });
@@ -111,7 +111,7 @@ describe("listingsSlice", () => {
     const payload = { data: [makeDraft({ id: "d3" })], count: 4, page: 2, pageSize: 50 };
     const state = reducer(
       undefined,
-      fetchListingsPage.fulfilled(payload, "req-id", { page: 2, pageSize: 50 })
+      fetchListingsPage.fulfilled(payload, "req-id", { page: 2, pageSize: 50, status: "all" })
     );
     expect(state.items).toHaveLength(1);
     expect(state.total).toBe(4);
@@ -123,11 +123,11 @@ describe("listingsSlice", () => {
   it("clears isFetching on fetchListingsPage.rejected", () => {
     const pending = reducer(
       undefined,
-      fetchListingsPage.pending("req-id", { page: 1, pageSize: 50 })
+      fetchListingsPage.pending("req-id", { page: 1, pageSize: 50, status: "all" })
     );
     const state = reducer(
       pending,
-      fetchListingsPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50 })
+      fetchListingsPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50, status: "all" })
     );
     expect(state.isFetching).toBe(false);
   });

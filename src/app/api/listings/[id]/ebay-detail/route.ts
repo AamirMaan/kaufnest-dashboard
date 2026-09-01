@@ -71,12 +71,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // own origin="app" reconciliation, and tell the caller so it can bail
     // out of rendering a dead edit form instead of a generic fetch error.
     if (detail.listingStatus !== "Active") {
-      const { error: deleteError } = await client.from("ebay_listing_drafts").delete().eq("id", id);
-      if (deleteError) {
-        console.error("[listings/ebay-detail] stale-listing cleanup failed:", deleteError.message);
+      // Marked inactive rather than deleted — the row stays visible as
+      // history under the Listings page's "Inactive" filter, same as the
+      // end/sync routes' reconciliation.
+      const { data: updated, error: updateError } = await client
+        .from("ebay_listing_drafts")
+        .update({ status: "inactive" })
+        .eq("id", id)
+        .select()
+        .single<EbayListingDraft>();
+      if (updateError || !updated) {
+        console.error(
+          "[listings/ebay-detail] stale-listing status update failed:",
+          updateError?.message ?? "no row returned"
+        );
       }
       return NextResponse.json(
-        { error: "This listing has already ended on eBay.", ended: true },
+        { error: "This listing has already ended on eBay.", ended: true, draft: updated ?? null },
         { status: 410 }
       );
     }

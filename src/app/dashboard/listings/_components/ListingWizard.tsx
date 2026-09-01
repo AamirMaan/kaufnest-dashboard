@@ -137,6 +137,16 @@ export function ListingWizard({ draftId }: Props) {
         router.push(`/dashboard/listings/${draftId}/live`);
         return;
       }
+      if (data.status === "inactive") {
+        // Ended on eBay (deleted here, or by eBay/Seller Hub) — there is
+        // nothing left to create/publish, and the wizard has no re-publish
+        // flow (out of scope for this pass). Only reachable via a direct
+        // URL hit or stale bookmark — the Listings table itself never links
+        // an inactive row anywhere (see ListingsTable.tsx).
+        toastError("This listing has already ended on eBay.");
+        router.push("/dashboard/listings");
+        return;
+      }
       setExistingRow(data);
       setDraftState(toFormState(data));
       setLoading(false);
