@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea } from "@/components/ui/FormFields";
@@ -171,6 +173,14 @@ export function EditLiveListing({ draftId }: Props) {
 
   return (
     <div>
+      <Link
+        href="/dashboard/listings"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-(--color-primary) hover:underline"
+      >
+        <ArrowLeft size={14} />
+        Back to Listings
+      </Link>
+
       <PageHeader title="Edit Listing" description="Changes save directly to your live eBay listing" />
 
       {error && (
@@ -290,13 +300,9 @@ export function EditLiveListing({ draftId }: Props) {
         })}
 
         <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setDeleteOpen(true)}
-            className="text-sm font-medium text-(--color-danger-text) hover:underline"
-          >
+          <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
             Delete listing
-          </button>
+          </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>
