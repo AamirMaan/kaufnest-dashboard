@@ -196,6 +196,19 @@ route — required-aspect names are category-driven, not creation-method-
 driven, so the same Taxonomy API answer applies whether or not the wizard
 originally created the listing.
 
+`ebay-detail` self-corrects staleness on load, not just on Sync: `GetItem`'s
+`SellingStatus.ListingStatus` (`EbayListingDetail.listingStatus`, added
+2026-09-01) is eBay's own ground truth for whether the listing is still
+live. When it's anything other than `"Active"` (ended in Seller Hub,
+expired, or ended here already with a failed local-row cleanup), the route
+deletes the local row itself and returns `410` with `{ error, ended: true }`
+instead of the normal detail payload — no need to wait for a Sync click or
+a failed Delete to discover it, since this is the exact same `GetItem` call
+already being made to load the edit form. `EditLiveListing.tsx` treats a
+`410` as a distinct case from a load failure: it removes the row from
+`listingsSlice`, toasts the message, and redirects to `/dashboard/listings`
+instead of rendering a dead edit form.
+
 **The single most important correctness property in this flow**: `revise`
 never blindly resends `ItemSpecifics` to eBay. It re-fetches the listing's
 CURRENT live aspects via `fetchListingDetail` (never trusting anything the

@@ -340,6 +340,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the aspects state handling in that file without re-reading this gotcha
   first.
 
+- **`listingStatus` defaults to `"Active"` on purpose — never flip that
+  default without re-checking the reconciliation logic it feeds (2026-09-01).**
+  `fetchListingDetail` reads `SellingStatus.ListingStatus` and falls back to
+  `"Active"` if the tag is absent: `tagText(sellingStatus, "ListingStatus")
+  ?? "Active"`. `GET /api/listings/[id]/ebay-detail` treats any non-`"Active"`
+  value as "this listing ended on eBay" and deletes the local row. The
+  fail-safe direction matters: if eBay ever omitted the tag on a genuinely
+  active listing, defaulting to anything OTHER than `"Active"` would delete a
+  live, still-selling listing's local row on the next page load. Defaulting
+  to `"Active"` means the worst case of a missing tag is staleness lingering
+  one more Sync cycle, not data loss.
+
 ## Tests
 
 `npx jest dashboard/listings` and `npx jest lib/integrations/ebay/listings`

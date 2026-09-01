@@ -83,7 +83,34 @@ describe("fetchListingDetail", () => {
       categoryName: "Cell Phones",
       aspects: { Brand: "Acme", Type: "Wireless" },
       multiValueAspectNames: [],
+      listingStatus: "Active",
     });
+  });
+
+  it("defaults listingStatus to Active when eBay omits the tag", async () => {
+    mockXmlResponse(GET_ITEM_RESPONSE);
+    const detail = await fetchListingDetail("token", "111222333");
+    expect(detail.listingStatus).toBe("Active");
+  });
+
+  it("surfaces a non-Active listingStatus so the caller can reconcile it", async () => {
+    mockXmlResponse(`<?xml version="1.0" encoding="utf-8"?>
+      <GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+        <Ack>Success</Ack>
+        <Item>
+          <ItemID>999</ItemID>
+          <Title>Ended listing</Title>
+          <Description></Description>
+          <PrimaryCategory><CategoryID>1</CategoryID><CategoryName>Misc</CategoryName></PrimaryCategory>
+          <SellingStatus>
+            <CurrentPrice currencyID="EUR">5.00</CurrentPrice>
+            <ListingStatus>Ended</ListingStatus>
+          </SellingStatus>
+        </Item>
+      </GetItemResponse>`);
+
+    const detail = await fetchListingDetail("token", "999");
+    expect(detail.listingStatus).toBe("Ended");
   });
 
   it("collapses a multi-value NameValueList to its first value only (v1 doesn't support MULTI-cardinality aspects)", async () => {

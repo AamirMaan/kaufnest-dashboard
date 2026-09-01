@@ -61,6 +61,12 @@ export function EditLiveListing({ draftId }: Props) {
       try {
         const res = await fetch(`/api/listings/${draftId}/ebay-detail`);
         const json = await res.json();
+        if (res.status === 410) {
+          dispatch(removeListingDraft(draftId));
+          toastError(json.error ?? "This listing has already ended on eBay.");
+          router.push("/dashboard/listings");
+          return;
+        }
         if (!res.ok) throw new Error(json.error ?? "Failed to load listing");
         setDetail(json);
         setAspects(json.aspects);

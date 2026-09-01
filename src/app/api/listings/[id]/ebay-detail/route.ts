@@ -63,6 +63,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   try {
     const detail = await fetchListingDetail(accessToken, draft.ebay_listing_id);
+
+    // GetItem is ground truth for whether this listing is still live — no
+    // need to wait for the next Sync click or a failed Delete to discover
+    // it ended outside the app (Seller Hub, expired, or ended here already
+    // with a local-cleanup failure). Reconcile immediately, same as Sync's
+    // own origin="app" reconciliation, and tell the caller so it can bail
+    // out of rendering a dead edit form instead of a generic fetch error.
+    if (detail.listingStatus !== "Active") {
+      const { error: deleteError } = await client.from("ebay_listing_drafts").delete().eq("id", id);
+      if (deleteError) {
+        console.error("[listings/ebay-detail] stale-listing cleanup failed:", deleteError.message);
+      }
+      return NextResponse.json(
+        { error: "This listing has already ended on eBay.", ended: true },
+        { status: 410 }
+      );
+    }
+
     return NextResponse.json(detail);
   } catch (err) {
     const message = errorMessage(err);
