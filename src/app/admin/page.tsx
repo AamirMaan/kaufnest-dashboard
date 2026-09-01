@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { TenantActions } from "./_components/TenantActions";
 import { AddTenantModal } from "./_components/AddTenantModal";
+import { AiUsageModal } from "./_components/AiUsageModal";
 import type { Tenant, TenantPlan, TenantStatus } from "@/types";
 import { Plus, Building2 } from "lucide-react";
 
@@ -27,6 +28,8 @@ export default function AdminPage() {
   const [tenants, setTenants] = useState<Tenant[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [aiUsage, setAiUsage] = useState<Record<string, { used: number; limit: number; byUser: Record<string, number> }>>({});
+  const [usageTenant, setUsageTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +39,22 @@ export default function AdminPage() {
         if (!cancelled) setTenants(data.tenants ?? []);
       })
       .catch(() => { if (!cancelled) setTenants([]); });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/ai-usage")
+      .then((r) => r.json())
+      .then((data: { usage?: { tenantId: string; used: number; limit: number; byUser: Record<string, number> }[] }) => {
+        if (cancelled) return;
+        const map: Record<string, { used: number; limit: number; byUser: Record<string, number> }> = {};
+        for (const row of data.usage ?? []) {
+          map[row.tenantId] = { used: row.used, limit: row.limit, byUser: row.byUser };
+        }
+        setAiUsage(map);
+      })
+      .catch(() => { if (!cancelled) setAiUsage({}); });
     return () => { cancelled = true; };
   }, [refreshKey]);
 
@@ -95,7 +114,7 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {["Tenant", "Admin Email", "Plan", "Status", "Trial Ends", "Created", "Actions"].map((h) => (
+                  {["Tenant", "Admin Email", "Plan", "Status", "AI Usage", "Trial Ends", "Created", "Actions"].map((h) => (
                     <th
                       key={h}
                       className="text-left text-xs font-semibold uppercase tracking-wider text-(--color-text-faint) pb-3 pr-4"
@@ -120,6 +139,19 @@ export default function AdminPage() {
                     </td>
                     <td className="py-3 pr-4">
                       <Badge label={t.status} variant={STATUS_VARIANT[t.status]} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      {aiUsage[t.id] && aiUsage[t.id].limit > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setUsageTenant(t)}
+                          className="text-(--color-primary) hover:underline"
+                        >
+                          {aiUsage[t.id].used} / {aiUsage[t.id].limit}
+                        </button>
+                      ) : (
+                        <span className="text-(--color-text-faint)">—</span>
+                      )}
                     </td>
                     <td className="py-3 pr-4 text-(--color-text-muted)">
                       {t.trial_ends_at
@@ -147,6 +179,17 @@ export default function AdminPage() {
           setRefreshKey((k) => k + 1);
         }}
       />
+
+      {usageTenant && (
+        <AiUsageModal
+          open={!!usageTenant}
+          tenant={usageTenant}
+          used={aiUsage[usageTenant.id]?.used ?? 0}
+          limit={aiUsage[usageTenant.id]?.limit ?? 0}
+          byUser={aiUsage[usageTenant.id]?.byUser ?? {}}
+          onClose={() => setUsageTenant(null)}
+        />
+      )}
     </div>
   );
 }
