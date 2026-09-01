@@ -317,6 +317,7 @@ BEGIN
       category_name          text,
       image_urls             text[] NOT NULL DEFAULT '{}',
       aspects                jsonb NOT NULL DEFAULT '{}'::jsonb,
+      origin                 text NOT NULL DEFAULT 'app' CHECK (origin IN ('app', 'ebay_import')),
       fulfillment_policy_id  text,
       payment_policy_id      text,
       return_policy_id       text,
@@ -626,6 +627,7 @@ BEGIN
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_status ON %1$I.ebay_listing_drafts (status)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_listing_drafts_created_by ON %1$I.ebay_listing_drafts (created_by)', schema_name);
+  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_ebay_listing_drafts_ebay_listing_id ON %1$I.ebay_listing_drafts (ebay_listing_id)', schema_name);
   -- Full (non-partial) index — see 033_ebay_messages_full_unique_index.sql.
   -- A partial index here breaks sync's upsert onConflict inference; NULLs
   -- (locally-created outbound rows) never conflict under a plain UNIQUE

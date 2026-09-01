@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Pagination";
+import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasPermission } from "@/lib/utils/permissions";
 import { fetchListingsPage } from "./_store/listingsSlice";
@@ -13,14 +15,31 @@ import { BusinessEbayGate } from "./_components/BusinessEbayGate";
 
 export default function ListingsPage() {
   const dispatch = useAppDispatch();
+  const { success, error: toastError } = useToast();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const { items, page, pageSize, total, isFetching } = useAppSelector((s) => s.listings);
+  const [syncing, setSyncing] = useState(false);
 
   const canManage = role && hasPermission(role, "manage_listings", permissionOverrides);
 
   function goToPage(nextPage: number) {
     dispatch(fetchListingsPage({ page: nextPage, pageSize }));
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/listings/ebay/sync", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Sync failed");
+      success(`Synced from eBay: ${json.imported} imported, ${json.removed} removed.`);
+      dispatch(fetchListingsPage({ page: 1, pageSize }));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (
@@ -31,12 +50,18 @@ export default function ListingsPage() {
           description="Publish products to eBay from Inventory or a dropship source"
           action={
             canManage && (
-              <Link href="/dashboard/listings/new">
-                <Button size="sm">
-                  <Plus size={14} />
-                  New Listing
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={handleSync} disabled={syncing}>
+                  <RefreshCw size={14} />
+                  {syncing ? "Syncing…" : "Sync from eBay"}
                 </Button>
-              </Link>
+                <Link href="/dashboard/listings/new">
+                  <Button size="sm">
+                    <Plus size={14} />
+                    New Listing
+                  </Button>
+                </Link>
+              </div>
             )
           }
         />

@@ -18,6 +18,7 @@ function makeDraft(overrides: Partial<EbayListingDraft> = {}): EbayListingDraft 
     category_name: "Cell Phones",
     image_urls: ["https://example.com/img.jpg"],
     aspects: { Brand: "Acme" },
+    origin: "app",
     fulfillment_policy_id: "fp-1",
     payment_policy_id: "pp-1",
     return_policy_id: "rp-1",

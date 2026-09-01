@@ -130,6 +130,13 @@ export function ListingWizard({ draftId }: Props) {
         router.push("/dashboard/listings");
         return;
       }
+      if (data.status === "published") {
+        // Already live on eBay (whether published by this app or imported
+        // via Sync) — the wizard/Inventory API flow must never touch it
+        // again. Redirect to the Trading-API live-edit page instead.
+        router.push(`/dashboard/listings/${draftId}/live`);
+        return;
+      }
       setExistingRow(data);
       setDraftState(toFormState(data));
       setLoading(false);

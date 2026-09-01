@@ -41,6 +41,23 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
   route file.
+- **Changing what's editable on an already-published listing**
+  (2026-08-31): everything lives in `EditLiveListing.tsx` +
+  `/api/listings/[id]/revise/route.ts` — a completely separate path from
+  the wizard/`publish.ts`. Add the field to `LiveDetail`/`EbayListingDetail`
+  (`lib/integrations/ebay/listings.ts`), thread it through
+  `fetchListingDetail`'s `GetItem` parsing and `reviseListing`'s
+  `ReviseItem` XML building, add the form control in
+  `EditLiveListing.tsx`, and include it in the `revise` route's request
+  body and its `ebay_listing_drafts` update. Do NOT add it to the wizard's
+  `DraftFormState`/`ListingWizard.tsx` — that's the create-only path and
+  never touches an already-published listing again.
+- **Adding a new way to bring listings into `ebay_listing_drafts` from
+  outside the wizard** (e.g. a different platform's "existing listings"
+  import): follow `/api/listings/ebay/sync/route.ts`'s pattern — always
+  exclude `origin="app"` rows from any upsert, and scope any reconciliation
+  delete to the new origin value, never to `origin="app"`. See the gotcha
+  below for why this is load-bearing, not just a style preference.
 
 ## Gotchas
 
@@ -250,7 +267,65 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   aspects and identifiers, add it as its own recognized case here rather
   than broadening the filter further; the goal is closing named gaps eBay
   documents, not guessing at every possible one.
+- **Sync must never overwrite an `origin="app"` row — load-bearing, not a
+  style choice (2026-08-31).** `POST /api/listings/ebay/sync` upserts by
+  `ebay_listing_id`, which is a full (non-partial) unique index across the
+  WHOLE table, not scoped by `origin`. `GetMyeBaySelling`'s summary (what
+  the sync fetches) carries none of a listing's `aspects`/policies/
+  `merchant_location_key` — if the upsert ever ran against an app-published
+  listing that's still active on eBay, it would silently blank all of that.
+  The route protects this by reading every existing `origin="app"` row's
+  `ebay_listing_id` first and excluding those from the upsert batch,
+  BEFORE building the insert rows — not as a post-hoc filter on the
+  result. If you ever add a second sync source (a different platform, a
+  scheduled job, anything else that writes `ebay_listing_drafts` from
+  external data), it must do the same exclusion; there is nothing at the
+  DB layer stopping a naive upsert from wiping an app-created listing.
+- **Multi-value aspects are also silently destroyed on the WRITE side, not
+  just collapsed on read (2026-08-31 final review, mitigated not fixed).**
+  `fetchListingDetail`'s read-side collapse (see the test above) was an
+  accepted v1 limitation for reading, but it is NOT symmetric for writing:
+  if a real eBay listing has `Color: Red, Blue` and a tenant edits ANY field
+  in `EditLiveListing.tsx` (even just price), the `aspects` state only ever
+  held `{ Color: "Red" }` — that's all `fetchListingDetail` gave it — so on
+  Save, `reviseListing` sends `<NameValueList><Name>Color</Name><Value>Red</Value></NameValueList>`.
+  `ReviseItem`'s `ItemSpecifics` is replace-all, so eBay now believes Color's
+  only value is Red — "Blue" is gone from the live listing permanently, even
+  though the tenant never touched Color. `fetchListingDetail` now also
+  returns `multiValueAspectNames: string[]` (names of any aspect eBay
+  reported with >1 `<Value>`), and `EditLiveListing.tsx` renders a warning
+  next to any *required* (visible) field whose name appears there — but this
+  is a UI warning only, not a guard: nothing stops the save, and an aspect
+  that isn't in the category's required-aspect list is never rendered as a
+  field at all, so a multi-value aspect outside that list gets no warning
+  either, even though it's silently collapsed the same way. A full fix means
+  redesigning `EbayListingDetail`/`ReviseListingInput`'s `aspects` shape from
+  `Record<string, string>` to something multi-value-aware end-to-end (fetch,
+  diff in `buildAspectsForRevise`, the UI, and the `ReviseItem` XML builder)
+  — that's a properly-scoped follow-up task, not done here. Don't mistake the
+  warning for the fix.
+- **`revise`'s `ItemSpecifics` omission depends on the frontend never
+  submitting stale/empty aspects (2026-08-31) — the two halves of this
+  contract live in different files and must be kept in sync.**
+  `POST /api/listings/[id]/revise` calls `buildAspectsForRevise(current,
+  submitted)` — `current` comes from a FRESH `fetchListingDetail` call the
+  route makes itself (never trusting anything the client claims is "the
+  original"), and if `submitted` matches it exactly, `aspects` is omitted
+  from the `ReviseItem` call entirely (per eBay's own guidance: resending
+  unchanged `ItemSpecifics` risks "attribute version problems"). This is
+  only safe because `EditLiveListing.tsx` seeds its `aspects` state from
+  `ebay-detail`'s response on load and only ever merges into it
+  (`setAspects(prev => ({ ...prev, [name]: value }))`), never resets it to
+  `{}`. If a future edit to `EditLiveListing.tsx` ever submits `aspects` as
+  empty or omitted for a listing that genuinely has aspect values, the
+  route would interpret that as "clear all specifics" and send an empty
+  `<ItemSpecifics>` block, wiping real eBay listing data. Don't "simplify"
+  the aspects state handling in that file without re-reading this gotcha
+  first.
 
 ## Tests
 
-`npx jest dashboard/listings`
+`npx jest dashboard/listings` and `npx jest lib/integrations/ebay/listings`
+(the Trading API functions this feature added — `fetchListingDetail`,
+`reviseListing`, `endListing`, `buildAspectsForRevise`,
+`conditionIdToListingCondition`)

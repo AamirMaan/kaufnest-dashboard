@@ -33,6 +33,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   }
 
+  // An imported listing never went through this app's Inventory API flow —
+  // it has no ebay_sku/ebay_offer_id, so publishing it here would create an
+  // entirely separate second listing for the same eBay item.
+  if (draft.origin === "ebay_import") {
+    return NextResponse.json(
+      { error: "Imported listings can't be published — edit them directly instead." },
+      { status: 400 }
+    );
+  }
+  // Already live on eBay — re-running createOffer against it risks a
+  // duplicate listing. Bookmarks/typed URLs/the table's own "Retry" link
+  // can all reach this route for a row that's since been published.
+  if (draft.status === "published") {
+    return NextResponse.json(
+      { error: "This listing is already published — edit it directly instead." },
+      { status: 409 }
+    );
+  }
+
   const conn = await getConnection(client, "ebay");
   if (!conn || conn.status !== "connected") {
     return NextResponse.json(
