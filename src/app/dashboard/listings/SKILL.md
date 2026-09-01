@@ -37,6 +37,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   chosen value to `DraftFormState`/`EbayListingDraft`/the DB column (2
   places rule) and `ListingWizard.tsx`'s `EMPTY_DRAFT`/`toFormState`/
   `toPayload`, and validate it in `validatePoliciesStep`.
+- **Changing anything about listing images** (upload rules, compression,
+  ordering, cleanup): `_components/ImageGrid.tsx` is the only UI, and the
+  two pure helpers it composes are `_lib/imageResize.ts` (`compressImage`,
+  `ALLOWED_IMAGE_TYPES`, `MAX_UPLOAD_BYTES`, plus the tested `fitWithin`)
+  and `_lib/storagePath.ts` (`LISTING_IMAGES_BUCKET`, `buildImagePath`,
+  `pathFromPublicUrl`). The cap itself is `MAX_LISTING_IMAGES` in
+  `_lib/wizardValidation.ts` (with `validateImagesStep` + its colocated
+  test) — put new rules in a helper with a test, not inline in the
+  component; the component itself has no test (it is all canvas/Storage/DnD
+  side effects).
 - **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
@@ -164,12 +174,43 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the retry budget on a request that will never succeed (bad category ID,
   missing policy IDs, etc.). Don't bypass this by calling
   `ebayFetch("/sell/inventory/v1/offer", ...)` directly for a new offer.
-- **Unsaved-draft image orphaning**: `ImagesStep.tsx` uploads under a
-  `"unsaved"` folder when `draftId` is null (new draft, not yet saved). If
-  the user uploads images then abandons the wizard without ever clicking
-  Save Draft/Publish, those files are never cleaned up. No cleanup job
-  exists for this in v1 — acceptable given Storage cost is low, flagged here
-  so it isn't mistaken for an oversight.
+- **`pathFromPublicUrl` returning `null` means "remove only, delete
+  nothing" — never treat it as a failure to work around (2026-09-01).**
+  `_lib/storagePath.ts`'s `pathFromPublicUrl` validates the URL's *hostname*
+  (`*.supabase.co`) before matching the bucket marker, and returns `null` for
+  anything else. That is not an edge case: every listing brought in by `POST
+  /api/listings/ebay/sync` holds eBay CDN URLs (`i.ebayimg.com`), and those
+  images belong to eBay, not to this app. `ImageGrid.tsx`'s `removeImage`
+  therefore drops the URL from `draft.image_urls` and returns early on
+  `null` — a caller that instead fell back to "parse the path out anyway"
+  would issue storage deletes against objects this app does not own. Any new
+  code path that removes a listing image (bulk delete, a listing-delete
+  cleanup job, anything) must reuse `pathFromPublicUrl` and honour the
+  `null` branch. The delete itself is also deliberately fire-and-forget:
+  the array is updated first, and a failed `remove()` only `console.warn`s —
+  a Storage hiccup must never block a seller from editing their listing.
+- **The draft row is created lazily on the first image upload — that is not
+  autosave (2026-09-01).** `ImageGrid.tsx` needs a real draft id to build a
+  storage path (`{tenant_schema}/{draftId}/{uuid}.{ext}` — the RLS-critical
+  shape, see the bucket gotcha below), so when `draftId` is `null` it awaits
+  `onDraftCreated()`, which `ListingWizard.tsx` wires to `handleDraftCreated()`
+  → the same `saveDraft()` insert path Save Draft uses. This replaced the old
+  `"unsaved"` folder, whose orphaned files nothing ever cleaned up. Two
+  consequences to keep in mind: (a) a row now exists in `ebay_listing_drafts`
+  as soon as someone uploads an image, even if they never click Save Draft —
+  it is a `status="draft"` row with whatever fields were filled at that
+  moment; (b) **nothing after that point autosaves** — the id is reused for
+  subsequent uploads, but title/price/policy edits made later still only
+  reach the DB when the user clicks Save Draft or Publish, and so do the
+  image URLs and their ORDER (drag-reorder only mutates local wizard state).
+  Don't read "the draft got created" as "the draft is up to date."
+- **The 24-image cap lives in two places on purpose.** `MAX_LISTING_IMAGES`
+  (`_lib/wizardValidation.ts`) is enforced by `validateImagesStep` (the
+  wizard's Next button) *and* by `ImageGrid.tsx`'s picker, which refuses the
+  files that would cross the cap rather than uploading them and failing
+  validation afterwards. Change the constant, not either call site — and if
+  you add another way to add images (a URL paste box, an AI-generated
+  image), enforce it there too: eBay rejects the publish outright past 24.
 - **eBay Inventory API needs Business Policies pre-configured on the
   tenant's real eBay seller account** — `PoliciesStep.tsx` will show empty
   dropdowns (not an error) if the connected eBay account has none. There's

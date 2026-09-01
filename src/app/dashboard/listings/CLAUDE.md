@@ -61,9 +61,10 @@ covers only Part 1; Part 2's design is
   re-publish flow, so a direct URL hit on an ended listing's `[id]` route
   bounces out instead of rendering an editable-looking form for a listing
   that's actually gone.
-- `_components/{Source,Details,Category,Aspects,Images,Policies,Review}Step.tsx` —
-  one component per wizard step, each taking `{ draft, setDraft }` (Images
-  also takes `draftId`, since uploads need a storage path). `AspectsStep`
+- `_components/{Source,Details,Category,Aspects,Policies,Review}Step.tsx` —
+  one component per wizard step, each taking `{ draft, setDraft }`. The
+  Images step is `_components/ImageGrid.tsx` instead (2026-09-01, replaced
+  `ImagesStep.tsx`) — see its own entry below. `AspectsStep`
   (2026-08-31) fetches `/api/listings/ebay/aspects?categoryId=` whenever
   `draft.category_id` changes, and renders one field per item aspect eBay's
   Taxonomy API says is required for that category (e.g. Brand/"Marke") —
@@ -83,6 +84,44 @@ covers only Part 1; Part 2's design is
   `company_profile` (see `SKILL.md`'s gotcha for why). `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
+- `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) — the
+  wizard's Images step. Props `{ draft, setDraft, draftId, onDraftCreated }`.
+  What it adds over the old step:
+  - **Drag-to-reorder** via `@dnd-kit/core` + `@dnd-kit/sortable`
+    (`DndContext` + `SortableContext` with `rectSortingStrategy`, pointer +
+    keyboard sensors, each tile has its own grip handle so the remove button
+    stays clickable). Order matters: slot 1 is eBay's search thumbnail and
+    carries a visible "Gallery image" badge. Reorder writes straight back via
+    `setDraft({ image_urls })` — it is NOT persisted until Save Draft/Publish.
+  - **24-image cap** — `MAX_LISTING_IMAGES` from `_lib/wizardValidation.ts`
+    (eBay's real per-listing picture limit), enforced both in the picker
+    (files past the cap are refused with a message naming the limit, the
+    dropzone disables at the cap) and in `validateImagesStep`. The count is
+    shown as `N / 24` next to the empty-state hint.
+  - **Per-file validation before upload** against `ALLOWED_IMAGE_TYPES` /
+    `MAX_UPLOAD_BYTES` (`_lib/imageResize.ts`). Failures are collected per
+    file and rendered as a list — one bad file (a `.pdf`, an oversized JPEG,
+    a single failed upload) never aborts the rest of the batch.
+  - **Client-side compression** — every accepted file goes through
+    `compressImage` (canvas downscale to 1600px long edge + JPEG re-encode)
+    before `supabase.storage.from(LISTING_IMAGES_BUCKET).upload(path, blob,
+    { contentType: "image/jpeg" })`. Paths come from `buildImagePath`
+    (`_lib/storagePath.ts`) — `{tenant_schema}/{draftId}/{uuid}.{ext}`.
+  - **`tenant_schema` is read from the session and never defaulted** —
+    `session?.user.app_metadata?.tenant_schema`; missing means an error and
+    zero uploads (the old `?? "public"` fallback could only ever fail the
+    bucket's RLS check anyway).
+  - **Lazy draft creation** — when `draftId` is null (a never-saved new
+    draft), the first upload awaits `onDraftCreated()`, which
+    `ListingWizard.tsx` wires to `handleDraftCreated()` (the existing
+    `saveDraft()` insert path, returning the new row's id). This removes the
+    old `"unsaved"` storage folder and the orphaned-image problem with it.
+  - **Remove deletes the storage object** — `pathFromPublicUrl(url)` first;
+    `null` (an eBay CDN URL on an imported listing, or any non-Supabase host)
+    means remove from the array only, never call storage delete. The array
+    update is optimistic and a failed delete only `console.warn`s — cleanup
+    must never block the seller. An in-flight delete shows a spinning
+    "Removing image…" line, since the tile itself is already gone.
 - `_components/ListingsTable.tsx` — the table on `page.tsx`, via the shared
   `DataTable`. Shows image thumbnail, title (links via `editHref(row)`),
   source badge, price, status badge, and an action link. `editHref(row)`
@@ -308,7 +347,17 @@ the XML shapes.
   `buildAspectsForRevise`, `conditionIdToListingCondition`, 2026-08-31) is
   this feature's own, used only by the four `/api/listings/[id]/*` and
   `/api/listings/ebay/sync` routes.
-- Supabase Storage bucket `listing-images` (new — see `supabase/SKILL.md`)
+- Supabase Storage bucket `listing-images` (new — see `supabase/SKILL.md`),
+  addressed through `_lib/storagePath.ts` (`LISTING_IMAGES_BUCKET`,
+  `buildImagePath`, `pathFromPublicUrl`) — never a hardcoded bucket name or
+  hand-built path
+- `_lib/imageResize.ts` — `compressImage`, `MAX_UPLOAD_BYTES`,
+  `ALLOWED_IMAGE_TYPES` (browser-only canvas work; `fitWithin` is the pure,
+  tested half)
+- `@dnd-kit/core` + `@dnd-kit/sortable` (added 2026-09-01) — used only by
+  `ImageGrid.tsx`; `@dnd-kit/utilities` is deliberately NOT imported (the
+  transform string is built inline) so the feature depends on nothing that
+  isn't in `package.json`
 - `types` (`EbayListingDraft` — includes `origin: "app" | "ebay_import"`,
   2026-08-31 — `ListingSourceType`, `ListingCondition`, `ListingStatus`)
 

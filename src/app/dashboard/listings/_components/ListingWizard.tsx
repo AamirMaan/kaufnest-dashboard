@@ -24,7 +24,7 @@ import {
 import { SourceStep } from "./SourceStep";
 import { DetailsStep } from "./DetailsStep";
 import { CategoryStep } from "./CategoryStep";
-import { ImagesStep } from "./ImagesStep";
+import { ImageGrid } from "./ImageGrid";
 import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
 import { ReviewStep } from "./ReviewStep";
@@ -254,6 +254,16 @@ export function ListingWizard({ draftId }: Props) {
     }
   }
 
+  /** Lazy draft creation for ImageGrid: uploads need a real draft id, so the
+   * first upload on a never-saved draft creates the row through the normal
+   * insert path and returns its id. This is NOT autosave — later field edits
+   * still need Save Draft. */
+  async function handleDraftCreated(): Promise<string> {
+    const saved = await saveDraft();
+    if (!saved) throw new Error("Could not create the draft to attach images to.");
+    return saved.id;
+  }
+
   async function handleSaveDraft() {
     const saved = await saveDraft();
     if (saved) {
@@ -305,7 +315,14 @@ export function ListingWizard({ draftId }: Props) {
         {step === "details" && <DetailsStep draft={draft} setDraft={setDraft} />}
         {step === "category" && <CategoryStep draft={draft} setDraft={setDraft} />}
         {step === "aspects" && <AspectsStep draft={draft} setDraft={setDraft} />}
-        {step === "images" && <ImagesStep draft={draft} setDraft={setDraft} draftId={existingRow?.id ?? null} />}
+        {step === "images" && (
+          <ImageGrid
+            draft={draft}
+            setDraft={setDraft}
+            draftId={existingRow?.id ?? null}
+            onDraftCreated={handleDraftCreated}
+          />
+        )}
         {step === "policies" && <PoliciesStep draft={draft} setDraft={setDraft} />}
         {step === "review" && <ReviewStep draft={draft} />}
 
