@@ -2,14 +2,14 @@
 "use client";
 
 import { use } from "react";
-import { ListingWizard } from "../_components/ListingWizard";
+import { ListingForm } from "../_components/ListingForm";
 import { BusinessEbayGate } from "../_components/BusinessEbayGate";
 
 export default function EditListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
     <BusinessEbayGate>
-      <ListingWizard draftId={id} />
+      <ListingForm draftId={id} />
     </BusinessEbayGate>
   );
 }

@@ -76,6 +76,7 @@ export function AspectsStep({ draft, setDraft }: Props) {
           return (
             <Field key={aspect.name} label={aspect.name} required>
               <Input
+                required={!isNotApplicable}
                 value={isNotApplicable ? "" : value}
                 disabled={isNotApplicable}
                 onChange={(e) =>
@@ -105,6 +106,7 @@ export function AspectsStep({ draft, setDraft }: Props) {
           <Field key={aspect.name} label={aspect.name} required>
             {aspect.values.length > 0 ? (
               <Select
+                required
                 value={value}
                 onChange={(e) =>
                   setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })
@@ -117,6 +119,7 @@ export function AspectsStep({ draft, setDraft }: Props) {
               </Select>
             ) : (
               <Input
+                required
                 value={value}
                 onChange={(e) =>
                   setDraft({ aspects: { ...draft.aspects, [aspect.name]: e.target.value } })

@@ -12,7 +12,8 @@ Save Draft/Publish/category-search/policy-fetch/Sync/live-edit/Delete all
 require the permission).
 
 **Two-part feature, both parts now built (2026-08-31).** Part 1 is the
-create/publish wizard described below (Inventory API, unchanged since). Part
+create/publish form described below (Inventory API — a 7-step wizard until
+2026-09-02, now a single scrolling page, see `ListingForm.tsx`). Part
 2 is syncing in a tenant's full eBay listing history (including listings this
 app never created) and editing/ending any of them via the Trading API — see
 "Sync & live-edit flow" below. `docs/superpowers/specs/2026-07-20-ebay-listing-creation-design.md`
@@ -35,10 +36,10 @@ covers only Part 1; Part 2's design is
   below) — `page.tsx` itself no longer reads `tenantPlan`/`connections`
   directly.
 - `new/page.tsx` / `[id]/page.tsx` — thin client-component wrappers around
-  `_components/ListingWizard.tsx` (draftId `null` vs the route param, read via
+  `_components/ListingForm.tsx` (draftId `null` vs the route param, read via
   React's `use(params)`), each also wrapped in `_components/BusinessEbayGate.tsx`
   — added 2026-08-27; these two routes previously had no gate at all, so a
-  Pro tenant or a tenant with no eBay connection could reach the wizard
+  Pro tenant or a tenant with no eBay connection could reach the form
   directly by URL even with the list page's button correctly hidden.
 - `_components/BusinessEbayGate.tsx` — the plan/connection gate itself
   (2026-08-27): renders an upgrade prompt when `tenantPlan` isn't Business
@@ -47,30 +48,61 @@ covers only Part 1; Part 2's design is
   "ebay"` row with `status === "connected"`, or `children` otherwise. Used by
   all three route files above — change the gate condition/copy here, not
   per-route.
-- `_components/ListingWizard.tsx` — the wizard shell. Owns `draft`
-  (`DraftFormState`, all-string controlled-input state) and `step` state,
-  loads an existing draft row when `draftId` is set, renders the current
-  step, and handles Save Draft (direct Supabase insert/update via `toPayload()`
-  + audit log) and Publish (saves, then `POST /api/listings/[id]/publish`).
+- `_components/ListingForm.tsx` (2026-09-02, replaced `ListingWizard.tsx`) —
+  the create/edit form. Owns `draft` (`DraftFormState`, all-string
+  controlled-input state), loads an existing draft row when `draftId` is
+  set, and handles Save Draft (direct Supabase insert/update via
+  `toPayload()` + audit log) and Publish (saves, then
+  `POST /api/listings/[id]/publish`).
+  **Layout**: a two-column grid (`lg:grid-cols-[1fr_380px]`, single column
+  below `lg`). The left column is ONE `<form id="listing-form"
+  onSubmit={handlePublish}>` holding three `<Section>`s — **Item**
+  (`SourceStep`, title, description, `ImageGrid`), **Listing**
+  (`CategoryStep`, `AspectsStep`, price / currency / quantity / condition)
+  and **Shipping** (`PoliciesStep`). The right column is
+  `<ListingPreview draft={draft} />` in a `lg:sticky lg:top-6` wrapper, so
+  the preview and its quality meter track every keystroke. Below the grid
+  is a `sticky bottom-0` action bar holding Save Draft and Publish; the
+  Publish button lives outside the `<form>` and reaches it via
+  `type="submit" form="listing-form"`. There is no step state, no `STEPS`
+  array and no Next/Back — that was the pre-2026-09-02 wizard.
+  **Button gates** (deliberately asymmetric, see `SKILL.md`): all six
+  `_lib/wizardValidation.ts` validators are `??`-chained every render into
+  `publishError`, which disables Publish and renders beside it as the
+  explanation; Save Draft is disabled only while a save/publish is in
+  flight, never by field completeness, because incomplete drafts are a
+  supported state.
+  **Two refs guard the row-creation race** (`inFlightSave`,
+  `existingRowRef`) — `ImageGrid`'s lazy `onDraftCreated()` and the two
+  buttons all funnel through one mutexed `saveDraft()`; see `SKILL.md`'s
+  gotcha for the duplicate-row bug this closes.
   `toPayload()` builds the DB row shape shared by insert/update; `created_by`
   is set only on the insert path (`{ ...toPayload(), created_by: user.id }`),
-  never on update — this file previously had a bug where update also
+  never on update — this file's predecessor had a bug where update also
   overwrote `created_by`, since fixed. On load, `status === "published"`
   redirects to the live-edit page and `status === "inactive"` (2026-09-01)
-  redirects back to `/dashboard/listings` with a toast — the wizard has no
+  redirects back to `/dashboard/listings` with a toast — this form has no
   re-publish flow, so a direct URL hit on an ended listing's `[id]` route
   bounces out instead of rendering an editable-looking form for a listing
   that's actually gone.
-- `_components/{Source,Details,Category,Aspects,Policies,Review}Step.tsx` —
-  one component per wizard step, each taking `{ draft, setDraft }`. The
-  Images step is `_components/ImageGrid.tsx` instead (2026-09-01, replaced
-  `ImagesStep.tsx`) — see its own entry below. `AspectsStep`
+- `_components/{Source,Category,Aspects,Policies}Step.tsx` —
+  field groups rendered by `ListingForm.tsx`'s sections, each taking
+  `{ draft, setDraft }`. (`DetailsStep.tsx` and `ReviewStep.tsx` were
+  deleted in the 2026-09-02 rewrite — their content is now inline in
+  `ListingForm.tsx` and `ListingPreview.tsx` respectively.) Images are
+  `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) —
+  see its own entry below. Because they now live inside a real `<form>`,
+  every `<button>` in them carries an explicit `type="button"`,
+  `CategoryStep`'s search box `preventDefault()`s Enter, and real listing
+  fields carry a `required` attribute (but NOT `CategoryStep`'s search
+  query or `PoliciesStep`'s create-location sub-form — see `SKILL.md`).
+  `AspectsStep`
   (2026-08-31) fetches `/api/listings/ebay/aspects?categoryId=` whenever
   `draft.category_id` changes, and renders one field per item aspect eBay's
   Taxonomy API says is required for that category (e.g. Brand/"Marke") —
   `publishOffer` otherwise rejects with errorId 25002 one missing aspect at
   a time. Stores the fetched required-names list on
-  `draft.required_aspect_names` (wizard-only, never persisted — see
+  `draft.required_aspect_names` (form-only, never persisted — see
   `wizardValidation.ts`) so `validateAspectsStep` can check completeness
   without re-fetching. `PoliciesStep`
   fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
@@ -85,7 +117,7 @@ covers only Part 1; Part 2's design is
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
 - `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) — the
-  wizard's Images step. Props `{ draft, setDraft, draftId, onDraftCreated }`.
+  form's images control. Props `{ draft, setDraft, draftId, onDraftCreated }`.
   What it adds over the old step:
   - **Drag-to-reorder** via `@dnd-kit/core` + `@dnd-kit/sortable`
     (`DndContext` + `SortableContext` with `rectSortingStrategy`, pointer +
@@ -113,8 +145,8 @@ covers only Part 1; Part 2's design is
     bucket's RLS check anyway).
   - **Lazy draft creation** — when `draftId` is null (a never-saved new
     draft), the first upload awaits `onDraftCreated()`, which
-    `ListingWizard.tsx` wires to `handleDraftCreated()` (the existing
-    `saveDraft()` insert path, returning the new row's id). This removes the
+    `ListingForm.tsx` wires to `handleDraftCreated()` (the existing
+    mutexed `saveDraft()` insert path, returning the new row's id). This removes the
     old `"unsaved"` storage folder and the orphaned-image problem with it.
   - **Remove deletes the storage object** — `pathFromPublicUrl(url)` first;
     `null` (an eBay CDN URL on an imported listing, or any non-Supabase host)
@@ -126,7 +158,7 @@ covers only Part 1; Part 2's design is
   `DataTable`. Shows image thumbnail, title (links via `editHref(row)`),
   source badge, price, status badge, and an action link. `editHref(row)`
   (2026-08-31) routes `status === "published"` rows to `[id]/live` (Trading
-  API edit page) and everything else to `[id]` (the wizard) — used by both
+  API edit page) and everything else to `[id]` (the create/edit form) — used by both
   the Title and Actions columns. The Source column checks `row.origin ===
   "ebay_import"` FIRST and shows an "Imported" badge in that case, before
   ever falling through to the `source_type`-based Inventory/Dropship badge
@@ -142,11 +174,13 @@ covers only Part 1; Part 2's design is
   the Trading-API-based edit page for any already-published listing,
   whether this app created it or it was imported. See "Sync & live-edit
   flow" below for the full data flow; this is a completely separate code
-  path from the wizard/Inventory API, not a mode of `ListingWizard.tsx`.
-- `_lib/wizardValidation.ts` — pure per-step validators + `DraftFormState`
-  type, colocated test. These validators only run when the wizard's own
-  "Next" button is clicked — see the SKILL.md gotcha on Save Draft/Publish
-  skipping them.
+  path from the create form/Inventory API, not a mode of `ListingForm.tsx`.
+- `_lib/wizardValidation.ts` — pure field-group validators +
+  `DraftFormState` type, colocated test. Since 2026-09-02 all six run on
+  every render of `ListingForm.tsx` and gate the Publish button (Save Draft
+  stays permissive by design) — see the SKILL.md gotcha. The filename keeps
+  its `wizard` prefix only to avoid churning every import; there is no
+  wizard any more.
 - `_lib/listingQuality.ts` — `scoreListing(draft) → { score, checks:
   QualityCheck[] }` (2026-09-01/02). Distinct from `wizardValidation.ts`:
   that answers whether a draft *can* be published; this scores 0-100 how
@@ -167,9 +201,9 @@ covers only Part 1; Part 2's design is
   hint. Passing checks are deliberately not listed. Pure presentational
   component, no Redux/Supabase — takes `{ draft: DraftFormState }` and has
   no automated test (this repo's Jest config is `testEnvironment: "node"`,
-  no jsdom, so component render tests aren't possible here). Not yet wired
-  into `ListingWizard.tsx`'s step flow as of this commit — wiring it into a
-  step (e.g. alongside or replacing `ReviewStep.tsx`) is a separate task.
+  no jsdom, so component render tests aren't possible here). Rendered by
+  `ListingForm.tsx` in the sticky right-hand column (2026-09-02), where it
+  replaced the old `ReviewStep.tsx`.
 - `_store/listingsSlice.ts` — `state.listings` (`items`, `loaded`, `page`,
   `pageSize`, `total`, `isFetching`). Actions: `hydratePage` (aliased
   `hydrateListingDrafts`), `addListingDraft`, `updateListingDraft`,
@@ -183,7 +217,7 @@ covers only Part 1; Part 2's design is
 
 Same pattern as every other CRUD feature: `dashboard/layout.tsx` fetches page
 1 of `ebay_listing_drafts`, `StoreProvider` hydrates `state.listings`. Draft
-CRUD writes go straight to Supabase from `ListingWizard.tsx` (RLS-protected),
+CRUD writes go straight to Supabase from `ListingForm.tsx` (RLS-protected),
 then dispatch the local slice action — no refetch. The two eBay-read calls
 (category search, business policies) and the publish action are the only
 server round-trips, via `src/app/api/listings/`, since only those need the
@@ -213,11 +247,11 @@ times (1s/2s/3s backoff) if eBay returns errorId 25751 — an eventual-
 consistency gap where the SKU isn't immediately queryable right after the
 PUT above (see `SKILL.md`'s gotcha) — before giving up. The offer's
 `merchantLocationKey` comes from the draft's own `merchant_location_key`
-field (chosen per-tenant in the wizard's Policies step, not a global env
+field (chosen per-tenant in the form's Shipping section, not a global env
 var — see `SKILL.md`'s gotcha for why that used to be broken for every
 tenant but one). The inventory item's `product.aspects` comes from the
-draft's `aspects` field (chosen per-category in the wizard's Item Specifics
-step — see `SKILL.md`'s gotcha for why this can't be a fixed field list,
+draft's `aspects` field (chosen per-category in the form's Listing section
+— see `SKILL.md`'s gotcha for why this can't be a fixed field list,
 and its follow-up gotcha for why product identifiers like EAN needed a
 second fix the same day even after Brand was handled). `status` moves
 `draft → publishing → published`, or
@@ -289,9 +323,9 @@ read-only — eBay restricts category changes on active listings), saves via
 /api/listings/[id]/end` (`EndItem`, then marks the local row `inactive`
 rather than deleting it — 2026-09-01, see the "inactive, not deleted" note
 above; the row stays visible under the Listings page's "Inactive" filter).
-The aspects picker reuses the wizard's own `GET /api/listings/ebay/aspects`
+The aspects picker reuses the create form's own `GET /api/listings/ebay/aspects`
 route — required-aspect names are category-driven, not creation-method-
-driven, so the same Taxonomy API answer applies whether or not the wizard
+driven, so the same Taxonomy API answer applies whether or not this app
 originally created the listing.
 
 `ebay-detail` self-corrects staleness on load, not just on Sync: `GetItem`'s

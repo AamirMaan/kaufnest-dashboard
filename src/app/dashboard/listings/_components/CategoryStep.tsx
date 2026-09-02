@@ -42,12 +42,23 @@ export function CategoryStep({ draft, setDraft }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Required-marked because a category IS required, but the control is a
+        * search box, not the stored value — it is intentionally left without a
+        * `required` attribute (it is empty again once a suggestion is picked).
+        * `validateCategoryStep` gates Publish on `category_id` instead. */}
       <Field label="Search eBay categories" required>
         <div className="flex gap-2">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              // This input now lives inside ListingForm's `<form>`; without
+              // preventDefault, Enter would trigger implicit submission
+              // (i.e. Publish) instead of a category search.
+              e.preventDefault();
+              handleSearch();
+            }}
             placeholder="e.g. wireless mouse"
           />
           <Button type="button" variant="secondary" onClick={handleSearch} disabled={searching}>

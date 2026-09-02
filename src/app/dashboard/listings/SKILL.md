@@ -1,16 +1,19 @@
 ---
 name: listings-feature
-description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
+description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around the single-page form's save mutex, SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
 ---
 
 # Listings feature playbook
 
 ## Minimal file set per change type
 
-- **New wizard field** (e.g. an "item specifics" step): add it to
+- **New listing field**: add it to
   `DraftFormState` in `_lib/wizardValidation.ts`, add a validator if it's
-  required, add/extend a step component, wire it into `ListingWizard.tsx`'s
-  `STEPS`/`VALIDATORS`/switch and its `toPayload()`, add the DB column via the
+  required (and chain that validator into `ListingForm.tsx`'s `publishError`
+  — a validator nobody chains gates nothing), render the control in the
+  right `<Section>` of `ListingForm.tsx` (or extend the step component that
+  section renders), add it to `ListingForm.tsx`'s `EMPTY_DRAFT`/
+  `toFormState`/`toPayload()`, add the DB column via the
   "2 places" rule (`supabase/SKILL.md`) — `021_ebay_listing_drafts.sql`-style
   new migration using `run_on_all_tenant_schemas` PLUS
   `provision_tenant_schema()` — and add it to
@@ -35,7 +38,7 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `GET /api/listings/ebay/<thing>/route.ts` mirroring `locations`/
   `policies`'s shape exactly, add the picker to `PoliciesStep.tsx`, add the
   chosen value to `DraftFormState`/`EbayListingDraft`/the DB column (2
-  places rule) and `ListingWizard.tsx`'s `EMPTY_DRAFT`/`toFormState`/
+  places rule) and `ListingForm.tsx`'s `EMPTY_DRAFT`/`toFormState`/
   `toPayload`, and validate it in `validatePoliciesStep`.
 - **Changing anything about listing images** (upload rules, compression,
   ordering, cleanup): `_components/ImageGrid.tsx` is the only UI, and the
@@ -47,6 +50,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   test) — put new rules in a helper with a test, not inline in the
   component; the component itself has no test (it is all canvas/Storage/DnD
   side effects).
+- **Changing the create/edit form's layout** (a new section, moving a
+  control between sections, changing the preview column): `ListingForm.tsx`
+  only. It is a single scrolling page — three `<Section>`s ("Item",
+  "Listing", "Shipping") inside one `<form id="listing-form">`, with
+  `<ListingPreview>` in a `lg:sticky` right column and a sticky bottom
+  action bar. There is no step machine, no `STEPS` array and no "Next"
+  button any more; anything that reads like one in older notes predates
+  2026-09-02. The step components (`SourceStep`, `CategoryStep`,
+  `AspectsStep`, `PoliciesStep`) survived the rewrite as plain
+  `{ draft, setDraft }` field groups — `DetailsStep.tsx` and
+  `ReviewStep.tsx` did not (their content is inline in `ListingForm.tsx`
+  and `ListingPreview.tsx` respectively).
 - **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
@@ -54,16 +69,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 - **Changing what's editable on an already-published listing**
   (2026-08-31): everything lives in `EditLiveListing.tsx` +
   `/api/listings/[id]/revise/route.ts` — a completely separate path from
-  the wizard/`publish.ts`. Add the field to `LiveDetail`/`EbayListingDetail`
+  the create form/`publish.ts`. Add the field to `LiveDetail`/`EbayListingDetail`
   (`lib/integrations/ebay/listings.ts`), thread it through
   `fetchListingDetail`'s `GetItem` parsing and `reviseListing`'s
   `ReviseItem` XML building, add the form control in
   `EditLiveListing.tsx`, and include it in the `revise` route's request
-  body and its `ebay_listing_drafts` update. Do NOT add it to the wizard's
-  `DraftFormState`/`ListingWizard.tsx` — that's the create-only path and
+  body and its `ebay_listing_drafts` update. Do NOT add it to the create
+  form's `DraftFormState`/`ListingForm.tsx` — that's the create-only path and
   never touches an already-published listing again.
 - **Adding a new way to bring listings into `ebay_listing_drafts` from
-  outside the wizard** (e.g. a different platform's "existing listings"
+  outside the create form** (e.g. a different platform's "existing listings"
   import): follow `/api/listings/ebay/sync/route.ts`'s pattern — always
   exclude `origin="app"` rows from any upsert, and scope any reconciliation
   status update (`status: "inactive"`, not a delete — see the gotcha below)
@@ -71,8 +86,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   exclusion's own `origin="app"` rows unless it's the deliberate SECOND,
   separate reconciliation pass the sync route already does. See the gotcha
   below for why this is load-bearing, not just a style preference.
-- **Adding a new required-looking field to `EditLiveListing.tsx` (or any
-  new create/edit form anywhere in the app)**: it MUST follow
+- **Adding a new required-looking field to `ListingForm.tsx` /
+  `EditLiveListing.tsx` (or any new create/edit form anywhere in the app)**:
+  it MUST follow
   `AGENTS.md`'s "Form conventions" section — real `<form>`, `required` on
   the actual input (not just `<Field required>`'s label), and a computed
   `isFormValid` disabling the submit button. `EditLiveListing.tsx` didn't
@@ -82,16 +98,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 ## Gotchas
 
 - **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
-  and the wizard routes had no gate at all until the same change.**
+  and the create/edit routes had no gate at all until the same change.**
   `hasPlatformIntegrations` (Pro + Business) was the original gate on
   `page.tsx` only; it's now `hasMessagingAndListings` (Business only, see
   `lib/utils/planGating.ts`) PLUS a connected-eBay check, applied via
   `_components/BusinessEbayGate.tsx` to **all three** routes. Before this,
-  `new/page.tsx`/`[id]/page.tsx` rendered `ListingWizard` with no gate
+  `new/page.tsx`/`[id]/page.tsx` rendered the listing form with no gate
   whatsoever — a Pro tenant, or one with no eBay connection at all, could
-  reach the wizard by navigating straight to the URL even though the list
+  reach it by navigating straight to the URL even though the list
   page's "New Listing" button was correctly hidden from them. Don't
-  reintroduce a route that renders `ListingWizard` without wrapping it in
+  reintroduce a route that renders `ListingForm` without wrapping it in
   `BusinessEbayGate`.
 - **Category search needs an application token, not the seller's user
   token — fixed.** `searchCategories` (Taxonomy API,
@@ -114,10 +130,10 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `AuditEntity` is `"expense" | "purchase" | "sale" | "user" | "product"` —
   adding a 6th value is a one-line, low-risk change but wasn't done for v1 to
   keep this feature's diff self-contained from a type other features also
-  consume. `ListingWizard.tsx` currently logs listing create/update audit
+  consume. `ListingForm.tsx` currently logs listing create/update audit
   entries with `entityType: "sale"` as the closest existing category — **fix
   this** by adding `"listing"` to `AuditEntity` and updating
-  `ListingWizard.tsx`'s two `writeAuditLog` calls the next time this file is
+  `ListingForm.tsx`'s two `writeAuditLog` calls the next time this file is
   touched for an unrelated reason (small enough to bundle, not urgent enough
   to justify its own PR).
 - **Offer-creation resume gap — fixed.** `publishListing` now takes an
@@ -131,21 +147,73 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `status`/`ebay_sku`/`publish_error` — it relies on the callback having
   already persisted `ebay_offer_id` earlier in the same request, not on
   writing it itself.
-- **Save Draft / Publish skip the step validators.** `_lib/wizardValidation.ts`'s
-  six validators (`validateSourceStep` … `validatePoliciesStep`, plus
-  `validateAspectsStep`) only run
-  from `ListingWizard.tsx`'s `goNext()`, when the user clicks "Next" within
-  the wizard. `handleSaveDraft`/`handlePublish` call `saveDraft()` directly
-  with no validation pass, so a user can click Save Draft on step 1 with an
-  empty title, zero/blank price, or no images and get a row written to
-  `ebay_listing_drafts` — the DB has minimal CHECK constraints
-  (`price >= 0`, `quantity >= 1`, `NOT NULL title`) but nothing enforcing a
-  non-blank title or that later-step fields are populated. This is
-  intentional (drafts are explicitly allowed to be incomplete — that's the
-  point of a draft), but the actual eBay publish call will still fail
-  server-side (400/502 from eBay) on a draft missing category/policies/
-  images, since those are required by eBay's Inventory API regardless of
-  local validation. Don't assume "it saved" implies "it's valid to publish."
+- **Save Draft and Publish have deliberately DIFFERENT validity gates
+  (rewritten 2026-09-02 — this gotcha used to say "Save Draft / Publish skip
+  the step validators", which is no longer true).** All six validators in
+  `_lib/wizardValidation.ts` (`validateSourceStep` … `validatePoliciesStep`,
+  including `validateAspectsStep`) now run on **every render** of
+  `ListingForm.tsx`, `??`-chained into a single `publishError: string | null`.
+  That value does exactly two things: it disables the Publish button, and it
+  renders next to it as helper text, so a disabled Publish always says why.
+  **Save Draft is not gated by any of them** and must never become gated:
+  it is `disabled={saving || publishing}` only. Drafts are explicitly allowed
+  to be incomplete — that is the point of a draft — so a Save Draft that can
+  always succeed must never render as disabled. This is the reconciliation
+  between `AGENTS.md`'s form convention ("a mutating button must never look
+  clickable when it can't succeed") and this feature's incomplete-draft
+  behaviour: the convention is about a button that *cannot succeed*, and Save
+  Draft always can. Two consequences that have NOT changed: (a) a row can
+  still be written to `ebay_listing_drafts` with an empty title, blank price
+  or no images — the DB has only minimal CHECK constraints (`price >= 0`,
+  `quantity >= 1`, `NOT NULL title`); (b) client-side validation is a UX gate,
+  not a guarantee — the eBay publish call can still fail server-side (400/502)
+  for reasons no local validator models. Don't assume "it saved" implies
+  "it's valid to publish", and don't assume "Publish was enabled" implies
+  "eBay will accept it."
+- **`saveDraft()` is behind an in-flight mutex, and it is load-bearing, not
+  defensive tidiness (2026-09-02).** Two independent paths call the same
+  "update if there's a row, otherwise insert" logic: the Save Draft / Publish
+  buttons, and `ImageGrid.tsx`'s `onDraftCreated()` lazy row creation on the
+  first image upload. Before the mutex, a user who started an upload and then
+  clicked Save Draft or Publish inside the window before the upload flow's own
+  busy state disabled those buttons could have BOTH paths read "no existing
+  row yet" and BOTH insert — two `ebay_listing_drafts` rows, with the
+  just-uploaded images attached to whichever id resolved last. `ListingForm.tsx`
+  closes this with two refs, and you need both:
+  - `inFlightSave: useRef<Promise<EbayListingDraft | null> | null>` — the
+    public `saveDraft()` is a thin wrapper that returns the *already-running*
+    promise if one exists instead of starting a second `performSave()`. Only
+    one insert can be issued, and both callers resolve with the same row, so
+    `onDraftCreated()` still gets a real id back rather than an error.
+  - `existingRowRef: useRef<EbayListingDraft | null>` — `performSave()`
+    branches on this ref, **not** on the `existingRow` state. `setExistingRow`
+    only lands on the next render, so a save started from a closure captured
+    before that render would otherwise still see `null` and insert again —
+    the same duplicate-row bug, just sequential rather than concurrent.
+    `rememberRow()` writes both, ref first.
+
+  If you add a third caller of the insert path, route it through `saveDraft()`
+  — never call `performSave()` directly.
+- **Everything lives inside one `<form id="listing-form">`, which changes the
+  rules for the field-group components (2026-09-02).** `SourceStep`,
+  `CategoryStep`, `AspectsStep` and `PoliciesStep` are no longer rendered on
+  their own page; they are inside the listing form's DOM. Three consequences
+  that have already bitten and are now fixed in-tree:
+  - **Every `<button>` inside them needs an explicit `type="button"`.** The
+    HTML default is `type="submit"`, so an untyped Category-search or
+    Create-location button would publish the listing.
+  - **`Enter` in a text input triggers implicit form submission.**
+    `CategoryStep`'s search box calls `preventDefault()` on Enter before
+    running its search for exactly this reason.
+  - **`<Field required>` does NOT always mean the control should carry
+    `required`.** It does for real listing fields (title, price, quantity,
+    condition, source, required aspects, the three policies + location — all
+    of which now carry the attribute). It deliberately does NOT for
+    `CategoryStep`'s search box (a query, not the stored `category_id`) or
+    `PoliciesStep`'s inline create-location fields (they belong to the
+    Create-location action, and marking them `required` would block the
+    listing form's own submit). Both carry an in-file comment saying so —
+    don't "fix" them.
 - **Storage bucket path convention is load-bearing for RLS**: images MUST
   upload to `{tenant_schema}/{draftId}/{filename}` — the `listing-images`
   bucket's write/delete RLS policies (`022_listing_images_bucket.sql`) check
@@ -193,8 +261,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   autosave (2026-09-01).** `ImageGrid.tsx` needs a real draft id to build a
   storage path (`{tenant_schema}/{draftId}/{uuid}.{ext}` — the RLS-critical
   shape, see the bucket gotcha below), so when `draftId` is `null` it awaits
-  `onDraftCreated()`, which `ListingWizard.tsx` wires to `handleDraftCreated()`
-  → the same `saveDraft()` insert path Save Draft uses. This replaced the old
+  `onDraftCreated()`, which `ListingForm.tsx` wires to `handleDraftCreated()`
+  → the same `saveDraft()` insert path Save Draft uses (which is exactly why
+  that path needs the in-flight mutex — see the gotcha below). This replaced the old
   `"unsaved"` folder, whose orphaned files nothing ever cleaned up. Two
   consequences to keep in mind: (a) a row now exists in `ebay_listing_drafts`
   as soon as someone uploads an image, even if they never click Save Draft —
@@ -202,11 +271,11 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   moment; (b) **nothing after that point autosaves** — the id is reused for
   subsequent uploads, but title/price/policy edits made later still only
   reach the DB when the user clicks Save Draft or Publish, and so do the
-  image URLs and their ORDER (drag-reorder only mutates local wizard state).
+  image URLs and their ORDER (drag-reorder only mutates local form state).
   Don't read "the draft got created" as "the draft is up to date."
 - **The 24-image cap lives in two places on purpose.** `MAX_LISTING_IMAGES`
-  (`_lib/wizardValidation.ts`) is enforced by `validateImagesStep` (the
-  wizard's Next button) *and* by `ImageGrid.tsx`'s picker, which refuses the
+  (`_lib/wizardValidation.ts`) is enforced by `validateImagesStep` (which
+  gates the Publish button) *and* by `ImageGrid.tsx`'s picker, which refuses the
   files that would cross the cap rather than uploading them and failing
   validation afterwards. Change the constant, not either call site — and if
   you add another way to add images (a URL paste box, an AI-generated
@@ -274,8 +343,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   EBAY_US is "Marke" on EBAY_DE), one missing aspect at a time, confirmed
   live 2026-08-31 on "Vitamine & Mineralien". There's no fixed list — every
   category has its own required-aspect set, only knowable via eBay's
-  Taxonomy API. Fixed with a new wizard step (`AspectsStep.tsx`, inserted
-  between Category and Images in `ListingWizard.tsx`'s `STEPS`) that fetches
+  Taxonomy API. Fixed with `AspectsStep.tsx` (a field group rendered in
+  `ListingForm.tsx`'s "Listing" section, right under the category picker;
+  it was a separate wizard step before 2026-09-02) that fetches
   `fetchRequiredAspects(categoryId)` (`publish.ts`, Taxonomy API
   `get_item_aspects_for_category`, application token like
   `searchCategories` — category metadata isn't seller-specific) whenever
@@ -440,8 +510,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   full checklist this now follows — apply it to any NEW form, don't wait
   for a bug report to retrofit it.
 
-- **Description HTML is sanitized in `publishPayloads.ts`, not in the wizard
-  editor — the client is not a security boundary here (2026-09-01).**
+- **Description HTML is sanitized in `publishPayloads.ts`, not in the
+  description editor — the client is not a security boundary here
+  (2026-09-01).**
   `ebay_listing_drafts.description` is written straight to Supabase from the
   browser (no server API in between), so any client-side editor restriction
   is cosmetic — a direct Supabase write bypasses it entirely.
