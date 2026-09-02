@@ -440,9 +440,34 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   full checklist this now follows — apply it to any NEW form, don't wait
   for a bug report to retrofit it.
 
+- **Description HTML is sanitized in `publishPayloads.ts`, not in the wizard
+  editor — the client is not a security boundary here (2026-09-01).**
+  `ebay_listing_drafts.description` is written straight to Supabase from the
+  browser (no server API in between), so any client-side editor restriction
+  is cosmetic — a direct Supabase write bypasses it entirely.
+  `lib/utils/sanitizeListingHtml.ts` (`isomorphic-dompurify`, a small
+  allowlist of formatting tags/attrs + `https?://`-only URLs) is the actual
+  enforcement point, called from both places `publishPayloads.ts` builds an
+  eBay-bound description: `buildInventoryItemPayload`'s `product.description`
+  and `buildOfferPayload`'s `listingDescription` (whose title-fallback check
+  changed from `draft.description ?? draft.title` to a truthiness check, so
+  a description that sanitizes down to nothing — e.g. pure `<script>`
+  content — still falls back to the title instead of publishing empty).
+  **`isomorphic-dompurify` is pinned to `2.17.0` in `package.json`, not
+  latest** — `3.x`/`4.x` pull in `jsdom@28+`, whose `html-encoding-sniffer`
+  dependency ships an ESM-only `@exodus/bytes` file that this project's
+  `ts-jest` config (no `transformIgnorePatterns` override) can't transform,
+  so any test that imports the sanitizer fails with `SyntaxError: Unexpected
+  token 'export'` at collection time. `2.17.0` depends on `jsdom@^25.0.1`,
+  which still resolves `html-encoding-sniffer@^4` (no ESM-only sub-dep) and
+  runs fine under the default jest config. Don't bump this package without
+  re-checking that chain.
+
 ## Tests
 
 `npx jest dashboard/listings` and `npx jest lib/integrations/ebay/listings`
 (the Trading API functions this feature added — `fetchListingDetail`,
 `reviseListing`, `endListing`, `buildAspectsForRevise`,
-`conditionIdToListingCondition`)
+`conditionIdToListingCondition`). `npx jest lib/utils/sanitizeListingHtml`
+and `npx jest lib/integrations/ebay/publishPayloads` cover the description
+sanitization above.
