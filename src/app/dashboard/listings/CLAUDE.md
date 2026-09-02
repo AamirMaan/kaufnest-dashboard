@@ -147,6 +147,29 @@ covers only Part 1; Part 2's design is
   type, colocated test. These validators only run when the wizard's own
   "Next" button is clicked — see the SKILL.md gotcha on Save Draft/Publish
   skipping them.
+- `_lib/listingQuality.ts` — `scoreListing(draft) → { score, checks:
+  QualityCheck[] }` (2026-09-01/02). Distinct from `wizardValidation.ts`:
+  that answers whether a draft *can* be published; this scores 0-100 how
+  well it will *perform* — title length, photo count, item-specifics
+  completeness, description length, category/price/policies presence, each
+  weighted and normalized by total weight so a category with no required
+  aspects doesn't cap the achievable score below 100. Consumed by
+  `ListingPreview.tsx`'s quality meter.
+- `_components/ListingPreview.tsx` (2026-09-01/02) — read-only "Approximate
+  eBay preview" panel: gallery (first `image_urls` entry large, rest as
+  thumbnails, neutral placeholder when empty), title/price/condition,
+  item-specifics table (hidden when `draft.aspects` has no non-blank
+  values), sanitized description (`sanitizeListingHtml`, cosmetic
+  defence-in-depth on top of the server-side gate in
+  `src/lib/utils/sanitizeListingHtml.ts`), and a `scoreListing`-driven
+  quality meter — a percentage bar colored by band (`<50` danger, `<80`
+  warning, else success) followed by only the *failing* checks' label +
+  hint. Passing checks are deliberately not listed. Pure presentational
+  component, no Redux/Supabase — takes `{ draft: DraftFormState }` and has
+  no automated test (this repo's Jest config is `testEnvironment: "node"`,
+  no jsdom, so component render tests aren't possible here). Not yet wired
+  into `ListingWizard.tsx`'s step flow as of this commit — wiring it into a
+  step (e.g. alongside or replacing `ReviewStep.tsx`) is a separate task.
 - `_store/listingsSlice.ts` — `state.listings` (`items`, `loaded`, `page`,
   `pageSize`, `total`, `isFetching`). Actions: `hydratePage` (aliased
   `hydrateListingDrafts`), `addListingDraft`, `updateListingDraft`,
