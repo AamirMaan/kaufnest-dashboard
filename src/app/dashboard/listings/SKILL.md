@@ -1,6 +1,6 @@
 ---
 name: listings-feature
-description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around the single-page form's save mutex, SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
+description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around the single-page form's save mutex, the TipTap description editor's Enter guard and AI actions, SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
 ---
 
 # Listings feature playbook
@@ -62,6 +62,27 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `{ draft, setDraft }` field groups — `DetailsStep.tsx` and
   `ReviewStep.tsx` did not (their content is inline in `ListingForm.tsx`
   and `ListingPreview.tsx` respectively).
+- **Changing the description editor** (toolbar buttons, which marks are
+  allowed, placeholder): `_components/DescriptionEditor.tsx` only — but if
+  you enable a new mark or node, add its tag to `ALLOWED_TAGS` in
+  `lib/utils/sanitizeListingHtml.ts` AND to the permitted-tag list in
+  `DESCRIBE_SYSTEM_PROMPT` (`lib/ai/prompts.ts`) in the same change.
+  Otherwise the sanitizer silently strips whatever the button produces on
+  the way to eBay, and the seller sees formatting in the editor that never
+  reaches the listing.
+- **Changing an AI action in the form** (a new AI button, different request
+  payload, different failure copy): the UI is
+  `_components/DescriptionEditor.tsx` (describe) /
+  `_components/AspectsStep.tsx` (aspects) /
+  `_components/AiUsageNote.tsx` (usage); the routes are
+  `app/api/listings/ai/{describe,aspects,usage}/route.ts` and the
+  server-only logic behind them is `lib/ai/` (`client.ts`, `prompts.ts`,
+  `quota.ts`, `authGuard.ts`, `errors.ts`). `aiVisible` is computed once in
+  `ListingForm.tsx` and passed down — don't recompute it per component
+  (except `AiUsageNote`, which is prop-free by design and reads the store
+  itself). Nothing in this folder may import `lib/ai/*` directly: it is
+  server-only (Anthropic key), and the `guard_edit.py` verifier will deny
+  the write.
 - **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
@@ -210,9 +231,12 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
     Review step); the single-page form has to block it explicitly. The
     `<form>` element in `ListingForm.tsx` carries an `onKeyDown` that
     `preventDefault()`s Enter for everything **except** a `<textarea>` (needs
-    Enter for newlines) and a focused `type="submit"` button (standard
-    keyboard activation). Do not remove it, and do not "simplify" it into a
-    blanket `preventDefault()` — the two exemptions are load-bearing.
+    Enter for newlines), an `isContentEditable` target (the TipTap
+    description editor needs Enter for paragraph breaks — added 2026-09-02,
+    see the TipTap gotcha below) and a focused `type="submit"` button
+    (standard keyboard activation). Do not remove it, and do not "simplify"
+    it into a blanket `preventDefault()` — the three exemptions are
+    load-bearing.
     `CategoryStep`'s search box also calls `preventDefault()` on Enter for its
     own reason (run the search instead of submitting); it does **not**
     `stopPropagation()`, so the event still reaches the form-level guard,
@@ -548,6 +572,79 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   runs fine under the default jest config. Don't bump this package without
   re-checking that chain.
 
+- **TipTap's contenteditable is not a `<textarea>`, and the form's Enter
+  guard is written in terms of `tagName` (2026-09-02).** Replacing the plain
+  `<Textarea>` with `DescriptionEditor.tsx` took the description field out of
+  the `tagName === "TEXTAREA"` exemption in `ListingForm.tsx`'s `onKeyDown`
+  — the same guard that exists to stop Enter from publishing a listing to a
+  live marketplace. The fix is two-layered on purpose:
+  1. **`DescriptionEditor.tsx` calls `event.stopPropagation()` on Enter**
+     inside `editorProps.handleKeyDown` and returns `false`. React attaches
+     its listeners at the root container, so stopping the native event on
+     ProseMirror's own `contenteditable` node means the form-level handler
+     never runs at all. Returning `false` is what keeps Enter working:
+     prosemirror-view's `someProp` consults this direct prop FIRST and only
+     falls through to the keymap plugins (paragraph split, list-item split)
+     on a falsy return. Returning `true` would swallow Enter entirely.
+  2. **`ListingForm.tsx` also exempts `target.isContentEditable`.** Belt and
+     braces for the iOS path, where prosemirror-view defers Enter to a
+     `setTimeout` with a *synthetic* key event and lets the real one bubble
+     untouched — layer 1 never sees that one. A contenteditable is not a
+     form control and cannot trigger implicit submission itself, so this
+     exemption gives nothing away.
+  Do not "consolidate" these into one. Do not swap `stopPropagation()` for
+  `preventDefault()` in layer 1 — that would kill the paragraph break.
+- **AI controls are HIDDEN when unavailable, not disabled-with-a-tooltip —
+  but the routes still enforce it.** `aiVisible = !!tenantPlan &&
+  hasAiFeatures(tenantPlan) && aiEnabled` (computed in `ListingForm.tsx`,
+  passed down; `AiUsageNote` recomputes it for itself). When it is false the
+  buttons and the usage note are not rendered at all — a greyed-out "Write
+  with AI" advertises a feature the tenant's plan does not include. Hidden
+  chrome is presentation only: `lib/ai/authGuard.ts` (`requireAiAccess`) is
+  the real gate and re-checks plan, tenant flag, `manage_listings` and quota
+  on every call. **Quota exhaustion is the deliberate exception**: a `429`
+  leaves the buttons rendered but `disabled`, with the route's own message
+  (which quotes the real monthly limit) shown next to them — the tenant has
+  the feature, they have just used it up, and hiding it would look like a
+  bug. `GET /api/listings/ai/usage` is deliberately NOT behind
+  `requireAiAccess` for the same reason: it must keep answering at 100% used.
+- **An empty aspect value from the model means "could not determine" and must
+  never be merged.** `AspectsStep.tsx`'s Fill-with-AI skips any returned
+  value that trims to empty. Writing `""` back would be indistinguishable
+  from a confident answer, and worse, it makes a still-unanswered required
+  field look dealt with right up until eBay rejects `publishOffer` with
+  errorId 25002. Two sibling rules in the same merge loop: a value that
+  isn't in a closed-list aspect's `values` is also skipped (the `<Select>`
+  would render blank while `draft.aspects` held something eBay will reject),
+  and a field the seller already filled in is never overwritten — only
+  blanks and the component's own previous AI answers are. The "AI" badge
+  tracks exactly that last set (`aiFilled`, local state, never persisted);
+  it clears on the field's next `onChange`, because once the seller edits a
+  value it is theirs.
+- **`/api/listings/ai/describe` is deliberately non-streaming.** Streaming
+  the HTML into the editor token-by-token would mean rendering a partial,
+  unsanitized document — and `sanitizeListingHtml` needs a *complete* one to
+  make a correct allowlist decision (a half-arrived `<script` isn't a tag
+  yet). The route waits for the full response, sanitizes it, and returns
+  `{ html }`; the editor calls `setContent` once, only on success, so a
+  failed call can never leave a half-written description behind. Don't
+  "improve" this into a stream.
+- **`useEditor` re-diffs its whole options object on every render**
+  (`EditorInstanceManager.compareOptions` in `@tiptap/react`) and calls
+  `editor.setOptions()` — which re-runs `view.setProps()` +
+  `view.updateState()` — on any identity mismatch. So `EXTENSIONS` and
+  `EDITOR_PROPS` in `DescriptionEditor.tsx` are module-level constants: an
+  inline `StarterKit.configure({...})` or `editorProps` literal is a new
+  object every keystroke. `content` is likewise pinned to a `useRef` of the
+  first `value` — `setOptions` never re-parses `content`, so passing the
+  live value there would churn the view for nothing. External value changes
+  are pushed in by an explicit effect that skips while the editor is focused
+  and passes `{ emitUpdate: false }`, so it can never fight the cursor or
+  echo back out as a change. Empty is normalized: `onUpdate` emits `""`
+  rather than ProseMirror's `"<p></p>"`, so `draft.description` stays falsy
+  for the preview's empty state, `scoreListing` and `toPayload()`'s
+  `|| null`.
+
 ## Tests
 
 `npx jest dashboard/listings` and `npx jest lib/integrations/ebay/listings`
@@ -555,4 +652,14 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 `reviseListing`, `endListing`, `buildAspectsForRevise`,
 `conditionIdToListingCondition`). `npx jest lib/utils/sanitizeListingHtml`
 and `npx jest lib/integrations/ebay/publishPayloads` cover the description
-sanitization above.
+sanitization above. `npx jest lib/ai` covers the prompt builders and quota
+accounting behind the AI routes.
+
+`DescriptionEditor.tsx`, `AiUsageNote.tsx` and `AspectsStep.tsx`'s AI fill
+have **no automated tests** and that is not an oversight: this repo's
+`jest.config.ts` uses `testEnvironment: "node"` with no jsdom, so no
+component in this folder can be rendered in a test at all (same reason
+`ListingPreview.tsx` and `ImageGrid.tsx` have none). TipTap additionally
+needs a real DOM to instantiate. Put anything worth asserting in a pure
+helper — `_lib/` — where it can be tested; verify the components in the
+browser.

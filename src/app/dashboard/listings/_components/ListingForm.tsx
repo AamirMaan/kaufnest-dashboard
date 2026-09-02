@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { hasAiFeatures } from "@/lib/utils/planGating";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -28,6 +29,8 @@ import { ImageGrid } from "./ImageGrid";
 import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
 import { ListingPreview } from "./ListingPreview";
+import { DescriptionEditor } from "./DescriptionEditor";
+import { AiUsageNote } from "./AiUsageNote";
 import type { Currency, EbayListingDraft } from "@/types";
 
 const FORM_ID = "listing-form";
@@ -105,6 +108,20 @@ export function ListingForm({ draftId }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const companyCurrency = useAppSelector((s) => s.companyProfile.profile?.currency);
+
+  /* AI controls are HIDDEN when the plan doesn't include AI or the platform
+   * admin has switched it off for this tenant — never rendered-and-disabled.
+   * (Quota exhaustion is the opposite: those controls stay visible and go
+   * disabled with the 429's message — see `DescriptionEditor.tsx`.) This is
+   * presentation only; `src/lib/ai/authGuard.ts` is the enforcement. */
+  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
+  const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;
+
+  /* Bumped after every successful AI call so `AiUsageNote` re-reads
+   * `/api/listings/ai/usage` — otherwise the count only ever reflects the
+   * page load and never moves as the seller generates. */
+  const [aiUsageToken, setAiUsageToken] = useState(0);
 
   const [draft, setDraftState] = useState<DraftFormState>(
     companyCurrency ? { ...EMPTY_DRAFT, currency: companyCurrency } : EMPTY_DRAFT
@@ -355,9 +372,22 @@ export function ListingForm({ draftId }: Props) {
           * or any required-aspect input would implicitly submit — i.e. push
           * a listing live to eBay from a keystroke. The old 7-step wizard
           * made that impossible (Publish only existed on the Review step);
-          * the single-page form has to block it explicitly. Two deliberate
-          * exemptions: a <textarea> needs Enter for newlines, and Enter on
-          * a focused submit button is standard keyboard activation. */}
+          * the single-page form has to block it explicitly. Three deliberate
+          * exemptions: a <textarea> needs Enter for newlines, a
+          * contenteditable (the TipTap description editor) needs it for
+          * paragraph breaks, and Enter on a focused submit button is standard
+          * keyboard activation.
+          *
+          * The contenteditable exemption is belt-and-braces, not the primary
+          * defence: `DescriptionEditor.tsx` already `stopPropagation()`s Enter
+          * inside ProseMirror's own keydown hook, so in the normal case this
+          * handler never sees the event. It still matters on iOS, where
+          * prosemirror-view defers Enter handling to a timeout with a
+          * synthetic event and lets the real one through untouched — without
+          * this line, that real event would bubble here and get
+          * preventDefault()ed, breaking newlines in the editor on iPad.
+          * A contenteditable is not a form control, so it cannot trigger
+          * implicit submission itself — exempting it gives nothing away. */}
         <form
           id={FORM_ID}
           onSubmit={handlePublish}
@@ -365,6 +395,7 @@ export function ListingForm({ draftId }: Props) {
             if (e.key !== "Enter") return;
             const target = e.target as HTMLElement;
             if (target.tagName === "TEXTAREA") return;
+            if (target.isContentEditable) return;
             if (
               target.tagName === "BUTTON" &&
               (target as HTMLButtonElement).type === "submit"
@@ -395,12 +426,14 @@ export function ListingForm({ draftId }: Props) {
             </Field>
 
             <Field label="Description">
-              <Textarea
-                rows={8}
+              <DescriptionEditor
                 value={draft.description}
-                onChange={(e) => setDraft({ description: e.target.value })}
-                placeholder="Item details buyers will see on eBay"
+                onChange={(description) => setDraft({ description })}
+                draft={draft}
+                aiVisible={aiVisible}
+                onAiUsed={() => setAiUsageToken((n) => n + 1)}
               />
+              <AiUsageNote refreshToken={aiUsageToken} />
             </Field>
 
             <ImageGrid
@@ -416,7 +449,12 @@ export function ListingForm({ draftId }: Props) {
             description="Category, item specifics and how it is priced."
           >
             <CategoryStep draft={draft} setDraft={setDraft} />
-            <AspectsStep draft={draft} setDraft={setDraft} />
+            <AspectsStep
+              draft={draft}
+              setDraft={setDraft}
+              aiVisible={aiVisible}
+              onAiUsed={() => setAiUsageToken((n) => n + 1)}
+            />
 
             <Row>
               <Field label="Price" required>

@@ -57,7 +57,8 @@ covers only Part 1; Part 2's design is
   **Layout**: a two-column grid (`lg:grid-cols-[1fr_380px]`, single column
   below `lg`). The left column is ONE `<form id="listing-form"
   onSubmit={handlePublish}>` holding three `<Section>`s — **Item**
-  (`SourceStep`, title, description, `ImageGrid`), **Listing**
+  (`SourceStep`, title, `DescriptionEditor` + `AiUsageNote`, `ImageGrid`),
+  **Listing**
   (`CategoryStep`, `AspectsStep`, price / currency / quantity / condition)
   and **Shipping** (`PoliciesStep`). The right column is
   `<ListingPreview draft={draft} />` in a `lg:sticky lg:top-6` wrapper, so
@@ -67,10 +68,16 @@ covers only Part 1; Part 2's design is
   `type="submit" form="listing-form"`. There is no step state, no `STEPS`
   array and no Next/Back — that was the pre-2026-09-02 wizard.
   **The `<form>` blocks implicit Enter submission** via its own `onKeyDown`
-  (exempting `<textarea>` and a focused submit button): Publish is the
+  (exempting `<textarea>`, any `isContentEditable` target, and a focused
+  submit button): Publish is the
   default submit button, so Enter in Title/Price/Quantity/an aspect field
   would otherwise publish to a live eBay marketplace from one keystroke —
   a hazard the old step-gated wizard didn't have. See `SKILL.md`.
+  **It also owns `aiVisible`** (2026-09-02) — `!!tenantPlan &&
+  hasAiFeatures(tenantPlan) && aiEnabled`, read from `currentUserSlice` —
+  and passes it down to `DescriptionEditor` and `AspectsStep`, plus an
+  `onAiUsed` callback that bumps an `aiUsageToken` counter so
+  `<AiUsageNote refreshToken={…} />` re-reads usage after each AI call.
   **Button gates** (deliberately asymmetric, see `SKILL.md`): all six
   `_lib/wizardValidation.ts` validators are `??`-chained every render into
   `publishError`, which disables Publish and renders beside it as the
@@ -103,6 +110,18 @@ covers only Part 1; Part 2's design is
   (but NOT `CategoryStep`'s search query or `PoliciesStep`'s create-location
   sub-form — see `SKILL.md`).
   `AspectsStep`
+  also takes optional `{ aiVisible, onAiUsed }` (2026-09-02): with
+  `aiVisible` it renders a **Fill with AI** button above the fields which
+  `POST`s title/description/`image_urls`/the required-aspect names to
+  `/api/listings/ai/aspects` and merges the answer into `draft.aspects`.
+  Three merge rules, all deliberate: an empty returned value is skipped
+  ("could not determine", never written back), a value outside a
+  closed-list aspect's `values` is skipped (the `<Select>` would show blank
+  while the draft held an invalid value), and a field the seller already
+  filled in is never overwritten — only blanks and the component's own
+  previous AI answers are. Filled names go into local `aiFilled` state and
+  render a small "AI" badge that clears on that field's next `onChange`
+  (and on a category change, which reloads the whole aspect set). It
   (2026-08-31) fetches `/api/listings/ebay/aspects?categoryId=` whenever
   `draft.category_id` changes, and renders one field per item aspect eBay's
   Taxonomy API says is required for that category (e.g. Brand/"Marke") —
@@ -122,6 +141,31 @@ covers only Part 1; Part 2's design is
   `company_profile` (see `SKILL.md`'s gotcha for why). `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
+- `_components/DescriptionEditor.tsx` (2026-09-02) — the description field.
+  A TipTap (`@tiptap/react` + `@tiptap/starter-kit`) rich-text editor that
+  replaced the plain `<Textarea>`; props `{ value, onChange, draft,
+  aiVisible, onAiUsed }`. Emits `editor.getHTML()` (normalized to `""` when
+  `editor.isEmpty`, so an empty doc never persists as `"<p></p>"`), which
+  `ListingPreview` already renders through `sanitizeListingHtml`.
+  `StarterKit` is configured down to exactly what the sanitizer's allowlist
+  keeps AND the toolbar can produce — bold, italic, bullet/ordered list, H2,
+  H3; `blockquote`/`code`/`codeBlock`/`horizontalRule`/`strike`/`link` are
+  off. The extensions array and `editorProps` are module-level constants on
+  purpose (see `SKILL.md`'s gotcha on `useEditor`'s per-render option diff).
+  When `aiVisible`, renders **Write with AI** and (only with existing
+  content) **Improve with AI**, both `POST /api/listings/ai/describe` and
+  replace the document via `editor.commands.setContent(html)` on success
+  only — a failed call leaves the editor untouched. A `429` keeps the
+  buttons rendered but disabled with the route's quota message.
+- `_components/AiUsageNote.tsx` (2026-09-02) — one-line current-period AI
+  usage read from `GET /api/listings/ai/usage`, plus a per-user breakdown
+  when the route returns `perUser` (admin/super_admin only — the route
+  decides, this component just renders what it gets). Computes `aiVisible`
+  itself from `currentUserSlice` and renders `null` when false or before
+  the fetch resolves; a failed fetch is swallowed on purpose (usage is
+  informational and must never toast or block the form). Optional
+  `refreshToken` prop re-triggers the fetch — `ListingForm` bumps it after
+  every successful AI call.
 - `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) — the
   form's images control. Props `{ draft, setDraft, draftId, onDraftCreated }`.
   What it adds over the old step:
@@ -385,12 +429,27 @@ the XML shapes.
 - `components/ui/{Modal is NOT used — dedicated pages instead, FormFields,
   Button, DataTable, Badge, Pagination, Toast}`
 - `components/layout/PageHeader`
-- `store/slices/{auditLogsSlice,currentUserSlice,companyProfileSlice}`
+- `store/slices/{auditLogsSlice,currentUserSlice,companyProfileSlice}` —
+  `currentUserSlice`'s `tenantPlan` + `aiEnabled` are what gate the AI
+  controls (see `aiVisible` above)
 - `app/dashboard/inventory/_store/inventorySlice` — read-only, `selectorItems`
   for the Source step's Inventory picker
 - `lib/utils/{audit,currency,detectPlatform,permissions,pagedQuery}` —
   `planGating`'s `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
-  specifically, not `hasPlatformIntegrations`
+  specifically, not `hasPlatformIntegrations`; `hasAiFeatures` is used by
+  `ListingForm.tsx` and `AiUsageNote.tsx` to compute `aiVisible`
+- `lib/ai/` — server-only (Anthropic client, prompt builders, quota
+  accounting, `requireAiAccess`). **Never imported by anything in this
+  folder**; the UI only ever talks to it through `app/api/listings/ai/`
+- `app/api/listings/ai/{describe,aspects,usage}` — the three routes
+  `DescriptionEditor.tsx`, `AspectsStep.tsx` and `AiUsageNote.tsx` call.
+  `describe`/`aspects` are guarded by `requireAiAccess` (plan + tenant flag
+  + `manage_listings` + quota); `usage` deliberately is not, so the note
+  still reads once quota is exhausted
+- `@tiptap/react` + `@tiptap/starter-kit` (added 2026-09-02) — used only by
+  `DescriptionEditor.tsx`. No other TipTap package is installed; anything
+  needing `@tiptap/extension-*` (Placeholder, Link, …) is a new dependency,
+  not something already available
 - `store/slices` — `s.integrations.connections` (read by `BusinessEbayGate.tsx`,
   hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
   Dropshipping/Integrations use)
