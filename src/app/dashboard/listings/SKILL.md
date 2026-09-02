@@ -74,7 +74,8 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   payload, different failure copy): the UI is
   `_components/DescriptionEditor.tsx` (describe) /
   `_components/AspectsStep.tsx` (aspects) /
-  `_components/AiUsageNote.tsx` (usage); the routes are
+  `components/ui/AiUsageNote.tsx` (usage, shared — also used by
+  `dashboard/settings/`, see that feature's `SKILL.md`); the routes are
   `app/api/listings/ai/{describe,aspects,usage}/route.ts` and the
   server-only logic behind them is `lib/ai/` (`client.ts`, `prompts.ts`,
   `quota.ts`, `authGuard.ts`, `errors.ts`). `aiVisible` is computed once in

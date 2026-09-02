@@ -30,7 +30,7 @@ import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
 import { ListingPreview } from "./ListingPreview";
 import { DescriptionEditor } from "./DescriptionEditor";
-import { AiUsageNote } from "./AiUsageNote";
+import { AiUsageNote } from "@/components/ui/AiUsageNote";
 import type { Currency, EbayListingDraft } from "@/types";
 
 const FORM_ID = "listing-form";

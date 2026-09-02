@@ -1,6 +1,6 @@
 ---
 name: ui-primitives
-description: Reference for the shared UI primitives in src/components/ui (Button, Badge, DataTable, FilterBar, FormFields, Modal, StatCard, Toast, ThemeProvider) — use this instead of opening the component source files when you need to know props, exports, or usage patterns.
+description: Reference for the shared UI primitives in src/components/ui (Button, Badge, DataTable, FilterBar, FormFields, Modal, StatCard, Toast, ThemeProvider, AiUsageNote) — use this instead of opening the component source files when you need to know props, exports, or usage patterns.
 ---
 
 # UI primitives reference (`src/components/ui/`)
@@ -168,6 +168,29 @@ called outside `<ToastProvider>`.
   `<ToastContainer>` to mount; just wrap the app in `ToastProvider` once
   (already done at a high level — check `layout.tsx`/providers before adding
   another).
+
+## AiUsageNote.tsx
+
+`export function AiUsageNote({ refreshToken? })` — `"use client"`. Prop-free
+by design apart from the optional `refreshToken: number` (bump it to
+re-trigger the fetch after an action the caller knows changed usage).
+
+- Computes its own visibility: `aiVisible = !!tenantPlan &&
+  hasAiFeatures(tenantPlan) && aiEnabled`, read directly from
+  `currentUserSlice` — it does not take `aiVisible` as a prop. Renders `null`
+  when `!aiVisible`, or before its `GET /api/listings/ai/usage` fetch
+  resolves. A failed fetch is swallowed silently (usage is informational,
+  must never toast or block a caller's UI).
+- Renders a one-line "used X of Y AI generations this month" note, plus a
+  per-user breakdown list when the route returns `perUser` (admin/
+  super_admin callers only — the route decides, not this component).
+- Moved here (2026-09-02) from `dashboard/listings/_components/` when
+  `dashboard/settings/` became a second consumer — see the repo's "3+
+  consumers or core wiring" shared-component rule in the root `AGENTS.md`.
+  Current consumers: `dashboard/listings/_components/ListingForm.tsx`
+  (passes `refreshToken`, bumped after each AI call) and
+  `dashboard/settings/page.tsx` (no props — plain mount-time read, gated in
+  a `{aiVisible && ...}` section wrapper matching that page's other cards).
 
 ## Where these are wired up
 

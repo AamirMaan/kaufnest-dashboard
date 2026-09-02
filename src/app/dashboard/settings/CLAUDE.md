@@ -40,6 +40,23 @@ values.
   companyForm)` — available to every role (read-only users can still preview
   the PDF using the saved profile).
 
+**AI usage section** (2026-09-02) — rendered between `BillingSection` and the
+Company Profile form, same card/heading shape as every other section on this
+page (`rounded-[var(--radius-card)] border ... bg-[var(--color-surface)] p-6
+space-y-4` + an `<h2>`). Gated on `aiVisible = !!tenantPlan &&
+hasAiFeatures(tenantPlan) && aiEnabled` (`tenantPlan`/`aiEnabled` from
+`s.currentUser`, `hasAiFeatures` from `lib/utils/planGating`) — the identical
+computation `ListingForm.tsx` uses, recomputed here rather than shared via
+props/context since the two live in unrelated route trees. When `aiVisible`
+is false the whole `<section>` is omitted, not disabled — same
+hidden-not-disabled rule as every other AI surface in the app. Renders
+`<AiUsageNote />` with no props (mount-time read only — Settings has no "just
+ran an AI call" moment to bump a `refreshToken` for, unlike `ListingForm`).
+`AiUsageNote` itself now lives in `src/components/ui/AiUsageNote.tsx` — moved
+there in this change because Settings became its second consumer (the
+listing form was the first); see `dashboard/listings/CLAUDE.md`'s "Files in
+this folder" entry for what it does internally.
+
 This feature has one private component: `_components/BillingSection.tsx`
 (2026-08-29) — fetches `GET /api/billing/status` and renders `PlanPicker`
 (`src/components/billing/`, shared with `/trial-expired`). No subscription
@@ -112,11 +129,15 @@ page's form, and the relevant DB migrations (see this folder's `SKILL.md`).
 
 ## Shared dependencies
 
-- `components/ui/{FormFields,Button,Toast}`
-- `lib/utils/{generateInvoice,currency}`
+- `components/ui/{FormFields,Button,Toast,AiUsageNote}` — `AiUsageNote`
+  moved here from `dashboard/listings/_components/` (2026-09-02) once
+  Settings became its second consumer
+- `lib/utils/{generateInvoice,currency,planGating}` — `hasAiFeatures` computes
+  the AI usage section's `aiVisible` gate
 - `lib/supabase/client` (`createTenantClient`, Company Profile save)
 - `store/slices/companyProfileSlice` (`hydrateCompanyProfile`),
-  `store/slices/currentUserSlice` (role gate)
+  `store/slices/currentUserSlice` (role gate, plus `tenantPlan`/`aiEnabled`
+  for the AI usage gate)
 - `types` (`Sale`, `CompanyProfile`, `Currency`)
 
 ## Tests

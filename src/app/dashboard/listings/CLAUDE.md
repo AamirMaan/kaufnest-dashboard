@@ -57,7 +57,7 @@ covers only Part 1; Part 2's design is
   **Layout**: a two-column grid (`lg:grid-cols-[1fr_380px]`, single column
   below `lg`). The left column is ONE `<form id="listing-form"
   onSubmit={handlePublish}>` holding three `<Section>`s — **Item**
-  (`SourceStep`, title, `DescriptionEditor` + `AiUsageNote`, `ImageGrid`),
+  (`SourceStep`, title, `DescriptionEditor` + `AiUsageNote` (shared, `components/ui/`), `ImageGrid`),
   **Listing**
   (`CategoryStep`, `AspectsStep`, price / currency / quantity / condition)
   and **Shipping** (`PoliciesStep`). The right column is
@@ -157,15 +157,17 @@ covers only Part 1; Part 2's design is
   replace the document via `editor.commands.setContent(html)` on success
   only — a failed call leaves the editor untouched. A `429` keeps the
   buttons rendered but disabled with the route's quota message.
-- `_components/AiUsageNote.tsx` (2026-09-02) — one-line current-period AI
-  usage read from `GET /api/listings/ai/usage`, plus a per-user breakdown
-  when the route returns `perUser` (admin/super_admin only — the route
-  decides, this component just renders what it gets). Computes `aiVisible`
-  itself from `currentUserSlice` and renders `null` when false or before
-  the fetch resolves; a failed fetch is swallowed on purpose (usage is
-  informational and must never toast or block the form). Optional
-  `refreshToken` prop re-triggers the fetch — `ListingForm` bumps it after
-  every successful AI call.
+- `AiUsageNote` — one-line current-period AI usage read from `GET
+  /api/listings/ai/usage`, plus a per-user breakdown when the route returns
+  `perUser` (admin/super_admin only — the route decides, this component just
+  renders what it gets). Computes `aiVisible` itself from `currentUserSlice`
+  and renders `null` when false or before the fetch resolves; a failed fetch
+  is swallowed on purpose (usage is informational and must never toast or
+  block the form). Optional `refreshToken` prop re-triggers the fetch —
+  `ListingForm` bumps it after every successful AI call. **Not in this
+  folder** — moved to `src/components/ui/AiUsageNote.tsx` (2026-09-02) when
+  the Settings page (`dashboard/settings/`) became its second consumer;
+  `ListingForm.tsx` imports it from `@/components/ui/AiUsageNote`.
 - `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) — the
   form's images control. Props `{ draft, setDraft, draftId, onDraftCreated }`.
   What it adds over the old step:
@@ -427,7 +429,9 @@ the XML shapes.
 ## Shared dependencies
 
 - `components/ui/{Modal is NOT used — dedicated pages instead, FormFields,
-  Button, DataTable, Badge, Pagination, Toast}`
+  Button, DataTable, Badge, Pagination, Toast, AiUsageNote}` — `AiUsageNote`
+  moved here from this folder (2026-09-02) once `dashboard/settings/` became
+  its second consumer; see that feature's `CLAUDE.md` for its other usage
 - `components/layout/PageHeader`
 - `store/slices/{auditLogsSlice,currentUserSlice,companyProfileSlice}` —
   `currentUserSlice`'s `tenantPlan` + `aiEnabled` are what gate the AI

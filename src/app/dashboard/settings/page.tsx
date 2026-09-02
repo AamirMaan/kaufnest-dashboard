@@ -15,8 +15,10 @@ import {
 } from "@/lib/utils/validation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
+import { hasAiFeatures } from "@/lib/utils/planGating";
 import { FileDown } from "lucide-react";
 import { BillingSection } from "./_components/BillingSection";
+import { AiUsageNote } from "@/components/ui/AiUsageNote";
 import type { CompanyProfile, Currency, Sale } from "@/types";
 
 const DEMO_SALE: Sale = {
@@ -53,6 +55,9 @@ export default function SettingsPage() {
   const companyProfile = useAppSelector((s) => s.companyProfile.profile);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const canEditCompanyProfile = role ? COMPANY_PROFILE_ROLES.includes(role) : false;
+  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
+  const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;
   const [companyForm, setCompanyForm] = useState<CompanyProfile | null>(companyProfile);
   const [savingCompanyProfile, setSavingCompanyProfile] = useState(false);
 
@@ -120,6 +125,15 @@ export default function SettingsPage() {
       <div className="mb-8">
         <BillingSection />
       </div>
+
+      {aiVisible && (
+        <section className="mb-8 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+          <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+            AI usage
+          </h2>
+          <AiUsageNote />
+        </section>
+      )}
 
       {companyForm && (
         <form onSubmit={handleCompanyProfileSubmit} className="max-w-2xl space-y-8">
