@@ -127,7 +127,7 @@ export default function SettingsPage() {
       </div>
 
       {aiVisible && (
-        <section className="mb-8 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+        <section className="max-w-2xl mb-8 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
           <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
             AI usage
           </h2>
