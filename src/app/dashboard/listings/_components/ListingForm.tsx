@@ -350,7 +350,31 @@ export function ListingForm({ draftId }: Props) {
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px] lg:items-start">
-        <form id={FORM_ID} onSubmit={handlePublish} className="space-y-6">
+        {/* Publish is this form's default submit button, so without this
+          * guard pressing Enter in Title, Price, Quantity, the supplier URL
+          * or any required-aspect input would implicitly submit — i.e. push
+          * a listing live to eBay from a keystroke. The old 7-step wizard
+          * made that impossible (Publish only existed on the Review step);
+          * the single-page form has to block it explicitly. Two deliberate
+          * exemptions: a <textarea> needs Enter for newlines, and Enter on
+          * a focused submit button is standard keyboard activation. */}
+        <form
+          id={FORM_ID}
+          onSubmit={handlePublish}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            const target = e.target as HTMLElement;
+            if (target.tagName === "TEXTAREA") return;
+            if (
+              target.tagName === "BUTTON" &&
+              (target as HTMLButtonElement).type === "submit"
+            ) {
+              return;
+            }
+            e.preventDefault();
+          }}
+          className="space-y-6"
+        >
           <Section
             title="Item"
             description="Where this listing comes from, what it is, and what buyers will see."

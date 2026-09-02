@@ -66,6 +66,11 @@ covers only Part 1; Part 2's design is
   Publish button lives outside the `<form>` and reaches it via
   `type="submit" form="listing-form"`. There is no step state, no `STEPS`
   array and no Next/Back — that was the pre-2026-09-02 wizard.
+  **The `<form>` blocks implicit Enter submission** via its own `onKeyDown`
+  (exempting `<textarea>` and a focused submit button): Publish is the
+  default submit button, so Enter in Title/Price/Quantity/an aspect field
+  would otherwise publish to a live eBay marketplace from one keystroke —
+  a hazard the old step-gated wizard didn't have. See `SKILL.md`.
   **Button gates** (deliberately asymmetric, see `SKILL.md`): all six
   `_lib/wizardValidation.ts` validators are `??`-chained every render into
   `publishError`, which disables Publish and renders beside it as the
@@ -93,9 +98,10 @@ covers only Part 1; Part 2's design is
   `_components/ImageGrid.tsx` (2026-09-01, replaced `ImagesStep.tsx`) —
   see its own entry below. Because they now live inside a real `<form>`,
   every `<button>` in them carries an explicit `type="button"`,
-  `CategoryStep`'s search box `preventDefault()`s Enter, and real listing
-  fields carry a `required` attribute (but NOT `CategoryStep`'s search
-  query or `PoliciesStep`'s create-location sub-form — see `SKILL.md`).
+  `CategoryStep`'s search box `preventDefault()`s Enter (to run its search
+  rather than submit), and real listing fields carry a `required` attribute
+  (but NOT `CategoryStep`'s search query or `PoliciesStep`'s create-location
+  sub-form — see `SKILL.md`).
   `AspectsStep`
   (2026-08-31) fetches `/api/listings/ebay/aspects?categoryId=` whenever
   `draft.category_id` changes, and renders one field per item aspect eBay's

@@ -202,9 +202,23 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   - **Every `<button>` inside them needs an explicit `type="button"`.** The
     HTML default is `type="submit"`, so an untyped Category-search or
     Create-location button would publish the listing.
-  - **`Enter` in a text input triggers implicit form submission.**
-    `CategoryStep`'s search box calls `preventDefault()` on Enter before
-    running its search for exactly this reason.
+  - **`Enter` in a text input triggers implicit form submission, and the
+    default submit button is Publish** — so without a guard, Enter in Title,
+    Price, Quantity, the supplier URL or a required-aspect input would push a
+    listing live to eBay from a single keystroke, once `isPublishable` is
+    true. The 7-step wizard made that impossible (Publish only existed on the
+    Review step); the single-page form has to block it explicitly. The
+    `<form>` element in `ListingForm.tsx` carries an `onKeyDown` that
+    `preventDefault()`s Enter for everything **except** a `<textarea>` (needs
+    Enter for newlines) and a focused `type="submit"` button (standard
+    keyboard activation). Do not remove it, and do not "simplify" it into a
+    blanket `preventDefault()` — the two exemptions are load-bearing.
+    `CategoryStep`'s search box also calls `preventDefault()` on Enter for its
+    own reason (run the search instead of submitting); it does **not**
+    `stopPropagation()`, so the event still reaches the form-level guard,
+    which calls `preventDefault()` a second time. That is harmless —
+    `preventDefault()` is idempotent and `handleSearch()` lives only in
+    `CategoryStep`'s handler, so nothing double-fires.
   - **`<Field required>` does NOT always mean the control should carry
     `required`.** It does for real listing fields (title, price, quantity,
     condition, source, required aspects, the three policies + location — all
