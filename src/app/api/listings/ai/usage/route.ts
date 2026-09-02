@@ -3,15 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { readTenantUsage, sumCalls, callsByUser } from "@/lib/ai/quota";
 import { getAiGenerationLimit } from "@/lib/utils/planGating";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import type { Profile, TenantPlan } from "@/types";
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "object" && err !== null && "message" in err) {
-    return String((err as { message: unknown }).message);
-  }
-  return String(err);
-}
 
 /**
  * Read-only current-period AI usage for the caller's tenant. Deliberately
@@ -87,9 +80,6 @@ export async function GET() {
 
     return NextResponse.json({ limit, tenantUsed, mine, perUser });
   } catch (err) {
-    return NextResponse.json(
-      { error: "Failed to load AI usage", detail: errorMessage(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: aiErrorMessage(err) }, { status: 500 });
   }
 }
