@@ -77,4 +77,9 @@ describe("scoreListing", () => {
       expect(check.hint.length).toBeGreaterThan(0);
     }
   });
+
+  it("reaches 100 for a fully complete draft even when its category requires no item specifics", () => {
+    const draft: DraftFormState = { ...goodDraft, required_aspect_names: [], aspects: {} };
+    expect(scoreListing(draft).score).toBe(100);
+  });
 });

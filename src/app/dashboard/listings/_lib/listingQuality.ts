@@ -27,6 +27,10 @@ export function scoreListing(draft: DraftFormState): {
     draft.aspects[name]?.trim()
   );
 
+  /* Weight is conditional on whether the category requires any item specifics.
+   * If none are required, zeroing the weight prevents empty drafts from scoring
+   * nonzero. The final score is normalized by totalWeight, so this doesn't cap
+   * the max score: a draft with no required aspects can still achieve 100%. */
   const aspectsWeight = draft.required_aspect_names.length > 0 ? 20 : 0;
 
   const checks: QualityCheck[] = [
@@ -85,6 +89,8 @@ export function scoreListing(draft: DraftFormState): {
     },
   ];
 
-  const score = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
+  const totalWeight = checks.reduce((sum, check) => sum + check.weight, 0);
+  const passedWeight = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
+  const score = totalWeight > 0 ? Math.round((100 * passedWeight) / totalWeight) : 0;
   return { score, checks };
 }
