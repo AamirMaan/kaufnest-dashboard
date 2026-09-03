@@ -46,6 +46,18 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   comments). Every self-serve trial signup failed at that very first insert
   until this was applied. See `(auth)/CLAUDE.md`/`SKILL.md` for the
   signup→provision→welcome flow this backs.
+- `control-plane/007_tenant_ai_usage.sql` — adds `control.tenants.ai_enabled`
+  (default true, the platform-admin AI revoke switch) and creates
+  `control.tenant_ai_usage` (per-tenant, per-user, per-month AI call and
+  token counters, RLS enabled). Backs the Listing Studio AI features.
+- `control-plane/008_ai_usage_atomic_increment.sql` — creates
+  `control.record_ai_usage(...)`, a SECURITY DEFINER
+  `INSERT ... ON CONFLICT DO UPDATE` that bumps one `tenant_ai_usage` row in
+  a single statement and returns the new `calls`. Replaces the read-then-
+  upsert in `recordUsage()` (`src/lib/ai/quota.ts`), which lost increments
+  under ordinary concurrency — N concurrent AI calls all read the same
+  `calls` and all wrote `calls + 1`, so the tenant was billed N times and
+  metered once. Requires `007`.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,

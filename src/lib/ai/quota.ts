@@ -51,9 +51,16 @@ export async function readTenantUsage(tenantId: string): Promise<UsageRow[]> {
 }
 
 /**
- * Increment one (tenant, user, period, kind) counter. Read-then-write rather
- * than an atomic RPC: a lost update under concurrency undercounts by one
- * call, which is acceptable for a soft quota and not worth a DB function.
+ * Increment one (tenant, user, period, kind) counter.
+ *
+ * Delegates to `control.record_ai_usage()` (control-plane migration 008)
+ * rather than reading the row and writing back `calls + 1` from here. The
+ * read-then-write version lost increments under ordinary concurrency — a
+ * double-clicked AI button, or the same form in two tabs, had every request
+ * read the same `calls` and write the same `calls + 1`, so N billed Anthropic
+ * calls moved the meter by one. The RPC does it in a single
+ * `INSERT ... ON CONFLICT DO UPDATE`, which Postgres locks the conflicting
+ * row for, so concurrent callers serialise instead of clobbering each other.
  */
 export async function recordUsage(args: {
   tenantId: string;
@@ -63,44 +70,17 @@ export async function recordUsage(args: {
   outputTokens: number;
 }): Promise<void> {
   const control = createControlClient();
-  const period = currentPeriod();
 
-  const { data: existing, error: readError } = await control
-    .schema("control")
-    .from("tenant_ai_usage")
-    .select("calls, input_tokens, output_tokens")
-    .eq("tenant_id", args.tenantId)
-    .eq("user_id", args.userId)
-    .eq("period", period)
-    .eq("kind", args.kind)
-    .maybeSingle();
+  const { error } = await control.schema("control").rpc("record_ai_usage", {
+    p_tenant: args.tenantId,
+    p_user: args.userId,
+    p_period: currentPeriod(),
+    p_kind: args.kind,
+    p_in: args.inputTokens,
+    p_out: args.outputTokens,
+  });
 
-  if (readError) {
-    throw new Error(`Failed to read existing AI usage: ${readError.message}`);
-  }
-
-  const prev = (existing as
-    | { calls: number; input_tokens: number; output_tokens: number }
-    | null) ?? { calls: 0, input_tokens: 0, output_tokens: 0 };
-
-  const { error: upsertError } = await control
-    .schema("control")
-    .from("tenant_ai_usage")
-    .upsert(
-      {
-        tenant_id: args.tenantId,
-        user_id: args.userId,
-        period,
-        kind: args.kind,
-        calls: prev.calls + 1,
-        input_tokens: prev.input_tokens + args.inputTokens,
-        output_tokens: prev.output_tokens + args.outputTokens,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "tenant_id,user_id,period,kind" }
-    );
-
-  if (upsertError) {
-    throw new Error(`Failed to record AI usage: ${upsertError.message}`);
+  if (error) {
+    throw new Error(`Failed to record AI usage: ${error.message}`);
   }
 }

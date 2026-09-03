@@ -97,6 +97,17 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
     };
   }
 
+  /* Known, accepted, bounded race: this is a read-then-decide check, so a
+   * burst of concurrent requests can all read the same `used` and all pass
+   * the gate before any of their increments land — the tenant can overshoot
+   * `limit` by roughly the number of requests in flight. Closing it properly
+   * needs a distributed lock or a reserve-then-commit scheme, which is more
+   * machinery than a soft monthly quota warrants. What matters is that the
+   * recorded count stays truthful: `recordUsage` increments atomically via
+   * `control.record_ai_usage()` (control-plane migration 008), so an
+   * over-limit burst is still counted in full and the next request is
+   * correctly refused. Do not "fix" this by making the increment
+   * non-atomic again. */
   if (used >= limit) {
     return {
       error: NextResponse.json(
