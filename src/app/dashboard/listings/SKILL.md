@@ -609,6 +609,20 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the feature, they have just used it up, and hiding it would look like a
   bug. `GET /api/listings/ai/usage` is deliberately NOT behind
   `requireAiAccess` for the same reason: it must keep answering at 100% used.
+- **`max_tokens` on the AI routes is a combined thinking + output budget, and
+  both routes branch on `stop_reason === "max_tokens"`.** Neither route passes
+  a `thinking` parameter, and on `claude-opus-5` (`AI_MODEL`) omitting it runs
+  **adaptive thinking by default** — the opposite of Opus 4.8/4.7, where
+  omitting it meant no thinking. So reasoning eats into the same `max_tokens`
+  the response text has to fit in. `aspects/route.ts` was raised 1000 → 4000
+  for this (a JSON object derived from up to 4 images); `describe/route.ts`
+  stays at 4000. Both now return a distinct "the AI response was cut off"
+  error on truncation instead of letting a half-written response fall through
+  to a generic parse failure or a silently-repaired half-sentence description.
+  If you ever want to reclaim the thinking budget, `thinking: { type:
+  "disabled" }` is only legal at effort `high` or below — both routes run at
+  `AI_EFFORT = "low"`, so it is available, but measure before assuming it
+  helps.
 - **A `recordUsage` failure must never destroy a generated AI response.**
   Both AI routes wrap the `recordUsage` call in its own try/catch that
   `console.error`s and continues. It sits *after* a successful Anthropic

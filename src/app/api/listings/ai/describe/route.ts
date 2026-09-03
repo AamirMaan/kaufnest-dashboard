@@ -20,6 +20,13 @@ export async function POST(req: NextRequest) {
   try {
     const response = await anthropic.messages.create({
       model: AI_MODEL,
+      // Caps thinking tokens AND response text together. This route passes no
+      // `thinking`, and on claude-opus-5 that means adaptive thinking is ON by
+      // default (it was off by default on Opus 4.8/4.7), so part of this
+      // budget goes to reasoning before a word of HTML is written. 4000 is
+      // ample for a listing description at `effort: "low"`; the
+      // `stop_reason === "max_tokens"` branch below is what makes a truncated
+      // response say so honestly rather than returning half a description.
       max_tokens: 4000,
       output_config: { effort: AI_EFFORT },
       system: [
@@ -55,6 +62,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "The assistant declined to write this description. Try rephrasing the title." },
         { status: 422 }
+      );
+    }
+
+    // Truncated: the HTML is real but incomplete, and an unclosed tag would
+    // be silently repaired by the sanitizer into a description that just
+    // stops mid-sentence. Refuse it and say why.
+    if (response.stop_reason === "max_tokens") {
+      return NextResponse.json(
+        {
+          error:
+            "The AI response was cut off before it finished. Try a shorter title or fewer item specifics.",
+        },
+        { status: 502 }
       );
     }
 

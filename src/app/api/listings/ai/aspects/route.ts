@@ -33,7 +33,16 @@ export async function POST(req: NextRequest) {
 
     const response = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 1000,
+      // 4000, matching describe/route.ts. `max_tokens` caps thinking tokens
+      // AND response text together, and neither route passes `thinking` —
+      // on claude-opus-5 that means adaptive thinking is ON by default (it
+      // was off by default on Opus 4.8/4.7), so it takes a share of this
+      // budget before the JSON object is written. The old 1000 was tight for
+      // a JSON object derived from up to 4 images and truncated into an
+      // opaque parse failure. Do not lower it without also setting
+      // `thinking: { type: "disabled" }` — which is only legal at effort
+      // `high` or below, and this route runs at `low`.
+      max_tokens: 4000,
       output_config: {
         effort: AI_EFFORT,
         format: {
@@ -83,6 +92,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "The assistant declined to extract item specifics for this listing." },
         { status: 422 }
+      );
+    }
+
+    // A truncated response is not a malformed one — say so, instead of
+    // letting a half-written JSON object fall through to the generic
+    // "unexpected response" parse failure below, which gives the seller
+    // nothing to act on.
+    if (response.stop_reason === "max_tokens") {
+      return NextResponse.json(
+        { error: "The AI response was cut off. Try a shorter title or fewer images." },
+        { status: 502 }
       );
     }
 
