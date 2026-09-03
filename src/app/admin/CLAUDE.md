@@ -59,16 +59,22 @@ not tenant roles.
   point), "AI: On"/"AI: Off" (`Sparkles`, tinted
   `--color-success-text`/`--color-text-faint`, opens a `ConfirmActionModal`
   before PATCHing `{ ai_enabled: !tenant.ai_enabled }` to
-  `/api/admin/tenants/[tenant.id]`), "Resend Invite" (`Mail`, tinted
-  `--color-info-text`, only shown when `tenant.status === "invited"`, posts
-  to `/api/admin/resend-invite` directly — **no confirmation**, unchanged
-  from before), "Impersonate" (`UserCog`, tinted `--color-warning-text`,
-  opens a `ConfirmActionModal` — replacing the previous `window.confirm()` —
-  naming `tenant.admin_email`, then posts `{ tenantId }` only to
-  `/api/admin/impersonate` and redirects to the returned magic link; a
-  failure now toasts via `useToast().error(...)` instead of `alert(...)`),
-  and "Delete" (`Trash2`, danger variant, opens the existing
-  `DeleteTenantModal`, unchanged).
+  `/api/admin/tenants/[tenant.id]`; wrapped in try/catch/finally — a rejected
+  `fetch` or unparsable JSON response toasts a network-error message rather
+  than failing silently, matching Impersonate's error handling), "Resend
+  Invite" (`Mail`, tinted `--color-info-text`, only shown when
+  `tenant.status === "invited"`, posts to `/api/admin/resend-invite`
+  directly — **no confirmation**, unchanged from before), "Impersonate"
+  (`UserCog`, tinted `--color-warning-text`, opens a `ConfirmActionModal` —
+  replacing the previous `window.confirm()` — naming `tenant.admin_email`,
+  then posts `{ tenantId }` only to `/api/admin/impersonate` and redirects to
+  the returned magic link; a failure now toasts via `useToast().error(...)`
+  instead of `alert(...)`), and "Delete" (`Trash2`, danger variant, opens the
+  existing `DeleteTenantModal`; unlike Edit/Toggle AI/Impersonate, its
+  `onDeleted` callback does `router.push("/admin")` rather than calling
+  `onRefresh()` — the tenant this page displays no longer exists after
+  deletion, so refreshing in place would land on this page's "Tenant not
+  found." state instead of the tenant list).
 - `_components/ConfirmActionModal.tsx` — generic yes/no confirmation dialog
   (2026-09-03). `{ open, title, message, confirmLabel, confirmingLabel, tone:
   "warning"|"success"|"info", loading, onConfirm, onClose }`. Distinct from

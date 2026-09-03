@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { EditTenantModal } from "./EditTenantModal";
@@ -16,6 +17,7 @@ interface Props {
 
 export function TenantDetailActions({ tenant, onRefresh }: Props) {
   const { success, error: toastError } = useToast();
+  const router = useRouter();
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -68,6 +70,8 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
       } else {
         toastError("Could not update AI visibility", data.error ?? "Please try again.");
       }
+    } catch {
+      toastError("Could not update AI visibility", "Network error — please try again.");
     } finally {
       setTogglingAi(false);
     }
@@ -145,7 +149,7 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
         onClose={() => setDeleteOpen(false)}
         onDeleted={() => {
           setDeleteOpen(false);
-          onRefresh();
+          router.push("/admin");
         }}
       />
       <ConfirmActionModal
