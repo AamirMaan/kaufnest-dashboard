@@ -4,6 +4,7 @@ import { createControlClient } from "@/lib/supabase/control";
 import { hasPermission } from "@/lib/utils/permissions";
 import { hasAiFeatures, getAiGenerationLimit } from "@/lib/utils/planGating";
 import { readTenantUsage, sumCalls } from "@/lib/ai/quota";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import type { Profile, TenantPlan } from "@/types";
 
 export interface AiAuthContext {
@@ -18,14 +19,6 @@ export interface AiAuthContext {
 export type AiAuthResult =
   | { context: AiAuthContext; error?: undefined }
   | { context?: undefined; error: NextResponse };
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "object" && err !== null && "message" in err) {
-    return String((err as { message: unknown }).message);
-  }
-  return String(err);
-}
 
 /**
  * Guard for `/api/listings/ai/*`. Checks, in order: signed in, has a tenant,
@@ -89,11 +82,13 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
     limit = getAiGenerationLimit(row.plan);
     used = sumCalls(await readTenantUsage(row.id));
   } catch (err) {
+    // The real cause — a Postgres error, readTenantUsage's own message, or a
+    // missing-env-var throw from createControlClient() — stays server-side.
+    // Every tenant user with `manage_listings` reaches this guard, so the
+    // response body gets the same user-safe copy `usage/route.ts` returns.
+    console.error("requireAiAccess failed", err);
     return {
-      error: NextResponse.json(
-        { error: "Failed to check AI access", detail: errorMessage(err) },
-        { status: 500 }
-      ),
+      error: NextResponse.json({ error: aiErrorMessage(err) }, { status: 500 }),
     };
   }
 

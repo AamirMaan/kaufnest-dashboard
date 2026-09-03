@@ -609,6 +609,15 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the feature, they have just used it up, and hiding it would look like a
   bug. `GET /api/listings/ai/usage` is deliberately NOT behind
   `requireAiAccess` for the same reason: it must keep answering at 100% used.
+- **Every AI route and the AI guard return `aiErrorMessage(err)` — never raw
+  error text.** `src/lib/ai/errors.ts` maps provider/driver failures to copy
+  a seller can act on; the real cause goes to `console.error` server-side.
+  `requireAiAccess`'s own catch used to return `{ error, detail:
+  errorMessage(err) }`, which leaked Postgres text, `readTenantUsage`'s
+  message, and `createControlClient()`'s missing-env-var throw to **any**
+  tenant user holding `manage_listings` (fixed 2026-09-03; `usage/route.ts`
+  had already been fixed the same way earlier in the same plan). There is no
+  `detail` field in any AI response body — don't reintroduce one.
 - **An empty aspect value from the model means "could not determine" and must
   never be merged.** `AspectsStep.tsx`'s Fill-with-AI skips any returned
   value that trims to empty. Writing `""` back would be indistinguishable
