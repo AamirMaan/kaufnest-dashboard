@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { TenantActions } from "./_components/TenantActions";
 import { AddTenantModal } from "./_components/AddTenantModal";
 import { AiUsageModal } from "./_components/AiUsageModal";
 import type { Tenant } from "@/types";
-import { Plus, Building2 } from "lucide-react";
+import { Plus, Building2, Menu } from "lucide-react";
 import { PLAN_VARIANT, STATUS_VARIANT } from "./_components/tenantVariants";
 
 export default function AdminPage() {
@@ -101,7 +101,7 @@ export default function AdminPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {["Tenant", "Admin Email", "Plan", "Status", "AI Usage", "Trial Ends", "Created", "Actions"].map((h) => (
+                  {["Tenant", "Admin Email", "Plan", "Status", "AI Usage", ""].map((h) => (
                     <th
                       key={h}
                       className="text-left text-xs font-semibold uppercase tracking-wider text-(--color-text-faint) pb-3 pr-4"
@@ -140,16 +140,14 @@ export default function AdminPage() {
                         <span className="text-(--color-text-faint)">—</span>
                       )}
                     </td>
-                    <td className="py-3 pr-4 text-(--color-text-muted)">
-                      {t.trial_ends_at
-                        ? new Date(t.trial_ends_at).toLocaleDateString("de-DE")
-                        : "—"}
-                    </td>
-                    <td className="py-3 pr-4 text-(--color-text-muted)">
-                      {new Date(t.created_at).toLocaleDateString("de-DE")}
-                    </td>
                     <td className="py-3">
-                      <TenantActions tenant={t} onRefresh={() => setRefreshKey((k) => k + 1)} />
+                      <Link
+                        href={`/admin/tenants/${t.id}`}
+                        aria-label={`View ${t.name} details`}
+                        className="inline-flex items-center justify-center rounded-(--radius-btn) p-1.5 text-(--color-text-muted) hover:text-(--color-text-base) hover:bg-(--color-surface-subtle) transition-colors"
+                      >
+                        <Menu size={16} />
+                      </Link>
                     </td>
                   </tr>
                 ))}
