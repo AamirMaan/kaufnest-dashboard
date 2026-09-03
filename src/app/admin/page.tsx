@@ -6,22 +6,9 @@ import { Badge } from "@/components/ui/Badge";
 import { TenantActions } from "./_components/TenantActions";
 import { AddTenantModal } from "./_components/AddTenantModal";
 import { AiUsageModal } from "./_components/AiUsageModal";
-import type { Tenant, TenantPlan, TenantStatus } from "@/types";
+import type { Tenant } from "@/types";
 import { Plus, Building2 } from "lucide-react";
-
-const PLAN_VARIANT: Record<TenantPlan, "info" | "success" | "warning" | "danger"> = {
-  trial:    "warning",
-  starter:  "info",
-  pro:      "success",
-  business: "danger",
-};
-
-const STATUS_VARIANT: Record<TenantStatus, "success" | "warning" | "danger" | "default"> = {
-  active:       "success",
-  invited:      "warning",
-  provisioning: "warning",
-  deactivated:  "danger",
-};
+import { PLAN_VARIANT, STATUS_VARIANT } from "./_components/tenantVariants";
 
 export default function AdminPage() {
   // null = not yet loaded (shows skeleton), array = loaded
