@@ -595,6 +595,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
      exemption gives nothing away.
   Do not "consolidate" these into one. Do not swap `stopPropagation()` for
   `preventDefault()` in layer 1 — that would kill the paragraph break.
+  **The guard also exempts any `<button>`, not only `type="submit"`**
+  (widened 2026-09-03). The narrower check was an accessibility regression:
+  Enter stopped activating every `type="button"` inside the form — the
+  Category "Search" button, the TipTap toolbar, the AI actions, the image
+  remove/reorder controls. Space still worked, so it wasn't a total keyboard
+  lockout, but it was still broken. Widening reopens nothing: implicit form
+  submission on Enter is a text-input/select behaviour, so a non-submit
+  button was never the hazard. Keep the exemption covering submit buttons
+  too — today's Publish sits outside the `<form>` via `form="listing-form"`,
+  but a future one might not.
 - **AI controls are HIDDEN when unavailable, not disabled-with-a-tooltip —
   but the routes still enforce it.** `aiVisible = !!tenantPlan &&
   hasAiFeatures(tenantPlan) && aiEnabled` (computed in `ListingForm.tsx`,

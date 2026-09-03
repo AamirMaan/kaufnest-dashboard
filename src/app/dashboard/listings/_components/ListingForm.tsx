@@ -399,8 +399,20 @@ export function ListingForm({ draftId }: Props) {
           * the single-page form has to block it explicitly. Three deliberate
           * exemptions: a <textarea> needs Enter for newlines, a
           * contenteditable (the TipTap description editor) needs it for
-          * paragraph breaks, and Enter on a focused submit button is standard
+          * paragraph breaks, and Enter on a focused <button> is standard
           * keyboard activation.
+          *
+          * The button exemption is ANY <button>, not just type="submit"
+          * (narrowed to submit until 2026-09-03, which was an accessibility
+          * regression: Enter stopped activating the Category "Search"
+          * button, the editor toolbar, the AI actions and the image
+          * remove/reorder controls — every one of which is type="button").
+          * Widening it gives nothing away: implicit form submission on Enter
+          * is a text-input/select behaviour, so a non-submit button could
+          * never have caused the hazard this guard exists for. The
+          * submit case stays covered too, as defensive coverage for any
+          * future submit button placed inside the <form> (today's Publish
+          * lives outside it, reaching in via form="listing-form").
           *
           * The contenteditable exemption is belt-and-braces, not the primary
           * defence: `DescriptionEditor.tsx` already `stopPropagation()`s Enter
@@ -420,12 +432,7 @@ export function ListingForm({ draftId }: Props) {
             const target = e.target as HTMLElement;
             if (target.tagName === "TEXTAREA") return;
             if (target.isContentEditable) return;
-            if (
-              target.tagName === "BUTTON" &&
-              (target as HTMLButtonElement).type === "submit"
-            ) {
-              return;
-            }
+            if (target.tagName === "BUTTON") return;
             e.preventDefault();
           }}
           className="space-y-6"
