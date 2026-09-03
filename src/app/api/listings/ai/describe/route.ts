@@ -33,13 +33,23 @@ export async function POST(req: NextRequest) {
     });
 
     // Tokens are billed whatever the stop reason, including a refusal.
-    await recordUsage({
-      tenantId,
-      userId,
-      kind: "describe",
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    });
+    //
+    // Metering failure is logged, never fatal. By this point the Anthropic
+    // call has succeeded and already cost money; letting the outer catch turn
+    // a metering error into a 502 would bill the tenant and hand them nothing.
+    // Same principle as ImageGrid's console.warn on a failed storage cleanup:
+    // a bookkeeping failure must not block the user.
+    try {
+      await recordUsage({
+        tenantId,
+        userId,
+        kind: "describe",
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      });
+    } catch (meterError) {
+      console.error("Failed to record AI usage for describe", meterError);
+    }
 
     if (response.stop_reason === "refusal") {
       return NextResponse.json(

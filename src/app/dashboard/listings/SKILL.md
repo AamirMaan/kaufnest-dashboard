@@ -609,6 +609,13 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the feature, they have just used it up, and hiding it would look like a
   bug. `GET /api/listings/ai/usage` is deliberately NOT behind
   `requireAiAccess` for the same reason: it must keep answering at 100% used.
+- **A `recordUsage` failure must never destroy a generated AI response.**
+  Both AI routes wrap the `recordUsage` call in its own try/catch that
+  `console.error`s and continues. It sits *after* a successful Anthropic
+  call, so letting it reach the route's outer catch would return a 502 and
+  discard content the tenant has already been billed for. Metering is
+  bookkeeping; the same "log and don't block the user" rule as `ImageGrid`'s
+  failed storage cleanup applies.
 - **Every AI route and the AI guard return `aiErrorMessage(err)` — never raw
   error text.** `src/lib/ai/errors.ts` maps provider/driver failures to copy
   a seller can act on; the real cause goes to `console.error` server-side.

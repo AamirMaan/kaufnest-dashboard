@@ -62,13 +62,22 @@ export async function POST(req: NextRequest) {
     });
 
     // Tokens are billed whatever the stop reason, including a refusal.
-    await recordUsage({
-      tenantId,
-      userId,
-      kind: "aspects",
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-    });
+    //
+    // Metering failure is logged, never fatal — see the same block in
+    // `../describe/route.ts`. The Anthropic call has already succeeded and
+    // cost money; a 502 from the outer catch would bill the tenant and throw
+    // the extracted aspects away.
+    try {
+      await recordUsage({
+        tenantId,
+        userId,
+        kind: "aspects",
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      });
+    } catch (meterError) {
+      console.error("Failed to record AI usage for aspects", meterError);
+    }
 
     if (response.stop_reason === "refusal") {
       return NextResponse.json(
