@@ -378,7 +378,8 @@ export function ListingForm({ draftId }: Props) {
   }
 
   return (
-    <div>
+    <div className="flex min-h-full flex-col">
+      <div className="flex-1">
       <PageHeader
         title={existingRow ? "Edit Listing" : "New Listing"}
         description="Fill in the details on the left — the preview on the right updates as you type."
@@ -549,6 +550,7 @@ export function ListingForm({ draftId }: Props) {
         <aside className="lg:sticky lg:top-6">
           <ListingPreview draft={draft} />
         </aside>
+      </div>
       </div>
 
       {/* Action bar — outside the <form>, which is why Publish carries
