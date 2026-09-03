@@ -1,4 +1,4 @@
-import { scoreListing } from "./listingQuality";
+import { scoreListing, visibleTextLength } from "./listingQuality";
 import type { DraftFormState } from "./wizardValidation";
 
 const emptyDraft: DraftFormState = {
@@ -22,6 +22,37 @@ const goodDraft: DraftFormState = {
   fulfillment_policy_id: "f1", payment_policy_id: "p1",
   return_policy_id: "r1", merchant_location_key: "loc1",
 };
+
+
+/* The real input shape since the TipTap editor landed: `editor.getHTML()`,
+ * not plain text — one heading, a paragraph and a bulleted list, which is
+ * what a typical AI-generated description looks like. Over 300 raw
+ * characters, under 300 visible ones: the exact case the old raw-`.length`
+ * check waved through. */
+const HTML_DESCRIPTION_SHORT =
+  "<h3>Condition</h3>" +
+  `<p>${"a".repeat(90)}</p>` +
+  "<ul>" +
+  Array.from({ length: 8 }, () => `<li>${"b".repeat(20)}</li>`).join("") +
+  "</ul>";
+
+describe("visibleTextLength", () => {
+  it("ignores markup", () => {
+    expect(visibleTextLength("<p><strong>Hello</strong> world</p>")).toBe(11);
+  });
+
+  it("counts an entity as the one character it renders as", () => {
+    expect(visibleTextLength("<p>Tom &amp; Jerry</p>")).toBe("Tom x Jerry".length);
+  });
+
+  it("keeps adjacent blocks from fusing into one word", () => {
+    expect(visibleTextLength("<p>one</p><p>two</p>")).toBe("one two".length);
+  });
+
+  it("is zero for markup with no text in it", () => {
+    expect(visibleTextLength("<p></p>")).toBe(0);
+  });
+});
 
 describe("scoreListing", () => {
   it("scores an empty draft at zero", () => {
@@ -81,5 +112,26 @@ describe("scoreListing", () => {
   it("reaches 100 for a fully complete draft even when its category requires no item specifics", () => {
     const draft: DraftFormState = { ...goodDraft, required_aspect_names: [], aspects: {} };
     expect(scoreListing(draft).score).toBe(100);
+  });
+
+  it("fails the description check on HTML whose visible text is under the bar", () => {
+    // Raw length clears the 300-character bar; visible text does not.
+    // Measuring the raw string would have passed this — the bug this test
+    // exists for.
+    expect(HTML_DESCRIPTION_SHORT.length).toBeGreaterThan(300);
+    expect(visibleTextLength(HTML_DESCRIPTION_SHORT)).toBeLessThan(300);
+    const { checks } = scoreListing({
+      ...goodDraft,
+      description: HTML_DESCRIPTION_SHORT,
+    });
+    expect(checks.find((c) => c.id === "description")?.passed).toBe(false);
+  });
+
+  it("passes the description check on HTML with enough visible text", () => {
+    const { checks } = scoreListing({
+      ...goodDraft,
+      description: `<h3>Condition</h3><p>${"a".repeat(300)}</p>`,
+    });
+    expect(checks.find((c) => c.id === "description")?.passed).toBe(true);
   });
 });

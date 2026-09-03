@@ -15,6 +15,30 @@ const GOOD_IMAGE_COUNT = 6;
 const GOOD_DESCRIPTION_CHARS = 300;
 
 /**
+ * Length of the text a buyer will actually read, with markup discounted.
+ *
+ * `description` holds HTML now (`editor.getHTML()` from `DescriptionEditor`),
+ * not the plain text this check was written against. Measuring `.length` on
+ * the raw string counted every `<p>`, `<h3>` and `<li>` toward the 300-character
+ * bar, so a typical AI-generated description passed on roughly 180-230
+ * characters of real content — in the feature's headline quality signal.
+ *
+ * A regex tag-strip is enough here: this is a length heuristic, not a
+ * sanitizer (that job belongs to `sanitizeListingHtml`, server-side). Tags
+ * become a space so `</p><p>` doesn't fuse two words into one, entities
+ * collapse to the single character they render as, and runs of whitespace
+ * count once.
+ */
+export function visibleTextLength(html: string): number {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&(?:[a-z]+|#\d+);/gi, "x")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+
+/**
  * Score a draft 0-100 on how well it will perform as an eBay listing —
  * distinct from `wizardValidation`, which answers whether it can be
  * published at all. Every check carries a hint saying what to do about it.
@@ -59,7 +83,8 @@ export function scoreListing(draft: DraftFormState): {
       id: "description",
       label: "Substantial description",
       weight: 15,
-      passed: draft.description.trim().length >= GOOD_DESCRIPTION_CHARS,
+      // Visible text, not raw markup — see `visibleTextLength` above.
+      passed: visibleTextLength(draft.description) >= GOOD_DESCRIPTION_CHARS,
       hint: `Write at least ${GOOD_DESCRIPTION_CHARS} characters covering condition, what is included, and dimensions.`,
     },
     {

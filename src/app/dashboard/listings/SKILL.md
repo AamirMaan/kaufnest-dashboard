@@ -660,6 +660,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `{ html }`; the editor calls `setContent` once, only on success, so a
   failed call can never leave a half-written description behind. Don't
   "improve" this into a stream.
+- **`listingQuality.ts`'s description check measures *visible* text, via
+  `visibleTextLength`, not `description.length`.** The 300-character bar was
+  written when `description` was plain text from a `<textarea>`; it now
+  receives `editor.getHTML()`, so `<p>`/`<h3>`/`<ul>`/`<li>` characters were
+  counting toward it — a typical AI-generated description cleared 300 raw
+  characters on roughly 180-230 characters of real content, in the feature's
+  headline "quality score". `visibleTextLength` strips tags (replacing each
+  with a space so `</p><p>` doesn't fuse two words), collapses entities to
+  one character and squashes whitespace runs. A regex is deliberate: this is
+  a length heuristic, not a security boundary — sanitization stays in
+  `publishPayloads.ts`, server-side. Any *new* quality check that measures
+  description content must go through this helper too.
 - **A stored description is not necessarily HTML — run it through
   `toEditorHtml` before it reaches the editor.** `ebay_listing_drafts.
   description` is a plain `text` column that predates the rich editor (the
