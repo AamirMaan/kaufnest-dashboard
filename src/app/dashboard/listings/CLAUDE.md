@@ -233,6 +233,14 @@ covers only Part 1; Part 2's design is
   stays permissive by design) — see the SKILL.md gotcha. The filename keeps
   its `wizard` prefix only to avoid churning every import; there is no
   wizard any more.
+- `_lib/descriptionHtml.ts` — `toEditorHtml(description)` + `escapeHtml`,
+  colocated test (2026-09-03). Adapter on the way *into* the TipTap editor:
+  `description` is a plain `text` column that predates the rich editor, so
+  drafts saved by the old `<textarea>` still hold plain text. TipTap parses
+  its `content` as HTML and would collapse those into a single paragraph,
+  losing every line break. Legacy text is escaped and wrapped
+  (`\n\n` → `<p>`, `\n` → `<br>`); anything that already looks like HTML
+  passes through unchanged. Called from `ListingForm.tsx`'s `toFormState`.
 - `_lib/listingQuality.ts` — `scoreListing(draft) → { score, checks:
   QualityCheck[] }` (2026-09-01/02). Distinct from `wizardValidation.ts`:
   that answers whether a draft *can* be published; this scores 0-100 how
@@ -489,6 +497,8 @@ the XML shapes.
 
 ## Tests
 
-`npx jest dashboard/listings` runs `_store/listingsSlice.test.ts` and
-`_lib/wizardValidation.test.ts`. `npx jest lib/integrations/ebay/listings`
+`npx jest dashboard/listings` runs `_store/listingsSlice.test.ts`,
+`_lib/wizardValidation.test.ts`, `_lib/listingQuality.test.ts`,
+`_lib/imageResize.test.ts`, `_lib/storagePath.test.ts` and
+`_lib/descriptionHtml.test.ts`. `npx jest lib/integrations/ebay/listings`
 covers the Trading API functions this feature added to that shared file.

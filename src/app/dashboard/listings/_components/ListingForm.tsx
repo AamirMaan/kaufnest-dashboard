@@ -23,6 +23,7 @@ import {
   validatePoliciesStep,
   type DraftFormState,
 } from "../_lib/wizardValidation";
+import { toEditorHtml } from "../_lib/descriptionHtml";
 import { SourceStep } from "./SourceStep";
 import { CategoryStep } from "./CategoryStep";
 import { ImageGrid } from "./ImageGrid";
@@ -62,7 +63,13 @@ function toFormState(row: EbayListingDraft): DraftFormState {
     product_id: row.product_id ?? "",
     source_url: row.source_url ?? "",
     title: row.title,
-    description: row.description ?? "",
+    /* `description` has been a plain `text` column since before the rich
+     * editor existed, so drafts saved by the old <textarea> are still out
+     * there. TipTap parses its `content` as HTML, which collapses plain text
+     * into one paragraph and silently drops every line break the seller
+     * typed. `toEditorHtml` wraps legacy text in `<p>`/`<br>` (escaping
+     * first) and passes anything already HTML straight through. */
+    description: toEditorHtml(row.description),
     price: String(row.price),
     currency: row.currency,
     quantity: String(row.quantity),

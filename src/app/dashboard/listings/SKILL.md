@@ -660,6 +660,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `{ html }`; the editor calls `setContent` once, only on success, so a
   failed call can never leave a half-written description behind. Don't
   "improve" this into a stream.
+- **A stored description is not necessarily HTML — run it through
+  `toEditorHtml` before it reaches the editor.** `ebay_listing_drafts.
+  description` is a plain `text` column that predates the rich editor (the
+  design chose "wrap legacy plain text in `<p>` on load" over a schema
+  fan-out), so real rows in the live database still hold `\n`-separated plain
+  text. TipTap parses `content` as HTML, so handing it that string collapses
+  the whole thing into one whitespace-normalized paragraph and the seller's
+  line breaks are gone. `_lib/descriptionHtml.ts` escapes and wraps legacy
+  text (`\n\n` → paragraphs, `\n` → `<br>`) and passes anything already
+  HTML through untouched; `ListingForm.tsx`'s `toFormState` is the single
+  call site. Escaping first is load-bearing — a legacy description containing
+  `<` or `&` must render as those characters, not be reinterpreted as markup.
 - **`useEditor` re-diffs its whole options object on every render**
   (`EditorInstanceManager.compareOptions` in `@tiptap/react`) and calls
   `editor.setOptions()` — which re-runs `view.setProps()` +
