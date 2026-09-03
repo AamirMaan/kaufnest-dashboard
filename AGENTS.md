@@ -97,6 +97,14 @@ New shared code from the migration:
   full-fetch `selectorItems` (`id, name, current_stock, sku`) for product
   dropdowns in modals. Users and dropshipping listings use client-side
   pagination only (small data sets).
+- `src/lib/ai/` — Anthropic client, prompt builders, quota metering and the
+  AI route guard (server-only, never imported client-side). Quota lives in
+  `control.tenant_ai_usage` (Project A); the per-plan allowance is
+  `aiGenerationsPerMonth` in `lib/utils/planGating.ts`. AI visibility is
+  `control.tenants.ai_enabled`, toggled per tenant from `/admin`.
+- `src/app/api/listings/ai/` — describe, aspects and usage routes.
+- `src/lib/utils/sanitizeListingHtml.ts` — eBay-safe HTML allowlist, applied
+  in `publishPayloads.ts` before either description field reaches eBay.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

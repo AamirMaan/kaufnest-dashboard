@@ -16,7 +16,7 @@ interface Props {
  * Without this, a Pro tenant (or one with no eBay connection) could bypass
  * the list page's gate entirely by navigating straight to
  * /dashboard/listings/new or /dashboard/listings/[id], since those routes
- * render ListingWizard directly and had no gate of their own.
+ * render the listing form directly and had no gate of their own.
  */
 export function BusinessEbayGate({ children }: Props) {
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);

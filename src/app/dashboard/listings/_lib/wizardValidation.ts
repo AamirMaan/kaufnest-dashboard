@@ -57,8 +57,15 @@ export function validateCategoryStep(draft: DraftFormState): string | null {
   return draft.category_id ? null : "Select a category.";
 }
 
+/** eBay's per-listing picture limit. */
+export const MAX_LISTING_IMAGES = 24;
+
 export function validateImagesStep(draft: DraftFormState): string | null {
-  return draft.image_urls.length > 0 ? null : "Add at least one image.";
+  if (draft.image_urls.length === 0) return "Add at least one image.";
+  if (draft.image_urls.length > MAX_LISTING_IMAGES) {
+    return `eBay allows at most ${MAX_LISTING_IMAGES} images per listing.`;
+  }
+  return null;
 }
 
 export function validateAspectsStep(draft: DraftFormState): string | null {

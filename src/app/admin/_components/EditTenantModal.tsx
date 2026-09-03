@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/FormFields";
+import { Checkbox, Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import type { Tenant, TenantPlan, TenantStatus } from "@/types";
 
@@ -23,6 +23,7 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
   const [plan, setPlan] = useState<TenantPlan>(tenant.plan);
   const [status, setStatus] = useState<TenantStatus>(tenant.status);
   const [adminEmail, setAdminEmail] = useState(tenant.admin_email ?? "");
+  const [aiEnabled, setAiEnabled] = useState(tenant.ai_enabled);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,10 +34,16 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
     setError(null);
     setLoading(true);
 
-    const patch: { plan?: TenantPlan; status?: TenantStatus; admin_email?: string } = {};
+    const patch: {
+      plan?: TenantPlan;
+      status?: TenantStatus;
+      admin_email?: string;
+      ai_enabled?: boolean;
+    } = {};
     if (plan !== tenant.plan) patch.plan = plan;
     if (status !== tenant.status) patch.status = status;
     if (emailChanged) patch.admin_email = adminEmail;
+    if (aiEnabled !== tenant.ai_enabled) patch.ai_enabled = aiEnabled;
 
     // Nothing changed — close without a network call
     if (Object.keys(patch).length === 0) {
@@ -80,6 +87,7 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
     setPlan(tenant.plan);
     setStatus(tenant.status);
     setAdminEmail(tenant.admin_email ?? "");
+    setAiEnabled(tenant.ai_enabled);
     setError(null);
     onClose();
   }
@@ -148,6 +156,12 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
             <option value="deactivated">Deactivated</option>
           </select>
         </div>
+
+        <Checkbox
+          label="AI features visible to this tenant"
+          checked={aiEnabled}
+          onChange={(e) => setAiEnabled(e.target.checked)}
+        />
       </form>
     </Modal>
   );

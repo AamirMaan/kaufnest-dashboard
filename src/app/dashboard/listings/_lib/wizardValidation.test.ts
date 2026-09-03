@@ -5,6 +5,7 @@ import {
   validateImagesStep,
   validateAspectsStep,
   validatePoliciesStep,
+  MAX_LISTING_IMAGES,
   type DraftFormState,
 } from "./wizardValidation";
 
@@ -108,6 +109,26 @@ describe("validateImagesStep", () => {
     expect(validateImagesStep(makeDraft({ image_urls: [] }))).toBe(
       "Add at least one image."
     );
+  });
+});
+
+describe("validateImagesStep image cap", () => {
+  function draftWithImages(imageCount: number): DraftFormState {
+    return makeDraft({
+      image_urls: Array.from({ length: imageCount }, (_, i) => `https://x/${i}.jpg`),
+    });
+  }
+
+  it("accepts exactly the eBay maximum", () => {
+    expect(validateImagesStep(draftWithImages(MAX_LISTING_IMAGES))).toBeNull();
+  });
+
+  it("rejects one image over the eBay maximum", () => {
+    expect(validateImagesStep(draftWithImages(MAX_LISTING_IMAGES + 1))).toMatch(/24/);
+  });
+
+  it("still requires at least one image", () => {
+    expect(validateImagesStep(draftWithImages(0))).toMatch(/at least one/i);
   });
 });
 

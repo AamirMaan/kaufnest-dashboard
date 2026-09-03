@@ -104,6 +104,7 @@ export function PoliciesStep({ draft, setDraft }: Props) {
     <div className="space-y-4">
       <Field label="Fulfillment Policy" required>
         <Select
+          required
           value={draft.fulfillment_policy_id}
           onChange={(e) => setDraft({ fulfillment_policy_id: e.target.value })}
         >
@@ -116,6 +117,7 @@ export function PoliciesStep({ draft, setDraft }: Props) {
 
       <Field label="Payment Policy" required>
         <Select
+          required
           value={draft.payment_policy_id}
           onChange={(e) => setDraft({ payment_policy_id: e.target.value })}
         >
@@ -128,6 +130,7 @@ export function PoliciesStep({ draft, setDraft }: Props) {
 
       <Field label="Return Policy" required>
         <Select
+          required
           value={draft.return_policy_id}
           onChange={(e) => setDraft({ return_policy_id: e.target.value })}
         >
@@ -146,6 +149,12 @@ export function PoliciesStep({ draft, setDraft }: Props) {
           </p>
           {createError && <p className="text-sm text-(--color-danger-text)">{createError}</p>}
 
+          {/* These fields belong to the "Create location" action, NOT to the
+            * listing form this component is rendered inside. They are marked
+            * `<Field required>` for the asterisk only — deliberately with no
+            * `required` attribute on the controls, which would otherwise
+            * block the listing form's own submit. Their completeness is
+            * enforced by the Create location button's `disabled` instead. */}
           <Field label="Location Name" required>
             <Input
               value={newLocation.name}
@@ -207,6 +216,7 @@ export function PoliciesStep({ draft, setDraft }: Props) {
       ) : (
         <Field label="Inventory Location" required>
           <Select
+            required
             value={draft.merchant_location_key}
             onChange={(e) => setDraft({ merchant_location_key: e.target.value })}
           >

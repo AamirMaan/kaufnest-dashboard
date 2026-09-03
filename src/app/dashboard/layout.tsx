@@ -166,16 +166,19 @@ export default async function DashboardLayout({
   const isAdmin = await isAdminPromise;
 
   // Tenant's subscription plan — drives platform-integrations gating.
+  // ai_enabled is the platform-admin AI visibility switch (control-plane 007).
   let tenantPlan: TenantPlan | null = null;
+  let aiEnabled = false;
   if (tenantSchema) {
     const control = createControlClient();
     const { data: tenant } = await control
       .schema("control")
       .from("tenants")
-      .select("plan")
+      .select("plan, ai_enabled")
       .eq("schema_name", tenantSchema)
       .single();
     tenantPlan = (tenant?.plan as TenantPlan | undefined) ?? null;
+    aiEnabled = (tenant?.ai_enabled as boolean | undefined) ?? false;
   }
 
   return (
@@ -190,6 +193,7 @@ export default async function DashboardLayout({
       currentUser={profile}
       companyProfile={companyProfile ?? undefined}
       tenantPlan={tenantPlan}
+      aiEnabled={aiEnabled}
       platformConnections={platformConnections ?? []}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       platformPayouts={platformPayoutsData ?? []}

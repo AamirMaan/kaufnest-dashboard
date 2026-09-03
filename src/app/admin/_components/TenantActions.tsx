@@ -18,6 +18,7 @@ export function TenantActions({ tenant, onRefresh }: Props) {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [togglingAi, setTogglingAi] = useState(false);
 
   async function handleResendInvite() {
     setResending(true);
@@ -35,6 +36,32 @@ export function TenantActions({ tenant, onRefresh }: Props) {
       }
     } finally {
       setResending(false);
+    }
+  }
+
+  async function handleToggleAi() {
+    setTogglingAi(true);
+    try {
+      const next = !tenant.ai_enabled;
+      const res = await fetch(`/api/admin/tenants/${tenant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ai_enabled: next }),
+      });
+      const data = (await res.json()) as { tenant?: Tenant; error?: string };
+      if (res.ok) {
+        success(
+          next ? "AI enabled" : "AI hidden",
+          next
+            ? `${tenant.name} can now see AI features.`
+            : `AI features are now hidden for ${tenant.name}.`
+        );
+        onRefresh();
+      } else {
+        toastError("Could not update AI visibility", data.error ?? "Please try again.");
+      }
+    } finally {
+      setTogglingAi(false);
     }
   }
 
@@ -73,6 +100,9 @@ export function TenantActions({ tenant, onRefresh }: Props) {
       <div className="flex items-center gap-2">
         <Button variant="secondary" onClick={() => setEditOpen(true)}>
           Edit
+        </Button>
+        <Button variant="secondary" onClick={handleToggleAi} disabled={togglingAi}>
+          {togglingAi ? "Saving…" : tenant.ai_enabled ? "AI: On" : "AI: Off"}
         </Button>
         {tenant.status === "invited" && (
           <Button variant="secondary" onClick={handleResendInvite} disabled={resending}>

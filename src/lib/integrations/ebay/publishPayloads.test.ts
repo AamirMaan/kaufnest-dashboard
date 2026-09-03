@@ -112,3 +112,23 @@ describe("buildOfferPayload", () => {
     expect(payload.pricingSummary.price.value).toBe("20.00");
   });
 });
+
+describe("description sanitization", () => {
+  it("strips active content from the inventory item description", () => {
+    const draft = makeDraft({ description: '<p>Nice</p><script>evil()</script>' });
+    const payload = buildInventoryItemPayload(draft);
+    expect(payload.product.description).not.toContain("script");
+    expect(payload.product.description).toContain("Nice");
+  });
+
+  it("strips active content from the offer listing description", () => {
+    const draft = makeDraft({ description: '<p onclick="evil()">Nice</p>' });
+    const payload = buildOfferPayload(draft, "EBAY_DE", "loc1");
+    expect(payload.listingDescription).not.toContain("onclick");
+  });
+
+  it("still falls back to the title when the description is null", () => {
+    const draft = makeDraft({ description: null });
+    expect(buildOfferPayload(draft, "EBAY_DE", "loc1").listingDescription).toBe(draft.title);
+  });
+});

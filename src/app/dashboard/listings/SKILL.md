@@ -1,16 +1,19 @@
 ---
 name: listings-feature
-description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
+description: Agent playbook for the eBay listing creation feature (src/app/dashboard/listings) — minimal file set per change type, gotchas around the single-page form's save mutex, the TipTap description editor's Enter guard and AI actions, SKU/offer resumability, Storage bucket RLS, and the AuditEntity type gap.
 ---
 
 # Listings feature playbook
 
 ## Minimal file set per change type
 
-- **New wizard field** (e.g. an "item specifics" step): add it to
+- **New listing field**: add it to
   `DraftFormState` in `_lib/wizardValidation.ts`, add a validator if it's
-  required, add/extend a step component, wire it into `ListingWizard.tsx`'s
-  `STEPS`/`VALIDATORS`/switch and its `toPayload()`, add the DB column via the
+  required (and chain that validator into `ListingForm.tsx`'s `publishError`
+  — a validator nobody chains gates nothing), render the control in the
+  right `<Section>` of `ListingForm.tsx` (or extend the step component that
+  section renders), add it to `ListingForm.tsx`'s `EMPTY_DRAFT`/
+  `toFormState`/`toPayload()`, add the DB column via the
   "2 places" rule (`supabase/SKILL.md`) — `021_ebay_listing_drafts.sql`-style
   new migration using `run_on_all_tenant_schemas` PLUS
   `provision_tenant_schema()` — and add it to
@@ -35,8 +38,52 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `GET /api/listings/ebay/<thing>/route.ts` mirroring `locations`/
   `policies`'s shape exactly, add the picker to `PoliciesStep.tsx`, add the
   chosen value to `DraftFormState`/`EbayListingDraft`/the DB column (2
-  places rule) and `ListingWizard.tsx`'s `EMPTY_DRAFT`/`toFormState`/
+  places rule) and `ListingForm.tsx`'s `EMPTY_DRAFT`/`toFormState`/
   `toPayload`, and validate it in `validatePoliciesStep`.
+- **Changing anything about listing images** (upload rules, compression,
+  ordering, cleanup): `_components/ImageGrid.tsx` is the only UI, and the
+  two pure helpers it composes are `_lib/imageResize.ts` (`compressImage`,
+  `ALLOWED_IMAGE_TYPES`, `MAX_UPLOAD_BYTES`, plus the tested `fitWithin`)
+  and `_lib/storagePath.ts` (`LISTING_IMAGES_BUCKET`, `buildImagePath`,
+  `pathFromPublicUrl`). The cap itself is `MAX_LISTING_IMAGES` in
+  `_lib/wizardValidation.ts` (with `validateImagesStep` + its colocated
+  test) — put new rules in a helper with a test, not inline in the
+  component; the component itself has no test (it is all canvas/Storage/DnD
+  side effects).
+- **Changing the create/edit form's layout** (a new section, moving a
+  control between sections, changing the preview column): `ListingForm.tsx`
+  only. It is a single scrolling page — three `<Section>`s ("Item",
+  "Listing", "Shipping") inside one `<form id="listing-form">`, with
+  `<ListingPreview>` in a `lg:sticky` right column and a sticky bottom
+  action bar. There is no step machine, no `STEPS` array and no "Next"
+  button any more; anything that reads like one in older notes predates
+  2026-09-02. The step components (`SourceStep`, `CategoryStep`,
+  `AspectsStep`, `PoliciesStep`) survived the rewrite as plain
+  `{ draft, setDraft }` field groups — `DetailsStep.tsx` and
+  `ReviewStep.tsx` did not (their content is inline in `ListingForm.tsx`
+  and `ListingPreview.tsx` respectively).
+- **Changing the description editor** (toolbar buttons, which marks are
+  allowed, placeholder): `_components/DescriptionEditor.tsx` only — but if
+  you enable a new mark or node, add its tag to `ALLOWED_TAGS` in
+  `lib/utils/sanitizeListingHtml.ts` AND to the permitted-tag list in
+  `DESCRIBE_SYSTEM_PROMPT` (`lib/ai/prompts.ts`) in the same change.
+  Otherwise the sanitizer silently strips whatever the button produces on
+  the way to eBay, and the seller sees formatting in the editor that never
+  reaches the listing.
+- **Changing an AI action in the form** (a new AI button, different request
+  payload, different failure copy): the UI is
+  `_components/DescriptionEditor.tsx` (describe) /
+  `_components/AspectsStep.tsx` (aspects) /
+  `components/ui/AiUsageNote.tsx` (usage, shared — also used by
+  `dashboard/settings/`, see that feature's `SKILL.md`); the routes are
+  `app/api/listings/ai/{describe,aspects,usage}/route.ts` and the
+  server-only logic behind them is `lib/ai/` (`client.ts`, `prompts.ts`,
+  `quota.ts`, `authGuard.ts`, `errors.ts`). `aiVisible` is computed once in
+  `ListingForm.tsx` and passed down — don't recompute it per component
+  (except `AiUsageNote`, which is prop-free by design and reads the store
+  itself). Nothing in this folder may import `lib/ai/*` directly: it is
+  server-only (Anthropic key), and the `guard_edit.py` verifier will deny
+  the write.
 - **Changing the plan/connection gate**: `_components/BusinessEbayGate.tsx`
   is the single source of truth — used by `page.tsx`, `new/page.tsx`, AND
   `[id]/page.tsx`. Change the copy/condition there, not in any individual
@@ -44,16 +91,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 - **Changing what's editable on an already-published listing**
   (2026-08-31): everything lives in `EditLiveListing.tsx` +
   `/api/listings/[id]/revise/route.ts` — a completely separate path from
-  the wizard/`publish.ts`. Add the field to `LiveDetail`/`EbayListingDetail`
+  the create form/`publish.ts`. Add the field to `LiveDetail`/`EbayListingDetail`
   (`lib/integrations/ebay/listings.ts`), thread it through
   `fetchListingDetail`'s `GetItem` parsing and `reviseListing`'s
   `ReviseItem` XML building, add the form control in
   `EditLiveListing.tsx`, and include it in the `revise` route's request
-  body and its `ebay_listing_drafts` update. Do NOT add it to the wizard's
-  `DraftFormState`/`ListingWizard.tsx` — that's the create-only path and
+  body and its `ebay_listing_drafts` update. Do NOT add it to the create
+  form's `DraftFormState`/`ListingForm.tsx` — that's the create-only path and
   never touches an already-published listing again.
 - **Adding a new way to bring listings into `ebay_listing_drafts` from
-  outside the wizard** (e.g. a different platform's "existing listings"
+  outside the create form** (e.g. a different platform's "existing listings"
   import): follow `/api/listings/ebay/sync/route.ts`'s pattern — always
   exclude `origin="app"` rows from any upsert, and scope any reconciliation
   status update (`status: "inactive"`, not a delete — see the gotcha below)
@@ -61,8 +108,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   exclusion's own `origin="app"` rows unless it's the deliberate SECOND,
   separate reconciliation pass the sync route already does. See the gotcha
   below for why this is load-bearing, not just a style preference.
-- **Adding a new required-looking field to `EditLiveListing.tsx` (or any
-  new create/edit form anywhere in the app)**: it MUST follow
+- **Adding a new required-looking field to `ListingForm.tsx` /
+  `EditLiveListing.tsx` (or any new create/edit form anywhere in the app)**:
+  it MUST follow
   `AGENTS.md`'s "Form conventions" section — real `<form>`, `required` on
   the actual input (not just `<Field required>`'s label), and a computed
   `isFormValid` disabling the submit button. `EditLiveListing.tsx` didn't
@@ -72,16 +120,16 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 ## Gotchas
 
 - **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
-  and the wizard routes had no gate at all until the same change.**
+  and the create/edit routes had no gate at all until the same change.**
   `hasPlatformIntegrations` (Pro + Business) was the original gate on
   `page.tsx` only; it's now `hasMessagingAndListings` (Business only, see
   `lib/utils/planGating.ts`) PLUS a connected-eBay check, applied via
   `_components/BusinessEbayGate.tsx` to **all three** routes. Before this,
-  `new/page.tsx`/`[id]/page.tsx` rendered `ListingWizard` with no gate
+  `new/page.tsx`/`[id]/page.tsx` rendered the listing form with no gate
   whatsoever — a Pro tenant, or one with no eBay connection at all, could
-  reach the wizard by navigating straight to the URL even though the list
+  reach it by navigating straight to the URL even though the list
   page's "New Listing" button was correctly hidden from them. Don't
-  reintroduce a route that renders `ListingWizard` without wrapping it in
+  reintroduce a route that renders `ListingForm` without wrapping it in
   `BusinessEbayGate`.
 - **Category search needs an application token, not the seller's user
   token — fixed.** `searchCategories` (Taxonomy API,
@@ -104,10 +152,10 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `AuditEntity` is `"expense" | "purchase" | "sale" | "user" | "product"` —
   adding a 6th value is a one-line, low-risk change but wasn't done for v1 to
   keep this feature's diff self-contained from a type other features also
-  consume. `ListingWizard.tsx` currently logs listing create/update audit
+  consume. `ListingForm.tsx` currently logs listing create/update audit
   entries with `entityType: "sale"` as the closest existing category — **fix
   this** by adding `"listing"` to `AuditEntity` and updating
-  `ListingWizard.tsx`'s two `writeAuditLog` calls the next time this file is
+  `ListingForm.tsx`'s two `writeAuditLog` calls the next time this file is
   touched for an unrelated reason (small enough to bundle, not urgent enough
   to justify its own PR).
 - **Offer-creation resume gap — fixed.** `publishListing` now takes an
@@ -121,21 +169,90 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `status`/`ebay_sku`/`publish_error` — it relies on the callback having
   already persisted `ebay_offer_id` earlier in the same request, not on
   writing it itself.
-- **Save Draft / Publish skip the step validators.** `_lib/wizardValidation.ts`'s
-  six validators (`validateSourceStep` … `validatePoliciesStep`, plus
-  `validateAspectsStep`) only run
-  from `ListingWizard.tsx`'s `goNext()`, when the user clicks "Next" within
-  the wizard. `handleSaveDraft`/`handlePublish` call `saveDraft()` directly
-  with no validation pass, so a user can click Save Draft on step 1 with an
-  empty title, zero/blank price, or no images and get a row written to
-  `ebay_listing_drafts` — the DB has minimal CHECK constraints
-  (`price >= 0`, `quantity >= 1`, `NOT NULL title`) but nothing enforcing a
-  non-blank title or that later-step fields are populated. This is
-  intentional (drafts are explicitly allowed to be incomplete — that's the
-  point of a draft), but the actual eBay publish call will still fail
-  server-side (400/502 from eBay) on a draft missing category/policies/
-  images, since those are required by eBay's Inventory API regardless of
-  local validation. Don't assume "it saved" implies "it's valid to publish."
+- **Save Draft and Publish have deliberately DIFFERENT validity gates
+  (rewritten 2026-09-02 — this gotcha used to say "Save Draft / Publish skip
+  the step validators", which is no longer true).** All six validators in
+  `_lib/wizardValidation.ts` (`validateSourceStep` … `validatePoliciesStep`,
+  including `validateAspectsStep`) now run on **every render** of
+  `ListingForm.tsx`, `??`-chained into a single `publishError: string | null`.
+  That value does exactly two things: it disables the Publish button, and it
+  renders next to it as helper text, so a disabled Publish always says why.
+  **Save Draft is not gated by any of them** and must never become gated:
+  it is `disabled={saving || publishing}` only. Drafts are explicitly allowed
+  to be incomplete — that is the point of a draft — so a Save Draft that can
+  always succeed must never render as disabled. This is the reconciliation
+  between `AGENTS.md`'s form convention ("a mutating button must never look
+  clickable when it can't succeed") and this feature's incomplete-draft
+  behaviour: the convention is about a button that *cannot succeed*, and Save
+  Draft always can. Two consequences that have NOT changed: (a) a row can
+  still be written to `ebay_listing_drafts` with an empty title, blank price
+  or no images — the DB has only minimal CHECK constraints (`price >= 0`,
+  `quantity >= 1`, `NOT NULL title`); (b) client-side validation is a UX gate,
+  not a guarantee — the eBay publish call can still fail server-side (400/502)
+  for reasons no local validator models. Don't assume "it saved" implies
+  "it's valid to publish", and don't assume "Publish was enabled" implies
+  "eBay will accept it."
+- **`saveDraft()` is behind an in-flight mutex, and it is load-bearing, not
+  defensive tidiness (2026-09-02).** Two independent paths call the same
+  "update if there's a row, otherwise insert" logic: the Save Draft / Publish
+  buttons, and `ImageGrid.tsx`'s `onDraftCreated()` lazy row creation on the
+  first image upload. Before the mutex, a user who started an upload and then
+  clicked Save Draft or Publish inside the window before the upload flow's own
+  busy state disabled those buttons could have BOTH paths read "no existing
+  row yet" and BOTH insert — two `ebay_listing_drafts` rows, with the
+  just-uploaded images attached to whichever id resolved last. `ListingForm.tsx`
+  closes this with two refs, and you need both:
+  - `inFlightSave: useRef<Promise<EbayListingDraft | null> | null>` — the
+    public `saveDraft()` is a thin wrapper that returns the *already-running*
+    promise if one exists instead of starting a second `performSave()`. Only
+    one insert can be issued, and both callers resolve with the same row, so
+    `onDraftCreated()` still gets a real id back rather than an error.
+  - `existingRowRef: useRef<EbayListingDraft | null>` — `performSave()`
+    branches on this ref, **not** on the `existingRow` state. `setExistingRow`
+    only lands on the next render, so a save started from a closure captured
+    before that render would otherwise still see `null` and insert again —
+    the same duplicate-row bug, just sequential rather than concurrent.
+    `rememberRow()` writes both, ref first.
+
+  If you add a third caller of the insert path, route it through `saveDraft()`
+  — never call `performSave()` directly.
+- **Everything lives inside one `<form id="listing-form">`, which changes the
+  rules for the field-group components (2026-09-02).** `SourceStep`,
+  `CategoryStep`, `AspectsStep` and `PoliciesStep` are no longer rendered on
+  their own page; they are inside the listing form's DOM. Three consequences
+  that have already bitten and are now fixed in-tree:
+  - **Every `<button>` inside them needs an explicit `type="button"`.** The
+    HTML default is `type="submit"`, so an untyped Category-search or
+    Create-location button would publish the listing.
+  - **`Enter` in a text input triggers implicit form submission, and the
+    default submit button is Publish** — so without a guard, Enter in Title,
+    Price, Quantity, the supplier URL or a required-aspect input would push a
+    listing live to eBay from a single keystroke, once `isPublishable` is
+    true. The 7-step wizard made that impossible (Publish only existed on the
+    Review step); the single-page form has to block it explicitly. The
+    `<form>` element in `ListingForm.tsx` carries an `onKeyDown` that
+    `preventDefault()`s Enter for everything **except** a `<textarea>` (needs
+    Enter for newlines), an `isContentEditable` target (the TipTap
+    description editor needs Enter for paragraph breaks — added 2026-09-02,
+    see the TipTap gotcha below) and a focused `type="submit"` button
+    (standard keyboard activation). Do not remove it, and do not "simplify"
+    it into a blanket `preventDefault()` — the three exemptions are
+    load-bearing.
+    `CategoryStep`'s search box also calls `preventDefault()` on Enter for its
+    own reason (run the search instead of submitting); it does **not**
+    `stopPropagation()`, so the event still reaches the form-level guard,
+    which calls `preventDefault()` a second time. That is harmless —
+    `preventDefault()` is idempotent and `handleSearch()` lives only in
+    `CategoryStep`'s handler, so nothing double-fires.
+  - **`<Field required>` does NOT always mean the control should carry
+    `required`.** It does for real listing fields (title, price, quantity,
+    condition, source, required aspects, the three policies + location — all
+    of which now carry the attribute). It deliberately does NOT for
+    `CategoryStep`'s search box (a query, not the stored `category_id`) or
+    `PoliciesStep`'s inline create-location fields (they belong to the
+    Create-location action, and marking them `required` would block the
+    listing form's own submit). Both carry an in-file comment saying so —
+    don't "fix" them.
 - **Storage bucket path convention is load-bearing for RLS**: images MUST
   upload to `{tenant_schema}/{draftId}/{filename}` — the `listing-images`
   bucket's write/delete RLS policies (`022_listing_images_bucket.sql`) check
@@ -164,12 +281,44 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   the retry budget on a request that will never succeed (bad category ID,
   missing policy IDs, etc.). Don't bypass this by calling
   `ebayFetch("/sell/inventory/v1/offer", ...)` directly for a new offer.
-- **Unsaved-draft image orphaning**: `ImagesStep.tsx` uploads under a
-  `"unsaved"` folder when `draftId` is null (new draft, not yet saved). If
-  the user uploads images then abandons the wizard without ever clicking
-  Save Draft/Publish, those files are never cleaned up. No cleanup job
-  exists for this in v1 — acceptable given Storage cost is low, flagged here
-  so it isn't mistaken for an oversight.
+- **`pathFromPublicUrl` returning `null` means "remove only, delete
+  nothing" — never treat it as a failure to work around (2026-09-01).**
+  `_lib/storagePath.ts`'s `pathFromPublicUrl` validates the URL's *hostname*
+  (`*.supabase.co`) before matching the bucket marker, and returns `null` for
+  anything else. That is not an edge case: every listing brought in by `POST
+  /api/listings/ebay/sync` holds eBay CDN URLs (`i.ebayimg.com`), and those
+  images belong to eBay, not to this app. `ImageGrid.tsx`'s `removeImage`
+  therefore drops the URL from `draft.image_urls` and returns early on
+  `null` — a caller that instead fell back to "parse the path out anyway"
+  would issue storage deletes against objects this app does not own. Any new
+  code path that removes a listing image (bulk delete, a listing-delete
+  cleanup job, anything) must reuse `pathFromPublicUrl` and honour the
+  `null` branch. The delete itself is also deliberately fire-and-forget:
+  the array is updated first, and a failed `remove()` only `console.warn`s —
+  a Storage hiccup must never block a seller from editing their listing.
+- **The draft row is created lazily on the first image upload — that is not
+  autosave (2026-09-01).** `ImageGrid.tsx` needs a real draft id to build a
+  storage path (`{tenant_schema}/{draftId}/{uuid}.{ext}` — the RLS-critical
+  shape, see the bucket gotcha below), so when `draftId` is `null` it awaits
+  `onDraftCreated()`, which `ListingForm.tsx` wires to `handleDraftCreated()`
+  → the same `saveDraft()` insert path Save Draft uses (which is exactly why
+  that path needs the in-flight mutex — see the gotcha below). This replaced the old
+  `"unsaved"` folder, whose orphaned files nothing ever cleaned up. Two
+  consequences to keep in mind: (a) a row now exists in `ebay_listing_drafts`
+  as soon as someone uploads an image, even if they never click Save Draft —
+  it is a `status="draft"` row with whatever fields were filled at that
+  moment; (b) **nothing after that point autosaves** — the id is reused for
+  subsequent uploads, but title/price/policy edits made later still only
+  reach the DB when the user clicks Save Draft or Publish, and so do the
+  image URLs and their ORDER (drag-reorder only mutates local form state).
+  Don't read "the draft got created" as "the draft is up to date."
+- **The 24-image cap lives in two places on purpose.** `MAX_LISTING_IMAGES`
+  (`_lib/wizardValidation.ts`) is enforced by `validateImagesStep` (which
+  gates the Publish button) *and* by `ImageGrid.tsx`'s picker, which refuses the
+  files that would cross the cap rather than uploading them and failing
+  validation afterwards. Change the constant, not either call site — and if
+  you add another way to add images (a URL paste box, an AI-generated
+  image), enforce it there too: eBay rejects the publish outright past 24.
 - **eBay Inventory API needs Business Policies pre-configured on the
   tenant's real eBay seller account** — `PoliciesStep.tsx` will show empty
   dropdowns (not an error) if the connected eBay account has none. There's
@@ -233,8 +382,9 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   EBAY_US is "Marke" on EBAY_DE), one missing aspect at a time, confirmed
   live 2026-08-31 on "Vitamine & Mineralien". There's no fixed list — every
   category has its own required-aspect set, only knowable via eBay's
-  Taxonomy API. Fixed with a new wizard step (`AspectsStep.tsx`, inserted
-  between Category and Images in `ListingWizard.tsx`'s `STEPS`) that fetches
+  Taxonomy API. Fixed with `AspectsStep.tsx` (a field group rendered in
+  `ListingForm.tsx`'s "Listing" section, right under the category picker;
+  it was a separate wizard step before 2026-09-02) that fetches
   `fetchRequiredAspects(categoryId)` (`publish.ts`, Taxonomy API
   `get_item_aspects_for_category`, application token like
   `searchCategories` — category metadata isn't seller-specific) whenever
@@ -399,9 +549,194 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   full checklist this now follows — apply it to any NEW form, don't wait
   for a bug report to retrofit it.
 
+- **Description HTML is sanitized in `publishPayloads.ts`, not in the
+  description editor — the client is not a security boundary here
+  (2026-09-01).**
+  `ebay_listing_drafts.description` is written straight to Supabase from the
+  browser (no server API in between), so any client-side editor restriction
+  is cosmetic — a direct Supabase write bypasses it entirely.
+  `lib/utils/sanitizeListingHtml.ts` (`isomorphic-dompurify`, a small
+  allowlist of formatting tags/attrs + `https?://`-only URLs) is the actual
+  enforcement point, called from both places `publishPayloads.ts` builds an
+  eBay-bound description: `buildInventoryItemPayload`'s `product.description`
+  and `buildOfferPayload`'s `listingDescription` (whose title-fallback check
+  changed from `draft.description ?? draft.title` to a truthiness check, so
+  a description that sanitizes down to nothing — e.g. pure `<script>`
+  content — still falls back to the title instead of publishing empty).
+  **`isomorphic-dompurify` is pinned to `2.17.0` in `package.json`, not
+  latest** — `3.x`/`4.x` pull in `jsdom@28+`, whose `html-encoding-sniffer`
+  dependency ships an ESM-only `@exodus/bytes` file that this project's
+  `ts-jest` config (no `transformIgnorePatterns` override) can't transform,
+  so any test that imports the sanitizer fails with `SyntaxError: Unexpected
+  token 'export'` at collection time. `2.17.0` depends on `jsdom@^25.0.1`,
+  which still resolves `html-encoding-sniffer@^4` (no ESM-only sub-dep) and
+  runs fine under the default jest config. Don't bump this package without
+  re-checking that chain.
+
+- **TipTap's contenteditable is not a `<textarea>`, and the form's Enter
+  guard is written in terms of `tagName` (2026-09-02).** Replacing the plain
+  `<Textarea>` with `DescriptionEditor.tsx` took the description field out of
+  the `tagName === "TEXTAREA"` exemption in `ListingForm.tsx`'s `onKeyDown`
+  — the same guard that exists to stop Enter from publishing a listing to a
+  live marketplace. The fix is two-layered on purpose:
+  1. **`DescriptionEditor.tsx` calls `event.stopPropagation()` on Enter**
+     inside `editorProps.handleKeyDown` and returns `false`. React attaches
+     its listeners at the root container, so stopping the native event on
+     ProseMirror's own `contenteditable` node means the form-level handler
+     never runs at all. Returning `false` is what keeps Enter working:
+     prosemirror-view's `someProp` consults this direct prop FIRST and only
+     falls through to the keymap plugins (paragraph split, list-item split)
+     on a falsy return. Returning `true` would swallow Enter entirely.
+  2. **`ListingForm.tsx` also exempts `target.isContentEditable`.** Belt and
+     braces for the iOS path, where prosemirror-view defers Enter to a
+     `setTimeout` with a *synthetic* key event and lets the real one bubble
+     untouched — layer 1 never sees that one. A contenteditable is not a
+     form control and cannot trigger implicit submission itself, so this
+     exemption gives nothing away.
+  Do not "consolidate" these into one. Do not swap `stopPropagation()` for
+  `preventDefault()` in layer 1 — that would kill the paragraph break.
+  **The guard also exempts any `<button>`, not only `type="submit"`**
+  (widened 2026-09-03). The narrower check was an accessibility regression:
+  Enter stopped activating every `type="button"` inside the form — the
+  Category "Search" button, the TipTap toolbar, the AI actions, the image
+  remove/reorder controls. Space still worked, so it wasn't a total keyboard
+  lockout, but it was still broken. Widening reopens nothing: implicit form
+  submission on Enter is a text-input/select behaviour, so a non-submit
+  button was never the hazard. Keep the exemption covering submit buttons
+  too — today's Publish sits outside the `<form>` via `form="listing-form"`,
+  but a future one might not.
+- **AI controls are HIDDEN when unavailable, not disabled-with-a-tooltip —
+  but the routes still enforce it.** `aiVisible = !!tenantPlan &&
+  hasAiFeatures(tenantPlan) && aiEnabled` (computed in `ListingForm.tsx`,
+  passed down; `AiUsageNote` recomputes it for itself). When it is false the
+  buttons and the usage note are not rendered at all — a greyed-out "Write
+  with AI" advertises a feature the tenant's plan does not include. Hidden
+  chrome is presentation only: `lib/ai/authGuard.ts` (`requireAiAccess`) is
+  the real gate and re-checks plan, tenant flag, `manage_listings` and quota
+  on every call. **Quota exhaustion is the deliberate exception**: a `429`
+  leaves the buttons rendered but `disabled`, with the route's own message
+  (which quotes the real monthly limit) shown next to them — the tenant has
+  the feature, they have just used it up, and hiding it would look like a
+  bug. `GET /api/listings/ai/usage` is deliberately NOT behind
+  `requireAiAccess` for the same reason: it must keep answering at 100% used.
+- **`max_tokens` on the AI routes is a combined thinking + output budget, and
+  both routes branch on `stop_reason === "max_tokens"`.** Neither route passes
+  a `thinking` parameter, and on `claude-opus-5` (`AI_MODEL`) omitting it runs
+  **adaptive thinking by default** — the opposite of Opus 4.8/4.7, where
+  omitting it meant no thinking. So reasoning eats into the same `max_tokens`
+  the response text has to fit in. `aspects/route.ts` was raised 1000 → 4000
+  for this (a JSON object derived from up to 4 images); `describe/route.ts`
+  stays at 4000. Both now return a distinct "the AI response was cut off"
+  error on truncation instead of letting a half-written response fall through
+  to a generic parse failure or a silently-repaired half-sentence description.
+  If you ever want to reclaim the thinking budget, `thinking: { type:
+  "disabled" }` is only legal at effort `high` or below — both routes run at
+  `AI_EFFORT = "low"`, so it is available, but measure before assuming it
+  helps.
+- **A `recordUsage` failure must never destroy a generated AI response.**
+  Both AI routes wrap the `recordUsage` call in its own try/catch that
+  `console.error`s and continues. It sits *after* a successful Anthropic
+  call, so letting it reach the route's outer catch would return a 502 and
+  discard content the tenant has already been billed for. Metering is
+  bookkeeping; the same "log and don't block the user" rule as `ImageGrid`'s
+  failed storage cleanup applies.
+- **Every AI route and the AI guard return `aiErrorMessage(err)` — never raw
+  error text.** `src/lib/ai/errors.ts` maps provider/driver failures to copy
+  a seller can act on; the real cause goes to `console.error` server-side.
+  `requireAiAccess`'s own catch used to return `{ error, detail:
+  errorMessage(err) }`, which leaked Postgres text, `readTenantUsage`'s
+  message, and `createControlClient()`'s missing-env-var throw to **any**
+  tenant user holding `manage_listings` (fixed 2026-09-03; `usage/route.ts`
+  had already been fixed the same way earlier in the same plan). There is no
+  `detail` field in any AI response body — don't reintroduce one.
+- **An empty aspect value from the model means "could not determine" and must
+  never be merged.** `AspectsStep.tsx`'s Fill-with-AI skips any returned
+  value that trims to empty. Writing `""` back would be indistinguishable
+  from a confident answer, and worse, it makes a still-unanswered required
+  field look dealt with right up until eBay rejects `publishOffer` with
+  errorId 25002. Two sibling rules in the same merge loop: a value that
+  isn't in a closed-list aspect's `values` is also skipped (the `<Select>`
+  would render blank while `draft.aspects` held something eBay will reject),
+  and a field the seller already filled in is never overwritten — only
+  blanks and the component's own previous AI answers are. The "AI" badge
+  tracks exactly that last set (`aiFilled`, local state, never persisted);
+  it clears on the field's next `onChange`, because once the seller edits a
+  value it is theirs.
+- **`/api/listings/ai/describe` is deliberately non-streaming.** Streaming
+  the HTML into the editor token-by-token would mean rendering a partial,
+  unsanitized document — and `sanitizeListingHtml` needs a *complete* one to
+  make a correct allowlist decision (a half-arrived `<script` isn't a tag
+  yet). The route waits for the full response, sanitizes it, and returns
+  `{ html }`; the editor calls `setContent` once, only on success, so a
+  failed call can never leave a half-written description behind. Don't
+  "improve" this into a stream.
+- **Save Draft and Publish must stay disabled while `ImageGrid` is
+  uploading.** `ImageGrid` reports its own `uploading` flag up through
+  `onBusyChange`; `ListingForm` mirrors it as `imagesUploading` and includes
+  it in both buttons' `disabled` and in `handlePublish`'s early return. A
+  save that lands mid-upload writes the `image_urls` array as it was before
+  the uploads finished, so the just-uploaded URLs — which live only in React
+  state until the upload resolves — never reach the row, and their objects
+  are orphaned in Storage. The action bar's `blockedReason` shows the upload
+  message ahead of any validation message, so the buttons never go inert
+  without saying why. Note this is upload-only: the `cleaningUp` counter
+  (storage deletes on remove) deliberately does *not* block saving, because
+  the array is already updated and a GC failure must never block the seller.
+- **`listingQuality.ts`'s description check measures *visible* text, via
+  `visibleTextLength`, not `description.length`.** The 300-character bar was
+  written when `description` was plain text from a `<textarea>`; it now
+  receives `editor.getHTML()`, so `<p>`/`<h3>`/`<ul>`/`<li>` characters were
+  counting toward it — a typical AI-generated description cleared 300 raw
+  characters on roughly 180-230 characters of real content, in the feature's
+  headline "quality score". `visibleTextLength` strips tags (replacing each
+  with a space so `</p><p>` doesn't fuse two words), collapses entities to
+  one character and squashes whitespace runs. A regex is deliberate: this is
+  a length heuristic, not a security boundary — sanitization stays in
+  `publishPayloads.ts`, server-side. Any *new* quality check that measures
+  description content must go through this helper too.
+- **A stored description is not necessarily HTML — run it through
+  `toEditorHtml` before it reaches the editor.** `ebay_listing_drafts.
+  description` is a plain `text` column that predates the rich editor (the
+  design chose "wrap legacy plain text in `<p>` on load" over a schema
+  fan-out), so real rows in the live database still hold `\n`-separated plain
+  text. TipTap parses `content` as HTML, so handing it that string collapses
+  the whole thing into one whitespace-normalized paragraph and the seller's
+  line breaks are gone. `_lib/descriptionHtml.ts` escapes and wraps legacy
+  text (`\n\n` → paragraphs, `\n` → `<br>`) and passes anything already
+  HTML through untouched; `ListingForm.tsx`'s `toFormState` is the single
+  call site. Escaping first is load-bearing — a legacy description containing
+  `<` or `&` must render as those characters, not be reinterpreted as markup.
+- **`useEditor` re-diffs its whole options object on every render**
+  (`EditorInstanceManager.compareOptions` in `@tiptap/react`) and calls
+  `editor.setOptions()` — which re-runs `view.setProps()` +
+  `view.updateState()` — on any identity mismatch. So `EXTENSIONS` and
+  `EDITOR_PROPS` in `DescriptionEditor.tsx` are module-level constants: an
+  inline `StarterKit.configure({...})` or `editorProps` literal is a new
+  object every keystroke. `content` is likewise pinned to a `useRef` of the
+  first `value` — `setOptions` never re-parses `content`, so passing the
+  live value there would churn the view for nothing. External value changes
+  are pushed in by an explicit effect that skips while the editor is focused
+  and passes `{ emitUpdate: false }`, so it can never fight the cursor or
+  echo back out as a change. Empty is normalized: `onUpdate` emits `""`
+  rather than ProseMirror's `"<p></p>"`, so `draft.description` stays falsy
+  for the preview's empty state, `scoreListing` and `toPayload()`'s
+  `|| null`.
+
 ## Tests
 
 `npx jest dashboard/listings` and `npx jest lib/integrations/ebay/listings`
 (the Trading API functions this feature added — `fetchListingDetail`,
 `reviseListing`, `endListing`, `buildAspectsForRevise`,
-`conditionIdToListingCondition`)
+`conditionIdToListingCondition`). `npx jest lib/utils/sanitizeListingHtml`
+and `npx jest lib/integrations/ebay/publishPayloads` cover the description
+sanitization above. `npx jest lib/ai` covers the prompt builders and quota
+accounting behind the AI routes.
+
+`DescriptionEditor.tsx`, `AiUsageNote.tsx` and `AspectsStep.tsx`'s AI fill
+have **no automated tests** and that is not an oversight: this repo's
+`jest.config.ts` uses `testEnvironment: "node"` with no jsdom, so no
+component in this folder can be rendered in a test at all (same reason
+`ListingPreview.tsx` and `ImageGrid.tsx` have none). TipTap additionally
+needs a real DOM to instantiate. Put anything worth asserting in a pure
+helper — `_lib/` — where it can be tested; verify the components in the
+browser.

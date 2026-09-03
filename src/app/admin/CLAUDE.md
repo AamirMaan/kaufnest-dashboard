@@ -12,30 +12,49 @@ not tenant roles.
   (`@/lib/supabase/control`) is `false`. Renders the admin header/shell, wrapped
   in `<ToastProvider>` so `_components/*` can call `useToast()`.
 - `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Invited/
-  Deactivated) + tenants table (Tenant, **Admin Email**, Plan, Status, Trial
-  Ends, Created, Actions), fetched client-side from `GET /api/admin/tenants`.
-  "Add Tenant" button opens `AddTenantModal`; closing it bumps `refreshKey` to
-  refetch the list.
+  Deactivated) + tenants table (Tenant, **Admin Email**, Plan, Status,
+  **AI Usage**, Trial Ends, Created, Actions), fetched client-side from
+  `GET /api/admin/tenants`. "Add Tenant" button opens `AddTenantModal`;
+  closing it bumps `refreshKey` to refetch the list. The **AI Usage** column
+  is populated by a second fetch effect (also keyed on `refreshKey`) against
+  `GET /api/admin/ai-usage`, kept in an `aiUsage: Record<tenantId, {used,
+  limit, byUser}>` state map. Cell shows a `used / limit` link (opens
+  `AiUsageModal`, stores the clicked row in `usageTenant`) when the tenant's
+  plan has a nonzero `limit`, otherwise `—` (Starter/Pro have no AI
+  allowance — see `getAiGenerationLimit` in `planGating.ts`).
 - `_components/AddTenantModal.tsx` — "Provision New Tenant" form (company
   name → auto-slug, plan, admin email/name). Posts to
   `/api/admin/provision-tenant`. On failure shows `data.detail ?? data.error`
   both inline (red banner in the form) and via `useToast().error(...)`; on
   success shows a `useToast().success(...)` toast before closing.
 - `_components/EditTenantModal.tsx` — "Edit Tenant" modal: pre-filled form for
-  `plan`, `status`, and `admin_email`. Computes a partial diff against the
-  current tenant and sends only changed fields to `PATCH
-  /api/admin/tenants/[tenant.id]`. Shows inline note when email changes ("A
-  verification email will be sent to the new address."). Calls `onClose()` on
-  success (parent bumps `refreshKey`).
+  `plan`, `status`, `admin_email`, and `ai_enabled` (rendered as a `Checkbox`
+  from `@/components/ui/FormFields`, "AI features visible to this tenant").
+  Computes a partial diff against the current tenant and sends only changed
+  fields to `PATCH /api/admin/tenants/[tenant.id]`. Shows inline note when
+  email changes ("A verification email will be sent to the new address.").
+  Calls `onClose()` on success (parent bumps `refreshKey`).
 - `_components/TenantActions.tsx` — per-row action buttons. Accepts
   `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
-  (opens `EditTenantModal`; calls `onRefresh` on close), a "Resend Invite"
-  button (only shown when `tenant.status === "invited"`; posts to
-  `/api/admin/resend-invite`), an "Impersonate" button (confirm dialog naming
-  `tenant.admin_email`, posts `{ tenantId }` only to `/api/admin/impersonate`
-  — the target email is never client-supplied, see that route below —
-  redirects to the returned magic link), and a **"Delete" button** (danger
-  variant) that opens `DeleteTenantModal`.
+  (opens `EditTenantModal`; calls `onRefresh` on close), an **"AI: On"/"AI:
+  Off" toggle button** (PATCHes `{ ai_enabled: !tenant.ai_enabled }` to
+  `/api/admin/tenants/[tenant.id]`, toasts "AI enabled"/"AI hidden", then
+  calls `onRefresh`), a "Resend Invite" button (only shown when
+  `tenant.status === "invited"`; posts to `/api/admin/resend-invite`), an
+  "Impersonate" button (confirm dialog naming `tenant.admin_email`, posts
+  `{ tenantId }` only to `/api/admin/impersonate` — the target email is
+  never client-supplied, see that route below — redirects to the returned
+  magic link), and a **"Delete" button** (danger variant) that opens
+  `DeleteTenantModal`.
+- `_components/AiUsageModal.tsx` — read-only breakdown modal for the AI
+  Usage column. Accepts `{ open, tenant, used, limit, byUser, onClose }`.
+  Modeled directly on `DeleteTenantModal.tsx`'s `Modal` usage/class
+  conventions (non-destructive, so no confirmation input). Renders
+  `{used} of {limit} generations this month` plus a `userId → calls` table
+  sorted descending by calls; `userId`s are shown raw (font-mono, truncated)
+  since the admin panel has no access to tenant `profiles` names and a
+  cross-project lookup isn't worth it for an internal tool. Renders "No AI
+  usage this month." when `byUser` is empty.
 - `_components/DeleteTenantModal.tsx` — destructive-confirmation modal for
   tenant deletion. Accepts `{ open, tenant, onClose, onDeleted }`. The user must
   **type the tenant's `schema_name` exactly** before the "Delete tenant" button
@@ -93,11 +112,31 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   that aren't `instanceof Error`) — `AddTenantModal` surfaces `detail` to the
   admin via toast + inline banner.
 - **`tenants/route.ts`** (`GET`) — lists `control.tenants`, newest first.
+- **`ai-usage/route.ts`** (`GET`) — current-period AI usage for every tenant,
+  for the AI Usage column/modal. Guarded by `verifyPlatformAdmin(email)` from
+  `@/lib/supabase/control` (the `NextResponse | null` variant, not the local
+  `{ok, response}` wrapper `tenants/route.ts` defines for itself). For each
+  `control.tenants` row, filters `control.tenant_ai_usage` rows (fetched once
+  for `currentPeriod()`, not per-tenant) down to that tenant and returns
+  `{ tenantId, used: sumCalls(...), limit: getAiGenerationLimit(tenant.plan),
+  byUser: callsByUser(...) }` (`sumCalls`/`callsByUser`/`currentPeriod` from
+  `@/lib/ai/quota`, `getAiGenerationLimit` from `@/lib/utils/planGating`).
+  Response: `{ period, usage: [...] }`. **Both Supabase queries are wrapped in
+  a try/catch that returns `{ error, detail }` (500) on failure** — this
+  route reads `tenant_ai_usage` directly rather than going through
+  `readTenantUsage` (which is per-tenant; this route needs one bulk read), so
+  the same "throw on Supabase error, don't silently return `[]`" invariant
+  `readTenantUsage` enforces is reproduced here by hand rather than
+  inherited.
 - **`tenants/[id]/route.ts`** (`PATCH`, `DELETE`) —
-  - `PATCH`: partial update for `{ plan?, status?, admin_email? }`. Steps: (1) fetch
-    current row — 404 on `PGRST116`; (2) if `admin_email` changed, scan Project B
-    Auth users and call `updateUserById`; (3) `.update(patch)` only changed fields.
-    Platform-admin override — writes `plan`/`status` directly, bypassing Stripe.
+  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled? }`.
+    Steps: (1) fetch current row — 404 on `PGRST116`; (2) if `admin_email`
+    changed, scan Project B Auth users and call `updateUserById`; (3)
+    `.update(patch)` only changed fields (`ai_enabled` uses a `!== undefined`
+    guard, not truthiness — `false` is a real value: a platform admin actually
+    revoking AI). Platform-admin override — writes `plan`/`status` directly,
+    bypassing Stripe. `ai_enabled` is the AI-visibility switch, not a plan
+    field — it doesn't touch the Stripe-owns-`plan`/`status` invariant.
   - `DELETE`: permanently destroys a tenant. Steps: (1) fetch tenant `schema_name`;
     (2a) `removeExposedSchema(schema_name)` — removes the schema from Project B's
     PostgREST "Exposed schemas" list via the Management API **before** dropping.
@@ -146,10 +185,14 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
 
 ## Shared dependencies
 
-- `src/lib/supabase/control.ts` (`createControlClient`, `isPlatformAdmin`) —
-  Project A, server-only. `isPlatformAdmin(email)` is also called from
-  `dashboard/layout.tsx` to decide whether to show the sidebar's "Admin Panel"
-  link (see `src/app/dashboard/CLAUDE.md`).
+- `src/lib/supabase/control.ts` (`createControlClient`, `isPlatformAdmin`,
+  `verifyPlatformAdmin`) — Project A, server-only. `isPlatformAdmin(email)` is
+  also called from `dashboard/layout.tsx` to decide whether to show the
+  sidebar's "Admin Panel" link (see `src/app/dashboard/CLAUDE.md`).
+- `src/lib/ai/quota.ts` (`currentPeriod`, `sumCalls`, `callsByUser`) and
+  `src/lib/utils/planGating.ts` (`getAiGenerationLimit`) — used by
+  `ai-usage/route.ts` to compute the AI Usage column's `used`/`limit`/
+  `byUser` per tenant.
 - `src/components/layout/BrandMark.tsx` — the theme-switching Boughtopia icon
   next to the header wordmark; `layout.tsx` (a server component) renders it
   as a child even though it's a client component, same as any other

@@ -32,6 +32,7 @@ export async function PATCH(
     plan?: TenantPlan;
     status?: TenantStatus;
     admin_email?: string;
+    ai_enabled?: boolean;
   };
 
   const control = createControlClient();
@@ -94,6 +95,7 @@ export async function PATCH(
   if (body.plan !== undefined) patch.plan = body.plan;
   if (body.status !== undefined) patch.status = body.status;
   if (body.admin_email !== undefined && body.admin_email !== "") patch.admin_email = body.admin_email;
+  if (body.ai_enabled !== undefined) patch.ai_enabled = body.ai_enabled;
 
   const { data: updated, error: patchError } = await control
     .schema("control")

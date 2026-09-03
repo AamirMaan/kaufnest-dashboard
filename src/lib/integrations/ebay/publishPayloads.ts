@@ -1,4 +1,5 @@
 import type { EbayListingDraft, ListingCondition } from "@/types";
+import { sanitizeListingHtml } from "@/lib/utils/sanitizeListingHtml";
 
 const CONDITION_ENUM: Record<ListingCondition, string> = {
   new: "NEW",
@@ -28,7 +29,7 @@ export function buildInventoryItemPayload(draft: EbayListingDraft): InventoryIte
     condition: CONDITION_ENUM[draft.condition],
     product: {
       title: draft.title,
-      description: draft.description ?? "",
+      description: sanitizeListingHtml(draft.description ?? ""),
       imageUrls: draft.image_urls,
       aspects,
     },
@@ -62,7 +63,9 @@ export function buildOfferPayload(
     format: "FIXED_PRICE",
     availableQuantity: draft.quantity,
     categoryId: draft.category_id ?? "",
-    listingDescription: draft.description ?? draft.title,
+    listingDescription: draft.description
+      ? sanitizeListingHtml(draft.description)
+      : draft.title,
     pricingSummary: { price: { value: draft.price.toFixed(2), currency: draft.currency } },
     listingPolicies: {
       fulfillmentPolicyId: draft.fulfillment_policy_id ?? "",

@@ -36,6 +36,7 @@ export function SourceStep({ draft, setDraft }: Props) {
       {draft.source_type === "inventory" ? (
         <Field label="Inventory Product" required>
           <Select
+            required
             value={draft.product_id}
             onChange={(e) => setDraft({ product_id: e.target.value })}
           >
@@ -50,6 +51,8 @@ export function SourceStep({ draft, setDraft }: Props) {
       ) : (
         <Field label="Supplier URL" required>
           <Input
+            required
+            type="url"
             value={draft.source_url}
             onChange={(e) => setDraft({ source_url: e.target.value })}
             placeholder="https://de.aliexpress.com/item/…"

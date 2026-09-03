@@ -1,4 +1,4 @@
-import { currentUserSlice, setCurrentUser, setTenantPlan } from "./currentUserSlice";
+import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled } from "./currentUserSlice";
 import type { Profile } from "@/types";
 
 const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
@@ -38,5 +38,23 @@ describe("currentUserSlice", () => {
     const state = reducer(withProfile, setTenantPlan("business"));
     expect(state.profile).toEqual(makeProfile());
     expect(state.tenantPlan).toBe("business");
+  });
+});
+
+describe("setAiEnabled", () => {
+  it("defaults to false before hydration", () => {
+    const state = currentUserSlice.reducer(undefined, { type: "@@INIT" });
+    expect(state.aiEnabled).toBe(false);
+  });
+
+  it("stores the tenant's AI visibility flag", () => {
+    const state = currentUserSlice.reducer(undefined, setAiEnabled(true));
+    expect(state.aiEnabled).toBe(true);
+  });
+
+  it("can revoke a previously enabled flag", () => {
+    const enabled = currentUserSlice.reducer(undefined, setAiEnabled(true));
+    const revoked = currentUserSlice.reducer(enabled, setAiEnabled(false));
+    expect(revoked.aiEnabled).toBe(false);
   });
 });
