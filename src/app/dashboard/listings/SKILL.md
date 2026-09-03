@@ -660,6 +660,18 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   `{ html }`; the editor calls `setContent` once, only on success, so a
   failed call can never leave a half-written description behind. Don't
   "improve" this into a stream.
+- **Save Draft and Publish must stay disabled while `ImageGrid` is
+  uploading.** `ImageGrid` reports its own `uploading` flag up through
+  `onBusyChange`; `ListingForm` mirrors it as `imagesUploading` and includes
+  it in both buttons' `disabled` and in `handlePublish`'s early return. A
+  save that lands mid-upload writes the `image_urls` array as it was before
+  the uploads finished, so the just-uploaded URLs — which live only in React
+  state until the upload resolves — never reach the row, and their objects
+  are orphaned in Storage. The action bar's `blockedReason` shows the upload
+  message ahead of any validation message, so the buttons never go inert
+  without saying why. Note this is upload-only: the `cleaningUp` counter
+  (storage deletes on remove) deliberately does *not* block saving, because
+  the array is already updated and a GC failure must never block the seller.
 - **`listingQuality.ts`'s description check measures *visible* text, via
   `visibleTextLength`, not `description.length`.** The 300-character bar was
   written when `description` was plain text from a `<textarea>`; it now

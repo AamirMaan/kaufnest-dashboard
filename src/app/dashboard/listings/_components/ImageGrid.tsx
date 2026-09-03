@@ -34,6 +34,12 @@ interface Props {
   /** Creates the draft row and resolves with its id. Only called when
    * `draftId` is null and the user picks at least one valid file. */
   onDraftCreated: () => Promise<string>;
+  /** Mirrors the internal `uploading` flag out to the parent so Save Draft
+   * and Publish can disable while files are still in flight. Without it a
+   * save persists `image_urls` from before the uploads finished: the new URLs
+   * exist only in local React state and are lost — and their objects
+   * orphaned in Storage — as soon as the seller navigates away. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
@@ -116,14 +122,29 @@ function SortableImage({
   );
 }
 
-export function ImageGrid({ draft, setDraft, draftId, onDraftCreated }: Props) {
+export function ImageGrid({
+  draft,
+  setDraft,
+  draftId,
+  onDraftCreated,
+  onBusyChange,
+}: Props) {
   const [uploading, setUploading] = useState(false);
+
   /** Number of storage deletes still in flight. Removal itself is optimistic
    * (the tile is gone immediately, per the "cleanup must never block the
    * seller" rule), so this is what keeps the UI from looking idle while the
    * object is actually being deleted. */
   const [cleaningUp, setCleaningUp] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
+
+  /* Single funnel for the uploading flag: every write goes through here so
+   * the parent's mirror can never drift out of sync with local state. Do not
+   * call `setUploading` directly. */
+  function setUploadingState(next: boolean) {
+    setUploading(next);
+    onBusyChange?.(next);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -165,7 +186,7 @@ export function ImageGrid({ draft, setDraft, draftId, onDraftCreated }: Props) {
       return;
     }
 
-    setUploading(true);
+    setUploadingState(true);
     setErrors([...failures]);
     try {
       const supabase = createClient();
@@ -212,7 +233,7 @@ export function ImageGrid({ draft, setDraft, draftId, onDraftCreated }: Props) {
     } catch (err) {
       setErrors([...failures, err instanceof Error ? err.message : "Upload failed"]);
     } finally {
-      setUploading(false);
+      setUploadingState(false);
     }
   }
 

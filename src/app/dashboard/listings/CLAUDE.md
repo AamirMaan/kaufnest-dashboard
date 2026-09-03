@@ -200,6 +200,16 @@ covers only Part 1; Part 2's design is
     `ListingForm.tsx` wires to `handleDraftCreated()` (the existing
     mutexed `saveDraft()` insert path, returning the new row's id). This removes the
     old `"unsaved"` storage folder and the orphaned-image problem with it.
+  - **`onBusyChange(busy)` mirrors the internal `uploading` flag to the
+    parent** (2026-09-03). `ListingForm.tsx` holds it as `imagesUploading`
+    and adds it to both Save Draft's and Publish's `disabled`, and to the
+    action bar's disabled-reason line ("Waiting for images to finish
+    uploading…"). Without it a save during an upload persisted the
+    `image_urls` array from *before* the uploads landed — the new URLs exist
+    only in React state until the upload resolves — so they were dropped
+    from the row and their objects orphaned in Storage. Every write to
+    `uploading` goes through the component's `setUploadingState` helper so
+    the two can't drift apart.
   - **Remove deletes the storage object** — `pathFromPublicUrl(url)` first;
     `null` (an eBay CDN URL on an imported listing, or any non-Supabase host)
     means remove from the array only, never call storage delete. The array

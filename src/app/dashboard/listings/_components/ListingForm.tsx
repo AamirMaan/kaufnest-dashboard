@@ -139,6 +139,13 @@ export function ListingForm({ draftId }: Props) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
+  /* Mirrors `ImageGrid`'s internal upload state. Saving mid-upload would
+   * persist the `image_urls` array as it was before the uploads finished —
+   * the new URLs live only in this component's state until the upload
+   * resolves, so they'd be dropped from the row and their objects left
+   * orphaned in Storage the moment the seller navigated away. */
+  const [imagesUploading, setImagesUploading] = useState(false);
+
   /* The row identity that `saveDraft` branches on. Kept in a ref as well as
    * in state because `setExistingRow` only lands on the next render: a second
    * save started from a closure captured before that render would still see
@@ -219,6 +226,16 @@ export function ListingForm({ draftId }: Props) {
     validatePoliciesStep(draft);
 
   const isPublishable = publishError === null;
+
+  /* Why the action buttons are inert, in priority order. An in-flight upload
+   * outranks a validation message because it is transient and self-resolving
+   * — and because a button that goes dead with no explanation reads as a
+   * broken page. */
+  const blockedReason = imagesUploading
+    ? "Waiting for images to finish uploading…"
+    : isPublishable
+      ? null
+      : publishError;
 
   function toPayload() {
     return {
@@ -335,7 +352,7 @@ export function ListingForm({ draftId }: Props) {
 
   async function handlePublish(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!isPublishable || saving || publishing) return;
+    if (!isPublishable || saving || publishing || imagesUploading) return;
     const saved = await saveDraft();
     if (!saved) return;
     setPublishing(true);
@@ -448,6 +465,7 @@ export function ListingForm({ draftId }: Props) {
               setDraft={setDraft}
               draftId={existingRow?.id ?? null}
               onDraftCreated={handleDraftCreated}
+              onBusyChange={setImagesUploading}
             />
           </Section>
 
@@ -531,21 +549,21 @@ export function ListingForm({ draftId }: Props) {
         * validation and submit event from here. */}
       <div className="sticky bottom-0 z-10 mt-6 -mx-4 border-t border-(--color-border) bg-(--color-surface) px-4 py-3 sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center justify-end gap-3">
-          {!isPublishable && (
-            <p className="mr-auto text-sm text-(--color-text-muted)">{publishError}</p>
+          {blockedReason && (
+            <p className="mr-auto text-sm text-(--color-text-muted)">{blockedReason}</p>
           )}
           <Button
             type="button"
             variant="secondary"
             onClick={handleSaveDraft}
-            disabled={saving || publishing}
+            disabled={saving || publishing || imagesUploading}
           >
             {saving ? "Saving…" : "Save Draft"}
           </Button>
           <Button
             type="submit"
             form={FORM_ID}
-            disabled={publishing || saving || !isPublishable}
+            disabled={publishing || saving || imagesUploading || !isPublishable}
           >
             {publishing ? "Publishing…" : "Publish to eBay"}
           </Button>
