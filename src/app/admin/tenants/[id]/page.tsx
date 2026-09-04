@@ -100,6 +100,10 @@ export default function TenantDetailPage({ params }: PageProps) {
                   {new Date(tenant.created_at).toLocaleDateString("de-DE")}
                 </dd>
               </div>
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wider text-(--color-text-faint) mb-1">Referral</dt>
+                <dd className="text-(--color-text-strong)">{tenant.referral ?? "—"}</dd>
+              </div>
             </dl>
           </div>
 

@@ -25,9 +25,11 @@ export async function POST(req: NextRequest) {
     plan: string;
     adminEmail: string;
     adminName?: string;
+    referral?: string;
   };
 
   const { name, plan, adminEmail, adminName = "" } = body;
+  const referral = body.referral?.trim() || null;
 
   const safeSlug = sanitizeSlug(body.slug);
   const schemaName = schemaNameFor(safeSlug);
@@ -128,6 +130,7 @@ export async function POST(req: NextRequest) {
       plan,
       status: "invited",
       trial_ends_at: trialEnd.toISOString(),
+      referral,
     });
     if (tenantInsertError) throw tenantInsertError;
 

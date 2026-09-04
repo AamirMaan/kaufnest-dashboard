@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -12,6 +12,20 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [referral, setReferral] = useState("");
+
+  // Prefill from a referral link like /signup?ref=alice — still editable,
+  // and it's fine if this runs after first paint since the field starts
+  // empty either way. Plain URLSearchParams instead of Next's
+  // useSearchParams() so this client component doesn't need a <Suspense>
+  // boundary just for an optional prefill. Deferred via a microtask rather
+  // than calling setReferral directly, since a synchronous setState in the
+  // effect body trips react-hooks/set-state-in-effect — same pattern as
+  // welcome/page.tsx's auto-provision.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) Promise.resolve().then(() => setReferral(ref));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,6 +39,8 @@ export default function SignupPage() {
     setLoading(true);
     const supabase = createClient();
 
+    const trimmedReferral = referral.trim();
+
     // Creates an UNCONFIRMED auth user and nothing else — no tenant, no
     // schema, no Management API call. Provisioning happens only after the
     // email is confirmed (see /api/signup/provision), so anonymous traffic
@@ -32,7 +48,13 @@ export default function SignupPage() {
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { company_name: companyName.trim(), full_name: fullName.trim() } },
+      options: {
+        data: {
+          company_name: companyName.trim(),
+          full_name: fullName.trim(),
+          ...(trimmedReferral ? { referral: trimmedReferral } : {}),
+        },
+      },
     });
 
     if (signUpError) {
@@ -153,6 +175,20 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="At least 8 characters"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="referral" className="block text-sm font-medium text-slate-300">
+            Referred by <span className="text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="referral"
+            type="text"
+            value={referral}
+            onChange={(e) => setReferral(e.target.value)}
+            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            placeholder="Referral code or name"
           />
         </div>
 

@@ -58,6 +58,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   under ordinary concurrency — N concurrent AI calls all read the same
   `calls` and all wrote `calls + 1`, so the tenant was billed N times and
   metered once. Requires `007`.
+- `control-plane/009_tenants_referral.sql` — adds nullable
+  `control.tenants.referral` text column — free-text attribution for who
+  referred a tenant (a `?ref=` URL param at self-serve signup, or set later
+  by a platform admin), so the business can identify and pay a referral
+  share manually. No format enforcement, no relationship to `plan`/Stripe.
+  See `docs/superpowers/specs/2026-09-04-tenant-referral-attribution-design.md`.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,

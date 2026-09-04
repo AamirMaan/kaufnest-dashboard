@@ -33,23 +33,27 @@ not tenant roles.
   `params: Promise<{ id: string }>`, resolved via React's `use()` — same
   pattern as `dashboard/sales/[id]/page.tsx`; **not** `useParams()`). Renders
   a back-link to `/admin`, the name/schema/Plan/Status header, a Details card
-  (Admin Email, Trial Ends, Created — moved off the main table), an AI Usage
+  (Admin Email, Trial Ends, Created, Referral — moved off the main table), an AI Usage
   card (`AiUsageBreakdown` inline, or a "not available on this plan" note
   when `limit` is 0), and an Actions card (`TenantDetailActions`). A
   `refreshKey` bumped by `TenantDetailActions.onRefresh` re-runs both fetches
   in place, mirroring `page.tsx`'s own refresh pattern.
 - `_components/AddTenantModal.tsx` — "Provision New Tenant" form (company
-  name → auto-slug, plan, admin email/name). Posts to
+  name → auto-slug, plan, admin email/name, optional referral). Posts to
   `/api/admin/provision-tenant`. On failure shows `data.detail ?? data.error`
   both inline (red banner in the form) and via `useToast().error(...)`; on
   success shows a `useToast().success(...)` toast before closing.
 - `_components/EditTenantModal.tsx` — "Edit Tenant" modal: pre-filled form for
-  `plan`, `status`, `admin_email`, and `ai_enabled` (rendered as a `Checkbox`
+  `plan`, `status`, `admin_email`, `ai_enabled` (rendered as a `Checkbox`
   from `@/components/ui/FormFields`, "AI features visible to this tenant").
   Computes a partial diff against the current tenant and sends only changed
   fields to `PATCH /api/admin/tenants/[tenant.id]`. Shows inline note when
   email changes ("A verification email will be sent to the new address.").
   Calls `onClose()` on success (parent bumps `refreshKey`).
+  Also edits `referral` (free text, optional) — unlike `admin_email`, an
+  empty submission explicitly clears a previously-set value to `null`
+  rather than being treated as "no change" (see the `PATCH` route's diff
+  logic in `api/admin/tenants/[id]/route.ts`).
 - `_components/TenantDetailActions.tsx` — per-tenant action buttons
   (2026-09-03, replaces `TenantActions.tsx`), rendered only on
   `tenants/[id]/page.tsx`. Accepts `{ tenant: Tenant, onRefresh: () => void }`.
@@ -173,7 +177,7 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `readTenantUsage` enforces is reproduced here by hand rather than
   inherited.
 - **`tenants/[id]/route.ts`** (`PATCH`, `DELETE`) —
-  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled? }`.
+  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled?, referral? }`.
     Steps: (1) fetch current row — 404 on `PGRST116`; (2) if `admin_email`
     changed, scan Project B Auth users and call `updateUserById`; (3)
     `.update(patch)` only changed fields (`ai_enabled` uses a `!== undefined`

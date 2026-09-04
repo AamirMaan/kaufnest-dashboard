@@ -24,10 +24,12 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
   const [status, setStatus] = useState<TenantStatus>(tenant.status);
   const [adminEmail, setAdminEmail] = useState(tenant.admin_email ?? "");
   const [aiEnabled, setAiEnabled] = useState(tenant.ai_enabled);
+  const [referral, setReferral] = useState(tenant.referral ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const emailChanged = adminEmail !== (tenant.admin_email ?? "");
+  const referralChanged = referral !== (tenant.referral ?? "");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,11 +41,13 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
       status?: TenantStatus;
       admin_email?: string;
       ai_enabled?: boolean;
+      referral?: string;
     } = {};
     if (plan !== tenant.plan) patch.plan = plan;
     if (status !== tenant.status) patch.status = status;
     if (emailChanged) patch.admin_email = adminEmail;
     if (aiEnabled !== tenant.ai_enabled) patch.ai_enabled = aiEnabled;
+    if (referralChanged) patch.referral = referral;
 
     // Nothing changed — close without a network call
     if (Object.keys(patch).length === 0) {
@@ -88,6 +92,7 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
     setStatus(tenant.status);
     setAdminEmail(tenant.admin_email ?? "");
     setAiEnabled(tenant.ai_enabled);
+    setReferral(tenant.referral ?? "");
     setError(null);
     onClose();
   }
@@ -162,6 +167,14 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
           checked={aiEnabled}
           onChange={(e) => setAiEnabled(e.target.checked)}
         />
+
+        <Field label="Referral">
+          <Input
+            value={referral}
+            onChange={(e) => setReferral(e.target.value)}
+            placeholder="Referral code or name (optional)"
+          />
+        </Field>
       </form>
     </Modal>
   );
