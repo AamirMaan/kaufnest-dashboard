@@ -253,6 +253,9 @@ export interface Tenant {
   slug: string;
   schema_name: string;
   admin_email: string | null;
+  /** Free-text attribution: who referred this tenant, for manual payout
+   * tracking. Optional, no format enforcement (control-plane migration 009). */
+  referral: string | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   plan: TenantPlan;
