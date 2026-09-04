@@ -24,13 +24,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      {/* Blocking script: set data-theme before first paint to avoid flash */}
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      suppressHydrationWarning
+    >
+      {/* Blocking script: set data-theme before first paint to avoid flash.
+          suppressHydrationWarning above is required — without it, React's
+          hydration pass treats this script-set attribute (absent from the
+          SSR markup) as a mismatch and it doesn't reliably survive hydration,
+          leaving bare :root (inconsistent dark-sidebar/light-surface mix). */}
       <head>
         <script
           // verifier:allow dangerous-html — static literal, no interpolation
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('kaufnest-theme');document.documentElement.setAttribute('data-theme',t||'dark')}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem('kaufnest-theme');document.documentElement.setAttribute('data-theme',t||'light')}catch(e){}})()`,
           }}
         />
       </head>
