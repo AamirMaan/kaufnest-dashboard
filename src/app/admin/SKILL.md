@@ -29,11 +29,15 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   four).
 - **Edit an existing tenant** (plan, status, admin email):
   `_components/EditTenantModal.tsx` (form) + `api/admin/tenants/[id]/route.ts`
-  (backend). `_components/TenantActions.tsx` and `page.tsx` are already wired
-  — only touch them if you need to change the button layout or refresh
-  behaviour.
-- **Change impersonation**: `_components/TenantActions.tsx` +
+  (backend). `_components/TenantDetailActions.tsx` and
+  `tenants/[id]/page.tsx` are already wired — only touch them if you need to
+  change the button layout or refresh behaviour. (2026-09-03: action buttons
+  moved off the main table onto the per-tenant detail page — see
+  `CLAUDE.md`.)
+- **Change impersonation**: `_components/TenantDetailActions.tsx` +
   `api/admin/impersonate/route.ts` / `exit-impersonation/route.ts`. The
+  confirmation dialog is a `ConfirmActionModal`, not `window.confirm()` — see
+  the gotcha below before reaching for `DeleteConfirmModal` instead. The
   `kaufnest_impersonating` cookie is read by `DashboardShell` — check that
   component if you rename the cookie.
 
@@ -96,3 +100,12 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   and re-stamping their `tenant_schema` — which would silently move them out of
   their original tenant. Same check exists in `/api/users/invite` (see
   `src/app/dashboard/users/SKILL.md`).
+- **`ConfirmActionModal` vs. the shared `DeleteConfirmModal`**: this folder's
+  `_components/ConfirmActionModal.tsx` is a plain yes/no confirm (Toggle AI,
+  Impersonate) — no reason field. `src/components/modals/DeleteConfirmModal.tsx`
+  (shared with Sales/Expenses/Purchases) forces a typed reason and is scoped
+  to delete-style flows; `DeleteTenantModal.tsx` in this folder uses a
+  type-the-schema-name confirmation instead of either, since dropping a
+  tenant schema is destructive enough to warrant more friction than a typed
+  reason would add. Don't reach for `DeleteConfirmModal` for a new
+  non-destructive admin-panel confirmation — use `ConfirmActionModal`.

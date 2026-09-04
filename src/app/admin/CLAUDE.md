@@ -12,16 +12,32 @@ not tenant roles.
   (`@/lib/supabase/control`) is `false`. Renders the admin header/shell, wrapped
   in `<ToastProvider>` so `_components/*` can call `useToast()`.
 - `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Invited/
-  Deactivated) + tenants table (Tenant, **Admin Email**, Plan, Status,
-  **AI Usage**, Trial Ends, Created, Actions), fetched client-side from
-  `GET /api/admin/tenants`. "Add Tenant" button opens `AddTenantModal`;
-  closing it bumps `refreshKey` to refetch the list. The **AI Usage** column
-  is populated by a second fetch effect (also keyed on `refreshKey`) against
-  `GET /api/admin/ai-usage`, kept in an `aiUsage: Record<tenantId, {used,
-  limit, byUser}>` state map. Cell shows a `used / limit` link (opens
-  `AiUsageModal`, stores the clicked row in `usageTenant`) when the tenant's
-  plan has a nonzero `limit`, otherwise `—` (Starter/Pro have no AI
-  allowance — see `getAiGenerationLimit` in `planGating.ts`).
+  Deactivated) + a slim tenants table (Tenant, **Admin Email**, Plan, Status,
+  **AI Usage**, and a final unlabeled column holding a hamburger-icon `Link`
+  to `/admin/tenants/[id]`), fetched client-side from `GET /api/admin/tenants`.
+  Trial Ends, Created, and all mutating actions live on the detail page now
+  (2026-09-03) — this table is read-mostly navigation. "Add Tenant" button
+  opens `AddTenantModal`; closing it bumps `refreshKey` to refetch the list.
+  The **AI Usage** column is populated by a second fetch effect (also keyed
+  on `refreshKey`) against `GET /api/admin/ai-usage`, kept in an
+  `aiUsage: Record<tenantId, {used, limit, byUser}>` state map. Cell shows a
+  `used / limit` link (opens `AiUsageModal`, stores the clicked row in
+  `usageTenant`) when the tenant's plan has a nonzero `limit`, otherwise `—`
+  (Starter/Pro have no AI allowance — see `getAiGenerationLimit` in
+  `planGating.ts`). Plan/Status badge variants come from the shared
+  `_components/tenantVariants.ts` (also used by the detail page) rather than
+  being defined here.
+- `tenants/[id]/page.tsx` — tenant detail page (2026-09-03). Client component;
+  fetches the same `GET /api/admin/tenants` + `GET /api/admin/ai-usage`
+  responses as `page.tsx` and finds the row by `id` (from
+  `params: Promise<{ id: string }>`, resolved via React's `use()` — same
+  pattern as `dashboard/sales/[id]/page.tsx`; **not** `useParams()`). Renders
+  a back-link to `/admin`, the name/schema/Plan/Status header, a Details card
+  (Admin Email, Trial Ends, Created — moved off the main table), an AI Usage
+  card (`AiUsageBreakdown` inline, or a "not available on this plan" note
+  when `limit` is 0), and an Actions card (`TenantDetailActions`). A
+  `refreshKey` bumped by `TenantDetailActions.onRefresh` re-runs both fetches
+  in place, mirroring `page.tsx`'s own refresh pattern.
 - `_components/AddTenantModal.tsx` — "Provision New Tenant" form (company
   name → auto-slug, plan, admin email/name). Posts to
   `/api/admin/provision-tenant`. On failure shows `data.detail ?? data.error`
@@ -34,27 +50,55 @@ not tenant roles.
   fields to `PATCH /api/admin/tenants/[tenant.id]`. Shows inline note when
   email changes ("A verification email will be sent to the new address.").
   Calls `onClose()` on success (parent bumps `refreshKey`).
-- `_components/TenantActions.tsx` — per-row action buttons. Accepts
-  `{ tenant: Tenant, onRefresh: () => void }`. Renders an "Edit" button
-  (opens `EditTenantModal`; calls `onRefresh` on close), an **"AI: On"/"AI:
-  Off" toggle button** (PATCHes `{ ai_enabled: !tenant.ai_enabled }` to
-  `/api/admin/tenants/[tenant.id]`, toasts "AI enabled"/"AI hidden", then
-  calls `onRefresh`), a "Resend Invite" button (only shown when
-  `tenant.status === "invited"`; posts to `/api/admin/resend-invite`), an
-  "Impersonate" button (confirm dialog naming `tenant.admin_email`, posts
-  `{ tenantId }` only to `/api/admin/impersonate` — the target email is
-  never client-supplied, see that route below — redirects to the returned
-  magic link), and a **"Delete" button** (danger variant) that opens
-  `DeleteTenantModal`.
-- `_components/AiUsageModal.tsx` — read-only breakdown modal for the AI
-  Usage column. Accepts `{ open, tenant, used, limit, byUser, onClose }`.
-  Modeled directly on `DeleteTenantModal.tsx`'s `Modal` usage/class
-  conventions (non-destructive, so no confirmation input). Renders
-  `{used} of {limit} generations this month` plus a `userId → calls` table
-  sorted descending by calls; `userId`s are shown raw (font-mono, truncated)
-  since the admin panel has no access to tenant `profiles` names and a
-  cross-project lookup isn't worth it for an internal tool. Renders "No AI
-  usage this month." when `byUser` is empty.
+- `_components/TenantDetailActions.tsx` — per-tenant action buttons
+  (2026-09-03, replaces `TenantActions.tsx`), rendered only on
+  `tenants/[id]/page.tsx`. Accepts `{ tenant: Tenant, onRefresh: () => void }`.
+  Every button carries a `lucide-react` icon and a semantic icon tint (no new
+  `Button` variants): "Edit" (`Pencil`, opens `EditTenantModal`, calls
+  `onRefresh` on close, no pre-confirmation — Save Changes is the commit
+  point), "AI: On"/"AI: Off" (`Sparkles`, tinted
+  `--color-success-text`/`--color-text-faint`, opens a `ConfirmActionModal`
+  before PATCHing `{ ai_enabled: !tenant.ai_enabled }` to
+  `/api/admin/tenants/[tenant.id]`; wrapped in try/catch/finally — a rejected
+  `fetch` or unparsable JSON response toasts a network-error message rather
+  than failing silently, matching Impersonate's error handling), "Resend
+  Invite" (`Mail`, tinted `--color-info-text`, only shown when
+  `tenant.status === "invited"`, posts to `/api/admin/resend-invite`
+  directly — **no confirmation**, unchanged from before), "Impersonate"
+  (`UserCog`, tinted `--color-warning-text`, opens a `ConfirmActionModal` —
+  replacing the previous `window.confirm()` — naming `tenant.admin_email`,
+  then posts `{ tenantId }` only to `/api/admin/impersonate` and redirects to
+  the returned magic link; a failure now toasts via `useToast().error(...)`
+  instead of `alert(...)`), and "Delete" (`Trash2`, danger variant, opens the
+  existing `DeleteTenantModal`; unlike Edit/Toggle AI/Impersonate, its
+  `onDeleted` callback does `router.push("/admin")` rather than calling
+  `onRefresh()` — the tenant this page displays no longer exists after
+  deletion, so refreshing in place would land on this page's "Tenant not
+  found." state instead of the tenant list).
+- `_components/ConfirmActionModal.tsx` — generic yes/no confirmation dialog
+  (2026-09-03). `{ open, title, message, confirmLabel, confirmingLabel, tone:
+  "warning"|"success"|"info", loading, onConfirm, onClose }`. Distinct from
+  the shared `src/components/modals/DeleteConfirmModal.tsx`, which forces a
+  typed reason for delete-style flows elsewhere in the app — this one is for
+  actions (Toggle AI, Impersonate) that need a plain confirm, no reason
+  field. `tone` colors an informational banner only; the confirm button is
+  always `variant="primary"` regardless of tone.
+- `_components/tenantVariants.ts` — `PLAN_VARIANT`/`STATUS_VARIANT` badge
+  maps (2026-09-03), shared between `page.tsx`'s table and
+  `tenants/[id]/page.tsx`'s header badges. Extracted so the two don't define
+  the same maps twice.
+- `_components/AiUsageModal.tsx` — thin `Modal` wrapper (2026-09-03) around
+  `AiUsageBreakdown`, kept only so the table's AI Usage cell can open it in a
+  popup. Accepts `{ open, tenant, used, limit, byUser, onClose }`, unchanged
+  since before the split.
+- `_components/AiUsageBreakdown.tsx` — presentational (2026-09-03): the
+  actual `{used} of {limit} generations this month` line + `userId → calls`
+  table (sorted descending by calls, "No AI usage this month." when empty),
+  extracted out of `AiUsageModal.tsx` so the detail page can render the same
+  markup inline, without a `Modal` wrapper. `userId`s are shown raw
+  (font-mono, truncated) since the admin panel has no access to tenant
+  `profiles` names and a cross-project lookup isn't worth it for an internal
+  tool.
 - `_components/DeleteTenantModal.tsx` — destructive-confirmation modal for
   tenant deletion. Accepts `{ open, tenant, onClose, onDeleted }`. The user must
   **type the tenant's `schema_name` exactly** before the "Delete tenant" button
@@ -157,8 +201,8 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `tenant_<schema>.profiles`, then re-calls
   `service.auth.admin.inviteUserByEmail` (no profile/schema changes — all already
   stamped at provision time). Returns `400` if `tenant.status !== "invited"` —
-  invites cannot be resent once the admin logs in for the first time. `TenantActions`
-  shows this button only when `tenant.status === "invited"`.
+  invites cannot be resent once the admin logs in for the first time. The detail page's
+  `TenantDetailActions` shows this button only when `tenant.status === "invited"`.
 - **`src/app/auth/confirm/route.ts`** (not in admin/, but cross-referenced) —
   verifies the Supabase OTP token from the invite link. After successful OTP
   verification (line 27), checks if the user's `tenant_schema` corresponds to a
@@ -213,6 +257,10 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   Management API, for the Exposed-schemas step.
 - `components/ui/{Button,Badge,Modal,FormFields}`, `types` (`Tenant` — incl.
   `admin_email`, `TenantPlan`, `TenantStatus`).
+- `next/link` — the tenants table's hamburger-icon cell and the detail
+  page's back link both use `Link`, not `Button` (`Button` renders a plain
+  `<button>`, so navigation-as-a-link is styled by copying its ghost-variant
+  classes directly rather than extending `Button` to accept `as="a"`).
 
 ## Tests
 
