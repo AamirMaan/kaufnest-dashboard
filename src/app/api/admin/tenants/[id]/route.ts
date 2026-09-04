@@ -97,7 +97,7 @@ export async function PATCH(
   if (body.status !== undefined) patch.status = body.status;
   if (body.admin_email !== undefined && body.admin_email !== "") patch.admin_email = body.admin_email;
   if (body.ai_enabled !== undefined) patch.ai_enabled = body.ai_enabled;
-  if (body.referral !== undefined) {
+  if (typeof body.referral === "string") {
     patch.referral = body.referral.trim() === "" ? null : body.referral.trim();
   }
 
