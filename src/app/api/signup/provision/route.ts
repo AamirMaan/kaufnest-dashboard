@@ -44,6 +44,10 @@ export async function POST() {
     typeof user.user_metadata?.full_name === "string"
       ? user.user_metadata.full_name.trim()
       : "";
+  const referral =
+    typeof user.user_metadata?.referral === "string" && user.user_metadata.referral.trim() !== ""
+      ? user.user_metadata.referral.trim()
+      : null;
 
   if (!companyName) {
     // Not a self-serve signup (an admin-invited user has no company_name),
@@ -92,6 +96,7 @@ export async function POST() {
       plan: "trial",
       status: "provisioning",
       trial_ends_at: trialEnd.toISOString(),
+      referral,
     });
 
   if (claimError) {

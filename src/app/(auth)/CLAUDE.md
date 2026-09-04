@@ -19,7 +19,12 @@ each page is a self-contained Supabase Auth form.
   **The `company_name`/`full_name` metadata keys are load-bearing** — read by
   `app/auth/confirm/route.ts` to detect a self-serve signup and by
   `api/signup/provision/route.ts` to name the tenant. Renaming them in one
-  place silently breaks the flow.
+  place silently breaks the flow. Also captures an optional `referral`
+  metadata key (2026-09-04) — prefilled from a `?ref=` URL param but still
+  editable, read by `api/signup/provision/route.ts` and written to
+  `control.tenants.referral`. Unlike `company_name`/`full_name`, it's
+  optional: absent from `user_metadata` entirely when the field was left
+  blank, not an empty string.
 - `forgot-password/page.tsx` — sends a password-reset email
   (`supabase.auth.resetPasswordForEmail`).
 - `set-password/page.tsx` — lets an invited user (or someone resetting their
