@@ -25,6 +25,7 @@ export function AddTenantModal({ open, onClose }: Props) {
   const [plan, setPlan] = useState<Plan>("trial");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
+  const [referral, setReferral] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +43,7 @@ export function AddTenantModal({ open, onClose }: Props) {
       const res = await fetch("/api/admin/provision-tenant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, slug, plan, adminEmail, adminName }),
+        body: JSON.stringify({ name, slug, plan, adminEmail, adminName, referral }),
       });
 
       const data = (await res.json()) as { ok?: boolean; error?: string; detail?: string };
@@ -66,7 +67,7 @@ export function AddTenantModal({ open, onClose }: Props) {
   }
 
   function handleClose() {
-    setName(""); setSlug(""); setPlan("trial"); setAdminEmail(""); setAdminName(""); setError(null);
+    setName(""); setSlug(""); setPlan("trial"); setAdminEmail(""); setAdminName(""); setReferral(""); setError(null);
     onClose();
   }
 
@@ -142,6 +143,14 @@ export function AddTenantModal({ open, onClose }: Props) {
             value={adminName}
             onChange={(e) => setAdminName(e.target.value)}
             placeholder="Jane Doe"
+          />
+        </Field>
+
+        <Field label="Referral">
+          <Input
+            value={referral}
+            onChange={(e) => setReferral(e.target.value)}
+            placeholder="Referral code or name (optional)"
           />
         </Field>
       </form>
