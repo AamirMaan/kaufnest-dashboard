@@ -149,8 +149,20 @@ Purely presentational, no state.
   token system (`var(--color-*)`) switches on.
 - Lazily initializes from `localStorage` so it matches the blocking
   inline script in `layout.tsx` that sets `data-theme` before hydration
-  (avoids a flash-of-wrong-theme). If you touch this, keep both in sync.
-- Default theme is `"dark"`.
+  (avoids a flash-of-wrong-theme). If you touch this, keep both in sync
+  (both fall back to the same default when `localStorage` has no value).
+- Default theme is `"light"`.
+- Also re-asserts `data-theme` in a `useEffect` keyed on `theme` (not just in
+  `toggle()`), and `layout.tsx`'s `<html>` carries `suppressHydrationWarning`.
+  **Both are required, not redundant**: without `suppressHydrationWarning`,
+  React's hydration pass treats the blocking script's script-set attribute
+  (absent from SSR markup) as a mismatch and it doesn't reliably survive
+  hydration — the DOM then falls back to bare `:root`, whose token defaults
+  are an inconsistent mix (dark sidebar tokens, light surface tokens, since
+  `:root` normally only needs to seed the values `[data-theme="dark"]`
+  doesn't override). Symptom was a permanently two-toned shell (dark
+  sidebar/navbar, light content) on every load, not just an intermittent
+  flash — fixed 2026-09-04.
 
 ## Toast.tsx
 
