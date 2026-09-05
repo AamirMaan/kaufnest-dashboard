@@ -25,6 +25,11 @@ const existingSale: Sale = {
   restock: false,
   refunded_amount: null,
   external_order_id: "12-34567-89012:001",
+  tracking_number: null,
+  shipping_carrier: null,
+  ebay_fulfillment_id: null,
+  ebay_sync_error: null,
+  ebay_synced_at: null,
 };
 
 // An incoming sync row for the same order (with different platform-owned fields,
@@ -52,6 +57,11 @@ const incomingSale: Sale = {
   restock: true,
   refunded_amount: null,
   external_order_id: "12-34567-89012:001",
+  tracking_number: null,
+  shipping_carrier: null,
+  ebay_fulfillment_id: null,
+  ebay_sync_error: null,
+  ebay_synced_at: null,
 };
 
 describe("mergeImportedSale", () => {

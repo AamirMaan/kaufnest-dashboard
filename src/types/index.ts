@@ -118,6 +118,18 @@ export interface Sale {
    */
   refunded_amount: number | null;
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
+  /**
+   * Carrier + tracking number captured when an eBay-sourced order's status
+   * is set to "shipped" — required by eBay's Fulfillment API. Null for
+   * every non-eBay sale, and for an eBay sale not currently "shipped".
+   */
+  tracking_number: string | null;
+  shipping_carrier: string | null;
+  /** eBay's fulfillmentId for this order's shipment, once synced. */
+  ebay_fulfillment_id: string | null;
+  /** Last eBay push-back error, if the most recent attempt failed. Cleared on the next successful sync. */
+  ebay_sync_error: string | null;
+  ebay_synced_at: string | null;
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
