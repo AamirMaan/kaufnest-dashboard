@@ -71,6 +71,29 @@ export const fetchSalesPage = createAsyncThunk(
   }
 );
 
+/**
+ * Re-fetch a single sale by id. Returns `null` when the row is gone or the
+ * read fails.
+ *
+ * Used to reconcile Redux after a **server-side** write the client didn't make
+ * itself — specifically the eBay sync-status route, which stamps
+ * `ebay_fulfillment_id`/`ebay_sync_error`/`ebay_synced_at` on the row after
+ * the client's own `sales.update(...)` has already returned. Both
+ * `EditSaleModal` (save-time sync) and `[id]/page.tsx` (Retry) call this and
+ * dispatch `updateSale(fresh)`; without it the order detail page — which
+ * renders from Redux when a store version exists — never shows (or clears)
+ * the Retry row until a full page reload.
+ */
+export async function fetchSaleById(saleId: string): Promise<Sale | null> {
+  const supabase = await createTenantClient();
+  const { data } = await supabase
+    .from("sales")
+    .select("*")
+    .eq("id", saleId)
+    .single<Sale>();
+  return data ?? null;
+}
+
 // ─── Shared page-hydration helper ─────────────────────────────────────────────
 
 function applyHydratePage(

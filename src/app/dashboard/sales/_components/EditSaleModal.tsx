@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { updateSale } from "../_store/salesSlice";
+import { updateSale, fetchSaleById } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, vatAmountFromGross } from "@/lib/utils/currency";
+import { isEbayIntegrationSyncedSale } from "@/lib/utils/filters";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
@@ -130,6 +131,11 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     }));
   }
 
+  // Only orders that came in through the Integrations sync/import pipeline can
+  // be pushed back to eBay — see `isEbayIntegrationSyncedSale`'s doc comment
+  // for why a CSV-imported "ebay" row is deliberately excluded.
+  const isEbayOrder = !!sale && isEbayIntegrationSyncedSale(sale);
+
   const qty = Math.max(1, parseInt(form.quantity) || 1);
   const price = parseFloat(form.unit_price) || 0;
   const total = qty * price;
@@ -149,9 +155,17 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     const status = form.status === "other" ? form.customStatus.trim() : form.status;
     const restock = status === "returned" ? form.restock : false;
 
-    const isEbayOrder = sale.platform === "ebay" && !!sale.external_order_id;
-    const trackingNumber = isEbayOrder && status === "shipped" ? form.trackingNumber.trim() || null : null;
-    const shippingCarrier = isEbayOrder && status === "shipped" ? form.carrier || null : null;
+    // Tracking/carrier are only *written* when this save sets an eBay order to
+    // "shipped" (the one case the form collects them). For every other status
+    // the sale's existing values are passed through unchanged — nulling them on
+    // the normal shipped → delivered step would erase the record of what was
+    // pushed to eBay while `ebay_fulfillment_id` survived, and would leave a
+    // pending Retry resending nulls.
+    const isEbayShipment = isEbayOrder && status === "shipped";
+    const trackingNumber = isEbayShipment
+      ? form.trackingNumber.trim() || null
+      : sale.tracking_number;
+    const shippingCarrier = isEbayShipment ? form.carrier || null : sale.shipping_carrier;
 
     const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
     const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
@@ -223,6 +237,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     // The local sales row is already committed above; a sync failure here
     // must never look like the edit itself failed.
     if (isEbayOrder && sale.status !== status && (status === "shipped" || status === "cancelled")) {
+      let syncError: string | null = null;
       try {
         const syncRes = await fetch(`/api/integrations/ebay/orders/${sale.id}/sync-status`, {
           method: "POST",
@@ -231,11 +246,38 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         });
         if (!syncRes.ok) {
           const body = await syncRes.json().catch(() => ({}));
+          syncError =
+            typeof body.error === "string" && body.error
+              ? body.error
+              : `eBay sync failed (HTTP ${syncRes.status})`;
           warning("Saved locally, eBay sync failed", body.error ?? "You can retry from the order detail page.");
         }
       } catch {
+        syncError = "Could not reach the eBay sync service.";
         warning("Saved locally, eBay sync failed", "You can retry from the order detail page.");
       }
+
+      // Persist the failure on the row ourselves. The route writes
+      // `ebay_sync_error` for failures it reaches, but it is gated by
+      // `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin
+      // only) while this modal is reachable by anyone with `update_sale`
+      // (accountant included). An accountant's save is rejected with a 403
+      // *before* the route touches the row, so without this write the order
+      // would silently never reach eBay and no admin would ever see a Retry
+      // row. Writing it here is safe: the same user just successfully updated
+      // this exact row a few lines above.
+      if (syncError) {
+        await supabase.from("sales").update({ ebay_sync_error: syncError }).eq("id", sale.id);
+      }
+
+      // Reconcile Redux with the post-sync row. `data` above is the *pre*-sync
+      // state; the ebay_* columns were written afterwards (by the route, or by
+      // the client-side write above). The order detail page renders from Redux
+      // whenever a store version exists and never re-fetches, so skipping this
+      // means the Retry row never appears — and a stale error from an earlier
+      // attempt never clears — until a hard reload.
+      const fresh = await fetchSaleById(sale.id);
+      if (fresh) dispatch(updateSale(fresh));
     }
 
     // Create linked purchase if user filled one in and no purchase is linked yet
@@ -413,7 +455,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
               onChange={(e) => set("restock", e.target.checked)}
             />
           )}
-          {sale?.platform === "ebay" && sale?.external_order_id && form.status === "shipped" && (
+          {isEbayOrder && form.status === "shipped" && (
             <Row>
               <Field label="Carrier" required>
                 <Select

@@ -53,10 +53,63 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (decimal commas, German dates, delimiter detection) live in
   `src/lib/utils/localeParse.ts` and `src/lib/utils/csv.ts`.
 
+- **Change eBay order status push-back** (shipped/cancelled → eBay): the four
+  touch points are `_components/EditSaleModal.tsx` (the trigger + the
+  Carrier/Tracking fields), `[id]/page.tsx` (the Retry row),
+  `src/app/api/integrations/ebay/orders/[saleId]/sync-status/route.ts` (the
+  server side), and `src/lib/utils/filters.ts` →
+  `isEbayIntegrationSyncedSale` (the eligibility predicate both ends share).
+  Full contract in `src/lib/integrations/SKILL.md`'s "eBay order status
+  push-back" section; see the gotchas below before changing any of it.
+
 ## Test command
 
 `npx jest dashboard/sales` — runs `_store/salesSlice.test.ts` and
 `_components/orderMath.test.ts` (and any other `*.test.ts` colocated here).
+The push-back eligibility predicate is tested with the shared filters:
+`npx jest lib/utils/filters`.
+
+## Gotchas — eBay order status push-back
+
+Four traps, all found in the 2026-09-04 final review of the feature and all
+fixed — don't reintroduce them:
+
+- **Reconcile Redux after the sync, or the Retry row is invisible.** The
+  sync-status route writes `ebay_sync_error`/`ebay_fulfillment_id`/
+  `ebay_synced_at` server-side, *after* `EditSaleModal`'s own
+  `.update().select()` has already returned the pre-sync row. `[id]/page.tsx`
+  renders `storeVersion ?? fetchedSale` and never re-fetches once a store
+  version exists, so whatever Redux holds is what the user sees. Both call
+  sites therefore end with `const fresh = await fetchSaleById(sale.id); if
+  (fresh) dispatch(updateSale(fresh));` — unconditionally, success and
+  failure. Failure is what makes the Retry row appear; success is what clears
+  a stale error from a previous attempt.
+- **Never re-inline `platform === "ebay" && external_order_id`.** Use
+  `isEbayIntegrationSyncedSale` (`lib/utils/filters.ts`). A CSV-imported eBay
+  row passes the naive check but has no `":"` line-item suffix, so the route
+  would use the whole id as both `orderId` and `lineItemId` and eBay would
+  reject it every single time — while the user was still forced through the
+  required Carrier/Tracking fields. The predicate is in `lib/utils/` and not
+  `lib/integrations/` on purpose: `EditSaleModal` is a Client Component and
+  the project verifier BLOCKS `@/lib/integrations/*` imports from `"use
+  client"` files (the existing `ebay/carriers` import there only survives via
+  a `// verifier:allow server-module-in-client` comment on the line above it).
+- **A 403 writes nothing server-side.** `requireIntegrationAdmin()` runs
+  before the route touches the row, and `manage_integrations` excludes
+  `accountant` while `update_sale` (which opens the modal) includes it. So
+  `EditSaleModal` writes `ebay_sync_error` from the client on *any* sync
+  failure — otherwise an accountant's status change silently never reaches
+  eBay and leaves no trace for an admin to retry.
+- **`createShippingFulfillment` is not idempotent on eBay's side.** eBay
+  allows several fulfillments per order (partial shipments), so a retry after
+  "eBay call succeeded, local DB write failed" double-ships the order with no
+  error. The route short-circuits on `status === "shipped" &&
+  sale.ebay_fulfillment_id` and only re-runs the local write. The `cancelled`
+  branch has no equivalent key and deliberately no guard.
+- Related: `tracking_number`/`shipping_carrier` are only overwritten by a save
+  that sets the order TO `"shipped"`. Any other status passes the existing
+  values through — nulling them on the normal shipped → delivered step erased
+  the record of what was pushed to eBay while `ebay_fulfillment_id` survived.
 
 ## Gotchas — fee fields
 

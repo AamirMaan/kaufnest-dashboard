@@ -198,7 +198,7 @@ now holds the shared `tradingApiCall()`/XML-entity helpers both files use.
 
 `POST /api/integrations/ebay/orders/[saleId]/sync-status` (server-only,
 uses `requireIntegrationAdmin()`) pushes a local `sales.status` change on an
-eBay-sourced order (`platform === "ebay"`, `external_order_id` set) out to
+eBay-sourced order out to
 eBay's Fulfillment API — the reverse direction of `fetchOrders`/Review
 Orders, which only reads from eBay. Triggered from `EditSaleModal.tsx`'s
 save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
@@ -215,10 +215,32 @@ save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
   scope). **This endpoint's exact request/response shape is unverified
   against eBay's live sandbox** — confirm field names against eBay's
   current API reference before relying on this in production.
+- **Eligibility is one shared predicate**: `isEbayIntegrationSyncedSale(sale)`
+  in **`src/lib/utils/filters.ts`** (next to `isRevenueSale`) — `platform ===
+  "ebay" && external_order_id?.includes(":")`. The route 404s when it fails,
+  and `EditSaleModal` uses the same call to decide whether to render the
+  Carrier/Tracking fields and fire the sync. It lives in `lib/utils/` rather
+  than here because `EditSaleModal` is a Client Component and the project
+  verifier blocks `@/lib/integrations/*` imports from `"use client"` files.
+  The `":"` check is the whole point: a **CSV-imported** eBay row
+  (`sales/_components/importFormats.ts`) has `platform === "ebay"` and a
+  non-null `external_order_id` copied straight from the sheet's `order_id`
+  column, with no line-item suffix — the split below would then use the whole
+  string as BOTH ids and eBay would reject every attempt forever.
 - `external_order_id` is parsed back into eBay's `orderId`/`lineItemId` by
   splitting on the **last** `:` (`"${orderId}:${lineItemId}"`, same
   dedup-key convention as `mapToSale.ts` — see "`external_order_id` dedup
-  contract" above).
+  contract" above). The predicate above guarantees the `:` is there, so there
+  is no whole-string fallback.
+- **Idempotent re-ship**: before any eBay call, `status === "shipped"` with a
+  non-null `sale.ebay_fulfillment_id` short-circuits to *only* re-running the
+  local write (clear `ebay_sync_error`, stamp `ebay_synced_at`) and returns
+  `{ ok: true }`. eBay allows several fulfillments per order (partial
+  shipments), so a second `createShippingFulfillment` succeeds silently and
+  double-ships the order — which is exactly what a retry after an "eBay
+  succeeded, local write failed" attempt used to do. **The `cancelled` branch
+  has no equivalent guard** — cancellation stores no idempotency key on the
+  row; don't add one without a design for it.
 - **Best-effort, non-blocking**: the route never throws past itself — any
   failure (token refresh, the eBay call, or the DB write) is caught, written
   into `sales.ebay_sync_error`, and returned as `{ error }` with the
@@ -227,6 +249,13 @@ save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
   this route runs. On success, `ebay_sync_error` is cleared and
   `ebay_synced_at` (both transitions) / `ebay_fulfillment_id` (shipped only)
   are set.
+- **A 403 from this route writes nothing** — `requireIntegrationAdmin()` runs
+  before the row is ever touched, and `manage_integrations` is
+  admin/super_admin only while `update_sale` (which opens `EditSaleModal`)
+  also covers `accountant`. So `EditSaleModal` writes `ebay_sync_error` from
+  the *client* on any sync failure, using the tenant client it already used
+  for the sale update. Without that, an accountant's status change would
+  silently never reach eBay with no trace for an admin to retry.
 - No new `PlatformAdapter` methods — `createShippingFulfillment`/
   `cancelOrder` are plain exported functions in `ebay.ts` that the route
   imports directly, same shape as `ebay/messages.ts`'s Trading-API-only
@@ -236,7 +265,17 @@ save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
   warning row when `sale.ebay_sync_error` is set, with a Retry button that
   re-POSTs this same route using the sale's current
   `status`/`tracking_number`/`shipping_carrier` — no modal, nothing to
-  re-enter.
+  re-enter. The button only renders when the sale's status is `shipped` or
+  `cancelled` (the two this route handles); the error text still renders for
+  any other status so the failure never silently disappears.
+- **Redux must be reconciled after every attempt.** This route writes the
+  `ebay_*` columns *after* the client's own `sales.update(...)` has returned,
+  and the order detail page renders from Redux whenever a store version
+  exists (it never re-fetches). Both callers therefore run
+  `fetchSaleById(sale.id)` (`dashboard/sales/_store/salesSlice.ts`) +
+  `dispatch(updateSale(fresh))` once the fetch settles — success *and*
+  failure. Skipping it means the Retry row never appears, and a stale error
+  from an earlier attempt never clears, until a hard page reload.
 
 ## Merge rule (re-import field ownership)
 

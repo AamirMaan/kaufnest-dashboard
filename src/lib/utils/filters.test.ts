@@ -3,6 +3,7 @@ import {
   getPresetRange,
   filterSales,
   isRevenueSale,
+  isEbayIntegrationSyncedSale,
   DEFAULT_SALES_FILTERS,
   sanitizeIlikeSearchTerm,
   isDefaultFilters,
@@ -145,5 +146,43 @@ describe("isDefaultFilters with search", () => {
 
   it("returns false when search is non-empty", () => {
     expect(isDefaultFilters({ ...DEFAULT_PURCHASE_FILTERS, search: "widget" })).toBe(false);
+  });
+});
+
+describe("isEbayIntegrationSyncedSale", () => {
+  it("accepts an order synced by the Integrations pipeline (orderId:lineItemId)", () => {
+    expect(
+      isEbayIntegrationSyncedSale({
+        platform: "ebay",
+        external_order_id: "12-34567-89012:001",
+      })
+    ).toBe(true);
+  });
+
+  it("rejects a CSV-imported eBay row whose order id has no line-item suffix", () => {
+    // importFormats.ts writes the sheet's raw `order_id` column straight into
+    // external_order_id — no ":" — so the sync route could never recover a real
+    // lineItemId from it, making every sync attempt a guaranteed failure.
+    expect(
+      isEbayIntegrationSyncedSale({
+        platform: "ebay",
+        external_order_id: "12-34567-89012",
+      })
+    ).toBe(false);
+  });
+
+  it("rejects a manually-created eBay sale (no external_order_id)", () => {
+    expect(
+      isEbayIntegrationSyncedSale({ platform: "ebay", external_order_id: null })
+    ).toBe(false);
+  });
+
+  it("rejects a synced order from another platform", () => {
+    expect(
+      isEbayIntegrationSyncedSale({
+        platform: "amazon",
+        external_order_id: "112-1234567-1234567:00000001",
+      })
+    ).toBe(false);
   });
 });
