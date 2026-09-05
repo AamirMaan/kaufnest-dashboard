@@ -258,6 +258,32 @@ editable fields.
   non-null `external_order_id` as informational only; don't add UI that lets
   a user edit it.
 
+## eBay order status push-back (additive fields on `Sale`)
+
+- `tracking_number`/`shipping_carrier: string | null` — captured in
+  `EditSaleModal.tsx` only when `sale.platform === "ebay" &&
+  sale.external_order_id` is set and the Status field is set to
+  `"shipped"`: two additional required fields (Carrier — a `Select` from
+  `EBAY_CARRIER_CODES`, `src/lib/integrations/ebay/carriers.ts`; Tracking
+  Number — a required `Input`), prefilled from the sale's existing values
+  (e.g. a retry after a failed sync). `null` for every non-eBay sale and for
+  an eBay sale not currently `"shipped"`.
+- `ebay_fulfillment_id`/`ebay_sync_error`/`ebay_synced_at: string | null` —
+  written only by the server route below, never by the client directly.
+- **After** the `sales.update(...)` succeeds (not before — the local save
+  must never be blocked by eBay), if `status` transitioned *into*
+  `"shipped"` or `"cancelled"` on an eBay-sourced sale, `EditSaleModal`
+  fire-and-awaits `POST /api/integrations/ebay/orders/[saleId]/sync-status`
+  (`src/lib/integrations/SKILL.md`'s "eBay order status push-back" section
+  has the full route contract). A non-OK response or a thrown `fetch`
+  (both caught) shows a `warning()` toast — "Saved locally, eBay sync
+  failed" — it never blocks `onSuccess()`/`onClose()`. `AddSaleModal` is
+  untouched: a sale can only be `platform === "ebay"` with a real
+  `external_order_id` via the Integrations sync/import pipeline, never via
+  manual creation.
+- Included in the same before/after audit-log diff as every other editable
+  field.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),

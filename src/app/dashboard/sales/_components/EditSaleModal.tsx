@@ -17,6 +17,9 @@ import { formatCurrency, vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
+// Plain data constant (carrier codes), no OAuth/server secrets; needed for
+// verifier:allow server-module-in-client — the Carrier <Select> below.
+import { EBAY_CARRIER_CODES } from "@/lib/integrations/ebay/carriers";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import type { Platform, Currency, Sale, Product, Purchase } from "@/types";
 
@@ -48,6 +51,8 @@ interface FormState {
   shipping_charged: string;
   advertising_fee: string;
   platform_fee: string;
+  trackingNumber: string;
+  carrier: string;
 }
 
 function saleToForm(sale: Sale, defaultVatRate: number): FormState {
@@ -71,6 +76,8 @@ function saleToForm(sale: Sale, defaultVatRate: number): FormState {
     shipping_charged: sale.shipping_charged != null ? String(sale.shipping_charged) : "",
     advertising_fee: sale.advertising_fee != null ? String(sale.advertising_fee) : "",
     platform_fee: sale.platform_fee != null ? String(sale.platform_fee) : "",
+    trackingNumber: sale.tracking_number ?? "",
+    carrier: sale.shipping_carrier ?? "",
   };
 }
 
@@ -79,11 +86,12 @@ const blankForm: FormState = {
   date: "", description: "", vat_included: false, vat_rate: "0",
   status: "pending", customStatus: "", restock: false, reason: "",
   shipping_cost: "", shipping_charged: "", advertising_fee: "", platform_fee: "",
+  trackingNumber: "", carrier: "",
 };
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
-  const { error: toastError } = useToast();
+  const { error: toastError, warning } = useToast();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const purchases = useAppSelector((s) => s.purchases.items);
@@ -141,6 +149,10 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     const status = form.status === "other" ? form.customStatus.trim() : form.status;
     const restock = status === "returned" ? form.restock : false;
 
+    const isEbayOrder = sale.platform === "ebay" && !!sale.external_order_id;
+    const trackingNumber = isEbayOrder && status === "shipped" ? form.trackingNumber.trim() || null : null;
+    const shippingCarrier = isEbayOrder && status === "shipped" ? form.carrier || null : null;
+
     const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
     const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
     const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
@@ -169,6 +181,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         platform_fee: platformFee,
         status,
         restock,
+        tracking_number: trackingNumber,
+        shipping_carrier: shippingCarrier,
       })
       .eq("id", sale.id)
       .select()
@@ -198,12 +212,31 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
       entityType: "sale",
       entityId: sale.id,
       metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock },
-        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock },
+        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock, tracking_number: sale.tracking_number, shipping_carrier: sale.shipping_carrier },
+        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock, tracking_number: data.tracking_number, shipping_carrier: data.shipping_carrier },
         reason: form.reason.trim(),
       },
     });
     if (log) dispatch(addAuditLog(log));
+
+    // Push the status change to eBay — best-effort, never blocks the save.
+    // The local sales row is already committed above; a sync failure here
+    // must never look like the edit itself failed.
+    if (isEbayOrder && sale.status !== status && (status === "shipped" || status === "cancelled")) {
+      try {
+        const syncRes = await fetch(`/api/integrations/ebay/orders/${sale.id}/sync-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, trackingNumber, carrier: shippingCarrier }),
+        });
+        if (!syncRes.ok) {
+          const body = await syncRes.json().catch(() => ({}));
+          warning("Saved locally, eBay sync failed", body.error ?? "You can retry from the order detail page.");
+        }
+      } catch {
+        warning("Saved locally, eBay sync failed", "You can retry from the order detail page.");
+      }
+    }
 
     // Create linked purchase if user filled one in and no purchase is linked yet
     const rawPrice = parseFloat(purchasePrice);
@@ -379,6 +412,30 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
               checked={form.restock}
               onChange={(e) => set("restock", e.target.checked)}
             />
+          )}
+          {sale?.platform === "ebay" && sale?.external_order_id && form.status === "shipped" && (
+            <Row>
+              <Field label="Carrier" required>
+                <Select
+                  value={form.carrier}
+                  onChange={(e) => set("carrier", e.target.value)}
+                  required
+                >
+                  <option value="">— Select carrier —</option>
+                  {EBAY_CARRIER_CODES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Tracking Number" required>
+                <Input
+                  value={form.trackingNumber}
+                  onChange={(e) => set("trackingNumber", e.target.value)}
+                  placeholder="e.g. 1Z999AA10123456784"
+                  required
+                />
+              </Field>
+            </Row>
           )}
         </div>
 
