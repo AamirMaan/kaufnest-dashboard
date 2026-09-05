@@ -20,6 +20,13 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   `isIntegrationPlatform(value)` type guard used by every API route to
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
+  `ebay.ts` also exports `createShippingFulfillment`/`cancelOrder` — plain
+  functions (not part of `PlatformAdapter`) backing the order status
+  push-back route, see "eBay order status push-back" below.
+- `ebay/carriers.ts` — `EBAY_CARRIER_CODES`, the fixed carrier enum eBay's
+  Fulfillment API requires (`shippingCarrierCode`); used by
+  `EditSaleModal.tsx`'s carrier `Select` and passed through to
+  `createShippingFulfillment` by the sync-status route.
 - `mapToSale.ts` — pure `normalizedOrderToSaleRow(order, platform,
   connectedBy, fees?)`. `shipping_cost`/`shipping_charged` always come out
   `null` — editable later via the Edit Sale modal, no earlier entry point
@@ -186,6 +193,50 @@ now holds the shared `tradingApiCall()`/XML-entity helpers both files use.
 - User-supplied reply text is escaped via `escapeXml()`
   (`ebay/tradingApi.ts`) before being interpolated into the request XML —
   required since it's free text that could contain `&`/`<`/`>`.
+
+## eBay order status push-back (shipped/cancelled)
+
+`POST /api/integrations/ebay/orders/[saleId]/sync-status` (server-only,
+uses `requireIntegrationAdmin()`) pushes a local `sales.status` change on an
+eBay-sourced order (`platform === "ebay"`, `external_order_id` set) out to
+eBay's Fulfillment API — the reverse direction of `fetchOrders`/Review
+Orders, which only reads from eBay. Triggered from `EditSaleModal.tsx`'s
+save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
+100%-manual model as the rest of this library, no cron/push infra.
+
+- `status: "shipped"` → `createShippingFulfillment(accessToken, orderId,
+  body)` in `ebay.ts` — `POST /sell/fulfillment/v1/order/{orderId}/
+  shipping_fulfillment`. Requires a carrier (`shippingCarrierCode`, from the
+  fixed enum in `ebay/carriers.ts`'s `EBAY_CARRIER_CODES`) and
+  `trackingNumber` — both captured in `EditSaleModal`.
+- `status: "cancelled"` → `cancelOrder(accessToken, orderId, body?)` in
+  `ebay.ts` — `POST /post-order/v2/cancellation` (separate base path from
+  the Fulfillment API, but covered by the existing `sell.fulfillment`
+  scope). **This endpoint's exact request/response shape is unverified
+  against eBay's live sandbox** — confirm field names against eBay's
+  current API reference before relying on this in production.
+- `external_order_id` is parsed back into eBay's `orderId`/`lineItemId` by
+  splitting on the **last** `:` (`"${orderId}:${lineItemId}"`, same
+  dedup-key convention as `mapToSale.ts` — see "`external_order_id` dedup
+  contract" above).
+- **Best-effort, non-blocking**: the route never throws past itself — any
+  failure (token refresh, the eBay call, or the DB write) is caught, written
+  into `sales.ebay_sync_error`, and returned as `{ error }` with the
+  upstream status code. The local `sales.status` change that triggered the
+  sync is never undone — it was already committed by `EditSaleModal` before
+  this route runs. On success, `ebay_sync_error` is cleared and
+  `ebay_synced_at` (both transitions) / `ebay_fulfillment_id` (shipped only)
+  are set.
+- No new `PlatformAdapter` methods — `createShippingFulfillment`/
+  `cancelOrder` are plain exported functions in `ebay.ts` that the route
+  imports directly, same shape as `ebay/messages.ts`'s Trading-API-only
+  functions. Amazon has no equivalent call, so this stays eBay-only
+  plumbing.
+- Retry: the order detail page (`dashboard/sales/[id]/page.tsx`) shows a
+  warning row when `sale.ebay_sync_error` is set, with a Retry button that
+  re-POSTs this same route using the sale's current
+  `status`/`tracking_number`/`shipping_carrier` — no modal, nothing to
+  re-enter.
 
 ## Merge rule (re-import field ownership)
 
