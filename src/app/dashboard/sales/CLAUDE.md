@@ -283,6 +283,14 @@ editable fields.
   manual creation.
 - Included in the same before/after audit-log diff as every other editable
   field.
+- **Retry a failed sync**: the order detail page
+  (`dashboard/sales/[id]/page.tsx`) shows a warning row when
+  `sale.ebay_sync_error` is set ("eBay sync failed: `<message>`" + a Retry
+  button), re-POSTing the same route with the sale's current
+  `status`/`tracking_number`/`shipping_carrier` — no modal, nothing to
+  re-enter. On success it re-fetches the sale and dispatches `updateSale`,
+  which clears the row (a successful sync clears `ebay_sync_error`
+  server-side).
 
 ## Shared dependencies (live outside this folder on purpose)
 
