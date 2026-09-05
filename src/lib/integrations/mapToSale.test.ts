@@ -50,6 +50,14 @@ describe("normalizedOrderToSaleRow", () => {
       restock: false,
       refunded_amount: null,
       external_order_id: "12-34567-89012:001",
+      // eBay status push-back columns — a freshly synced order has never been
+      // pushed back, so all five start null and are only written by the
+      // sync-status route / EditSaleModal.
+      tracking_number: null,
+      shipping_carrier: null,
+      ebay_fulfillment_id: null,
+      ebay_sync_error: null,
+      ebay_synced_at: null,
     });
   });
 
@@ -77,6 +85,11 @@ describe("normalizedOrderToSaleRow", () => {
       restock: false,
       refunded_amount: null,
       external_order_id: "112-1234567-1234567:00000001",
+      tracking_number: null,
+      shipping_carrier: null,
+      ebay_fulfillment_id: null,
+      ebay_sync_error: null,
+      ebay_synced_at: null,
     });
   });
 
