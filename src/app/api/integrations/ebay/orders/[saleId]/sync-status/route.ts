@@ -16,7 +16,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ saleId:
   const { client } = auth.context;
 
   const { saleId } = await params;
-  const { status, trackingNumber, carrier } = (await req.json()) as SyncStatusBody;
+
+  let status: SyncStatusBody["status"];
+  let trackingNumber: SyncStatusBody["trackingNumber"];
+  let carrier: SyncStatusBody["carrier"];
+  try {
+    ({ status, trackingNumber, carrier } = (await req.json()) as SyncStatusBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
 
   if (status !== "shipped" && status !== "cancelled") {
     return NextResponse.json(
@@ -45,7 +53,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ saleId:
     );
   }
 
-  const conn = await getConnection(client, "ebay");
+  let conn;
+  try {
+    conn = await getConnection(client, "ebay");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to look up eBay connection";
+    console.error("[ebay/sync-status] getConnection failed:", message);
+    await client.from("sales").update({ ebay_sync_error: message }).eq("id", saleId);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
   if (!conn || conn.status !== "connected") {
     return NextResponse.json(
       { error: "eBay is not connected. Connect it in Integrations first." },
