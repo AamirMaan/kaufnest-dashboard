@@ -124,10 +124,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
   encouraged — that's a connected tool, not the agent starting a server. Otherwise,
   ask the user to manually exercise the feature in the browser and report back what
   they see.
-- **Don't run `npm test`, `npx tsc --noEmit`, or `npm run lint` mid-task** just to
-  check your work. Ask the user to run the relevant test command and paste output
-  back. Running these repeatedly burns tokens on output the user can capture in one
-  shot locally.
+- **Running unit tests yourself is fine and encouraged** — run the focused
+  `npx jest <path>` for whatever you just changed (not the whole suite) to verify
+  your own work before committing, instead of asking the user to run it and paste
+  output back. Always target the specific worktree/directory you're actually
+  working in — running from the wrong checkout (e.g. the main repo root when your
+  changes are only in a feature worktree) silently tests stale code.
+- **Still don't run `npx tsc --noEmit` or `npm run lint` mid-task** just to check
+  your work — `.husky/pre-commit` already runs both automatically on every
+  `git commit` and will fail the commit if either catches something. Fix what it
+  reports and re-run the same `git commit` command.
 
 ## Unit tests — when to write them
 
