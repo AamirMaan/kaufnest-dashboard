@@ -283,6 +283,17 @@ export default function SaleDetailPage({ params }: PageProps) {
     ? (inventoryItems.find((p) => p.id === sale.product_id) ?? null)
     : null;
 
+  const hasShippingAddress =
+    sale.buyer_name != null ||
+    sale.shipping_address_line1 != null ||
+    sale.shipping_address_line2 != null ||
+    sale.shipping_city != null ||
+    sale.shipping_state != null ||
+    sale.shipping_postal_code != null ||
+    sale.shipping_country != null ||
+    sale.buyer_phone != null ||
+    sale.buyer_email != null;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -490,6 +501,38 @@ export default function SaleDetailPage({ params }: PageProps) {
                     Set this order back to Shipped or Cancelled to retry the sync.
                   </p>
                 )}
+              </div>
+            )}
+
+            {hasShippingAddress && (
+              <div>
+                <dt className="text-xs font-medium text-(--color-text-muted) uppercase tracking-wider mb-1">
+                  Shipping Address
+                </dt>
+                <dd className="text-sm text-(--color-text-base) space-y-0.5">
+                  {sale.buyer_name && (
+                    <p className="font-semibold">{sale.buyer_name}</p>
+                  )}
+                  {sale.shipping_address_line1 && <p>{sale.shipping_address_line1}</p>}
+                  {sale.shipping_address_line2 && <p>{sale.shipping_address_line2}</p>}
+                  {(sale.shipping_city || sale.shipping_state || sale.shipping_postal_code) && (
+                    <p>
+                      {[
+                        sale.shipping_city,
+                        [sale.shipping_state, sale.shipping_postal_code].filter(Boolean).join(" "),
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
+                  {sale.shipping_country && <p>{sale.shipping_country}</p>}
+                  {sale.buyer_phone && (
+                    <p className="text-xs text-(--color-text-muted) pt-1">{sale.buyer_phone}</p>
+                  )}
+                  {sale.buyer_email && (
+                    <p className="text-xs text-(--color-text-muted)">{sale.buyer_email}</p>
+                  )}
+                </dd>
               </div>
             )}
 

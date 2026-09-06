@@ -336,6 +336,46 @@ editable fields.
   still renders for any other status (with a line telling the user to set
   the status back), so a failure is never invisible.
 
+## Buyer shipping address (additive fields on `Sale`)
+
+Nine nullable columns (migration `041_sales_shipping_address.sql`, see
+`supabase/SKILL.md`): `buyer_name`, `shipping_address_line1`,
+`shipping_address_line2`, `shipping_city`, `shipping_state`,
+`shipping_postal_code`, `shipping_country`, `buyer_phone`, `buyer_email`.
+
+- **Automatic capture (eBay only)**: `src/lib/integrations/ebay.ts`'s
+  `fetchOrders` extracts `fulfillmentStartInstructions[].shippingStep.shipTo`
+  per order (order-level, duplicated onto every line item's
+  `NormalizedOrder.shipping`, same as `date`/`description`) and
+  `mapToSale.ts`'s `normalizedOrderToSaleRow` spreads it onto the insert row,
+  all nine `null` when `order.shipping` is missing/null. Amazon's adapter is
+  untouched — its `NormalizedOrder`s leave `shipping` `undefined`
+  (SP-API's order-address endpoint needs a separate PII-access grant this
+  app doesn't request), and `mapToSale.ts` already treats an absent field as
+  "no data".
+- **Manual capture/edit (any platform)**: `AddSaleModal`/`EditSaleModal` both
+  have a collapsible "Shipping Address (optional)" section (same
+  chevron/collapse pattern as "Fees & shipping (optional)" —
+  `showShipping` boolean). None of the nine fields are `required`.
+  `EditSaleModal`'s section auto-opens when the sale being edited already
+  has at least one of the nine fields set, same rule as the Fees section.
+  Included in the `sales.update(...)` payload and the before/after audit-log
+  diff, same as every other editable field group.
+- **User-owned on re-import**: all nine are preserved from the existing row
+  on a re-sync (`mergeImportedSale.ts` — see
+  `src/lib/integrations/SKILL.md`'s Merge rule section) — a seller's manual
+  correction to a wrong or incomplete auto-captured address survives a later
+  status-change re-import of the same order.
+- **Display**: `[id]/page.tsx`'s Details card renders a "Shipping Address"
+  block (bold `buyer_name` line, address lines, `city, state postal_code`,
+  `country`, then phone/email as small muted lines) only when at least one
+  of the nine fields is non-null — same visual weight as the card's other
+  rows, not a separate card.
+- `shipping_country` is free text on purpose (not a fixed-list `Select`) —
+  eBay returns a 2-letter code, a manual entry might not; validation is
+  deferred to the future label-purchase feature that actually needs a valid
+  country code.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
