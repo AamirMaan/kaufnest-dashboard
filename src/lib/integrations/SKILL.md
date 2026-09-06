@@ -13,16 +13,26 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
 
 ## Files
 
-- `types.ts` — `NormalizedOrder` (platform-agnostic order shape), `TokenSet`,
-  `ExchangeCodeResult` (`TokenSet` + optional `externalAccountId`/
-  `marketplaceId`), `PlatformAdapter` interface, `SyncResult`.
+- `types.ts` — `NormalizedOrder` (platform-agnostic order shape — its
+  optional `shipping?: ShippingAddress | null` field, added for buyer
+  shipping address capture, is `undefined` when an adapter doesn't support
+  address capture (Amazon) and `null` when the platform returned no address;
+  `ShippingAddress` is also defined here), `TokenSet`, `ExchangeCodeResult`
+  (`TokenSet` + optional `externalAccountId`/`marketplaceId`),
+  `PlatformAdapter` interface, `SyncResult`.
 - `registry.ts` — `getAdapter(platform)` → `PlatformAdapter`,
   `isIntegrationPlatform(value)` type guard used by every API route to
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
-  `ebay.ts` also exports `createShippingFulfillment`/`cancelOrder` — plain
-  functions (not part of `PlatformAdapter`) backing the order status
-  push-back route, see "eBay order status push-back" below.
+  `ebay.ts`'s `fetchOrders` also extracts the buyer's shipping address from
+  `fulfillmentStartInstructions[].shippingStep.shipTo` (order-level,
+  duplicated onto every line item's `NormalizedOrder.shipping`, same as
+  `date`/`description`); `amazon.ts` is untouched, leaving `shipping`
+  `undefined` (SP-API's order-address endpoint needs a separate PII-access
+  grant this app doesn't request). `ebay.ts` also exports
+  `createShippingFulfillment`/`cancelOrder` — plain functions (not part of
+  `PlatformAdapter`) backing the order status push-back route, see "eBay
+  order status push-back" below.
 - `ebay/carriers.ts` — `EBAY_CARRIER_CODES`, the fixed carrier enum eBay's
   Fulfillment API requires (`shippingCarrierCode`); used by
   `EditSaleModal.tsx`'s carrier `Select` and passed through to

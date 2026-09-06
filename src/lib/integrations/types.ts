@@ -18,6 +18,18 @@ export type IntegrationsClient = Pick<SupabaseClient, "from">;
  * `external_order_id` (e.g. `${orderId}:${lineItemId}`) so the
  * `(platform, external_order_id)` unique index stays one-row-per-line-item.
  */
+export interface ShippingAddress {
+  buyerName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
 export interface NormalizedOrder {
   external_order_id: string;
   product_name: string;
@@ -28,6 +40,12 @@ export interface NormalizedOrder {
   date: string; // ISO date (YYYY-MM-DD)
   status: string;
   description: string | null;
+  /**
+   * Buyer shipping address, when the platform's order API returns one.
+   * `undefined` (not set) when the adapter doesn't support it (Amazon) —
+   * distinct from `null`, which means "asked and the platform had none".
+   */
+  shipping?: ShippingAddress | null;
 }
 
 export interface TokenSet {
