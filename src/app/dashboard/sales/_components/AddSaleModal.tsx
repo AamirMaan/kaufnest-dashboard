@@ -46,6 +46,15 @@ interface FormState {
   shipping_charged: string;
   advertising_fee: string;
   platform_fee: string;
+  buyer_name: string;
+  shipping_address_line1: string;
+  shipping_address_line2: string;
+  shipping_city: string;
+  shipping_state: string;
+  shipping_postal_code: string;
+  shipping_country: string;
+  buyer_phone: string;
+  buyer_email: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -69,6 +78,15 @@ function makeDefaults(defaultVatRate: number): FormState {
     shipping_charged: "",
     advertising_fee: "",
     platform_fee: "",
+    buyer_name: "",
+    shipping_address_line1: "",
+    shipping_address_line2: "",
+    shipping_city: "",
+    shipping_state: "",
+    shipping_postal_code: "",
+    shipping_country: "",
+    buyer_phone: "",
+    buyer_email: "",
   };
 }
 
@@ -81,6 +99,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFees, setShowFees] = useState(false);
+  const [showShipping, setShowShipping] = useState(false);
   const [showLinkedPurchase, setShowLinkedPurchase] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [purchaseVendor, setPurchaseVendor] = useState("");
@@ -127,6 +146,15 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
     const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
     const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
+    const buyerName = form.buyer_name.trim() || null;
+    const shippingAddressLine1 = form.shipping_address_line1.trim() || null;
+    const shippingAddressLine2 = form.shipping_address_line2.trim() || null;
+    const shippingCity = form.shipping_city.trim() || null;
+    const shippingState = form.shipping_state.trim() || null;
+    const shippingPostalCode = form.shipping_postal_code.trim() || null;
+    const shippingCountry = form.shipping_country.trim() || null;
+    const buyerPhone = form.buyer_phone.trim() || null;
+    const buyerEmail = form.buyer_email.trim() || null;
 
     const { data, error: dbError } = await supabase
       .from("sales")
@@ -149,6 +177,15 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         platform_fee: platformFee,
         status,
         restock,
+        buyer_name: buyerName,
+        shipping_address_line1: shippingAddressLine1,
+        shipping_address_line2: shippingAddressLine2,
+        shipping_city: shippingCity,
+        shipping_state: shippingState,
+        shipping_postal_code: shippingPostalCode,
+        shipping_country: shippingCountry,
+        buyer_phone: buyerPhone,
+        buyer_email: buyerEmail,
       })
       .select()
       .single<Sale>();
@@ -220,6 +257,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
 
     setForm(makeDefaults(defaultVatRate));
     setShowFees(false);
+    setShowShipping(false);
     setShowLinkedPurchase(false);
     setPurchasePrice("");
     setPurchaseVendor("");
@@ -233,6 +271,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     setForm(makeDefaults(defaultVatRate));
     setError(null);
     setShowFees(false);
+    setShowShipping(false);
     setShowLinkedPurchase(false);
     setPurchasePrice("");
     setPurchaseVendor("");
@@ -489,6 +528,100 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
                   itemTotal={total}
                   currency={form.currency}
                 />
+              </Row>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border)]">
+          <button
+            type="button"
+            onClick={() => setShowShipping((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[var(--color-text-strong)] hover:bg-[var(--color-surface-raised)] transition-colors rounded-[var(--radius-card)]"
+          >
+            <span>Shipping Address (optional)</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform text-[var(--color-text-muted)] ${showShipping ? "rotate-180" : ""}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {showShipping && (
+            <div className="px-4 pb-4 space-y-3 border-t border-[var(--color-border)] pt-3">
+              <Field label="Buyer Name">
+                <Input
+                  value={form.buyer_name}
+                  onChange={(e) => set("buyer_name", e.target.value)}
+                  placeholder="e.g. Jane Buyer"
+                />
+              </Field>
+              <Row>
+                <Field label="Address Line 1">
+                  <Input
+                    value={form.shipping_address_line1}
+                    onChange={(e) => set("shipping_address_line1", e.target.value)}
+                  />
+                </Field>
+                <Field label="Address Line 2">
+                  <Input
+                    value={form.shipping_address_line2}
+                    onChange={(e) => set("shipping_address_line2", e.target.value)}
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Field label="City">
+                  <Input
+                    value={form.shipping_city}
+                    onChange={(e) => set("shipping_city", e.target.value)}
+                  />
+                </Field>
+                <Field label="State">
+                  <Input
+                    value={form.shipping_state}
+                    onChange={(e) => set("shipping_state", e.target.value)}
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Field label="Postal Code">
+                  <Input
+                    value={form.shipping_postal_code}
+                    onChange={(e) => set("shipping_postal_code", e.target.value)}
+                  />
+                </Field>
+                <Field label="Country">
+                  <Input
+                    value={form.shipping_country}
+                    onChange={(e) => set("shipping_country", e.target.value)}
+                    placeholder="e.g. DE"
+                  />
+                </Field>
+              </Row>
+              <Row>
+                <Field label="Phone">
+                  <Input
+                    type="tel"
+                    value={form.buyer_phone}
+                    onChange={(e) => set("buyer_phone", e.target.value)}
+                  />
+                </Field>
+                <Field label="Email">
+                  <Input
+                    type="email"
+                    value={form.buyer_email}
+                    onChange={(e) => set("buyer_email", e.target.value)}
+                  />
+                </Field>
               </Row>
             </div>
           )}
