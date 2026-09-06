@@ -13,6 +13,16 @@ values.
   `companyForm` state, grouped into sections:
   - **Company Profile**: `name`, `logo_url`, `address`, `currency`, `timezone`
   - **Contact**: `phone`, `email`
+  - **Shipping From Address** (2026-09-04): `ship_from_street1`,
+    `ship_from_street2`, `ship_from_city`, `ship_from_state`,
+    `ship_from_postal_code`, `ship_from_country` — a structured sender
+    address, separate from the free-text `address` field above (which keeps
+    backing the invoice header PDF, untouched). Not consumed by anything in
+    this codebase yet; it exists for a later shipping-label feature, which
+    reuses `name`/`phone` from the Company Profile/Contact sections above
+    for the sender name/phone rather than duplicating them here. All six
+    fields are optional (no `required` prop) — a tenant that never uses
+    shipping labels can leave the section blank forever.
   - **Tax & Registration**: `vat_number`, `tax_id`, `vat_rate` (default VAT
     rate used by the Add/Edit modals in Sales/Expenses/Purchases)
   - **Banking Details**: `bank_name`, `iban`, `bic`
