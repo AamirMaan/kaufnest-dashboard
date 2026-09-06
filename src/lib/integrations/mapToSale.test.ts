@@ -1,5 +1,5 @@
 import { normalizedOrderToSaleRow } from "./mapToSale";
-import type { NormalizedOrder } from "./types";
+import type { NormalizedOrder, ShippingAddress } from "./types";
 
 describe("normalizedOrderToSaleRow", () => {
   const ebayOrder: NormalizedOrder = {
@@ -26,6 +26,18 @@ describe("normalizedOrderToSaleRow", () => {
     description: "Amazon order 112-1234567-1234567",
   };
 
+  const shippingFixture: ShippingAddress = {
+    buyerName: "Jane Buyer",
+    addressLine1: "123 Main St",
+    addressLine2: "Apt 4",
+    city: "Berlin",
+    state: "BE",
+    postalCode: "10115",
+    country: "DE",
+    phone: "+49 30 1234567",
+    email: "jane@example.com",
+  };
+
   it("maps an eBay order to a sales insert row", () => {
     const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123");
 
@@ -50,6 +62,11 @@ describe("normalizedOrderToSaleRow", () => {
       restock: false,
       refunded_amount: null,
       external_order_id: "12-34567-89012:001",
+      tracking_number: null,
+      shipping_carrier: null,
+      ebay_fulfillment_id: null,
+      ebay_sync_error: null,
+      ebay_synced_at: null,
       buyer_name: null,
       shipping_address_line1: null,
       shipping_address_line2: null,
@@ -59,14 +76,6 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_country: null,
       buyer_phone: null,
       buyer_email: null,
-      // eBay status push-back columns — a freshly synced order has never been
-      // pushed back, so all five start null and are only written by the
-      // sync-status route / EditSaleModal.
-      tracking_number: null,
-      shipping_carrier: null,
-      ebay_fulfillment_id: null,
-      ebay_sync_error: null,
-      ebay_synced_at: null,
     });
   });
 
@@ -94,6 +103,11 @@ describe("normalizedOrderToSaleRow", () => {
       restock: false,
       refunded_amount: null,
       external_order_id: "112-1234567-1234567:00000001",
+      tracking_number: null,
+      shipping_carrier: null,
+      ebay_fulfillment_id: null,
+      ebay_sync_error: null,
+      ebay_synced_at: null,
       buyer_name: null,
       shipping_address_line1: null,
       shipping_address_line2: null,
@@ -103,11 +117,6 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_country: null,
       buyer_phone: null,
       buyer_email: null,
-      tracking_number: null,
-      shipping_carrier: null,
-      ebay_fulfillment_id: null,
-      ebay_sync_error: null,
-      ebay_synced_at: null,
     });
   });
 
@@ -148,5 +157,48 @@ describe("normalizedOrderToSaleRow", () => {
     const row = normalizedOrderToSaleRow({ ...ebayOrder, currency: "JPY" }, "ebay", "user-123");
 
     expect(row.currency).toBe("EUR");
+  });
+
+  it("maps all nine shipping fields onto the sales row when order.shipping is set", () => {
+    const row = normalizedOrderToSaleRow(
+      { ...ebayOrder, shipping: shippingFixture },
+      "ebay",
+      "user-123"
+    );
+
+    expect(row.buyer_name).toBe("Jane Buyer");
+    expect(row.shipping_address_line1).toBe("123 Main St");
+    expect(row.shipping_address_line2).toBe("Apt 4");
+    expect(row.shipping_city).toBe("Berlin");
+    expect(row.shipping_state).toBe("BE");
+    expect(row.shipping_postal_code).toBe("10115");
+    expect(row.shipping_country).toBe("DE");
+    expect(row.buyer_phone).toBe("+49 30 1234567");
+    expect(row.buyer_email).toBe("jane@example.com");
+  });
+
+  it("maps all nine shipping fields to null when order.shipping is omitted", () => {
+    const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-123");
+
+    expect(row.buyer_name).toBeNull();
+    expect(row.shipping_address_line1).toBeNull();
+    expect(row.shipping_address_line2).toBeNull();
+    expect(row.shipping_city).toBeNull();
+    expect(row.shipping_state).toBeNull();
+    expect(row.shipping_postal_code).toBeNull();
+    expect(row.shipping_country).toBeNull();
+    expect(row.buyer_phone).toBeNull();
+    expect(row.buyer_email).toBeNull();
+  });
+
+  it("maps all nine shipping fields to null when order.shipping is explicitly null (eBay had no fulfillment address)", () => {
+    const row = normalizedOrderToSaleRow(
+      { ...ebayOrder, shipping: null },
+      "ebay",
+      "user-123"
+    );
+
+    expect(row.buyer_name).toBeNull();
+    expect(row.shipping_address_line1).toBeNull();
   });
 });

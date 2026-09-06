@@ -60,14 +60,17 @@ export function normalizedOrderToSaleRow(
     ebay_fulfillment_id: null,
     ebay_sync_error: null,
     ebay_synced_at: null,
-    buyer_name: null,
-    shipping_address_line1: null,
-    shipping_address_line2: null,
-    shipping_city: null,
-    shipping_state: null,
-    shipping_postal_code: null,
-    shipping_country: null,
-    buyer_phone: null,
-    buyer_email: null,
+    // Buyer shipping address — all null when order.shipping is missing or
+    // null (Amazon orders leave it undefined; an eBay order eBay returned
+    // no address for carries null). See migration 041.
+    buyer_name: order.shipping?.buyerName ?? null,
+    shipping_address_line1: order.shipping?.addressLine1 ?? null,
+    shipping_address_line2: order.shipping?.addressLine2 ?? null,
+    shipping_city: order.shipping?.city ?? null,
+    shipping_state: order.shipping?.state ?? null,
+    shipping_postal_code: order.shipping?.postalCode ?? null,
+    shipping_country: order.shipping?.country ?? null,
+    buyer_phone: order.shipping?.phone ?? null,
+    buyer_email: order.shipping?.email ?? null,
   };
 }
