@@ -58,16 +58,27 @@ calls the two API routes over `fetch`.
   address-completeness error becomes `400 { error: message }`.
 - **`POST /api/shipping/buy`** (`src/app/api/shipping/buy/route.ts`) — body
   `{ saleId, easypostShipmentId, rateId, weightOz, carrier, service, cost, costCurrency }`.
-  Same guard. Calls `buyLabel`, then inserts a `shipments` row. **Does not
-  re-fetch the rate from EasyPost** — `carrier`/`service`/`cost`/
-  `costCurrency` are trusted from the client because they only affect what's
-  *displayed*; `rateId` alone determines what EasyPost actually charges, and
-  it was already shown to and chosen by the user against this same route's
-  own `/rates` response in the previous step. Writes an audit log entry
-  (`entityType: "shipment"`, `action: "create"`) after a successful insert.
-  If the insert fails after a successful EasyPost purchase, returns a 500
-  naming the tracking number (the label WAS bought at that point — the
-  seller needs a way to find it manually) rather than a generic error.
+  Same guard, plus body validation now also rejects a `cost` that is present
+  but not a `number` (final-review fix — it used to reach the insert
+  untyped and could only fail as a confusing Postgres error after a label
+  was already purchased). **Before calling `buyLabel()`**, queries
+  `shipments` for an existing row with this `saleId` and 400s
+  ("This order already has a shipping label…") without ever hitting
+  EasyPost if one exists — this is the real guard against buying two real
+  labels for one order (`shipments.sale_id` has no unique constraint, and
+  the order-detail page's shipment fetch could otherwise silently show
+  "Generate Shipping Label" again if a duplicate ever existed — see
+  `dashboard/sales/CLAUDE.md`'s Shipping labels section). Then calls
+  `buyLabel`, then inserts a `shipments` row. **Does not re-fetch the rate
+  from EasyPost** — `carrier`/`service`/`cost`/`costCurrency` are trusted
+  from the client because they only affect what's *displayed*; `rateId`
+  alone determines what EasyPost actually charges, and it was already shown
+  to and chosen by the user against this same route's own `/rates` response
+  in the previous step. Writes an audit log entry (`entityType: "shipment"`,
+  `action: "create"`) after a successful insert. If the insert fails after a
+  successful EasyPost purchase, returns a 500 naming the tracking number
+  (the label WAS bought at that point — the seller needs a way to find it
+  manually) rather than a generic error.
 
 Both routes are real API routes (not client-direct Supabase calls)
 specifically because they call out to EasyPost with a server-side API key —
@@ -102,3 +113,22 @@ per order" only at the UI level (the Shipping card's state 3 has no
   type-check — that's intentional, not a bug to work around (see
   `docs/superpowers/plans/2026-09-04-shipping-label-generation.md`'s Global
   Constraints for the full story).
+- **Shared platform EasyPost account (known limitation, accepted for now):**
+  all tenants currently purchase labels against a single
+  `EASYPOST_API_KEY` — there is no per-tenant EasyPost credential, and
+  neither `/api/shipping/rates` nor `/api/shipping/buy` has a plan gate
+  (unlike `/api/integrations/*` routes, which check
+  `hasPlatformIntegrations(plan)`). This was a deliberate scope decision to
+  ship label purchasing now; per-tenant EasyPost accounts and/or a plan
+  gate are accepted future work, not an oversight — do not silently "fix"
+  this without a product decision, see
+  `docs/superpowers/plans/2026-09-04-shipping-label-generation.md`'s Global
+  Constraints for context.
+- **Two separate tracking-number stores, deliberately unlinked:**
+  `sales.tracking_number`/`shipping_carrier` (written by the eBay
+  order-status push-back feature) and `shipments.tracking_number` (written
+  by this feature, when a label is purchased in-app) are NOT automatically
+  synced. A seller who buys a label here must still manually copy the
+  tracking number into "Edit Order" if they want it pushed to eBay. This is
+  an explicit scope decision (see the design spec's "Explicitly out of
+  scope" section), not a bug.

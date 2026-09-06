@@ -766,16 +766,30 @@ rendered for every sale in one of three states: (1) no shipment yet and
 either the tenant's `CompanyProfile.ship_from_*` fields or the sale's
 `shipping_*`/`buyer_*` fields are incomplete — a muted message + link to
 Settings, no button; (2) no shipment yet, both addresses complete — a
-"Generate Shipping Label" `Button` (admin/super_admin only, gated by a
-`currentRole` selector defined **before** the page's early
-loading/not-found returns, alongside `isSuperAdmin`/`hasDeleteOverride` —
-see the gotcha in this feature's `SKILL.md` for why) opens
-`_components/GenerateLabelModal.tsx`; (3) a shipment exists — read-only
-carrier/service/tracking number/cost + a "Download Label" link. Like the
-linked purchase, the shipment is fetched on-demand
-(`.from("shipments").select("*").eq("sale_id", sale.id).maybeSingle()`) on
-mount, not hydrated globally — no Redux slice, since a sale has at most one
-shipment in v1. The address-completeness check duplicates
+"Generate Shipping Label" `Button` for `canGenerateLabel` users (opens
+`_components/GenerateLabelModal.tsx`), else a muted "No label generated for
+this order yet." message; (3) a shipment exists — read-only
+carrier/service/tracking number/cost + a "Download Label" link.
+`canGenerateLabel = isAdmin || hasManageIntegrationsOverride` — admin/
+super_admin, OR a user granted the `manage_integrations` permission
+override (final-review fix, 2026-09-06: this now matches
+`requireIntegrationAdmin()`'s `hasPermission(...)` check on the two API
+routes and the `shipments_insert` RLS policy's `current_user_has_override('manage_integrations')`
+branch — previously this gate only checked role, so an override-holder
+could reach a real EasyPost purchase that RLS would then reject). Both
+selectors are defined **before** the page's early loading/not-found
+returns, alongside `isSuperAdmin`/`hasDeleteOverride` — see the gotcha in
+this feature's `SKILL.md` for why. Like the linked purchase, the shipment is
+fetched on-demand
+(`.from("shipments").select("*").eq("sale_id", sale.id).order("created_at",
+{ ascending: false }).limit(1)`, taking `data?.[0] ?? null` — **not**
+`.maybeSingle()`, which throws if more than one shipment ever exists for a
+sale, since `sale_id` has no unique constraint) on mount, not hydrated
+globally — no Redux slice, since a sale has at most one shipment in v1. The
+actual duplicate-purchase guard is server-side, in `/api/shipping/buy`
+(checks for an existing `shipments` row before calling `buyLabel()`) — this
+fetch shape is defensive UI robustness on top of that, not the guard
+itself. The address-completeness check duplicates
 `src/lib/shipping/addressMappers.ts`'s throw-on-missing checks client-side
 so the button never appears when it's guaranteed to fail server-side. See
 `src/lib/shipping/SKILL.md` for the EasyPost wrapper, the address mappers,

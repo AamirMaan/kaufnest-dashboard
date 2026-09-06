@@ -220,7 +220,10 @@ export function GenerateLabelModal({ sale, onClose, onSuccess }: Props) {
                 {rate.deliveryDays != null ? ` (${rate.deliveryDays}d)` : ""}
               </span>
               <span className="font-semibold">
-                {formatCurrency(parseFloat(rate.rate), rate.currency as Currency)}
+                {formatCurrency(
+                  parseFloat(rate.rate),
+                  (rate.currency || sale?.currency) as Currency
+                )}
               </span>
             </label>
           ))}

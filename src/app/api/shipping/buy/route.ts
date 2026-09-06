@@ -27,13 +27,32 @@ export async function POST(req: NextRequest) {
     !body.rateId ||
     typeof body.weightOz !== "number" ||
     !body.carrier ||
-    !body.service
+    !body.service ||
+    (body.cost !== null && body.cost !== undefined && typeof body.cost !== "number")
   ) {
     return NextResponse.json(
       {
         error:
           "saleId, easypostShipmentId, rateId, weightOz, carrier and service are required.",
       },
+      { status: 400 }
+    );
+  }
+
+  // Duplicate-purchase guard (final-review Fix 2): a sale.id with no unique
+  // constraint on shipments.sale_id means nothing at the DB layer stops a
+  // second real EasyPost purchase for the same order — this check runs
+  // BEFORE buyLabel() so it actually prevents the double-charge, not just
+  // hides it from the UI (see [id]/page.tsx's shipment-fetch fix for the
+  // defensive half of this).
+  const { data: existingShipment } = await client
+    .from("shipments")
+    .select("id")
+    .eq("sale_id", body.saleId)
+    .limit(1);
+  if (existingShipment && existingShipment.length > 0) {
+    return NextResponse.json(
+      { error: "This order already has a shipping label. Refresh the page to see it." },
       { status: 400 }
     );
   }

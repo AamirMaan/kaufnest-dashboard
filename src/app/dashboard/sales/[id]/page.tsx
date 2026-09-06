@@ -42,14 +42,20 @@ export default function SaleDetailPage({ params }: PageProps) {
     (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
   );
   const canDelete = isSuperAdmin || hasDeleteOverride;
-  // "Generate Shipping Label" role gate — admin/super_admin only, same bar
-  // as requireIntegrationAdmin() on the two API routes this button calls.
-  // Must be selected here (before the loading/not-found early returns
-  // below), not inside the Derived Values section — calling a new
-  // useAppSelector after a conditional return would change the number of
-  // hooks called between renders.
+  // "Generate Shipping Label" role gate — same bar as requireIntegrationAdmin()
+  // on the two API routes this button calls (admin/super_admin, OR a user
+  // granted the manage_integrations override — see hasPermission() in
+  // lib/utils/permissions.ts) and the shipments_insert RLS policy (043_shipments.sql /
+  // 005_tenant_provisioning.sql). Must be selected here (before the
+  // loading/not-found early returns below), not inside the Derived Values
+  // section — calling a new useAppSelector after a conditional return would
+  // change the number of hooks called between renders.
   const currentRole = useAppSelector((s) => s.currentUser.profile?.role);
-  const canGenerateLabel = currentRole === "admin" || currentRole === "super_admin";
+  const isAdmin = currentRole === "admin" || currentRole === "super_admin";
+  const hasManageIntegrationsOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("manage_integrations") ?? false
+  );
+  const canGenerateLabel = isAdmin || hasManageIntegrationsOverride;
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
@@ -170,13 +176,19 @@ export default function SaleDetailPage({ params }: PageProps) {
     (async () => {
       setShipmentLoading(true);
       const supabase = await createTenantClient();
+      // .maybeSingle() would throw (PGRST116) if more than one shipment ever
+      // exists for this sale — sale_id has no unique constraint (deliberate,
+      // see 043_shipments.sql's header comment). Ordering + limit(1) instead
+      // tolerates any number of rows without crashing the page; the actual
+      // duplicate-purchase guard lives in /api/shipping/buy (Fix 2).
       const { data } = await supabase
         .from("shipments")
         .select("*")
         .eq("sale_id", sale.id)
-        .maybeSingle();
+        .order("created_at", { ascending: false })
+        .limit(1);
       if (!cancelled) {
-        setShipment((data as Shipment) ?? null);
+        setShipment((data?.[0] as Shipment | undefined) ?? null);
         setShipmentLoading(false);
       }
     })();
@@ -644,12 +656,14 @@ export default function SaleDetailPage({ params }: PageProps) {
             </Link>{" "}
             and a buyer address on this order to generate a shipping label.
           </p>
+        ) : canGenerateLabel ? (
+          <Button variant="secondary" onClick={() => setGenerateLabelOpen(true)}>
+            Generate Shipping Label
+          </Button>
         ) : (
-          canGenerateLabel && (
-            <Button variant="secondary" onClick={() => setGenerateLabelOpen(true)}>
-              Generate Shipping Label
-            </Button>
-          )
+          <p className="text-sm text-(--color-text-muted)">
+            No label generated for this order yet.
+          </p>
         )}
       </section>
 

@@ -621,11 +621,14 @@ BEGIN
 
   -- shipments — mirrors platform_payouts: every tenant member can read (a
   -- tracking number/cost is order info, not a secret), write restricted to
-  -- admin/super_admin (same bar as the "Generate Shipping Label" UI gate and
-  -- requireIntegrationAdmin()). No UPDATE/DELETE policy — v1 has no
-  -- edit/void/refund flow.
+  -- admin/super_admin, OR a user granted the manage_integrations override
+  -- (same OR-shape as ebay_messages_all_admin above; added 2026-09-06 so
+  -- this matches requireIntegrationAdmin()'s hasPermission() check and the
+  -- "Generate Shipping Label" UI gate exactly — an override-holder could
+  -- otherwise have a real EasyPost purchase succeed and then be rejected
+  -- here). No UPDATE/DELETE policy — v1 has no edit/void/refund flow.
   EXECUTE format('CREATE POLICY "shipments_select" ON %1$I.shipments FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
-  EXECUTE format('CREATE POLICY "shipments_insert" ON %1$I.shipments FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+  EXECUTE format('CREATE POLICY "shipments_insert" ON %1$I.shipments FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_integrations'')))', schema_name);
 
   -- notifications — read-only: tenant members see rows their role allows,
   -- plus rows unlocked by an additive per-user permission override. There is

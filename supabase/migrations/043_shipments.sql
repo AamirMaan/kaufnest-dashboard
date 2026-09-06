@@ -15,11 +15,16 @@
 -- RLS mirrors platform_payouts' shape (008_platform_integrations.sql /
 -- 005_tenant_provisioning.sql): every tenant member can read (a shipment's
 -- tracking number/cost is order information, not a secret like an OAuth
--- token — unlike platform_connections), but only admin/super_admin can
--- write — same role bar as the "Generate Shipping Label" button and the
--- requireIntegrationAdmin() guard on both API routes. No UPDATE/DELETE
--- policy: v1 has no edit/void/refund flow for a purchased label, so there
--- is nothing for either policy to protect yet.
+-- token — unlike platform_connections), but only admin/super_admin (OR a
+-- user granted the manage_integrations override, same OR-shape as
+-- 030_ebay_messages_override.sql's ebay_messages_all_admin policy — added
+-- in the final-review pass, 2026-09-06, so this bar matches
+-- requireIntegrationAdmin()'s hasPermission() check exactly; without it an
+-- override-holder could have a real EasyPost purchase succeed and then be
+-- rejected here) can write — same bar as the "Generate Shipping Label"
+-- button and the requireIntegrationAdmin() guard on both API routes. No
+-- UPDATE/DELETE policy: v1 has no edit/void/refund flow for a purchased
+-- label, so there is nothing for either policy to protect yet.
 --
 -- Also baked into provision_tenant_schema() (005_tenant_provisioning.sql,
 -- same commit), so every NEW tenant gets this table from the start.
@@ -52,5 +57,5 @@ SELECT public.run_on_all_tenant_schemas($$
 
   DROP POLICY IF EXISTS "shipments_insert" ON {{schema}}.shipments;
   CREATE POLICY "shipments_insert" ON {{schema}}.shipments
-    FOR INSERT WITH CHECK ({{schema}}.is_tenant_member() AND {{schema}}.current_user_role() IN ('admin', 'super_admin'));
+    FOR INSERT WITH CHECK ({{schema}}.is_tenant_member() AND ({{schema}}.current_user_role() IN ('admin', 'super_admin') OR {{schema}}.current_user_has_override('manage_integrations')));
 $$);
