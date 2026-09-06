@@ -149,32 +149,6 @@ fixed — don't reintroduce them:
   passed as `itemTotal` in both modals, not a change to the component or
   `computeFeeFromPercent` itself.
 
-## Gotchas — buyer shipping address fields
-
-- Nine optional `string | null` fields (`buyer_name`,
-  `shipping_address_line1/2`, `shipping_city`, `shipping_state`,
-  `shipping_postal_code`, `shipping_country`, `buyer_phone`, `buyer_email`)
-  live in `FormState`/`saleToForm`/`blankForm`/`makeDefaults` in both modals,
-  behind their own "Shipping Address (optional)" collapsible section — same
-  `showFees`-style boolean/chevron pattern, see `CLAUDE.md` → "Buyer shipping
-  address" for the full field list and where it renders.
-- **None of the nine get `required`** — same rule as fee fields. Trim to
-  `null` on save, never persist `""`.
-- **`EditSaleModal.tsx` had already drifted from this plan's original
-  assumed shape** by the time Task 5 landed (2026-09-06) — a separate,
-  already-merged eBay order-status-push-back feature had added
-  `trackingNumber`/`carrier` to `FormState`/`saleToForm`/`blankForm` and new
-  JSX inside the Status card. The "Shipping Address" section's own anchor
-  (the "Fees & shipping" `</div>` immediately followed by `<Field label="Reason
-  for Edit">`) was untouched by that feature and matched the plan verbatim —
-  only the FormState/saleToForm/blankForm insertion points needed
-  re-locating (insert after `carrier: string;` / `carrier: sale.shipping_carrier
-  ?? ""` / `trackingNumber: "", carrier: "",` respectively, not at the
-  file's true end). If you're implementing a plan against this modal and its
-  "find this block" text doesn't match, check for unrelated features that
-  landed on this file between plan-authoring and implementation before
-  assuming the plan itself is wrong.
-
 ## Gotchas — CSV import formats (German support)
 
 - **`Versandkosten` maps to `shipping_charged`** (what the buyer paid — I6), NOT

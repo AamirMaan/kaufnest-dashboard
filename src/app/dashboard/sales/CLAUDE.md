@@ -413,35 +413,6 @@ surface in:
   still defaults both to `null`, so every other caller of that function is
   unaffected.
 
-## Buyer shipping address (additive fields on `Sale`, all optional)
-
-Nine `string | null` columns — `buyer_name`, `shipping_address_line1`,
-`shipping_address_line2`, `shipping_city`, `shipping_state`,
-`shipping_postal_code`, `shipping_country`, `buyer_phone`, `buyer_email` —
-added for eBay order extraction (Tasks 1-4 of the 2026-09-04
-buyer-shipping-address plan; see `src/lib/integrations/mapToSale.ts` for how
-eBay's API payload populates them on sync) and now also editable manually
-(Task 5).
-
-- **AddSaleModal / EditSaleModal** — collapsible "Shipping Address
-  (optional)" section (own `showShipping` boolean + chevron toggle,
-  identical shape to "Fees & shipping" above), rendered right after
-  "Fees & shipping" and before "Reason for Edit" (Edit) / "Purchase cost"
-  (Add). None of the nine fields are `required` — per this repo's form
-  conventions `required` is reserved for fields that block submission, and
-  these are all optional. Every field is `.trim() || null` before the DB
-  write — empty string never persists, matching the fee-fields pattern.
-- `EditSaleModal` auto-opens the section when the existing sale has at least
-  one of the nine fields non-null (the `showShipping` initializer mirrors
-  `showFees`'s pattern exactly).
-- Included in `EditSaleModal`'s before/after audit-log diff alongside every
-  other editable field — follow this shape if you add a tenth field to this
-  group.
-- Not (yet) exported in `handleExport()`'s CSV columns, not filterable/
-  sortable in `page.tsx`'s table, and not part of `importFormats.ts`'s CSV
-  import column set — Task 5 only wires the two modals. Add those
-  separately if a future task asks for it.
-
 ## Linked Purchase (cost of goods)
 
 A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The link is created in three places:
