@@ -10,6 +10,18 @@ import type { IntegrationPlatform } from "@/types";
  */
 export type IntegrationsClient = Pick<SupabaseClient, "from">;
 
+export interface ShippingAddress {
+  buyerName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
 /**
  * Platform-agnostic order shape returned by each adapter's `fetchOrders`.
  * One `NormalizedOrder` maps to one `sales` row via `mapToSale.ts` — for
@@ -28,6 +40,12 @@ export interface NormalizedOrder {
   date: string; // ISO date (YYYY-MM-DD)
   status: string;
   description: string | null;
+  /**
+   * Buyer shipping address, when the platform's order API returns one.
+   * `undefined` (not set) when the adapter doesn't support it (Amazon) —
+   * distinct from `null`, which means "asked and the platform had none".
+   */
+  shipping?: ShippingAddress | null;
 }
 
 export interface TokenSet {

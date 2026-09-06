@@ -118,6 +118,22 @@ export interface Sale {
    */
   refunded_amount: number | null;
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
+  // ─── Buyer shipping address (migration 041) ──────────────────────────────
+  // Captured automatically on eBay sync (ebay.ts's fetchOrders), or entered/
+  // corrected by hand via AddSaleModal/EditSaleModal's "Shipping Address
+  // (optional)" section, on any platform. All nine are user-owned in the
+  // re-import merge rule (mergeImportedSale.ts) — a manual correction
+  // survives a later re-sync of the same order.
+  buyer_name: string | null;
+  shipping_address_line1: string | null;
+  shipping_address_line2: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_postal_code: string | null;
+  /** ISO 3166-1 alpha-2, e.g. "DE". Free text — no format enforcement, matches `referral`'s precedent. */
+  shipping_country: string | null;
+  buyer_phone: string | null;
+  buyer_email: string | null;
   /**
    * Carrier + tracking number captured when an eBay-sourced order's status
    * is set to "shipped" — required by eBay's Fulfillment API. Null for

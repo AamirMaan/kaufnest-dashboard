@@ -1,4 +1,4 @@
-import { createShippingFulfillment, cancelOrder } from "./ebay";
+import { ebayAdapter, createShippingFulfillment, cancelOrder } from "./ebay";
 
 const originalFetch = global.fetch;
 
@@ -115,5 +115,176 @@ describe("cancelOrder", () => {
     }) as unknown as typeof fetch;
 
     await expect(cancelOrder("token-1", "order-1")).rejects.toThrow(/500/);
+  });
+});
+
+function mockJsonResponse(body: unknown) {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(body),
+  }) as unknown as typeof fetch;
+}
+
+describe("ebayAdapter.fetchOrders — shipping address extraction", () => {
+  it("maps fulfillmentStartInstructions' shipTo onto every line item's NormalizedOrder.shipping", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-34567-89012",
+          creationDate: "2026-06-01T10:00:00.000Z",
+          orderFulfillmentStatus: "FULFILLED",
+          orderPaymentStatus: "PAID",
+          lineItems: [
+            {
+              lineItemId: "001",
+              title: "Wireless Mouse",
+              quantity: "2",
+              total: { value: "19.98", currency: "EUR" },
+            },
+            {
+              lineItemId: "002",
+              title: "USB-C Cable",
+              quantity: "1",
+              total: { value: "5.50", currency: "EUR" },
+            },
+          ],
+          fulfillmentStartInstructions: [
+            {
+              shippingStep: {
+                shipTo: {
+                  fullName: "Jane Buyer",
+                  contactAddress: {
+                    addressLine1: "123 Main St",
+                    addressLine2: "Apt 4",
+                    city: "Berlin",
+                    stateOrProvince: "BE",
+                    postalCode: "10115",
+                    countryCode: "DE",
+                  },
+                  primaryPhone: { phoneNumber: "+49 30 1234567" },
+                  email: "jane@example.com",
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+
+    expect(orders).toHaveLength(2);
+    const expectedShipping = {
+      buyerName: "Jane Buyer",
+      addressLine1: "123 Main St",
+      addressLine2: "Apt 4",
+      city: "Berlin",
+      state: "BE",
+      postalCode: "10115",
+      country: "DE",
+      phone: "+49 30 1234567",
+      email: "jane@example.com",
+    };
+    expect(orders[0].shipping).toEqual(expectedShipping);
+    expect(orders[1].shipping).toEqual(expectedShipping);
+  });
+
+  it("sets shipping to null (not undefined) when fulfillmentStartInstructions is missing", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-34567-89099",
+          creationDate: "2026-06-02T10:00:00.000Z",
+          orderFulfillmentStatus: "IN_PROGRESS",
+          orderPaymentStatus: "PAID",
+          lineItems: [
+            {
+              lineItemId: "001",
+              title: "Phone Case",
+              quantity: "1",
+              total: { value: "9.99", currency: "EUR" },
+            },
+          ],
+        },
+      ],
+    });
+
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+
+    expect(orders).toHaveLength(1);
+    expect(orders[0].shipping).toBeNull();
+  });
+
+  it("sets shipping to null when fulfillmentStartInstructions is an empty array", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-34567-89100",
+          creationDate: "2026-06-03T10:00:00.000Z",
+          orderFulfillmentStatus: "IN_PROGRESS",
+          orderPaymentStatus: "PAID",
+          lineItems: [
+            {
+              lineItemId: "001",
+              title: "Phone Case",
+              quantity: "1",
+              total: { value: "9.99", currency: "EUR" },
+            },
+          ],
+          fulfillmentStartInstructions: [],
+        },
+      ],
+    });
+
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+
+    expect(orders[0].shipping).toBeNull();
+  });
+
+  it("fills only the fields eBay returned and nulls the rest when shipTo has a partial address", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-34567-89101",
+          creationDate: "2026-06-04T10:00:00.000Z",
+          orderFulfillmentStatus: "IN_PROGRESS",
+          orderPaymentStatus: "PAID",
+          lineItems: [
+            {
+              lineItemId: "001",
+              title: "Phone Case",
+              quantity: "1",
+              total: { value: "9.99", currency: "EUR" },
+            },
+          ],
+          fulfillmentStartInstructions: [
+            {
+              shippingStep: {
+                shipTo: {
+                  contactAddress: {
+                    city: "Berlin",
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+
+    expect(orders).toHaveLength(1);
+    expect(orders[0].shipping).toEqual({
+      buyerName: null,
+      addressLine1: null,
+      addressLine2: null,
+      city: "Berlin",
+      state: null,
+      postalCode: null,
+      country: null,
+      phone: null,
+      email: null,
+    });
   });
 });

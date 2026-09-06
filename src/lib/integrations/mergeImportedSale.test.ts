@@ -30,10 +30,19 @@ const existingSale: Sale = {
   ebay_fulfillment_id: null,
   ebay_sync_error: null,
   ebay_synced_at: null,
+  buyer_name: "Jane Buyer",
+  shipping_address_line1: "123 Main St",
+  shipping_address_line2: "Apt 4",
+  shipping_city: "Berlin",
+  shipping_state: "BE",
+  shipping_postal_code: "10115",
+  shipping_country: "DE",
+  buyer_phone: "+49 30 1234567",
+  buyer_email: "jane@example.com",
 };
 
 // An incoming sync row for the same order (with different platform-owned fields,
-// and nulls/defaults for user-owned fields — as normalizedOrderToSaleRow produces)
+// and nulls/different values for user-owned fields — as a re-sync might carry)
 const incomingSale: Sale = {
   id: "sale-001", // same id (would be overwritten by merge, but existing wins for non-platform fields)
   platform: "ebay",
@@ -62,6 +71,15 @@ const incomingSale: Sale = {
   ebay_fulfillment_id: null,
   ebay_sync_error: null,
   ebay_synced_at: null,
+  buyer_name: null,
+  shipping_address_line1: null,
+  shipping_address_line2: null,
+  shipping_city: "Munich",
+  shipping_state: null,
+  shipping_postal_code: null,
+  shipping_country: null,
+  buyer_phone: null,
+  buyer_email: null,
 };
 
 describe("mergeImportedSale", () => {
@@ -127,5 +145,53 @@ describe("mergeImportedSale", () => {
     // user-owned fields still preserved from existing
     expect(result.vat_rate).toBe(existingSale.vat_rate);
     expect(result.product_id).toBe(existingSale.product_id);
+  });
+
+  // Test 6: shipping-address fields (nine new fields) preserved from
+  // existing on a re-import — proves a seller's hand-corrected address
+  // survives a later status-change sync of the same order.
+  it("preserves all nine shipping-address fields from existing when incoming carries different values", () => {
+    const result = mergeImportedSale(existingSale, incomingSale);
+
+    expect(result.buyer_name).toBe(existingSale.buyer_name);
+    expect(result.shipping_address_line1).toBe(existingSale.shipping_address_line1);
+    expect(result.shipping_address_line2).toBe(existingSale.shipping_address_line2);
+    // incomingSale.shipping_city ("Munich") differs from existingSale's
+    // ("Berlin") — existing must win, proving the field is user-owned.
+    expect(result.shipping_city).toBe(existingSale.shipping_city);
+    expect(result.shipping_city).not.toBe(incomingSale.shipping_city);
+    expect(result.shipping_state).toBe(existingSale.shipping_state);
+    expect(result.shipping_postal_code).toBe(existingSale.shipping_postal_code);
+    expect(result.shipping_country).toBe(existingSale.shipping_country);
+    expect(result.buyer_phone).toBe(existingSale.buyer_phone);
+    expect(result.buyer_email).toBe(existingSale.buyer_email);
+  });
+
+  // Test 7: a populated eBay push-back tracking number and a populated
+  // shipping address must coexist across a re-import — both are user-owned,
+  // so neither should clobber the other when the incoming re-sync carries
+  // nulls for both field families (a re-sync that doesn't carry these).
+  it("preserves a populated tracking number/fulfillment id alongside the shipping-address fields on re-import", () => {
+    const existingWithTracking: Sale = {
+      ...existingSale,
+      tracking_number: "1Z999AA10123456784",
+      ebay_fulfillment_id: "fulfillment-abc",
+    };
+    const incomingWithoutTracking: Sale = {
+      ...incomingSale,
+      tracking_number: null,
+      ebay_fulfillment_id: null,
+    };
+
+    const result = mergeImportedSale(existingWithTracking, incomingWithoutTracking);
+
+    // eBay push-back fields survive
+    expect(result.tracking_number).toBe("1Z999AA10123456784");
+    expect(result.ebay_fulfillment_id).toBe("fulfillment-abc");
+    // shipping-address fields survive alongside them, unclobbered
+    expect(result.buyer_name).toBe(existingSale.buyer_name);
+    expect(result.shipping_address_line1).toBe(existingSale.shipping_address_line1);
+    expect(result.shipping_city).toBe(existingSale.shipping_city);
+    expect(result.buyer_email).toBe(existingSale.buyer_email);
   });
 });

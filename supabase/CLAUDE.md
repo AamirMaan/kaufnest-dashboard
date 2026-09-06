@@ -331,6 +331,20 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   to eBay's Fulfillment API via
   `POST /api/integrations/ebay/orders/[saleId]/sync-status`. Backs the Sales
   feature (`src/app/dashboard/sales/`).
+- `migrations/041_sales_shipping_address.sql` — adds nine nullable columns to
+  `sales` (`buyer_name`, `shipping_address_line1`, `shipping_address_line2`,
+  `shipping_city`, `shipping_state`, `shipping_postal_code`,
+  `shipping_country`, `buyer_phone`, `buyer_email`) via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. Captures the buyer's shipping address automatically
+  when an order is synced from eBay (`fulfillmentStartInstructions[].shippingStep.shipTo`
+  in `src/lib/integrations/ebay.ts`), plus a manual/editable field set on
+  every sale (any platform) via a new "Shipping Address (optional)" section
+  in `AddSaleModal`/`EditSaleModal`. All nine columns are user-owned
+  (preserved on re-import — see `mergeImportedSale.ts`'s doc comment and
+  `src/lib/integrations/SKILL.md`'s Merge rule section). The Amazon adapter
+  is untouched — its `NormalizedOrder`s leave `shipping` `undefined`,
+  degrading gracefully. Backs `src/app/dashboard/sales/`.
 
 ## Related code
 

@@ -1,4 +1,4 @@
-import type { NormalizedOrder, PlatformAdapter, TokenSet } from "./types";
+import type { NormalizedOrder, PlatformAdapter, ShippingAddress, TokenSet } from "./types";
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -38,12 +38,35 @@ interface EbayLineItem {
   total?: EbayMoney;
 }
 
+interface EbayContactAddress {
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  stateOrProvince?: string;
+  postalCode?: string;
+  countryCode?: string;
+}
+
+interface EbayShipTo {
+  fullName?: string;
+  contactAddress?: EbayContactAddress;
+  primaryPhone?: { phoneNumber?: string };
+  email?: string;
+}
+
+interface EbayFulfillmentStartInstruction {
+  shippingStep?: {
+    shipTo?: EbayShipTo;
+  };
+}
+
 interface EbayOrder {
   orderId: string;
   creationDate?: string;
   orderFulfillmentStatus?: string;
   orderPaymentStatus?: string;
   lineItems?: EbayLineItem[];
+  fulfillmentStartInstructions?: EbayFulfillmentStartInstruction[];
 }
 
 interface EbayOrdersResponse {
@@ -88,6 +111,32 @@ function mapStatus(fulfillmentStatus: string | undefined, paymentStatus: string 
     default:
       return "pending";
   }
+}
+
+/**
+ * eBay orders in this app's flow are single-shipment — there is no
+ * per-line-item address, so this reads the FIRST fulfillmentStartInstruction's
+ * shipTo and the caller attaches the result to every line item's
+ * NormalizedOrder (same as date/description). Returns null (not undefined)
+ * when eBay's response has no fulfillmentStartInstructions/shipTo, per the
+ * NormalizedOrder.shipping contract: null means "asked, platform had none".
+ */
+function extractShippingAddress(order: EbayOrder): ShippingAddress | null {
+  const shipTo = order.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo;
+  if (!shipTo) return null;
+
+  const address = shipTo.contactAddress;
+  return {
+    buyerName: shipTo.fullName ?? null,
+    addressLine1: address?.addressLine1 ?? null,
+    addressLine2: address?.addressLine2 ?? null,
+    city: address?.city ?? null,
+    state: address?.stateOrProvince ?? null,
+    postalCode: address?.postalCode ?? null,
+    country: address?.countryCode ?? null,
+    phone: shipTo.primaryPhone?.phoneNumber ?? null,
+    email: shipTo.email ?? null,
+  };
 }
 
 export const ebayAdapter: PlatformAdapter = {
@@ -143,6 +192,7 @@ export const ebayAdapter: PlatformAdapter = {
     for (const order of json.orders ?? []) {
       const status = mapStatus(order.orderFulfillmentStatus, order.orderPaymentStatus);
       const date = (order.creationDate ?? new Date().toISOString()).slice(0, 10);
+      const shipping = extractShippingAddress(order);
 
       for (const item of order.lineItems ?? []) {
         const quantity = Number(item.quantity) || 1;
@@ -158,6 +208,7 @@ export const ebayAdapter: PlatformAdapter = {
           date,
           status,
           description: `eBay order ${order.orderId}`,
+          shipping,
         });
       }
     }

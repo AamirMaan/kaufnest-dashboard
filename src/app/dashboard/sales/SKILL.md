@@ -53,6 +53,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (decimal commas, German dates, delimiter detection) live in
   `src/lib/utils/localeParse.ts` and `src/lib/utils/csv.ts`.
 
+- **Add or change a shipping-address field**: `supabase/migrations/041_sales_shipping_address.sql` +
+  `supabase/migrations/005_tenant_provisioning.sql` (schema), `src/types/index.ts`
+  (the `Sale` type), `src/lib/integrations/mapToSale.ts` (eBay sync mapping),
+  `_components/AddSaleModal.tsx` + `EditSaleModal.tsx` (manual entry),
+  `[id]/page.tsx` (display).
 - **Change eBay order status push-back** (shipped/cancelled → eBay): the four
   touch points are `_components/EditSaleModal.tsx` (the trigger + the
   Carrier/Tracking fields), `[id]/page.tsx` (the Retry row),
@@ -110,6 +115,26 @@ fixed — don't reintroduce them:
   that sets the order TO `"shipped"`. Any other status passes the existing
   values through — nulling them on the normal shipped → delivered step erased
   the record of what was pushed to eBay while `ebay_fulfillment_id` survived.
+
+## Gotchas — buyer shipping address
+
+- **Pre-existing eBay orders never backfill their address on a later
+  re-sync.** `mergeImportedSale`'s ownership rule for these nine fields is
+  inverted from most others: existing wins over incoming, always — it can't
+  tell "user cleared it" from "never captured", so an existing `NULL` beats
+  an incoming real value every time. An order imported/synced before
+  migration `041_sales_shipping_address.sql` landed has `NULL` in all nine
+  columns and will keep it forever, no matter how many times it's re-synced.
+  Only orders synced AFTER 041 landed get an auto-captured address; older
+  ones need the address filled in by hand via Edit Order.
+- **Editing a sale writes these nine fields into the audit log's before/after
+  snapshot whenever they're set** — same full-snapshot pattern
+  `EditSaleModal` already used for every other field before this feature, not
+  a new pattern. The consequence is new, though: a buyer's name, address,
+  phone, and email now accumulate in `audit_logs.metadata` on *every* edit of
+  that order, not just edits that touch the shipping section. This changes
+  the audit table's data-protection profile — a GDPR erasure request against
+  a buyer now needs to consider audit rows too, not just the `sales` row.
 
 ## Gotchas — fee fields
 
