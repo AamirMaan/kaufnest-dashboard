@@ -378,6 +378,27 @@ BEGIN
     )
   $sql$, schema_name);
 
+  -- shipments: one row per purchased EasyPost label. See
+  -- 043_shipments.sql for the full rationale (RLS mirrors platform_payouts,
+  -- no unique constraint on sale_id, no UPDATE/DELETE policy in v1).
+  EXECUTE format($sql$
+    CREATE TABLE IF NOT EXISTS %1$I.shipments (
+      id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      sale_id              uuid NOT NULL REFERENCES %1$I.sales(id) ON DELETE CASCADE,
+      carrier              text NOT NULL,
+      service              text NOT NULL,
+      tracking_number      text NOT NULL,
+      label_url            text NOT NULL,
+      label_format         text NOT NULL DEFAULT 'PDF',
+      cost                 numeric(10,2),
+      cost_currency        text,
+      weight_oz            numeric(10,2) NOT NULL,
+      easypost_shipment_id text NOT NULL,
+      created_by           uuid NOT NULL REFERENCES %1$I.profiles(id),
+      created_at           timestamptz NOT NULL DEFAULT now()
+    )
+  $sql$, schema_name);
+
   -- ── 2. updated_at triggers (reuse schema-agnostic public.set_updated_at) ──
 
   EXECUTE format('CREATE OR REPLACE TRIGGER set_expenses_updated_at BEFORE UPDATE ON %1$I.expenses FOR EACH ROW EXECUTE PROCEDURE public.set_updated_at()', schema_name);
@@ -528,7 +549,7 @@ BEGIN
 
   -- ── 5. Row-Level Security ──────────────────────────────────
 
-  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts', 'ebay_messages', 'notifications', 'notification_reads']
+  FOREACH tbl IN ARRAY ARRAY['profiles', 'expenses', 'purchases', 'sales', 'products', 'audit_logs', 'company_profile', 'platform_connections', 'platform_payouts', 'ebay_listing_drafts', 'ebay_messages', 'notifications', 'notification_reads', 'shipments']
   LOOP
     EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', schema_name, tbl);
   END LOOP;
@@ -598,6 +619,14 @@ BEGIN
   -- the message.received notification (029) but not the row it points to).
   EXECUTE format('CREATE POLICY "ebay_messages_all_admin" ON %1$I.ebay_messages FOR ALL USING (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages''))) WITH CHECK (%1$I.is_tenant_member() AND (%1$I.current_user_role() IN (''admin'', ''super_admin'') OR %1$I.current_user_has_override(''manage_messages'')))', schema_name);
 
+  -- shipments — mirrors platform_payouts: every tenant member can read (a
+  -- tracking number/cost is order info, not a secret), write restricted to
+  -- admin/super_admin (same bar as the "Generate Shipping Label" UI gate and
+  -- requireIntegrationAdmin()). No UPDATE/DELETE policy — v1 has no
+  -- edit/void/refund flow.
+  EXECUTE format('CREATE POLICY "shipments_select" ON %1$I.shipments FOR SELECT USING (%1$I.is_tenant_member() AND auth.role() = ''authenticated'')', schema_name);
+  EXECUTE format('CREATE POLICY "shipments_insert" ON %1$I.shipments FOR INSERT WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_role() IN (''admin'', ''super_admin''))', schema_name);
+
   -- notifications — read-only: tenant members see rows their role allows,
   -- plus rows unlocked by an additive per-user permission override. There is
   -- deliberately no insert/update/delete policy — only the SECURITY DEFINER
@@ -656,6 +685,8 @@ BEGIN
   -- index either, so partial buys nothing and costs correctness.
   EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_ebay_messages_external_id ON %1$I.ebay_messages (external_message_id)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ebay_messages_thread ON %1$I.ebay_messages (buyer_username, item_id, ebay_created_at)', schema_name);
+
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_shipments_sale_id ON %1$I.shipments (sale_id)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_notifications_created ON %1$I.notifications (created_at DESC)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_notifications_category ON %1$I.notifications (category)', schema_name);
