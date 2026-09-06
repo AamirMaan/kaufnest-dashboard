@@ -69,8 +69,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `loadingRates || !isWeightValid`; the step-2 Buy button has no native
   form (radio selection, not text input) but is disabled the same way via
   `buying || !selectedRateId`; both steps swap to a busy verb ("Fetching
-  rates…"/"Buying…") while their request is in flight. Not yet wired into
-  `[id]/page.tsx` — that's Task 7.
+  rates…"/"Buying…") while their request is in flight. Wired into
+  `[id]/page.tsx`'s Shipping card — see the "## Shipping labels" section
+  below.
 - `_components/FeeAmountOrPercentField.tsx` — the €/% toggle input used for
   `advertising_fee`/`platform_fee` in both modals above (2026-08-27). See
   "Fee fields" below.
@@ -757,6 +758,28 @@ refunds_exceeded, unmatched_order_ids, already_applied_order_ids,
 exceeded_order_ids }`. The insert entry is written before the refund loop can
 run so it survives a mid-loop abort; the refund-outcomes entry can only exist
 after the loop finishes.
+
+## Shipping labels (`src/lib/shipping/`)
+
+`[id]/page.tsx` has a third card, **Shipping**, below Financials/Details,
+rendered for every sale in one of three states: (1) no shipment yet and
+either the tenant's `CompanyProfile.ship_from_*` fields or the sale's
+`shipping_*`/`buyer_*` fields are incomplete — a muted message + link to
+Settings, no button; (2) no shipment yet, both addresses complete — a
+"Generate Shipping Label" `Button` (admin/super_admin only, gated by a
+`currentRole` selector defined **before** the page's early
+loading/not-found returns, alongside `isSuperAdmin`/`hasDeleteOverride` —
+see the gotcha in this feature's `SKILL.md` for why) opens
+`_components/GenerateLabelModal.tsx`; (3) a shipment exists — read-only
+carrier/service/tracking number/cost + a "Download Label" link. Like the
+linked purchase, the shipment is fetched on-demand
+(`.from("shipments").select("*").eq("sale_id", sale.id).maybeSingle()`) on
+mount, not hydrated globally — no Redux slice, since a sale has at most one
+shipment in v1. The address-completeness check duplicates
+`src/lib/shipping/addressMappers.ts`'s throw-on-missing checks client-side
+so the button never appears when it's guaranteed to fail server-side. See
+`src/lib/shipping/SKILL.md` for the EasyPost wrapper, the address mappers,
+and the two `/api/shipping/*` routes this card and modal call.
 
 ## Tests
 

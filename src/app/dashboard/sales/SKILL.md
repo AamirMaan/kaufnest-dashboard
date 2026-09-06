@@ -44,8 +44,9 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   id="generate-label-form">`; rate list rendering lives in step 2. Types
   (`EasyPostRate`, `Shipment`) and the EasyPost wrapper live in
   `src/lib/shipping/` — not this folder. As of 2026-09-06 (Task 6) the
-  component exists but is not yet imported anywhere; Task 7 wires it into
-  `[id]/page.tsx`'s order-detail page action row.
+  component is wired into `[id]/page.tsx`'s Shipping card (Task 7,
+  2026-09-06) — see "Gotchas — detail page" below for the role-gate
+  selector's hooks-ordering constraint.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
@@ -496,6 +497,24 @@ fixed — don't reintroduce them:
   the per-order variant uses `invoiceNumberFor` (deterministic, id-based) and
   `computeOrderInvoiceTotals` from `src/lib/utils/invoiceMath.ts`. The button is
   transiently disabled on hard-refresh until `companyProfile` hydrates from Redux.
+- **Shipping card / "Generate Shipping Label" role gate (Task 7,
+  2026-09-06) — hooks-ordering trap.** The page has two early `return`s
+  (loading, then not-found/`!sale`) before the main render. Every
+  `useAppSelector`/`useState`/`useEffect` call must therefore sit **above**
+  both returns, in the fixed block near the top of the component — React
+  calls hooks by position, so a hook added below either `return` (e.g.
+  inside the "Derived values" section, which only runs once `sale` is
+  guaranteed non-null) changes how many hooks run between a loading render
+  and a loaded render and throws "Rendered fewer hooks than expected." This
+  is why `canGenerateLabel`'s `currentRole` selector lives right next to
+  `isSuperAdmin`/`hasDeleteOverride` at the top, and why `shipment`/
+  `shipmentLoading`/`generateLabelOpen` state + the shipment-fetch
+  `useEffect` sit right after the linked-purchase effect, both still above
+  the loading/not-found returns — NOT next to `hasSenderAddress`/
+  `hasBuyerAddress`/`addressesComplete`, which correctly live in "Derived
+  values" since they only need `sale` and `companyProfile`, not a new hook.
+  If you add another role gate or another on-demand fetch to this page,
+  follow the same placement, not the Derived Values section.
 
 ## Gotchas
 
