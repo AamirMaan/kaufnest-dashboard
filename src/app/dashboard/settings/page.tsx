@@ -255,8 +255,9 @@ export default function SettingsPage() {
               Shipping From Address
             </h2>
             <p className="text-xs text-[var(--color-text-muted)]">
-              Used as the sender address when generating shipping labels. Your
-              company name and phone number above are reused automatically.
+              Will be used as the sender address when shipping-label generation is
+              available. Your company name and phone number above are reused
+              automatically.
             </p>
 
             <Field label="Street Address (Line 1)">
@@ -291,7 +292,7 @@ export default function SettingsPage() {
                   value={companyForm.ship_from_state ?? ""}
                   onChange={(e) => setCompany("ship_from_state", e.target.value || null)}
                   disabled={!canEditCompanyProfile}
-                  placeholder="Berlin"
+                  placeholder="Brandenburg"
                 />
               </Field>
             </Row>

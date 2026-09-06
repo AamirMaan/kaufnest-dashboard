@@ -15,14 +15,15 @@ from `CompanyProfile`.
 ## Minimal file set for common changes
 
 - **Add/change a Company Profile field (incl. invoice/banking/contact
-  fields)**: `page.tsx` (form field + the `handleCompanyProfileSubmit` update
-  payload) AND `src/types/index.ts` (`CompanyProfile`) AND
-  `supabase/migrations/005_tenant_provisioning.sql` (`company_profile` table +
-  `provision_tenant_schema()`, per the "3 places" rule in
-  `supabase/SKILL.md`) AND a one-off `ALTER TABLE` migration for
-  already-provisioned tenants (`tenant_kaufnest`). If the field should appear
-  on generated PDFs, also update `src/lib/utils/generateInvoice.ts`
-  (`addHeader`/`addFooter`).
+  fields)**: `page.tsx` (form field + the `handleCompanyProfileSubmit` upsert
+  payload) AND `src/types/index.ts` (`CompanyProfile`) AND a new
+  `supabase/migrations/NNN_*.sql` using `run_on_all_tenant_schemas` (never a
+  hardcoded `ALTER TABLE tenant_kaufnest...`) AND
+  `supabase/migrations/005_tenant_provisioning.sql`'s `company_profile` table
+  inside `provision_tenant_schema()` — the "2 places" rule in
+  `supabase/SKILL.md`. See `042_company_profile_shipfrom_address.sql` for a
+  worked example. If the field should appear on generated PDFs, also update
+  `src/lib/utils/generateInvoice.ts` (`addHeader`/`addFooter`).
 - **Change Company Profile role gating**: `page.tsx`'s
   `COMPANY_PROFILE_ROLES` constant — keep in sync with the
   `company_profile_update` RLS policy in `005_tenant_provisioning.sql`.
@@ -104,3 +105,10 @@ from `CompanyProfile`.
   configurations (see AGENTS.md's "This is NOT the Next.js you know" note) —
   reading the query string via `window.location` sidesteps that entirely
   since it's plain client-side code with no App Router hook involved.
+- The "Shipping From Address" section's six `ship_from_*` fields
+  (`ship_from_street1/street2/city/state/postal_code/country`) are
+  deliberately unvalidated and unconsumed by anything in this codebase today
+  — they exist only for a later shipping-label feature. Don't add a
+  `required` prop, format validation, or a country `<Select>` here; that
+  belongs to the shipping-label feature when it lands, per
+  `docs/superpowers/specs/2026-09-04-company-shipfrom-address-design.md`.
