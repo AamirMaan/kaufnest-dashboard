@@ -94,6 +94,12 @@ export default function SettingsPage() {
         vat_number: companyForm.vat_number,
         tax_id: companyForm.tax_id,
         address: companyForm.address,
+        ship_from_street1: companyForm.ship_from_street1,
+        ship_from_street2: companyForm.ship_from_street2,
+        ship_from_city: companyForm.ship_from_city,
+        ship_from_state: companyForm.ship_from_state,
+        ship_from_postal_code: companyForm.ship_from_postal_code,
+        ship_from_country: companyForm.ship_from_country,
         phone: companyForm.phone,
         email: companyForm.email,
         currency: companyForm.currency,
@@ -239,6 +245,74 @@ export default function SettingsPage() {
                     {validateEmail(companyForm.email ?? "")}
                   </p>
                 )}
+              </Field>
+            </Row>
+          </section>
+
+          {/* Shipping From Address */}
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
+            <h2 className="text-base font-semibold text-[var(--color-text-strong)]">
+              Shipping From Address
+            </h2>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Will be used as the sender address when shipping-label generation is
+              available. Your company name and phone number above are reused
+              automatically.
+            </p>
+
+            <Field label="Street Address (Line 1)">
+              <Input
+                value={companyForm.ship_from_street1 ?? ""}
+                onChange={(e) => setCompany("ship_from_street1", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="123 Main St"
+              />
+            </Field>
+
+            <Field label="Street Address (Line 2)">
+              <Input
+                value={companyForm.ship_from_street2 ?? ""}
+                onChange={(e) => setCompany("ship_from_street2", e.target.value || null)}
+                disabled={!canEditCompanyProfile}
+                placeholder="Apt, suite, unit, etc. (optional)"
+              />
+            </Field>
+
+            <Row>
+              <Field label="City">
+                <Input
+                  value={companyForm.ship_from_city ?? ""}
+                  onChange={(e) => setCompany("ship_from_city", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="Berlin"
+                />
+              </Field>
+              <Field label="State or Region">
+                <Input
+                  value={companyForm.ship_from_state ?? ""}
+                  onChange={(e) => setCompany("ship_from_state", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="Brandenburg"
+                />
+              </Field>
+            </Row>
+
+            <Row>
+              <Field label="Postal Code">
+                <Input
+                  value={companyForm.ship_from_postal_code ?? ""}
+                  onChange={(e) => setCompany("ship_from_postal_code", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="10115"
+                />
+              </Field>
+              <Field label="Country">
+                <Input
+                  value={companyForm.ship_from_country ?? ""}
+                  onChange={(e) => setCompany("ship_from_country", e.target.value || null)}
+                  disabled={!canEditCompanyProfile}
+                  placeholder="DE"
+                />
               </Field>
             </Row>
           </section>
