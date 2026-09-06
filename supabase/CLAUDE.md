@@ -345,6 +345,17 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `src/lib/integrations/SKILL.md`'s Merge rule section). The Amazon adapter
   is untouched — its `NormalizedOrder`s leave `shipping` `undefined`,
   degrading gracefully. Backs `src/app/dashboard/sales/`.
+- `migrations/042_company_profile_shipfrom_address.sql` — adds six nullable
+  `ship_from_street1`, `ship_from_street2`, `ship_from_city`,
+  `ship_from_state`, `ship_from_postal_code`, `ship_from_country` text
+  columns to `company_profile` in every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. A structured sender address, captured on the Settings
+  page's new "Shipping From Address" section and used only by a later
+  shipping-label feature — the existing free-text `address` column is
+  untouched and keeps backing the invoice header PDF. See
+  `docs/superpowers/specs/2026-09-04-company-shipfrom-address-design.md`.
+  Backs the Settings feature (`src/app/dashboard/settings/`).
 
 ## Related code
 

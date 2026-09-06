@@ -250,6 +250,13 @@ export interface CompanyProfile {
   vat_number: string | null;
   tax_id: string | null;
   address: string | null;
+  ship_from_street1: string | null;
+  ship_from_street2: string | null;
+  ship_from_city: string | null;
+  ship_from_state: string | null;
+  ship_from_postal_code: string | null;
+  /** ISO 3166-1 alpha-2, e.g. "DE". Free text — validated at label-purchase time (a later shipping-label feature), not here. */
+  ship_from_country: string | null;
   phone: string | null;
   email: string | null;
   currency: Currency;
