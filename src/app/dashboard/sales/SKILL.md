@@ -36,6 +36,16 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   preset list + `statusLabel`/`isPresetStatus`) and its colocated test. Also
   check `StatusBadge` in `src/components/ui/Badge.tsx` for a variant mapping if
   you add a new preset that should render with a non-default color.
+- **Change the shipping-label-generation modal (rates/buy flow)**:
+  `_components/GenerateLabelModal.tsx` only — it's a self-contained
+  fetch-driven two-step modal (`POST /api/shipping/rates` then `POST
+  /api/shipping/buy`, both under `src/app/api/shipping/`), no Redux slice of
+  its own. Package-dimension/weight fields live in step 1's `<form
+  id="generate-label-form">`; rate list rendering lives in step 2. Types
+  (`EasyPostRate`, `Shipment`) and the EasyPost wrapper live in
+  `src/lib/shipping/` — not this folder. As of 2026-09-06 (Task 6) the
+  component exists but is not yet imported anywhere; Task 7 wires it into
+  `[id]/page.tsx`'s order-detail page action row.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →

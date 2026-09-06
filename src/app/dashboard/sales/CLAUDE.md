@@ -56,6 +56,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
   treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
+- `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
+  plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
+  onSuccess(shipment: Shipment) }`, `sale` non-null means open. Step 1
+  (`"form"`) is a real `<form id="generate-label-form">` collecting
+  weight (oz, required) + optional length/width/height (in) and POSTs
+  `/api/shipping/rates`; step 2 (`"rates"`) renders the returned
+  `EasyPostRate[]` (`@/lib/shipping/easypost`) as a radio list and POSTs
+  `/api/shipping/buy` on "Buy Label". Follows this repo's mutating-button
+  convention: submit button is `type="submit" form="generate-label-form"`
+  living in the `Modal` footer outside the `<form>`, disabled while
+  `loadingRates || !isWeightValid`; the step-2 Buy button has no native
+  form (radio selection, not text input) but is disabled the same way via
+  `buying || !selectedRateId`; both steps swap to a busy verb ("Fetching
+  rates…"/"Buying…") while their request is in flight. Not yet wired into
+  `[id]/page.tsx` — that's Task 7.
 - `_components/FeeAmountOrPercentField.tsx` — the €/% toggle input used for
   `advertising_fee`/`platform_fee` in both modals above (2026-08-27). See
   "Fee fields" below.
