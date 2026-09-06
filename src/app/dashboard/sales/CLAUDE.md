@@ -42,6 +42,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `external_order_id`/`description`, sanitized with `sanitizeIlikeSearchTerm`),
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
+  Also exports `fetchSaleById(saleId)` — a plain async helper (not a thunk)
+  that re-reads one `sales` row and returns it or `null`. It exists so
+  `EditSaleModal` and `[id]/page.tsx` share one way to reconcile Redux after a
+  **server-side** write the client didn't make itself (the eBay sync route's
+  `ebay_fulfillment_id`/`ebay_sync_error`/`ebay_synced_at`); callers do
+  `const fresh = await fetchSaleById(id); if (fresh) dispatch(updateSale(fresh));`.
   Used **only** by this feature — registered centrally in `src/store/store.ts`
   and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/salesSlice.test.ts` — reducer tests (covers `hydratePage`, `setFetching`,
@@ -257,6 +263,78 @@ editable fields.
   inventory or VAT accounting. Both modals and `page.tsx` should treat a
   non-null `external_order_id` as informational only; don't add UI that lets
   a user edit it.
+
+## eBay order status push-back (additive fields on `Sale`)
+
+- **Eligibility is `isEbayIntegrationSyncedSale(sale)`** (`lib/utils/filters.ts`,
+  next to `isRevenueSale`) — `platform === "ebay" &&
+  external_order_id?.includes(":")`. **Do not re-inline `platform === "ebay"
+  && external_order_id` anywhere**: a CSV-imported eBay row also satisfies
+  that (`importFormats.ts` copies the sheet's raw `order_id` into
+  `external_order_id`), but it has no `":"` line-item suffix, so the sync
+  route can't recover a `lineItemId` and eBay rejects it forever — the user
+  would be forced through required Carrier/Tracking fields for a sync that
+  can never succeed. Both `EditSaleModal.tsx` and the sync-status route call
+  this one function. It lives in `lib/utils/` rather than
+  `lib/integrations/` because the modal is a Client Component and the
+  project verifier blocks `@/lib/integrations/*` imports from `"use client"`
+  files.
+- `tracking_number`/`shipping_carrier: string | null` — captured in
+  `EditSaleModal.tsx` only when `isEbayIntegrationSyncedSale(sale)` and the
+  Status field is set to `"shipped"`: two additional required fields
+  (Carrier — a `Select` from `EBAY_CARRIER_CODES`,
+  `src/lib/integrations/ebay/carriers.ts`; Tracking Number — a required
+  `Input`), prefilled from the sale's existing values (e.g. a retry after a
+  failed sync). **These two columns are only overwritten by a save that sets
+  the order TO `"shipped"`** — every other save passes the sale's existing
+  values through unchanged. (They used to be nulled on any non-shipped
+  status, which erased the record of what was pushed to eBay on the perfectly
+  normal shipped → delivered step, while `ebay_fulfillment_id` survived, and
+  left an outstanding Retry resending nulls.)
+- `ebay_fulfillment_id`/`ebay_synced_at: string | null` — written only by the
+  server route below, never by the client. `ebay_sync_error` is written by
+  that route **and** by `EditSaleModal` (see the accountant note below).
+- **After** the `sales.update(...)` succeeds (not before — the local save
+  must never be blocked by eBay), if `status` transitioned *into*
+  `"shipped"` or `"cancelled"` on an eligible eBay sale, `EditSaleModal`
+  fire-and-awaits `POST /api/integrations/ebay/orders/[saleId]/sync-status`
+  (`src/lib/integrations/SKILL.md`'s "eBay order status push-back" section
+  has the full route contract). A non-OK response or a thrown `fetch`
+  (both caught) shows a `warning()` toast — "Saved locally, eBay sync
+  failed" — it never blocks `onSuccess()`/`onClose()`. `AddSaleModal` is
+  untouched: a sale can only be `platform === "ebay"` with a real
+  `external_order_id` via the Integrations sync/import pipeline, never via
+  manual creation.
+- **On any sync failure the modal also writes `ebay_sync_error` itself**, via
+  the same tenant client it used for the sale update. The route is gated by
+  `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin),
+  but this modal is reachable by anyone with `update_sale`, which includes
+  **`accountant`**. An accountant's save is 403'd *before* the route touches
+  the row, so without this client-side write the order would silently never
+  reach eBay and no Retry row would ever appear for an admin to find. The
+  write is safe — the same user just successfully updated the same row.
+- **Redux is reconciled after the attempt settles** (success *and* failure):
+  `fetchSaleById(sale.id)` from `_store/salesSlice.ts` + `dispatch(updateSale
+  (fresh))`. The `data` returned by the modal's own `.update().select()` is
+  the *pre*-sync row; the `ebay_*` columns are written afterwards. Since
+  `[id]/page.tsx` renders `storeVersion ?? fetchedSale` and never re-fetches
+  once a store version exists, skipping this reconcile means the Retry row
+  never appears — and a stale error from an earlier attempt never clears —
+  until a hard page reload.
+- Included in the same before/after audit-log diff as every other editable
+  field.
+- **Retry a failed sync**: the order detail page
+  (`dashboard/sales/[id]/page.tsx`) shows a warning row when
+  `sale.ebay_sync_error` is set ("eBay sync failed: `<message>`" + a Retry
+  button), re-POSTing the same route with the sale's current
+  `status`/`tracking_number`/`shipping_carrier` — no modal, nothing to
+  re-enter. On success it calls the same `fetchSaleById` + `updateSale`
+  pair, which clears the row (a successful sync clears `ebay_sync_error`
+  server-side). The **Retry button only renders when `sale.status` is
+  `"shipped"` or `"cancelled"`** — the only two the route handles;
+  `handleRetrySync` guards on the same condition. The error text itself
+  still renders for any other status (with a line telling the user to set
+  the status back), so a failure is never invisible.
 
 ## Shared dependencies (live outside this folder on purpose)
 

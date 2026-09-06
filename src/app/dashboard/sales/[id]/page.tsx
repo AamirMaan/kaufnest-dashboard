@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { addSale, removeSale } from "../_store/salesSlice";
+import { addSale, removeSale, updateSale, fetchSaleById } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -150,10 +150,43 @@ export default function SaleDetailPage({ params }: PageProps) {
   // Modal state
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   async function handleDownloadInvoice() {
     if (!sale || !companyProfile) return;
     await generateOrderInvoice(sale, companyProfile);
+  }
+
+  async function handleRetrySync() {
+    // Only the two statuses this feature actually pushes to eBay are
+    // retryable — resending anything else would be a no-op at best.
+    if (!sale || (sale.status !== "shipped" && sale.status !== "cancelled")) return;
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/integrations/ebay/orders/${sale.id}/sync-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: sale.status,
+          trackingNumber: sale.tracking_number,
+          carrier: sale.shipping_carrier,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toastError("eBay sync failed", body.error ?? "Please try again.");
+        return;
+      }
+
+      const fresh = await fetchSaleById(sale.id);
+      if (fresh) dispatch(updateSale(fresh));
+      success("eBay sync succeeded", "The order status was pushed to eBay.");
+    } catch {
+      toastError("eBay sync failed", "Please try again.");
+    } finally {
+      setRetrying(false);
+    }
   }
 
   async function handleDelete(reason: string) {
@@ -240,6 +273,11 @@ export default function SaleDetailPage({ params }: PageProps) {
   // matches the sale currency — mismatched currencies produce a meaningless number.
   const hasCurrencyMatch =
     !linkedPurchase || linkedPurchase.currency === sale.currency;
+
+  // Retry only makes sense for the two statuses this feature pushes to eBay.
+  // The error row itself still renders for any other status (otherwise the
+  // failure would vanish with no way to see it) — just without the button.
+  const canRetrySync = sale.status === "shipped" || sale.status === "cancelled";
 
   const linkedProduct = sale.product_id
     ? (inventoryItems.find((p) => p.id === sale.product_id) ?? null)
@@ -437,6 +475,21 @@ export default function SaleDetailPage({ params }: PageProps) {
             {sale.restock && (
               <div className="rounded-(--radius-btn) bg-(--color-success-bg) border border-green-200 px-3 py-2 text-xs text-(--color-success-text)">
                 Item returned to stock (resellable)
+              </div>
+            )}
+
+            {sale.ebay_sync_error && (
+              <div className="rounded-(--radius-btn) bg-(--color-danger-bg) border border-red-200 px-3 py-2 text-xs text-(--color-danger-text) space-y-2">
+                <p>eBay sync failed: {sale.ebay_sync_error}</p>
+                {canRetrySync ? (
+                  <Button variant="secondary" onClick={handleRetrySync} disabled={retrying}>
+                    {retrying ? "Retrying…" : "Retry"}
+                  </Button>
+                ) : (
+                  <p>
+                    Set this order back to Shipped or Cancelled to retry the sync.
+                  </p>
+                )}
               </div>
             )}
 

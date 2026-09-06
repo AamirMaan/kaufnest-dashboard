@@ -153,7 +153,13 @@ BEGIN
       shipping_cost    numeric(12,2) CHECK (shipping_cost    >= 0),
       shipping_charged numeric(12,2) CHECK (shipping_charged >= 0),
       advertising_fee  numeric(12,2) CHECK (advertising_fee  >= 0),
-      platform_fee     numeric(12,2) CHECK (platform_fee     >= 0)
+      platform_fee     numeric(12,2) CHECK (platform_fee     >= 0),
+      -- eBay order status push-back — see 040_sales_ebay_fulfillment.sql.
+      tracking_number     text,
+      shipping_carrier    text,
+      ebay_fulfillment_id text,
+      ebay_sync_error     text,
+      ebay_synced_at      timestamptz
     )
   $sql$, schema_name);
 

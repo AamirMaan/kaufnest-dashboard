@@ -25,6 +25,11 @@ const makeSale = (overrides: Partial<Sale> = {}): Sale => ({
   restock: false,
   refunded_amount: null,
   external_order_id: null,
+  tracking_number: null,
+  shipping_carrier: null,
+  ebay_fulfillment_id: null,
+  ebay_sync_error: null,
+  ebay_synced_at: null,
   ...overrides,
 });
 

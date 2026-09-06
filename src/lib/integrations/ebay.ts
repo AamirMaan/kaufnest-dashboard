@@ -165,3 +165,92 @@ export const ebayAdapter: PlatformAdapter = {
     return orders;
   },
 };
+
+export interface CreateShippingFulfillmentBody {
+  lineItems: { lineItemId: string; quantity: number }[];
+  shippedDate: string;
+  shippingCarrierCode: string;
+  trackingNumber: string;
+}
+
+export interface CreateShippingFulfillmentResult {
+  fulfillmentId: string;
+}
+
+/**
+ * POSTs a shipping fulfillment for an eBay order — marks it shipped on
+ * eBay's side. `orderId` is the eBay order id parsed out of
+ * `sales.external_order_id` by the sync-status route. Throws on any
+ * non-OK response or a 2xx response with no `fulfillmentId`.
+ */
+export async function createShippingFulfillment(
+  accessToken: string,
+  orderId: string,
+  body: CreateShippingFulfillmentBody
+): Promise<CreateShippingFulfillmentResult> {
+  const res = await fetch(`${EBAY_ORDERS_URL}/${orderId}/shipping_fulfillment`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`eBay createShippingFulfillment failed: ${res.status} ${await res.text()}`);
+  }
+
+  const json = (await res.json()) as { fulfillmentId?: string };
+  if (!json.fulfillmentId) {
+    throw new Error("eBay createShippingFulfillment succeeded but returned no fulfillmentId");
+  }
+  return { fulfillmentId: json.fulfillmentId };
+}
+
+export interface CancelOrderBody {
+  cancelReason?: string;
+}
+
+export interface CancelOrderResult {
+  cancelId?: string;
+}
+
+/**
+ * POSTs an order cancellation via eBay's Post-Order Cancellation API
+ * (separate base path from the Fulfillment API above, authorized by the
+ * same `sell.fulfillment` scope already in `EBAY_SCOPE`). `orderId` is the
+ * eBay order id parsed out of `sales.external_order_id`, sent as
+ * `legacyOrderId`.
+ *
+ * UNVERIFIED against eBay's live sandbox at design time — confirm the
+ * `legacyOrderId`/`cancelState`/`cancelReason` field names against eBay's
+ * current Post-Order API reference before relying on this in production. A
+ * wrong field name surfaces as a caught error in the sync-status route
+ * (writes `sales.ebay_sync_error`, returns 502), not a crash.
+ */
+export async function cancelOrder(
+  accessToken: string,
+  orderId: string,
+  body?: CancelOrderBody
+): Promise<CancelOrderResult> {
+  const res = await fetch(`${EBAY_BASE}/post-order/v2/cancellation`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      legacyOrderId: orderId,
+      cancelState: "CANCEL_FULL_ORDER",
+      cancelReason: body?.cancelReason ?? "SELLER_CANCEL_BUYER_REQUEST",
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`eBay cancelOrder failed: ${res.status} ${await res.text()}`);
+  }
+
+  const json = (await res.json().catch(() => ({}))) as { cancelId?: string };
+  return { cancelId: json.cancelId };
+}

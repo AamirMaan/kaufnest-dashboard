@@ -321,6 +321,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   history under the Listings page's "Inactive" filter. Backs the Listings
   feature (`src/app/dashboard/listings/`) — see its `SKILL.md` gotcha for
   the full story.
+- `migrations/040_sales_ebay_fulfillment.sql` — adds nullable
+  `tracking_number`, `shipping_carrier`, `ebay_fulfillment_id`,
+  `ebay_sync_error`, `ebay_synced_at` to `sales` in every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. Backs the eBay order status push-back (piece 1/4 of
+  the "eBay order fulfillment" decomposition) — pushing a local
+  "shipped"/"cancelled" `sales.status` change on an eBay-sourced order out
+  to eBay's Fulfillment API via
+  `POST /api/integrations/ebay/orders/[saleId]/sync-status`. Backs the Sales
+  feature (`src/app/dashboard/sales/`).
 
 ## Related code
 

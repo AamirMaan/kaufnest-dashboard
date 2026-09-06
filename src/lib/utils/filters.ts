@@ -154,6 +154,36 @@ export function isRevenueSale(sale: { status: string | null }): boolean {
   return sale.status !== "returned" && sale.status !== "cancelled";
 }
 
+/**
+ * Canonical "is this sale an eBay order eligible for status push-back" rule —
+ * update here to change everywhere (EditSaleModal + the sync-status route).
+ *
+ * The `":"` check is load-bearing, not defensive noise. A synced eBay order's
+ * `external_order_id` is `"${orderId}:${lineItemId}"` (see
+ * `lib/integrations/mapToSale.ts` and `lib/integrations/SKILL.md`'s dedup-key
+ * contract), and the sync route splits it on the LAST `":"` to recover both
+ * ids. A **CSV-imported** eBay row (`sales/_components/importFormats.ts`) sets
+ * `external_order_id` straight from a plain `order_id` column with no
+ * line-item suffix — that string has no `":"`, so the split falls back to
+ * using the whole value as BOTH `orderId` and `lineItemId`, which eBay's API
+ * always rejects. Such a row would be a guaranteed, permanent sync failure, so
+ * it must not render the Carrier/Tracking fields or reach the route at all.
+ *
+ * Lives here (next to `isRevenueSale`) rather than in `lib/integrations/`
+ * because `EditSaleModal` is a Client Component and the project verifier
+ * blocks `@/lib/integrations/*` imports from `"use client"` files.
+ */
+export function isEbayIntegrationSyncedSale(sale: {
+  platform: string;
+  external_order_id: string | null;
+}): boolean {
+  return (
+    sale.platform === "ebay" &&
+    !!sale.external_order_id &&
+    sale.external_order_id.includes(":")
+  );
+}
+
 function matchesSearch(term: string, ...fields: (string | null)[]): boolean {
   const needle = term.trim().toLowerCase();
   if (!needle) return true;
