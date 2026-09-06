@@ -240,4 +240,51 @@ describe("ebayAdapter.fetchOrders — shipping address extraction", () => {
 
     expect(orders[0].shipping).toBeNull();
   });
+
+  it("fills only the fields eBay returned and nulls the rest when shipTo has a partial address", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-34567-89101",
+          creationDate: "2026-06-04T10:00:00.000Z",
+          orderFulfillmentStatus: "IN_PROGRESS",
+          orderPaymentStatus: "PAID",
+          lineItems: [
+            {
+              lineItemId: "001",
+              title: "Phone Case",
+              quantity: "1",
+              total: { value: "9.99", currency: "EUR" },
+            },
+          ],
+          fulfillmentStartInstructions: [
+            {
+              shippingStep: {
+                shipTo: {
+                  contactAddress: {
+                    city: "Berlin",
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+
+    expect(orders).toHaveLength(1);
+    expect(orders[0].shipping).toEqual({
+      buyerName: null,
+      addressLine1: null,
+      addressLine2: null,
+      city: "Berlin",
+      state: null,
+      postalCode: null,
+      country: null,
+      phone: null,
+      email: null,
+    });
+  });
 });

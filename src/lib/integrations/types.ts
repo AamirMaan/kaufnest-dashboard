@@ -10,14 +10,6 @@ import type { IntegrationPlatform } from "@/types";
  */
 export type IntegrationsClient = Pick<SupabaseClient, "from">;
 
-/**
- * Platform-agnostic order shape returned by each adapter's `fetchOrders`.
- * One `NormalizedOrder` maps to one `sales` row via `mapToSale.ts` — for
- * platforms that return multiple line items per order, the adapter emits one
- * `NormalizedOrder` per line item and gives each a distinct
- * `external_order_id` (e.g. `${orderId}:${lineItemId}`) so the
- * `(platform, external_order_id)` unique index stays one-row-per-line-item.
- */
 export interface ShippingAddress {
   buyerName: string | null;
   addressLine1: string | null;
@@ -30,6 +22,14 @@ export interface ShippingAddress {
   email: string | null;
 }
 
+/**
+ * Platform-agnostic order shape returned by each adapter's `fetchOrders`.
+ * One `NormalizedOrder` maps to one `sales` row via `mapToSale.ts` — for
+ * platforms that return multiple line items per order, the adapter emits one
+ * `NormalizedOrder` per line item and gives each a distinct
+ * `external_order_id` (e.g. `${orderId}:${lineItemId}`) so the
+ * `(platform, external_order_id)` unique index stays one-row-per-line-item.
+ */
 export interface NormalizedOrder {
   external_order_id: string;
   product_name: string;

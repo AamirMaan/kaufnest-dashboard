@@ -166,4 +166,32 @@ describe("mergeImportedSale", () => {
     expect(result.buyer_phone).toBe(existingSale.buyer_phone);
     expect(result.buyer_email).toBe(existingSale.buyer_email);
   });
+
+  // Test 7: a populated eBay push-back tracking number and a populated
+  // shipping address must coexist across a re-import — both are user-owned,
+  // so neither should clobber the other when the incoming re-sync carries
+  // nulls for both field families (a re-sync that doesn't carry these).
+  it("preserves a populated tracking number/fulfillment id alongside the shipping-address fields on re-import", () => {
+    const existingWithTracking: Sale = {
+      ...existingSale,
+      tracking_number: "1Z999AA10123456784",
+      ebay_fulfillment_id: "fulfillment-abc",
+    };
+    const incomingWithoutTracking: Sale = {
+      ...incomingSale,
+      tracking_number: null,
+      ebay_fulfillment_id: null,
+    };
+
+    const result = mergeImportedSale(existingWithTracking, incomingWithoutTracking);
+
+    // eBay push-back fields survive
+    expect(result.tracking_number).toBe("1Z999AA10123456784");
+    expect(result.ebay_fulfillment_id).toBe("fulfillment-abc");
+    // shipping-address fields survive alongside them, unclobbered
+    expect(result.buyer_name).toBe(existingSale.buyer_name);
+    expect(result.shipping_address_line1).toBe(existingSale.shipping_address_line1);
+    expect(result.shipping_city).toBe(existingSale.shipping_city);
+    expect(result.buyer_email).toBe(existingSale.buyer_email);
+  });
 });

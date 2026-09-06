@@ -133,15 +133,15 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const [showShipping, setShowShipping] = useState(() => {
     if (!sale) return false;
     return (
-      sale.buyer_name != null ||
-      sale.shipping_address_line1 != null ||
-      sale.shipping_address_line2 != null ||
-      sale.shipping_city != null ||
-      sale.shipping_state != null ||
-      sale.shipping_postal_code != null ||
-      sale.shipping_country != null ||
-      sale.buyer_phone != null ||
-      sale.buyer_email != null
+      !!sale.buyer_name ||
+      !!sale.shipping_address_line1 ||
+      !!sale.shipping_address_line2 ||
+      !!sale.shipping_city ||
+      !!sale.shipping_state ||
+      !!sale.shipping_postal_code ||
+      !!sale.shipping_country ||
+      !!sale.buyer_phone ||
+      !!sale.buyer_email
     );
   });
   const [showAddPurchase, setShowAddPurchase] = useState(false);
