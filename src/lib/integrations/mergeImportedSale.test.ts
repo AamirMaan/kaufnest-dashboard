@@ -30,6 +30,15 @@ const existingSale: Sale = {
   ebay_fulfillment_id: null,
   ebay_sync_error: null,
   ebay_synced_at: null,
+  buyer_name: null,
+  shipping_address_line1: null,
+  shipping_address_line2: null,
+  shipping_city: null,
+  shipping_state: null,
+  shipping_postal_code: null,
+  shipping_country: null,
+  buyer_phone: null,
+  buyer_email: null,
 };
 
 // An incoming sync row for the same order (with different platform-owned fields,
@@ -62,6 +71,15 @@ const incomingSale: Sale = {
   ebay_fulfillment_id: null,
   ebay_sync_error: null,
   ebay_synced_at: null,
+  buyer_name: null,
+  shipping_address_line1: null,
+  shipping_address_line2: null,
+  shipping_city: null,
+  shipping_state: null,
+  shipping_postal_code: null,
+  shipping_country: null,
+  buyer_phone: null,
+  buyer_email: null,
 };
 
 describe("mergeImportedSale", () => {

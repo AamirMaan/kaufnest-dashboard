@@ -154,6 +154,16 @@ BEGIN
       shipping_charged numeric(12,2) CHECK (shipping_charged >= 0),
       advertising_fee  numeric(12,2) CHECK (advertising_fee  >= 0),
       platform_fee     numeric(12,2) CHECK (platform_fee     >= 0),
+      -- Buyer shipping address — see 041_sales_shipping_address.sql.
+      buyer_name             text,
+      shipping_address_line1 text,
+      shipping_address_line2 text,
+      shipping_city          text,
+      shipping_state         text,
+      shipping_postal_code   text,
+      shipping_country       text,
+      buyer_phone            text,
+      buyer_email            text,
       -- eBay order status push-back — see 040_sales_ebay_fulfillment.sql.
       tracking_number     text,
       shipping_carrier    text,
