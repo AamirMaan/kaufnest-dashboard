@@ -56,6 +56,22 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
   treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
+- `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
+  plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
+  onSuccess(shipment: Shipment) }`, `sale` non-null means open. Step 1
+  (`"form"`) is a real `<form id="generate-label-form">` collecting
+  weight (oz, required) + optional length/width/height (in) and POSTs
+  `/api/shipping/rates`; step 2 (`"rates"`) renders the returned
+  `EasyPostRate[]` (`@/lib/shipping/easypost`) as a radio list and POSTs
+  `/api/shipping/buy` on "Buy Label". Follows this repo's mutating-button
+  convention: submit button is `type="submit" form="generate-label-form"`
+  living in the `Modal` footer outside the `<form>`, disabled while
+  `loadingRates || !isWeightValid`; the step-2 Buy button has no native
+  form (radio selection, not text input) but is disabled the same way via
+  `buying || !selectedRateId`; both steps swap to a busy verb ("Fetching
+  rates…"/"Buying…") while their request is in flight. Wired into
+  `[id]/page.tsx`'s Shipping card — see the "## Shipping labels" section
+  below.
 - `_components/FeeAmountOrPercentField.tsx` — the €/% toggle input used for
   `advertising_fee`/`platform_fee` in both modals above (2026-08-27). See
   "Fee fields" below.
@@ -742,6 +758,42 @@ refunds_exceeded, unmatched_order_ids, already_applied_order_ids,
 exceeded_order_ids }`. The insert entry is written before the refund loop can
 run so it survives a mid-loop abort; the refund-outcomes entry can only exist
 after the loop finishes.
+
+## Shipping labels (`src/lib/shipping/`)
+
+`[id]/page.tsx` has a third card, **Shipping**, below Financials/Details,
+rendered for every sale in one of three states: (1) no shipment yet and
+either the tenant's `CompanyProfile.ship_from_*` fields or the sale's
+`shipping_*`/`buyer_*` fields are incomplete — a muted message + link to
+Settings, no button; (2) no shipment yet, both addresses complete — a
+"Generate Shipping Label" `Button` for `canGenerateLabel` users (opens
+`_components/GenerateLabelModal.tsx`), else a muted "No label generated for
+this order yet." message; (3) a shipment exists — read-only
+carrier/service/tracking number/cost + a "Download Label" link.
+`canGenerateLabel = isAdmin || hasManageIntegrationsOverride` — admin/
+super_admin, OR a user granted the `manage_integrations` permission
+override (final-review fix, 2026-09-06: this now matches
+`requireIntegrationAdmin()`'s `hasPermission(...)` check on the two API
+routes and the `shipments_insert` RLS policy's `current_user_has_override('manage_integrations')`
+branch — previously this gate only checked role, so an override-holder
+could reach a real EasyPost purchase that RLS would then reject). Both
+selectors are defined **before** the page's early loading/not-found
+returns, alongside `isSuperAdmin`/`hasDeleteOverride` — see the gotcha in
+this feature's `SKILL.md` for why. Like the linked purchase, the shipment is
+fetched on-demand
+(`.from("shipments").select("*").eq("sale_id", sale.id).order("created_at",
+{ ascending: false }).limit(1)`, taking `data?.[0] ?? null` — **not**
+`.maybeSingle()`, which throws if more than one shipment ever exists for a
+sale, since `sale_id` has no unique constraint) on mount, not hydrated
+globally — no Redux slice, since a sale has at most one shipment in v1. The
+actual duplicate-purchase guard is server-side, in `/api/shipping/buy`
+(checks for an existing `shipments` row before calling `buyLabel()`) — this
+fetch shape is defensive UI robustness on top of that, not the guard
+itself. The address-completeness check duplicates
+`src/lib/shipping/addressMappers.ts`'s throw-on-missing checks client-side
+so the button never appears when it's guaranteed to fail server-side. See
+`src/lib/shipping/SKILL.md` for the EasyPost wrapper, the address mappers,
+and the two `/api/shipping/*` routes this card and modal call.
 
 ## Tests
 

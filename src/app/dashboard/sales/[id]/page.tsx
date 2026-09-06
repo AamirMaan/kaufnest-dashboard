@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { EditSaleModal } from "../_components/EditSaleModal";
+import { GenerateLabelModal } from "../_components/GenerateLabelModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
@@ -21,7 +22,7 @@ import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { generateOrderInvoice } from "@/lib/utils/generateInvoice";
 import { ArrowLeft, Pencil, Download, Trash2 } from "lucide-react";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
-import type { Sale, Purchase, Product } from "@/types";
+import type { Sale, Purchase, Product, Shipment, Currency } from "@/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -41,6 +42,20 @@ export default function SaleDetailPage({ params }: PageProps) {
     (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
   );
   const canDelete = isSuperAdmin || hasDeleteOverride;
+  // "Generate Shipping Label" role gate — same bar as requireIntegrationAdmin()
+  // on the two API routes this button calls (admin/super_admin, OR a user
+  // granted the manage_integrations override — see hasPermission() in
+  // lib/utils/permissions.ts) and the shipments_insert RLS policy (043_shipments.sql /
+  // 005_tenant_provisioning.sql). Must be selected here (before the
+  // loading/not-found early returns below), not inside the Derived Values
+  // section — calling a new useAppSelector after a conditional return would
+  // change the number of hooks called between renders.
+  const currentRole = useAppSelector((s) => s.currentUser.profile?.role);
+  const isAdmin = currentRole === "admin" || currentRole === "super_admin";
+  const hasManageIntegrationsOverride = useAppSelector(
+    (s) => s.currentUser.profile?.permission_overrides?.includes("manage_integrations") ?? false
+  );
+  const canGenerateLabel = isAdmin || hasManageIntegrationsOverride;
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
@@ -146,6 +161,43 @@ export default function SaleDetailPage({ params }: PageProps) {
   }, [sale?.id]);
   // ^ omit purchases/dispatch — we only want this to fire once per sale id;
   //   Redux updates flow through linkedPurchase without re-triggering the fetch
+
+  // Shipment (shipping-label feature) — same fetch-on-load pattern as the
+  // linked purchase above. No Redux slice: a sale has at most one shipment
+  // in v1, so it's fetched on-demand rather than hydrated globally.
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [shipmentLoading, setShipmentLoading] = useState(true);
+  const [generateLabelOpen, setGenerateLabelOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sale?.id) return;
+    let cancelled = false;
+
+    (async () => {
+      setShipmentLoading(true);
+      const supabase = await createTenantClient();
+      // .maybeSingle() would throw (PGRST116) if more than one shipment ever
+      // exists for this sale — sale_id has no unique constraint (deliberate,
+      // see 043_shipments.sql's header comment). Ordering + limit(1) instead
+      // tolerates any number of rows without crashing the page; the actual
+      // duplicate-purchase guard lives in /api/shipping/buy (Fix 2).
+      const { data } = await supabase
+        .from("shipments")
+        .select("*")
+        .eq("sale_id", sale.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (!cancelled) {
+        setShipment((data?.[0] as Shipment | undefined) ?? null);
+        setShipmentLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sale?.id]);
+  // ^ same reasoning as the linked-purchase effect above — fire once per
+  //   sale id, not on every render.
 
   // Modal state
   const [editOpen, setEditOpen] = useState(false);
@@ -293,6 +345,24 @@ export default function SaleDetailPage({ params }: PageProps) {
     !!sale.shipping_country ||
     !!sale.buyer_phone ||
     !!sale.buyer_email;
+
+  // Shipping card gating — mirrors the throw-on-missing checks in
+  // src/lib/shipping/addressMappers.ts, checked here client-side so the
+  // "Generate Shipping Label" button never appears when it's guaranteed to
+  // fail server-side.
+  const hasSenderAddress = !!(
+    companyProfile?.ship_from_street1 &&
+    companyProfile?.ship_from_city &&
+    companyProfile?.ship_from_postal_code &&
+    companyProfile?.ship_from_country
+  );
+  const hasBuyerAddress = !!(
+    sale.shipping_address_line1 &&
+    sale.shipping_city &&
+    sale.shipping_postal_code &&
+    sale.shipping_country
+  );
+  const addressesComplete = hasSenderAddress && hasBuyerAddress;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -545,6 +615,58 @@ export default function SaleDetailPage({ params }: PageProps) {
         </section>
       </div>
 
+      {/* Shipping card — own card per design, rendered for every sale */}
+      <section className="rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-6 space-y-4">
+        <h2 className="text-base font-semibold text-(--color-text-strong)">
+          Shipping
+        </h2>
+
+        {shipmentLoading ? (
+          <p className="text-sm text-(--color-text-muted)">Loading…</p>
+        ) : shipment ? (
+          <dl className="space-y-2">
+            <FinRow label="Carrier" value={`${shipment.carrier} — ${shipment.service}`} />
+            <FinRow label="Tracking Number" value={shipment.tracking_number} />
+            {shipment.cost != null && (
+              <FinRow
+                label="Label Cost"
+                value={formatCurrency(
+                  shipment.cost,
+                  (shipment.cost_currency ?? sale.currency) as Currency
+                )}
+              />
+            )}
+            <div className="pt-2">
+              <a
+                href={shipment.label_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-(--color-primary) hover:underline"
+              >
+                <Download size={14} />
+                Download Label
+              </a>
+            </div>
+          </dl>
+        ) : !addressesComplete ? (
+          <p className="text-sm text-(--color-text-muted)">
+            Add a sender address in{" "}
+            <Link href="/dashboard/settings" className="text-(--color-primary) hover:underline">
+              Settings
+            </Link>{" "}
+            and a buyer address on this order to generate a shipping label.
+          </p>
+        ) : canGenerateLabel ? (
+          <Button variant="secondary" onClick={() => setGenerateLabelOpen(true)}>
+            Generate Shipping Label
+          </Button>
+        ) : (
+          <p className="text-sm text-(--color-text-muted)">
+            No label generated for this order yet.
+          </p>
+        )}
+      </section>
+
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button variant="secondary" onClick={() => setEditOpen(true)}>
@@ -592,6 +714,15 @@ export default function SaleDetailPage({ params }: PageProps) {
         description={`This will permanently delete "${sale.product_name}". This action cannot be undone.`}
         onConfirm={handleDelete}
         onClose={() => setDeleteOpen(false)}
+      />
+      <GenerateLabelModal
+        sale={generateLabelOpen ? sale : null}
+        onClose={() => setGenerateLabelOpen(false)}
+        onSuccess={(newShipment) => {
+          setShipment(newShipment);
+          setGenerateLabelOpen(false);
+          success("Shipping label generated", `Tracking number ${newShipment.tracking_number}`);
+        }}
       />
     </div>
   );

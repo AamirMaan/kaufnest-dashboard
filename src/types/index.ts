@@ -173,7 +173,7 @@ export type AuditAction =
   | "permission_change"
   | "status_change";
 
-export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message";
+export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment";
 
 export interface AuditLog {
   id: string;
@@ -407,4 +407,22 @@ export interface EbayMessage {
   item_url: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ─── Shipments ────────────────────────────────────────────────────────────
+
+export interface Shipment {
+  id: string;
+  sale_id: string;
+  carrier: string;
+  service: string;
+  tracking_number: string;
+  label_url: string;
+  label_format: string;
+  cost: number | null;
+  cost_currency: string | null;
+  weight_oz: number;
+  easypost_shipment_id: string;
+  created_by: string;
+  created_at: string;
 }

@@ -356,6 +356,22 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   untouched and keeps backing the invoice header PDF. See
   `docs/superpowers/specs/2026-09-04-company-shipfrom-address-design.md`.
   Backs the Settings feature (`src/app/dashboard/settings/`).
+- `migrations/043_shipments.sql` — creates `shipments` (one row per
+  purchased EasyPost label) in every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into
+  `provision_tenant_schema()` in the same commit. RLS mirrors
+  `platform_payouts`: SELECT for all tenant members, INSERT restricted to
+  admin/super_admin OR a user granted the `manage_integrations` permission
+  override (the override branch was added in a final-review pass,
+  2026-09-06, same `OR current_user_has_override(...)` shape as
+  `030_ebay_messages_override.sql` — needed to match
+  `requireIntegrationAdmin()`'s `hasPermission()` check on the two
+  `/api/shipping/*` routes; without it an override-holder's real EasyPost
+  purchase would succeed and then be rejected at the `shipments` insert), no
+  UPDATE/DELETE policy (v1 has no edit/void/refund flow). Backs the
+  shipping-label-generation feature (`src/lib/shipping/`,
+  `src/app/api/shipping/`, `src/app/dashboard/sales/[id]/page.tsx`'s
+  Shipping card).
 
 ## Related code
 
