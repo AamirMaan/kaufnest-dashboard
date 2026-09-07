@@ -20,6 +20,7 @@ import { formatDate, formatDateTime } from "@/lib/utils/date";
 import { computeNetProceeds, computeGrossProfit } from "../_components/orderMath";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { generateOrderInvoice } from "@/lib/utils/generateInvoice";
+import { generatePlainShippingLabel } from "@/lib/shipping/generatePlainLabel";
 import { ArrowLeft, Pencil, Download, Trash2 } from "lucide-react";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import type { Sale, Purchase, Product, Shipment, Currency } from "@/types";
@@ -56,6 +57,11 @@ export default function SaleDetailPage({ params }: PageProps) {
     (s) => s.currentUser.profile?.permission_overrides?.includes("manage_integrations") ?? false
   );
   const canGenerateLabel = isAdmin || hasManageIntegrationsOverride;
+  // Decides which Shipping-card body renders when no shipment exists yet —
+  // the real EasyPost flow (gated further by canGenerateLabel above) when
+  // true, or the free plain PDF label when false. Same hooks-ordering
+  // constraint as every other selector in this block — see SKILL.md.
+  const shippingLabelsEnabled = useAppSelector((s) => s.currentUser.shippingLabelsEnabled);
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
@@ -207,6 +213,11 @@ export default function SaleDetailPage({ params }: PageProps) {
   async function handleDownloadInvoice() {
     if (!sale || !companyProfile) return;
     await generateOrderInvoice(sale, companyProfile);
+  }
+
+  async function handleDownloadPlainLabel() {
+    if (!sale || !companyProfile) return;
+    await generatePlainShippingLabel(sale, companyProfile);
   }
 
   async function handleRetrySync() {
@@ -656,14 +667,21 @@ export default function SaleDetailPage({ params }: PageProps) {
             </Link>{" "}
             and a buyer address on this order to generate a shipping label.
           </p>
-        ) : canGenerateLabel ? (
-          <Button variant="secondary" onClick={() => setGenerateLabelOpen(true)}>
-            Generate Shipping Label
-          </Button>
+        ) : shippingLabelsEnabled ? (
+          canGenerateLabel ? (
+            <Button variant="secondary" onClick={() => setGenerateLabelOpen(true)}>
+              Generate Shipping Label
+            </Button>
+          ) : (
+            <p className="text-sm text-(--color-text-muted)">
+              No label generated for this order yet.
+            </p>
+          )
         ) : (
-          <p className="text-sm text-(--color-text-muted)">
-            No label generated for this order yet.
-          </p>
+          <Button variant="secondary" onClick={handleDownloadPlainLabel}>
+            <Download size={15} />
+            Download Shipping Label
+          </Button>
         )}
       </section>
 

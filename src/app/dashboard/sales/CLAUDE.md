@@ -762,14 +762,36 @@ after the loop finishes.
 ## Shipping labels (`src/lib/shipping/`)
 
 `[id]/page.tsx` has a third card, **Shipping**, below Financials/Details,
-rendered for every sale in one of three states: (1) no shipment yet and
-either the tenant's `CompanyProfile.ship_from_*` fields or the sale's
-`shipping_*`/`buyer_*` fields are incomplete — a muted message + link to
-Settings, no button; (2) no shipment yet, both addresses complete — a
-"Generate Shipping Label" `Button` for `canGenerateLabel` users (opens
-`_components/GenerateLabelModal.tsx`), else a muted "No label generated for
-this order yet." message; (3) a shipment exists — read-only
-carrier/service/tracking number/cost + a "Download Label" link.
+rendered for every sale in one of four states: (1) a shipment exists — a
+real, already-purchased EasyPost label — shown **regardless of the current
+`shippingLabelsEnabled` flag** (it's a historical record; a tenant can have
+one from before the flag was turned off), read-only
+carrier/service/tracking number/cost + a "Download Label" link; (2) no
+shipment yet and either the tenant's `CompanyProfile.ship_from_*` fields or
+the sale's `shipping_*`/`buyer_*` fields are incomplete — a muted message +
+link to Settings, no button; (3) no shipment yet, both addresses complete,
+`state.currentUser.shippingLabelsEnabled` true (2026-09-07,
+control-plane migration 010 — platform-admin per-tenant switch, defaults
+false, no plan tie) — a "Generate Shipping Label" `Button` for
+`canGenerateLabel` users (opens `_components/GenerateLabelModal.tsx`), else
+a muted "No label generated for this order yet." message — this branch is
+the pre-2026-09-07 behavior, now reachable only when the tenant's flag is
+on; (4) no shipment yet, addresses complete,
+`shippingLabelsEnabled` **false** (the default) — a "Download Shipping
+Label" `Button` that calls `generatePlainShippingLabel(sale,
+companyProfile)` (`src/lib/shipping/generatePlainLabel.ts`) directly, no
+modal, no API call, **not** gated by `canGenerateLabel` — open to anyone
+who can view the order, same access level as "Download Invoice".
+
+`shippingLabelsEnabled` is read from
+`state.currentUser.shippingLabelsEnabled`, hydrated the same way as
+`aiEnabled` — see `dashboard/CLAUDE.md`'s hydration description and
+`src/lib/shipping/SKILL.md`'s per-tenant gate section for the full chain
+(the actual enforcement is server-side, in
+`src/lib/shipping/authGuard.ts`'s `requireShippingLabelAccess()`, called by
+both `/api/shipping/*` routes — this client flag only decides which button
+renders).
+
 `canGenerateLabel = isAdmin || hasManageIntegrationsOverride` — admin/
 super_admin, OR a user granted the `manage_integrations` permission
 override (final-review fix, 2026-09-06: this now matches
