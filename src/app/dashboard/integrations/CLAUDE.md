@@ -39,6 +39,17 @@ and imported manually via `/dashboard/integrations/review` and stored as
   imported rows in local state, calls `router.refresh()` to re-hydrate
   `salesSlice`. Applies the same plan/role guards as `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
+  **"Sync Statuses" button (2026-09-07)**: a second, independent submission
+  path to the *same* import route — re-fetches `GET /api/integrations/review`
+  for fresh platform data, collects every order already marked `imported:
+  true` across **both** platform tabs (not just the active one), and POSTs
+  them to `POST /api/integrations/review/import` with no
+  `purchaseCosts`/`orderFees` keys. This reaches orders the checkbox-based
+  Import flow can never re-select (already-imported rows render a static "✓"
+  instead of a checkbox), and relies entirely on `mergeImportedSale.ts`'s
+  existing platform-owned/user-owned field split — no new backend code. See
+  `docs/superpowers/specs/2026-09-07-order-status-pull-sync-design.md` for
+  the full design.
   **Fee entry (2026-08-27)**: per-order "Ad Fee"/"Platform Fee" `€` inputs
   (transient local state, `orderFees`, same shape/pattern as the existing
   `purchaseCosts` column) plus a bulk toolbar above the table — "Apply X% to
