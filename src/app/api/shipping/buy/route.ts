@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
+import { requireShippingLabelAccess } from "@/lib/shipping/authGuard";
 import { buyLabel } from "@/lib/shipping/easypost";
 import { writeAuditLog } from "@/lib/utils/audit";
 import type { Profile, Shipment } from "@/types";
@@ -18,7 +19,10 @@ interface BuyRequestBody {
 export async function POST(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
-  const { client, userId } = auth.context;
+  const { client, userId, tenantSchema } = auth.context;
+
+  const labelAccess = await requireShippingLabelAccess(tenantSchema);
+  if (labelAccess.error) return labelAccess.error;
 
   const body = (await req.json()) as Partial<BuyRequestBody>;
   if (
