@@ -538,14 +538,7 @@ export default function SaleDetailPage({ params }: PageProps) {
 
           <dl className="space-y-3">
             {sale.description && (
-              <div>
-                <dt className="text-xs font-medium text-(--color-text-muted) uppercase tracking-wider mb-1">
-                  Description
-                </dt>
-                <dd className="text-sm text-(--color-text-base)">
-                  {sale.description}
-                </dd>
-              </div>
+              <DetailRow label="Description">{sale.description}</DetailRow>
             )}
 
             <FinRow
@@ -586,11 +579,8 @@ export default function SaleDetailPage({ params }: PageProps) {
             )}
 
             {hasShippingAddress && (
-              <div>
-                <dt className="text-xs font-medium text-(--color-text-muted) uppercase tracking-wider mb-1">
-                  Shipping Address
-                </dt>
-                <dd className="text-sm text-(--color-text-base) space-y-0.5">
+              <DetailRow label="Shipping Address">
+                <div className="space-y-0.5">
                   {sale.buyer_name && (
                     <p className="font-semibold">{sale.buyer_name}</p>
                   )}
@@ -613,8 +603,8 @@ export default function SaleDetailPage({ params }: PageProps) {
                   {sale.buyer_email && (
                     <p className="text-xs text-(--color-text-muted)">{sale.buyer_email}</p>
                   )}
-                </dd>
-              </div>
+                </div>
+              </DetailRow>
             )}
 
             <FinRow label="Created By" value={sale.created_by} />
@@ -759,6 +749,21 @@ function FinRow({
     <div className="flex items-start justify-between gap-4 text-sm">
       <dt className="text-(--color-text-muted) shrink-0">{label}</dt>
       <dd className="text-(--color-text-base) text-right">{value}</dd>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <dt className="text-(--color-text-muted) shrink-0 w-32">{label}</dt>
+      <dd className="text-(--color-text-base) text-left flex-1">{children}</dd>
     </div>
   );
 }
