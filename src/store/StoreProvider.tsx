@@ -14,7 +14,7 @@ import {
 } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
-import { setCurrentUser, setTenantPlan, setAiEnabled } from "@/store/slices/currentUserSlice";
+import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled } from "@/store/slices/currentUserSlice";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
@@ -52,6 +52,7 @@ interface StoreProviderProps {
   companyProfile?: CompanyProfile;
   tenantPlan?: TenantPlan | null;
   aiEnabled?: boolean;
+  shippingLabelsEnabled?: boolean;
   platformConnections?: PlatformConnection[];
   dropshipListings?: DropshipListing[];
   platformPayouts?: PlatformPayout[];
@@ -72,6 +73,7 @@ export function StoreProvider({
   companyProfile,
   tenantPlan,
   aiEnabled,
+  shippingLabelsEnabled,
   platformConnections,
   dropshipListings,
   platformPayouts,
@@ -91,6 +93,7 @@ export function StoreProvider({
     if (companyProfile)    store.dispatch(hydrateCompanyProfile(companyProfile));
     if (tenantPlan)        store.dispatch(setTenantPlan(tenantPlan));
     if (aiEnabled !== undefined) store.dispatch(setAiEnabled(aiEnabled));
+    if (shippingLabelsEnabled !== undefined) store.dispatch(setShippingLabelsEnabled(shippingLabelsEnabled));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));

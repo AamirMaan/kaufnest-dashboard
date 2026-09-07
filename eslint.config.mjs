@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     // checkouts with their own .next build output — the patterns above only
     // match at the repo root, not nested inside a worktree directory.
     ".worktrees/**",
+    // Claude Code's own EnterWorktree tool creates worktrees under
+    // .claude/worktrees/<branch>/ — same issue, different root.
+    ".claude/worktrees/**",
   ]),
 ]);
 

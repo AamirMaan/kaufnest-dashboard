@@ -298,6 +298,12 @@ export interface Tenant {
   /** Platform-admin visibility switch for AI features. The plan grants AI;
    * this revokes it per tenant. Defaults true (control-plane migration 007). */
   ai_enabled: boolean;
+  /** Platform-admin per-tenant switch for EasyPost shipping-label
+   * purchasing (src/lib/shipping/). No plan tie — every tenant currently
+   * shares one platform EasyPost account. Defaults false (control-plane
+   * migration 010); the order-detail page falls back to a free plain
+   * sender/receiver PDF label while this is off. */
+  shipping_labels_enabled: boolean;
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;

@@ -1,12 +1,17 @@
 ---
 name: shipping-labels
-description: Reference for the shipping-label-generation library at src/lib/shipping (EasyPost REST wrapper, CompanyProfile/Sale address mappers) — use when touching label purchase, carrier rates, or the two /api/shipping/* routes.
+description: Reference for the shipping-label-generation library at src/lib/shipping (EasyPost REST wrapper, CompanyProfile/Sale address mappers, the per-tenant EasyPost auth guard, and the free plain-PDF-label fallback) — use when touching label purchase, carrier rates, per-tenant shipping-label gating, the plain PDF label, or the two /api/shipping/* routes.
 ---
 
 # Shipping label library (`src/lib/shipping/`)
 
-Server-only shared code (never imported from a Client Component — it calls
-EasyPost with a server-side API key). Consumed by
+Mostly server-only shared code. `easypost.ts` (calls EasyPost with a
+server-side API key) and `authGuard.ts` (reads `control.tenants` with the
+control-plane client) are never imported from a Client Component.
+`addressMappers.ts` is pure and has no such restriction — it's reused
+client-side by `generatePlainLabel.ts` (see `dashboard/sales/CLAUDE.md`),
+which is a Client Component's direct dependency, not consumed only via
+`fetch` like the EasyPost flow. Consumed by
 `src/app/api/shipping/rates/route.ts` and
 `src/app/api/shipping/buy/route.ts`. The dashboard feature
 (`src/app/dashboard/sales/[id]/page.tsx`'s Shipping card +
@@ -45,6 +50,26 @@ calls the two API routes over `fetch`.
   never appears when it's guaranteed to fail — belt and suspenders,
   deliberately not deduplicated since each check is cheap and lives at a
   different layer.
+- `authGuard.ts` — `requireShippingLabelAccess(tenantSchema: string)`, the
+  per-tenant EasyPost purchasing gate (control-plane migration 010). Reads
+  `control.tenants.shipping_labels_enabled` via the control-plane client and
+  throws when it's `false`/missing. Called by both
+  `src/app/api/shipping/rates/route.ts` and
+  `src/app/api/shipping/buy/route.ts`, right after `requireIntegrationAdmin()`
+  — mirrors the shape of `src/lib/ai/authGuard.ts`'s per-tenant gate (same
+  "platform-admin visibility switch, no plan tie" pattern as `ai_enabled`).
+  See the Gotchas section below for the full per-tenant gate story.
+- `generatePlainLabel.ts` — `generatePlainShippingLabel(sale, companyProfile)`,
+  the free `jsPDF` fallback label shown on the order-detail page while a
+  tenant's `shipping_labels_enabled` flag is off. Renders sender/receiver
+  addresses only — no tracking number, carrier, cost, or EasyPost API call.
+  Reuses `addressFromCompanyProfile`/`addressFromSale` from
+  `addressMappers.ts` unchanged (no duplicated validation). Unlike every
+  other file in this folder, this one is safe to import from a Client
+  Component — it has no server secret and makes no network call — and is in
+  fact called directly from `dashboard/sales/[id]/page.tsx` (see
+  `dashboard/sales/CLAUDE.md`'s "Shipping labels" section), not via `fetch`
+  like the EasyPost flow.
 
 ## The two API routes
 
@@ -113,17 +138,22 @@ per order" only at the UI level (the Shipping card's state 3 has no
   type-check — that's intentional, not a bug to work around (see
   `docs/superpowers/plans/2026-09-04-shipping-label-generation.md`'s Global
   Constraints for the full story).
-- **Shared platform EasyPost account (known limitation, accepted for now):**
-  all tenants currently purchase labels against a single
-  `EASYPOST_API_KEY` — there is no per-tenant EasyPost credential, and
-  neither `/api/shipping/rates` nor `/api/shipping/buy` has a plan gate
-  (unlike `/api/integrations/*` routes, which check
-  `hasPlatformIntegrations(plan)`). This was a deliberate scope decision to
-  ship label purchasing now; per-tenant EasyPost accounts and/or a plan
-  gate are accepted future work, not an oversight — do not silently "fix"
-  this without a product decision, see
-  `docs/superpowers/plans/2026-09-04-shipping-label-generation.md`'s Global
-  Constraints for context.
+- **Per-tenant gate (control-plane migration 010, 2026-09-07):**
+  `requireShippingLabelAccess()` (`authGuard.ts`) checks
+  `control.tenants.shipping_labels_enabled` — called by both API routes
+  right after `requireIntegrationAdmin()`. Defaults **false** for every
+  tenant; a platform admin flips it on per tenant from
+  `/admin/tenants/[id]` (`TenantDetailActions.tsx`'s "Shipping Labels:
+  On/Off" button). No plan tie — this is a pure visibility switch, same
+  shape as `ai_enabled` but without `hasAiFeatures(plan)`'s plan check,
+  since EasyPost purchasing isn't part of the pricing tiers. While the flag
+  is off, the order-detail page's Shipping card shows a free plain
+  sender/receiver PDF label instead (`generatePlainLabel.ts`, no API call)
+  — see `dashboard/sales/CLAUDE.md`'s Shipping labels section.
+- **Shared platform EasyPost account (still true):** all tenants that DO
+  have the flag on purchase against the same platform `EASYPOST_API_KEY` —
+  there is still no per-tenant EasyPost credential. Per-tenant credentials
+  remain accepted future work.
 - **Two separate tracking-number stores, deliberately unlinked:**
   `sales.tracking_number`/`shipping_carrier` (written by the eBay
   order-status push-back feature) and `shipments.tracking_number` (written

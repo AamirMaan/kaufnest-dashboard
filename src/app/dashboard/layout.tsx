@@ -167,18 +167,25 @@ export default async function DashboardLayout({
 
   // Tenant's subscription plan — drives platform-integrations gating.
   // ai_enabled is the platform-admin AI visibility switch (control-plane 007).
+  // shipping_labels_enabled is the platform-admin EasyPost visibility switch
+  // (control-plane 010) — no plan tie, defaults false.
   let tenantPlan: TenantPlan | null = null;
   let aiEnabled = false;
+  let shippingLabelsEnabled = false;
   if (tenantSchema) {
     const control = createControlClient();
-    const { data: tenant } = await control
+    const { data: tenant, error: tenantError } = await control
       .schema("control")
       .from("tenants")
-      .select("plan, ai_enabled")
+      .select("plan, ai_enabled, shipping_labels_enabled")
       .eq("schema_name", tenantSchema)
       .single();
+    if (tenantError) {
+      console.error("[dashboard/layout] control.tenants lookup failed", tenantError);
+    }
     tenantPlan = (tenant?.plan as TenantPlan | undefined) ?? null;
     aiEnabled = (tenant?.ai_enabled as boolean | undefined) ?? false;
+    shippingLabelsEnabled = (tenant?.shipping_labels_enabled as boolean | undefined) ?? false;
   }
 
   return (
@@ -194,6 +201,7 @@ export default async function DashboardLayout({
       companyProfile={companyProfile ?? undefined}
       tenantPlan={tenantPlan}
       aiEnabled={aiEnabled}
+      shippingLabelsEnabled={shippingLabelsEnabled}
       platformConnections={platformConnections ?? []}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       platformPayouts={platformPayoutsData ?? []}

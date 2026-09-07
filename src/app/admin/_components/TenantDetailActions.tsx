@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { EditTenantModal } from "./EditTenantModal";
 import { DeleteTenantModal } from "./DeleteTenantModal";
 import { ConfirmActionModal } from "./ConfirmActionModal";
-import { Pencil, Sparkles, Mail, UserCog, Trash2 } from "lucide-react";
+import { Pencil, Sparkles, Mail, UserCog, Trash2, Truck } from "lucide-react";
 import type { Tenant } from "@/types";
 
 interface Props {
@@ -25,6 +25,9 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
 
   const [aiConfirmOpen, setAiConfirmOpen] = useState(false);
   const [togglingAi, setTogglingAi] = useState(false);
+
+  const [shippingConfirmOpen, setShippingConfirmOpen] = useState(false);
+  const [togglingShipping, setTogglingShipping] = useState(false);
 
   const [impersonateConfirmOpen, setImpersonateConfirmOpen] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
@@ -77,6 +80,35 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
     }
   }
 
+  async function handleConfirmToggleShipping() {
+    setTogglingShipping(true);
+    try {
+      const next = !tenant.shipping_labels_enabled;
+      const res = await fetch(`/api/admin/tenants/${tenant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shipping_labels_enabled: next }),
+      });
+      const data = (await res.json()) as { tenant?: Tenant; error?: string };
+      if (res.ok) {
+        success(
+          next ? "Shipping labels enabled" : "Shipping labels disabled",
+          next
+            ? `${tenant.name} can now purchase real shipping labels via EasyPost.`
+            : `${tenant.name} is back to the plain sender/receiver label.`
+        );
+        setShippingConfirmOpen(false);
+        onRefresh();
+      } else {
+        toastError("Could not update shipping label access", data.error ?? "Please try again.");
+      }
+    } catch {
+      toastError("Could not update shipping label access", "Network error — please try again.");
+    } finally {
+      setTogglingShipping(false);
+    }
+  }
+
   async function handleConfirmImpersonate() {
     setImpersonating(true);
     try {
@@ -115,6 +147,14 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
             className={tenant.ai_enabled ? "text-(--color-success-text)" : "text-(--color-text-faint)"}
           />
           {tenant.ai_enabled ? "AI: On" : "AI: Off"}
+        </Button>
+
+        <Button variant="secondary" onClick={() => setShippingConfirmOpen(true)}>
+          <Truck
+            size={14}
+            className={tenant.shipping_labels_enabled ? "text-(--color-success-text)" : "text-(--color-text-faint)"}
+          />
+          {tenant.shipping_labels_enabled ? "Shipping Labels: On" : "Shipping Labels: Off"}
         </Button>
 
         {tenant.status === "invited" && (
@@ -166,6 +206,21 @@ export function TenantDetailActions({ tenant, onRefresh }: Props) {
         loading={togglingAi}
         onConfirm={handleConfirmToggleAi}
         onClose={() => setAiConfirmOpen(false)}
+      />
+      <ConfirmActionModal
+        open={shippingConfirmOpen}
+        title={tenant.shipping_labels_enabled ? "Disable shipping labels" : "Enable shipping labels"}
+        message={
+          tenant.shipping_labels_enabled
+            ? `Disable EasyPost shipping labels for ${tenant.name}? They'll fall back to the free plain sender/receiver label immediately.`
+            : `Enable EasyPost shipping labels for ${tenant.name}? Their users will be able to purchase real, trackable labels immediately.`
+        }
+        confirmLabel={tenant.shipping_labels_enabled ? "Disable" : "Enable"}
+        confirmingLabel="Saving…"
+        tone={tenant.shipping_labels_enabled ? "warning" : "success"}
+        loading={togglingShipping}
+        onConfirm={handleConfirmToggleShipping}
+        onClose={() => setShippingConfirmOpen(false)}
       />
       <ConfirmActionModal
         open={impersonateConfirmOpen}

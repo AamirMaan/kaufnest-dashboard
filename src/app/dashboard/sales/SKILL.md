@@ -46,7 +46,17 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `src/lib/shipping/` — not this folder. As of 2026-09-06 (Task 6) the
   component is wired into `[id]/page.tsx`'s Shipping card (Task 7,
   2026-09-06) — see "Gotchas — detail page" below for the role-gate
-  selector's hooks-ordering constraint.
+  selector's hooks-ordering constraint. As of 2026-09-07 this modal/flow is
+  reachable only when `state.currentUser.shippingLabelsEnabled` is true —
+  the plain-label fallback (`src/lib/shipping/generatePlainLabel.ts`) has
+  no modal at all, it's a direct `onClick` call, same shape as "Download
+  Invoice".
+- **Change the plain PDF shipping label** (shown while a tenant's
+  `shipping_labels_enabled` flag is off): `src/lib/shipping/generatePlainLabel.ts`
+  only — a self-contained `jsPDF` renderer, no modal, no Redux slice, no API
+  route. Reuses `addressFromCompanyProfile`/`addressFromSale` from
+  `src/lib/shipping/addressMappers.ts` unchanged; do not duplicate their
+  validation logic here.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
@@ -506,7 +516,10 @@ fixed — don't reintroduce them:
   inside the "Derived values" section, which only runs once `sale` is
   guaranteed non-null) changes how many hooks run between a loading render
   and a loaded render and throws "Rendered fewer hooks than expected." This
-  is why `canGenerateLabel`'s `currentRole` selector lives right next to
+  is why `canGenerateLabel`'s `currentRole` selector AND the newer
+  `shippingLabelsEnabled` selector (2026-09-07 — reads
+  `state.currentUser.shippingLabelsEnabled`, decides which Shipping-card body
+  renders when no shipment exists yet) both live right next to
   `isSuperAdmin`/`hasDeleteOverride` at the top, and why `shipment`/
   `shipmentLoading`/`generateLabelOpen` state + the shipment-fetch
   `useEffect` sit right after the linked-purchase effect, both still above

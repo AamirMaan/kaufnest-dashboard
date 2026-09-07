@@ -64,6 +64,12 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   by a platform admin), so the business can identify and pay a referral
   share manually. No format enforcement, no relationship to `plan`/Stripe.
   See `docs/superpowers/specs/2026-09-04-tenant-referral-attribution-design.md`.
+- `control-plane/010_tenant_shipping_labels.sql` — adds
+  `control.tenants.shipping_labels_enabled` (default false), the
+  platform-admin per-tenant switch for EasyPost shipping-label purchasing.
+  No plan tie — mirrors `ai_enabled`'s shape (007) but is a pure on/off
+  toggle, not plan-gated. See
+  `docs/superpowers/specs/2026-09-07-shipping-label-gating-and-detail-layout-design.md`.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,

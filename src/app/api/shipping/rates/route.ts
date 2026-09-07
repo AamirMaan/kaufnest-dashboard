@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
+import { requireShippingLabelAccess } from "@/lib/shipping/authGuard";
 import { getRates } from "@/lib/shipping/easypost";
 import { addressFromCompanyProfile, addressFromSale } from "@/lib/shipping/addressMappers";
 import type { CompanyProfile, Sale } from "@/types";
@@ -15,7 +16,10 @@ interface RatesRequestBody {
 export async function POST(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
-  const { client } = auth.context;
+  const { client, tenantSchema } = auth.context;
+
+  const labelAccess = await requireShippingLabelAccess(tenantSchema);
+  if (labelAccess.error) return labelAccess.error;
 
   const body = (await req.json()) as Partial<RatesRequestBody>;
   if (!body.saleId || typeof body.weightOz !== "number" || body.weightOz <= 0) {

@@ -65,7 +65,10 @@ not tenant roles.
   before PATCHing `{ ai_enabled: !tenant.ai_enabled }` to
   `/api/admin/tenants/[tenant.id]`; wrapped in try/catch/finally — a rejected
   `fetch` or unparsable JSON response toasts a network-error message rather
-  than failing silently, matching Impersonate's error handling), "Resend
+  than failing silently, matching Impersonate's error handling),
+  "Shipping Labels: On/Off" (`Truck`, same tint/confirm-modal shape as the
+  AI toggle, PATCHes `{ shipping_labels_enabled: !tenant.shipping_labels_enabled }`
+  — see `src/lib/shipping/SKILL.md` for what this actually gates), "Resend
   Invite" (`Mail`, tinted `--color-info-text`, only shown when
   `tenant.status === "invited"`, posts to `/api/admin/resend-invite`
   directly — **no confirmation**, unchanged from before), "Impersonate"
@@ -177,7 +180,7 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `readTenantUsage` enforces is reproduced here by hand rather than
   inherited.
 - **`tenants/[id]/route.ts`** (`PATCH`, `DELETE`) —
-  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled?, referral? }`.
+  - `PATCH`: partial update for `{ plan?, status?, admin_email?, ai_enabled?, shipping_labels_enabled?, referral? }`.
     Steps: (1) fetch current row — 404 on `PGRST116`; (2) if `admin_email`
     changed, scan Project B Auth users and call `updateUserById`; (3)
     `.update(patch)` only changed fields (`ai_enabled` uses a `!== undefined`

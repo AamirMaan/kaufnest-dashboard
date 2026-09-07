@@ -17,13 +17,19 @@ broadly when working on a specific feature.**
   compute `isPlatformAdmin` — both are passed to `<DashboardShell>` (the
   impersonation banner and the sidebar's "Admin Panel" link, respectively).
   Additionally, when `tenant_schema` is present, fetches the tenant's
-  `plan, ai_enabled` from `control.tenants` via `createControlClient()` and
-  passes them to `<StoreProvider>` as `tenantPlan` (hydrated into
-  `currentUserSlice.tenantPlan`, read by the Integrations page for plan
-  gating via `hasPlatformIntegrations`) and `aiEnabled` (hydrated into
-  `currentUserSlice.aiEnabled`, read by the Listings page to decide whether
-  AI controls render at all — `ai_enabled` is the platform-admin AI
-  visibility switch, control-plane migration 007). The `platform_connections` select
+  `plan, ai_enabled, shipping_labels_enabled` from `control.tenants` via
+  `createControlClient()` and passes them to `<StoreProvider>` as
+  `tenantPlan` (hydrated into `currentUserSlice.tenantPlan`, read by the
+  Integrations page for plan gating via `hasPlatformIntegrations`),
+  `aiEnabled` (hydrated into `currentUserSlice.aiEnabled`, read by the
+  Listings page to decide whether AI controls render at all — `ai_enabled`
+  is the platform-admin AI visibility switch, control-plane migration 007),
+  and `shippingLabelsEnabled` (hydrated into
+  `currentUserSlice.shippingLabelsEnabled`, read by the Sales order-detail
+  page to decide whether EasyPost label purchasing is offered vs. a plain
+  PDF label fallback — `shipping_labels_enabled` is the platform-admin
+  EasyPost visibility switch, control-plane migration 010, defaults false,
+  no plan tie). The `platform_connections` select
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
