@@ -1,6 +1,6 @@
 ---
 name: shipping-labels
-description: Reference for the shipping-label-generation library at src/lib/shipping (EasyPost REST wrapper, CompanyProfile/Sale address mappers) — use when touching label purchase, carrier rates, or the two /api/shipping/* routes.
+description: Reference for the shipping-label-generation library at src/lib/shipping (EasyPost REST wrapper, CompanyProfile/Sale address mappers, the per-tenant EasyPost auth guard, and the free plain-PDF-label fallback) — use when touching label purchase, carrier rates, per-tenant shipping-label gating, the plain PDF label, or the two /api/shipping/* routes.
 ---
 
 # Shipping label library (`src/lib/shipping/`)
@@ -50,6 +50,26 @@ calls the two API routes over `fetch`.
   never appears when it's guaranteed to fail — belt and suspenders,
   deliberately not deduplicated since each check is cheap and lives at a
   different layer.
+- `authGuard.ts` — `requireShippingLabelAccess(tenantSchema: string)`, the
+  per-tenant EasyPost purchasing gate (control-plane migration 010). Reads
+  `control.tenants.shipping_labels_enabled` via the control-plane client and
+  throws when it's `false`/missing. Called by both
+  `src/app/api/shipping/rates/route.ts` and
+  `src/app/api/shipping/buy/route.ts`, right after `requireIntegrationAdmin()`
+  — mirrors the shape of `src/lib/ai/authGuard.ts`'s per-tenant gate (same
+  "platform-admin visibility switch, no plan tie" pattern as `ai_enabled`).
+  See the Gotchas section below for the full per-tenant gate story.
+- `generatePlainLabel.ts` — `generatePlainShippingLabel(sale, companyProfile)`,
+  the free `jsPDF` fallback label shown on the order-detail page while a
+  tenant's `shipping_labels_enabled` flag is off. Renders sender/receiver
+  addresses only — no tracking number, carrier, cost, or EasyPost API call.
+  Reuses `addressFromCompanyProfile`/`addressFromSale` from
+  `addressMappers.ts` unchanged (no duplicated validation). Unlike every
+  other file in this folder, this one is safe to import from a Client
+  Component — it has no server secret and makes no network call — and is in
+  fact called directly from `dashboard/sales/[id]/page.tsx` (see
+  `dashboard/sales/CLAUDE.md`'s "Shipping labels" section), not via `fetch`
+  like the EasyPost flow.
 
 ## The two API routes
 

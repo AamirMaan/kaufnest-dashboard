@@ -174,12 +174,15 @@ export default async function DashboardLayout({
   let shippingLabelsEnabled = false;
   if (tenantSchema) {
     const control = createControlClient();
-    const { data: tenant } = await control
+    const { data: tenant, error: tenantError } = await control
       .schema("control")
       .from("tenants")
       .select("plan, ai_enabled, shipping_labels_enabled")
       .eq("schema_name", tenantSchema)
       .single();
+    if (tenantError) {
+      console.error("[dashboard/layout] control.tenants lookup failed", tenantError);
+    }
     tenantPlan = (tenant?.plan as TenantPlan | undefined) ?? null;
     aiEnabled = (tenant?.ai_enabled as boolean | undefined) ?? false;
     shippingLabelsEnabled = (tenant?.shipping_labels_enabled as boolean | undefined) ?? false;

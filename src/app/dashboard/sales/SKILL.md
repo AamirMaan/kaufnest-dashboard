@@ -51,6 +51,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   the plain-label fallback (`src/lib/shipping/generatePlainLabel.ts`) has
   no modal at all, it's a direct `onClick` call, same shape as "Download
   Invoice".
+- **Change the plain PDF shipping label** (shown while a tenant's
+  `shipping_labels_enabled` flag is off): `src/lib/shipping/generatePlainLabel.ts`
+  only — a self-contained `jsPDF` renderer, no modal, no Redux slice, no API
+  route. Reuses `addressFromCompanyProfile`/`addressFromSale` from
+  `src/lib/shipping/addressMappers.ts` unchanged; do not duplicate their
+  validation logic here.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
