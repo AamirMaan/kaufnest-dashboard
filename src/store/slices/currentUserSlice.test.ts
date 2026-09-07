@@ -1,4 +1,4 @@
-import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled } from "./currentUserSlice";
+import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled } from "./currentUserSlice";
 import type { Profile } from "@/types";
 
 const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
@@ -56,5 +56,23 @@ describe("setAiEnabled", () => {
     const enabled = currentUserSlice.reducer(undefined, setAiEnabled(true));
     const revoked = currentUserSlice.reducer(enabled, setAiEnabled(false));
     expect(revoked.aiEnabled).toBe(false);
+  });
+});
+
+describe("setShippingLabelsEnabled", () => {
+  it("defaults to false before hydration", () => {
+    const state = currentUserSlice.reducer(undefined, { type: "@@INIT" });
+    expect(state.shippingLabelsEnabled).toBe(false);
+  });
+
+  it("stores the tenant's shipping-label visibility flag", () => {
+    const state = currentUserSlice.reducer(undefined, setShippingLabelsEnabled(true));
+    expect(state.shippingLabelsEnabled).toBe(true);
+  });
+
+  it("can revoke a previously enabled flag", () => {
+    const enabled = currentUserSlice.reducer(undefined, setShippingLabelsEnabled(true));
+    const revoked = currentUserSlice.reducer(enabled, setShippingLabelsEnabled(false));
+    expect(revoked.shippingLabelsEnabled).toBe(false);
   });
 });
