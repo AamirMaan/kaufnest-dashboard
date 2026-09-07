@@ -60,6 +60,7 @@ graphify-out/cache/
 # Playwright E2E — saved auth state (contains real session tokens)
 e2e/.auth/
 .worktrees/
+.claude/worktrees/
 
 # Doc-drift hook scratch state — regenerated every session, never shared
 .claude/claude-md-review.md
