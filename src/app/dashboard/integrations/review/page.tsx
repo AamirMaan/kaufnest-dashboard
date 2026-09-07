@@ -260,7 +260,19 @@ export default function ReviewPage() {
 
     try {
       const freshRes = await fetch("/api/integrations/review");
+
+      if (!freshRes.ok) {
+        const message = await freshRes
+          .json()
+          .then((body: { error?: string; detail?: string }) => body.detail ?? body.error)
+          .catch(() => undefined);
+        setImportError(message ?? "Failed to refresh order data");
+        toast.error("Sync failed", message ?? "Failed to refresh order data");
+        return;
+      }
+
       const fresh = (await freshRes.json()) as ReviewResponse;
+      const failedPlatforms = Object.keys(fresh.errors ?? {});
 
       const items: { platform: IntegrationPlatform; order: ReviewOrder }[] = [];
       for (const platform of ALL_PLATFORMS) {
@@ -291,10 +303,17 @@ export default function ReviewPage() {
 
       setData(fresh);
       const syncedCount = result.imported ?? 0;
-      toast.success(
-        "Statuses synced",
-        `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced from eBay/Amazon.`
-      );
+      if (failedPlatforms.length > 0) {
+        toast.warning(
+          "Statuses partially synced",
+          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.join(", ")} — try again later.`
+        );
+      } else {
+        toast.success(
+          "Statuses synced",
+          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced from eBay/Amazon.`
+        );
+      }
       router.refresh();
     } catch {
       const message = "Network error — please try again";
