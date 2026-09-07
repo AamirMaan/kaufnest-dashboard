@@ -35,6 +35,7 @@ export default function ReviewPage() {
   const [activeTab, setActiveTab] = useState<IntegrationPlatform | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [purchaseCosts, setPurchaseCosts] = useState<
     Record<string, { price: string; vendor: string }>
@@ -142,6 +143,10 @@ export default function ReviewPage() {
 
   const unimportedOnTab = activeOrders.filter((o) => !o.imported);
 
+  const hasImportedOrders = platforms.some((p) =>
+    (data?.[p]?.orders ?? []).some((o) => o.imported)
+  );
+
   const allSelectedOnTab =
     unimportedOnTab.length > 0 &&
     unimportedOnTab.every((o) =>
@@ -246,6 +251,57 @@ export default function ReviewPage() {
       toast.error("Import failed", message);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleSyncStatuses() {
+    setImportError(null);
+    setSyncing(true);
+
+    try {
+      const freshRes = await fetch("/api/integrations/review");
+      const fresh = (await freshRes.json()) as ReviewResponse;
+
+      const items: { platform: IntegrationPlatform; order: ReviewOrder }[] = [];
+      for (const platform of ALL_PLATFORMS) {
+        for (const order of fresh[platform]?.orders ?? []) {
+          if (order.imported) items.push({ platform, order });
+        }
+      }
+
+      if (items.length === 0) {
+        setData(fresh);
+        toast.info("Nothing to sync", "No previously-imported orders found.");
+        return;
+      }
+
+      const res = await fetch("/api/integrations/review/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const result = (await res.json()) as { imported?: number; error?: string; detail?: string };
+
+      if (!res.ok) {
+        const message = result.detail ?? result.error ?? "Sync failed";
+        setImportError(message);
+        toast.error("Sync failed", message);
+        return;
+      }
+
+      setData(fresh);
+      const syncedCount = result.imported ?? 0;
+      toast.success(
+        "Statuses synced",
+        `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced from eBay/Amazon.`
+      );
+      router.refresh();
+    } catch {
+      const message = "Network error — please try again";
+      setImportError(message);
+      toast.error("Sync failed", message);
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -545,11 +601,18 @@ export default function ReviewPage() {
             </table>
           </div>
 
-          {/* Import button */}
-          <div className="flex justify-end">
+          {/* Sync + Import buttons */}
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleSyncStatuses}
+              disabled={!hasImportedOrders || syncing || importing}
+            >
+              {syncing ? "Syncing…" : "Sync Statuses"}
+            </Button>
             <Button
               onClick={handleImport}
-              disabled={selected.size === 0 || importing}
+              disabled={selected.size === 0 || importing || syncing}
             >
               {importing
                 ? "Importing…"
