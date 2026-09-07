@@ -306,7 +306,7 @@ export default function ReviewPage() {
       if (failedPlatforms.length > 0) {
         toast.warning(
           "Statuses partially synced",
-          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.join(", ")} — try again later.`
+          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.map((p) => PLATFORM_LABELS[p as IntegrationPlatform]).join(", ")} — try again later.`
         );
       } else {
         toast.success(
