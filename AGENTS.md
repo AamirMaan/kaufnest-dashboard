@@ -148,6 +148,49 @@ discovers any `src/**/*.test.ts(x)`. Keep tests pure (no Supabase/Redux deps whe
 possible) — the CSV helpers, `productOptions.ts`, `vatAmountFromGross`, etc. are all
 good examples of the kind of logic that deserves a test.
 
+## UI/Design conventions — atomic design is the structural backbone
+
+Every new UI element is built from this ladder, in order — check the level
+below before inventing something bespoke:
+- **Atoms** — `src/components/ui/*` (Button, Badge, Input, Select, Textarea,
+  Checkbox, Modal, StatCard, Toast). Never hardcode a color/radius/shadow;
+  use the `var(--color-*)`/`--radius-*`/`--shadow-*` tokens these atoms
+  already consume.
+- **Molecules** — a `Field`+`Input` pairing, a `Row` of two `Field`s, a
+  composite like `FeeAmountOrPercentField`. Feature-owned unless 3+ features
+  need it (the existing shared-vs-feature-private rule below already
+  governs promotion).
+- **Organisms** — a full Add/Edit modal, a `DataTable`+`FilterBar` section,
+  a page's card section. Extend an existing organism (`DeleteConfirmModal`,
+  `InvoiceModal`) before forking a new one.
+- **Templates/pages** — `page.tsx` files compose organisms into the full
+  layout. A page should not contain one-off styling that belongs in an atom.
+
+**Visual hierarchy**: one primary `Button` per view — competing actions use
+`variant="secondary"`/`"ghost"`. Follow the existing type scale (`text-2xl
+font-bold` page titles, `text-base font-semibold` card headings, `text-sm`
+body, `text-xs`/`text-[11px]` meta) — no new ad hoc sizes.
+
+**Consistency**: same icon set (`lucide-react`) and spacing scale
+(`space-y-4/6/8`, `p-3/4/6`, `rounded-[var(--radius-card|btn)]`) everywhere
+— copy an existing section's classes rather than approximating them.
+
+**Clarity**: every `DataTable` gets an `emptyMessage`, never a blank void.
+Every icon-only button gets an accessible label. Follow existing
+back-link/breadcrumb patterns (`<ChevronLeft/>` + label).
+
+**Feedback**: this is what the "Form conventions" section below already
+enforces for mutations (busy-verb buttons, disabled-while-invalid) — every
+mutation also fires a `useToast()` call on both success and failure, never a
+silent one.
+
+**User control**: destructive actions always go through `DeleteConfirmModal`
+(typed reason where applicable), never a bare `confirm()`. Every modal
+closes on Escape/backdrop click and has a Cancel button (`Modal.tsx`'s
+existing behavior — never build one that traps the user). A multi-step flow
+(e.g. a rate-picker-then-buy modal) keeps entered data and lets the user
+retry on error instead of closing/resetting.
+
 ## Form conventions — always enforced, not optional polish
 
 **A mutating button must never look clickable when it can't succeed, and
