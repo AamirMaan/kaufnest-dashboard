@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 function LoginForm() {
   const router = useRouter();
@@ -39,33 +40,33 @@ function LoginForm() {
     <div className="w-full max-w-sm">
       {/* Logo / Brand */}
       <div className="mb-8 text-center">
-        <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
-        <span className="text-3xl font-bold text-white tracking-tight">
+        <BrandMark size={40} className="mx-auto mb-2" />
+        <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
           Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
-        <p className="mt-2 text-sm text-slate-400">Business Dashboard</p>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">Business Dashboard</p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-5"
+        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 shadow-[var(--shadow-card)] space-y-5"
       >
-        <h1 className="text-lg font-semibold text-white mb-1">Sign in</h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text-strong)] mb-1">Sign in</h1>
 
         {linkError && (
-          <div className="rounded-lg bg-yellow-950 border border-yellow-800 px-4 py-3 text-sm text-yellow-300">
+          <div className="rounded-lg bg-[var(--color-warning-bg)] border border-[var(--color-warning-text)]/30 px-4 py-3 text-sm text-[var(--color-warning-text)]">
             Your link has expired or is invalid. Please sign in or request a new one.
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-lg bg-[var(--color-danger-bg)] border border-[var(--color-danger-text)]/30 px-4 py-3 text-sm text-[var(--color-danger-text)]">
             {error}
           </div>
         )}
 
         <div className="space-y-1">
-          <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+          <label htmlFor="email" className="block text-sm font-medium text-[var(--color-text-base)]">
             Email
           </label>
           <input
@@ -75,17 +76,17 @@ function LoginForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="you@example.com"
           />
         </div>
 
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="password" className="block text-sm font-medium text-[var(--color-text-base)]">
               Password
             </label>
-            <Link href="/forgot-password" className="text-xs text-slate-400 hover:text-white transition-colors">
+            <Link href="/forgot-password" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-strong)] transition-colors">
               Forgot password?
             </Link>
           </div>
@@ -96,7 +97,7 @@ function LoginForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="••••••••"
           />
         </div>
@@ -109,9 +110,9 @@ function LoginForm() {
           {loading ? "Signing in…" : "Sign in"}
         </button>
 
-        <p className="text-center text-xs text-slate-400">
+        <p className="text-center text-xs text-[var(--color-text-muted)]">
           Don&rsquo;t have an account?{" "}
-          <Link href="/signup" className="text-slate-200 hover:text-white transition-colors">
+          <Link href="/signup" className="text-[var(--color-text-base)] hover:text-[var(--color-text-strong)] transition-colors">
             Start a free trial
           </Link>
         </p>
