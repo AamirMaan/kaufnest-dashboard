@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 type State = "idle" | "loading" | "success" | "error" | "no-session";
 
@@ -59,18 +60,18 @@ export default function SetPasswordPage() {
     return (
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
-          <span className="text-3xl font-bold text-white tracking-tight">
+          <BrandMark size={40} className="mx-auto mb-2" />
+          <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
             Bought<span className="text-[var(--color-primary-hover)]">opia</span>
           </span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-4">
-          <div className="rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300">
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 shadow-[var(--shadow-card)] space-y-4">
+          <div className="rounded-lg bg-[var(--color-danger-bg)] border border-[var(--color-danger-text)]/30 px-4 py-3 text-sm text-[var(--color-danger-text)]">
             This link has expired or is invalid. Please request a new one.
           </div>
           <a
             href="/forgot-password"
-            className="block text-center text-sm text-slate-400 hover:text-white transition-colors"
+            className="block text-center text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-strong)] transition-colors"
           >
             Request a new link →
           </a>
@@ -82,33 +83,33 @@ export default function SetPasswordPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 text-center">
-        <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
-        <span className="text-3xl font-bold text-white tracking-tight">
+        <BrandMark size={40} className="mx-auto mb-2" />
+        <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
           Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
-        <p className="mt-2 text-sm text-slate-400">Business Dashboard</p>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">Business Dashboard</p>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-5">
+      <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 shadow-[var(--shadow-card)] space-y-5">
         <div>
-          <h1 className="text-lg font-semibold text-white mb-1">Set your password</h1>
-          <p className="text-sm text-slate-400">Choose a strong password for your account.</p>
+          <h1 className="text-lg font-semibold text-[var(--color-text-strong)] mb-1">Set your password</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">Choose a strong password for your account.</p>
         </div>
 
         {state === "success" ? (
-          <div className="rounded-lg bg-green-950 border border-green-800 px-4 py-3 text-sm text-green-300">
+          <div className="rounded-lg bg-[var(--color-success-bg)] border border-[var(--color-success-text)]/30 px-4 py-3 text-sm text-[var(--color-success-text)]">
             Password set! Redirecting to your dashboard…
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {errorMsg && (
-              <div className="rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300">
+              <div className="rounded-lg bg-[var(--color-danger-bg)] border border-[var(--color-danger-text)]/30 px-4 py-3 text-sm text-[var(--color-danger-text)]">
                 {errorMsg}
               </div>
             )}
 
             <div className="space-y-1">
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="password" className="block text-sm font-medium text-[var(--color-text-base)]">
                 New password
               </label>
               <input
@@ -118,13 +119,13 @@ export default function SetPasswordPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                 placeholder="Minimum 8 characters"
               />
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="confirm" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="confirm" className="block text-sm font-medium text-[var(--color-text-base)]">
                 Confirm password
               </label>
               <input
@@ -134,7 +135,7 @@ export default function SetPasswordPage() {
                 required
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+                className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                 placeholder="Re-enter your password"
               />
             </div>

@@ -4,9 +4,25 @@ Route group `(auth)` — public, unauthenticated pages, all sharing a centered
 card layout (`layout.tsx`). No feature-private components, slices, or tests:
 each page is a self-contained Supabase Auth form.
 
+**Theme-aware, not dark-only (2026-09-09).** All four pages + `layout.tsx`
+used to hardcode a dark `slate-900`/`slate-950` palette regardless of the
+app's light/dark setting. They now use the same `--color-*` tokens as the
+rest of the app (`--color-surface`, `--color-border`, `--color-text-*`,
+`--color-danger-bg`/`-text`, etc. — see `globals.css`), so they follow
+whatever theme `ThemeProvider` has set (`data-theme` on `<html>`, default
+light). Status/error banners follow the `border-[var(--color-X-text)]/30
+bg-[var(--color-X-bg)] text-[var(--color-X-text)]` pattern already used in
+`app/admin/_components/ConfirmActionModal.tsx`. Only the primary submit
+button keeps a literal `text-white`, matching `Button.tsx`'s convention of
+white text on the solid `--color-primary` fill in both themes. Each page's
+brand mark now renders via the shared `BrandMark` component instead of a
+hardcoded `<img src="/brand/boughtopia-icon-bag-mono-light.svg">`, so the
+icon switches with the theme too (see Shared dependencies below).
+
 ## Files in this folder
 
-- `layout.tsx` — shared centered-card shell for all auth pages.
+- `layout.tsx` — shared centered-card shell for all auth pages, themed via
+  `bg-[var(--color-surface-subtle)]` (was a hardcoded `bg-slate-950`).
 - `login/page.tsx` — email/password sign-in (`supabase.auth.signInWithPassword`).
 - `signup/page.tsx` — self-serve signup (2026-08-28). Calls
   `supabase.auth.signUp()` directly from the browser with `company_name` and
@@ -79,12 +95,11 @@ each page is a self-contained Supabase Auth form.
   no Redux here, these run before any session/store exists)
 - `email-templates/` (project root) — the branded invite/reset email HTML sent
   by Supabase, separate from these in-app pages
-- `public/brand/boughtopia-icon-bag-mono-light.svg` — referenced directly via
-  a plain `<img>` (not the theme-aware `BrandMark` component dashboard/admin
-  chrome uses) since `layout.tsx` here hardcodes `bg-slate-950` regardless of
-  the app's light/dark theme setting — the white-mono icon is always correct
-  here, no switching needed. If this layout's fixed dark background ever
-  changes, revisit whether these pages should switch to `BrandMark` instead.
+- `components/layout/BrandMark` — theme-aware brand icon (2026-09-09; used to
+  be a plain `<img src="/brand/boughtopia-icon-bag-mono-light.svg">` on every
+  page here, back when this route group's background was permanently dark).
+  Requires `ThemeProvider` context, which `app/layout.tsx` already provides
+  app-wide, so no extra wiring was needed.
 
 ## Tests
 

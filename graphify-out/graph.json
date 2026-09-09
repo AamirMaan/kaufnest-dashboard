@@ -2266,7 +2266,7 @@
       "label": "State",
       "file_type": "code",
       "source_file": "src/app/(auth)/forgot-password/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "_origin": "ast"
     },
     {
@@ -2274,7 +2274,7 @@
       "label": "ForgotPasswordPage()",
       "file_type": "code",
       "source_file": "src/app/(auth)/forgot-password/page.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "_origin": "ast"
     },
     {
@@ -2306,7 +2306,7 @@
       "label": "LoginForm()",
       "file_type": "code",
       "source_file": "src/app/(auth)/login/page.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "_origin": "ast"
     },
     {
@@ -2314,7 +2314,7 @@
       "label": "LoginPage()",
       "file_type": "code",
       "source_file": "src/app/(auth)/login/page.tsx",
-      "source_location": "L123",
+      "source_location": "L124",
       "_origin": "ast"
     },
     {
@@ -2330,7 +2330,7 @@
       "label": "State",
       "file_type": "code",
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "_origin": "ast"
     },
     {
@@ -2338,7 +2338,7 @@
       "label": "SetPasswordPage()",
       "file_type": "code",
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "_origin": "ast"
     },
     {
@@ -2354,7 +2354,7 @@
       "label": "SignupPage()",
       "file_type": "code",
       "source_file": "src/app/(auth)/signup/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "_origin": "ast"
     },
     {
@@ -21298,7 +21298,7 @@
       "label": "Files in this folder",
       "file_type": "document",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L7",
+      "source_location": "L22",
       "_origin": "ast"
     },
     {
@@ -21306,7 +21306,7 @@
       "label": "Related files outside this folder (cannot be colocated)",
       "file_type": "document",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L34",
+      "source_location": "L60",
       "_origin": "ast"
     },
     {
@@ -21314,7 +21314,7 @@
       "label": "Shared dependencies",
       "file_type": "document",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L66",
+      "source_location": "L92",
       "_origin": "ast"
     },
     {
@@ -21322,7 +21322,7 @@
       "label": "Tests",
       "file_type": "document",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L79",
+      "source_location": "L104",
       "_origin": "ast"
     },
     {
@@ -28094,11 +28094,33 @@
     },
     {
       "source": "src_app_auth_forgot_password_page",
+      "target": "src_components_layout_brandmark",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/forgot-password/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_forgot_password_page",
+      "target": "src_components_layout_brandmark_brandmark",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/forgot-password/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_forgot_password_page",
       "target": "src_app_auth_forgot_password_page_state",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/forgot-password/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28108,7 +28130,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/forgot-password/page.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28179,11 +28201,33 @@
     },
     {
       "source": "src_app_auth_login_page",
+      "target": "src_components_layout_brandmark",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/login/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_login_page",
+      "target": "src_components_layout_brandmark_brandmark",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/login/page.tsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_login_page",
       "target": "src_app_auth_login_page_loginform",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/login/page.tsx",
-      "source_location": "L8",
+      "source_location": "L9",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28193,7 +28237,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/login/page.tsx",
-      "source_location": "L123",
+      "source_location": "L124",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28243,11 +28287,33 @@
     },
     {
       "source": "src_app_auth_set_password_page",
+      "target": "src_components_layout_brandmark",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/set-password/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_set_password_page",
+      "target": "src_components_layout_brandmark_brandmark",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/set-password/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_set_password_page",
       "target": "src_app_auth_set_password_page_state",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28257,7 +28323,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L9",
+      "source_location": "L10",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -28307,11 +28373,33 @@
     },
     {
       "source": "src_app_auth_signup_page",
+      "target": "src_components_layout_brandmark",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/signup/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_signup_page",
+      "target": "src_components_layout_brandmark_brandmark",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/(auth)/signup/page.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_auth_signup_page",
       "target": "src_app_auth_signup_page_signuppage",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/signup/page.tsx",
-      "source_location": "L7",
+      "source_location": "L8",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -83167,7 +83255,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L7",
+      "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -83177,7 +83265,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L34",
+      "source_location": "L60",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -83187,7 +83275,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L66",
+      "source_location": "L92",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -83197,7 +83285,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/CLAUDE.md",
-      "source_location": "L79",
+      "source_location": "L104",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -85838,7 +85926,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/forgot-password/page.tsx",
-      "source_location": "L19",
+      "source_location": "L20",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -85849,7 +85937,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/login/page.tsx",
-      "source_location": "L22",
+      "source_location": "L23",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -85860,7 +85948,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L39",
+      "source_location": "L40",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -85871,7 +85959,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/(auth)/signup/page.tsx",
-      "source_location": "L40",
+      "source_location": "L47",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -88457,7 +88545,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/(auth)/set-password/page.tsx",
-      "source_location": "L19",
+      "source_location": "L20",
       "weight": 1.0,
       "_origin": "ast"
     },

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { BrandMark } from "@/components/layout/BrandMark";
 
 export default function SignupPage() {
   const [companyName, setCompanyName] = useState("");
@@ -87,15 +88,15 @@ export default function SignupPage() {
     return (
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
-          <span className="text-3xl font-bold text-white tracking-tight">
+          <BrandMark size={40} className="mx-auto mb-2" />
+          <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
             Bought<span className="text-[var(--color-primary-hover)]">opia</span>
           </span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl text-center">
-          <h1 className="text-lg font-semibold text-white mb-2">Check your email</h1>
-          <p className="text-sm text-slate-400">
-            We sent a confirmation link to <strong className="text-slate-200">{email}</strong>.
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 shadow-[var(--shadow-card)] text-center">
+          <h1 className="text-lg font-semibold text-[var(--color-text-strong)] mb-2">Check your email</h1>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            We sent a confirmation link to <strong className="text-[var(--color-text-base)]">{email}</strong>.
             Click it and we&rsquo;ll set up your workspace.
           </p>
         </div>
@@ -106,27 +107,27 @@ export default function SignupPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 text-center">
-        <img src="/brand/boughtopia-icon-bag-mono-light.svg" alt="" aria-hidden="true" width={40} height={40} className="mx-auto mb-2" />
-        <span className="text-3xl font-bold text-white tracking-tight">
+        <BrandMark size={40} className="mx-auto mb-2" />
+        <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
           Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
-        <p className="mt-2 text-sm text-slate-400">14 days free · no credit card</p>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">14 days free · no credit card</p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-5"
+        className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8 shadow-[var(--shadow-card)] space-y-5"
       >
-        <h1 className="text-lg font-semibold text-white mb-1">Start your free trial</h1>
+        <h1 className="text-lg font-semibold text-[var(--color-text-strong)] mb-1">Start your free trial</h1>
 
         {error && (
-          <div className="rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-lg bg-[var(--color-danger-bg)] border border-[var(--color-danger-text)]/30 px-4 py-3 text-sm text-[var(--color-danger-text)]">
             {error}
           </div>
         )}
 
         <div className="space-y-1">
-          <label htmlFor="company" className="block text-sm font-medium text-slate-300">
+          <label htmlFor="company" className="block text-sm font-medium text-[var(--color-text-base)]">
             Company name
           </label>
           <input
@@ -136,13 +137,13 @@ export default function SignupPage() {
             required
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="Acme GmbH"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="fullName" className="block text-sm font-medium text-slate-300">
+          <label htmlFor="fullName" className="block text-sm font-medium text-[var(--color-text-base)]">
             Your name
           </label>
           <input
@@ -152,13 +153,13 @@ export default function SignupPage() {
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="Jane Doe"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+          <label htmlFor="email" className="block text-sm font-medium text-[var(--color-text-base)]">
             Work email
           </label>
           <input
@@ -168,13 +169,13 @@ export default function SignupPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="you@example.com"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+          <label htmlFor="password" className="block text-sm font-medium text-[var(--color-text-base)]">
             Password
           </label>
           <input
@@ -185,21 +186,21 @@ export default function SignupPage() {
             minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="At least 8 characters"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="referral" className="block text-sm font-medium text-slate-300">
-            Referred by <span className="text-slate-500">(optional)</span>
+          <label htmlFor="referral" className="block text-sm font-medium text-[var(--color-text-base)]">
+            Referred by <span className="text-[var(--color-text-faint)]">(optional)</span>
           </label>
           <input
             id="referral"
             type="text"
             value={referral}
             onChange={(e) => setReferral(e.target.value)}
-            className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+            className="w-full rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-strong)] placeholder-[var(--color-text-faint)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
             placeholder="Referral code or name"
           />
         </div>
@@ -211,15 +212,15 @@ export default function SignupPage() {
             required
             checked={consent}
             onChange={(e) => setConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-700 bg-slate-800 text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           />
-          <label htmlFor="consent" className="text-xs text-slate-400">
+          <label htmlFor="consent" className="text-xs text-[var(--color-text-muted)]">
             I agree to the{" "}
-            <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-slate-200 hover:text-white underline">
+            <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-[var(--color-text-base)] hover:text-[var(--color-text-strong)] underline">
               Terms &amp; Conditions
             </Link>{" "}
             and{" "}
-            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-slate-200 hover:text-white underline">
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[var(--color-text-base)] hover:text-[var(--color-text-strong)] underline">
               Privacy Policy
             </Link>
             , including that Boughtopia is not liable for my business&apos;s tax
@@ -235,9 +236,9 @@ export default function SignupPage() {
           {loading ? "Creating your account…" : "Start free trial"}
         </button>
 
-        <p className="text-center text-xs text-slate-400">
+        <p className="text-center text-xs text-[var(--color-text-muted)]">
           Already have an account?{" "}
-          <Link href="/login" className="text-slate-200 hover:text-white transition-colors">
+          <Link href="/login" className="text-[var(--color-text-base)] hover:text-[var(--color-text-strong)] transition-colors">
             Sign in
           </Link>
         </p>
