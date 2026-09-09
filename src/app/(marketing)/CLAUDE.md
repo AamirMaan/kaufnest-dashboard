@@ -48,7 +48,7 @@ signed-in state.
   border on Pro; that was the thing this was changed away from.
 - `_components/TrialInfo.tsx` — what the trial includes and what happens
   when it ends.
-- `_components/MarketingFooter.tsx` — copyright, privacy, sign in.
+- `_components/MarketingFooter.tsx` — copyright, privacy, terms, sign in.
 
 ## Pricing is derived, not transcribed
 
@@ -71,6 +71,15 @@ don't need to look identical. **This is intentional, not a drift bug** —
 don't "fix" it back to `--color-primary`. The logotype's "opia" accent in
 `MarketingNav.tsx` is the one exception: it stays indigo, since it's the
 same brand mark shown everywhere else (login, emails, dashboard header).
+
+## Legal pages linked from the footer
+
+`/privacy` (`src/app/privacy/page.tsx`) and `/terms` (`src/app/terms/page.tsx`)
+are standalone routes outside this folder (not marketing-owned, no private
+state) — they exist only so `MarketingFooter.tsx` has somewhere to link.
+`/terms` carries the tax-liability disclaimer (Boughtopia is a record-keeping
+tool, not a tax advisor; the user is solely responsible for tax calculation,
+collection, and remittance) — keep that section if the page is ever reworded.
 
 ## Shared dependencies
 

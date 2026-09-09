@@ -150,10 +150,10 @@ export default function PrivacyPolicyPage() {
             <h2 className="text-base font-semibold text-[var(--color-text-strong)]">9. Contact</h2>
             <p className="mt-2">
               Questions about this policy or your data can be sent to{" "}
-              <a className="text-[var(--color-primary)] hover:underline" href="mailto:privacy@boughtopia.example">
-                privacy@boughtopia.example
+              <a className="text-[var(--color-primary)] hover:underline" href="mailto:support@boughtopia.com">
+                support@boughtopia.com
               </a>
-              . [Replace with your actual support/privacy contact address.]
+              .
             </p>
           </section>
 

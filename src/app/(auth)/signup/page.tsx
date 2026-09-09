@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [referral, setReferral] = useState("");
+  const [consent, setConsent] = useState(false);
 
   // Prefill from a referral link like /signup?ref=alice — still editable,
   // and it's fine if this runs after first paint since the field starts
@@ -36,6 +37,11 @@ export default function SignupPage() {
       return;
     }
 
+    if (!consent) {
+      setError("Please agree to the Terms & Conditions and Privacy Policy to continue.");
+      return;
+    }
+
     setLoading(true);
     const supabase = createClient();
 
@@ -53,6 +59,12 @@ export default function SignupPage() {
           company_name: companyName.trim(),
           full_name: fullName.trim(),
           ...(trimmedReferral ? { referral: trimmedReferral } : {}),
+          // Recorded so we can show, if it's ever disputed, that this account
+          // affirmatively agreed to the Terms (which disclaim tax liability)
+          // before we created it. `terms_version` pins it to the copy that
+          // was live at signup time — see /terms's "Last updated" date.
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: "2026-09",
         },
       },
     });
@@ -192,9 +204,32 @@ export default function SignupPage() {
           />
         </div>
 
+        <div className="flex items-start gap-2">
+          <input
+            id="consent"
+            type="checkbox"
+            required
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-700 bg-slate-800 text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          />
+          <label htmlFor="consent" className="text-xs text-slate-400">
+            I agree to the{" "}
+            <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-slate-200 hover:text-white underline">
+              Terms &amp; Conditions
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-slate-200 hover:text-white underline">
+              Privacy Policy
+            </Link>
+            , including that Boughtopia is not liable for my business&apos;s tax
+            calculation, collection, or reporting.
+          </label>
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !consent}
           className="w-full rounded-[var(--radius-btn)] bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white transition-colors"
         >
           {loading ? "Creating your account…" : "Start free trial"}

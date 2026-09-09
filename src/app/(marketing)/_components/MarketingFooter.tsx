@@ -9,6 +9,9 @@ export function MarketingFooter() {
           <Link href="/privacy" className="hover:text-emerald-600">
             Privacy
           </Link>
+          <Link href="/terms" className="hover:text-emerald-600">
+            Terms
+          </Link>
           <Link href="/login" className="hover:text-emerald-600">
             Sign in
           </Link>

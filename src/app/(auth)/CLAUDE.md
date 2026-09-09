@@ -25,6 +25,16 @@ each page is a self-contained Supabase Auth form.
   `control.tenants.referral`. Unlike `company_name`/`full_name`, it's
   optional: absent from `user_metadata` entirely when the field was left
   blank, not an empty string.
+  Also requires ticking a consent checkbox (2026-09-09) — "I agree to the
+  Terms & Conditions and Privacy Policy" — before the submit button is
+  enabled (both `required` on the checkbox and `disabled={loading ||
+  !consent}` on the button, matching the AGENTS.md form-validation
+  convention). On submit this writes `terms_accepted_at` (ISO timestamp) and
+  `terms_version` ("2026-09", pinned to `/terms`'s "Last updated" date) into
+  `user_metadata` alongside `company_name`/`full_name`/`referral` — kept
+  there only (not mirrored into `control.tenants`) since Supabase's
+  `auth.users.raw_user_meta_data` is already a durable, queryable record;
+  revisit if `/admin` ever needs to surface consent status per tenant.
 - `forgot-password/page.tsx` — sends a password-reset email
   (`supabase.auth.resetPasswordForEmail`).
 - `set-password/page.tsx` — lets an invited user (or someone resetting their

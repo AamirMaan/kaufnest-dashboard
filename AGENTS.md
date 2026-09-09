@@ -172,7 +172,7 @@ font-bold` page titles, `text-base font-semibold` card headings, `text-sm`
 body, `text-xs`/`text-[11px]` meta) — no new ad hoc sizes.
 
 **Consistency**: same icon set (`lucide-react`) and spacing scale
-(`space-y-4/6/8`, `p-3/4/6`, `rounded-[var(--radius-card|btn)]`) everywhere
+(`space-y-4/6/8`, `p-3/4/6`, `rounded-[var(--radius-card)]`/`rounded-[var(--radius-btn)]`) everywhere
 — copy an existing section's classes rather than approximating them.
 
 **Clarity**: every `DataTable` gets an `emptyMessage`, never a blank void.
