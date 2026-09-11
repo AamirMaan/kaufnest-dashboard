@@ -5,12 +5,17 @@ import {
   validateImagesStep,
   validateAspectsStep,
   validatePoliciesStep,
+  validatePricingStep,
+  validateAdvertisingStep,
   MAX_LISTING_IMAGES,
+  EMPTY_PRICING_MARKETING,
+  NEW_CAMPAIGN,
   type DraftFormState,
 } from "./wizardValidation";
 
 function makeDraft(overrides: Partial<DraftFormState> = {}): DraftFormState {
   return {
+    ...EMPTY_PRICING_MARKETING,
     source_type: "inventory",
     product_id: "product-1",
     source_url: "",
@@ -183,5 +188,134 @@ describe("validatePoliciesStep", () => {
     expect(validatePoliciesStep(makeDraft({ merchant_location_key: "" }))).toBe(
       "Select an inventory location."
     );
+  });
+});
+
+describe("validatePricingStep", () => {
+  it("passes with nothing extra set", () => {
+    expect(validatePricingStep(makeDraft())).toBeNull();
+  });
+
+  it("accepts VAT from 0 to 100 and rejects values outside it", () => {
+    expect(validatePricingStep(makeDraft({ vat_percentage: "0" }))).toBeNull();
+    expect(validatePricingStep(makeDraft({ vat_percentage: "19" }))).toBeNull();
+    expect(validatePricingStep(makeDraft({ vat_percentage: "101" }))).toBe(
+      "VAT must be between 0 and 100%."
+    );
+    expect(validatePricingStep(makeDraft({ vat_percentage: "-1" }))).toBe(
+      "VAT must be between 0 and 100%."
+    );
+  });
+
+  it("allows Best Offer with no thresholds", () => {
+    expect(validatePricingStep(makeDraft({ best_offer_enabled: true }))).toBeNull();
+  });
+
+  it("requires Best Offer thresholds to sit below the price", () => {
+    expect(
+      validatePricingStep(makeDraft({ best_offer_enabled: true, best_offer_auto_accept: "19.99" }))
+    ).toBe("Auto-accept price must be above 0 and below the listing price.");
+    expect(
+      validatePricingStep(makeDraft({ best_offer_enabled: true, best_offer_auto_decline: "25" }))
+    ).toBe("Auto-decline price must be above 0 and below the listing price.");
+  });
+
+  it("requires auto-decline below auto-accept", () => {
+    expect(
+      validatePricingStep(
+        makeDraft({
+          best_offer_enabled: true,
+          best_offer_auto_accept: "15",
+          best_offer_auto_decline: "15",
+        })
+      )
+    ).toBe("Auto-decline price must be below the auto-accept price.");
+  });
+
+  it("ignores Best Offer thresholds while Best Offer is off", () => {
+    expect(
+      validatePricingStep(makeDraft({ best_offer_enabled: false, best_offer_auto_accept: "999" }))
+    ).toBeNull();
+  });
+
+  it("requires a Buy 2 tier once multi-buy is on", () => {
+    expect(validatePricingStep(makeDraft({ multibuy_enabled: true }))).toBe(
+      "Choose a Buy 2 discount."
+    );
+  });
+
+  it("requires tiers to increase", () => {
+    expect(
+      validatePricingStep(
+        makeDraft({ multibuy_enabled: true, multibuy_2_pct: "5", multibuy_3_pct: "5" })
+      )
+    ).toBe("The Buy 3 discount must be higher than Buy 2.");
+    expect(
+      validatePricingStep(
+        makeDraft({
+          multibuy_enabled: true,
+          multibuy_2_pct: "2",
+          multibuy_3_pct: "4",
+          multibuy_4_pct: "3",
+        })
+      )
+    ).toBe("The Buy 4+ discount must be higher than Buy 3.");
+  });
+
+  it("requires Buy 3 before Buy 4+", () => {
+    expect(
+      validatePricingStep(
+        makeDraft({ multibuy_enabled: true, multibuy_2_pct: "2", multibuy_4_pct: "15" })
+      )
+    ).toBe("Set a Buy 3 discount before Buy 4 or more.");
+  });
+
+  it("accepts the screenshot's 2% / 4% / 15% tiers", () => {
+    expect(
+      validatePricingStep(
+        makeDraft({
+          multibuy_enabled: true,
+          multibuy_2_pct: "2",
+          multibuy_3_pct: "4",
+          multibuy_4_pct: "15",
+        })
+      )
+    ).toBeNull();
+  });
+});
+
+describe("validateAdvertisingStep", () => {
+  it("passes when the ad is off, whatever the other fields hold", () => {
+    expect(validateAdvertisingStep(makeDraft({ ad_enabled: false, ad_rate: "500" }))).toBeNull();
+  });
+
+  it("accepts a rate from 2 to 100 with at most one decimal", () => {
+    for (const rate of ["2", "13", "16.3", "100"]) {
+      expect(
+        validateAdvertisingStep(makeDraft({ ad_enabled: true, ad_rate: rate, ad_campaign_id: "c-1" }))
+      ).toBeNull();
+    }
+  });
+
+  it("rejects an out-of-range or over-precise rate", () => {
+    for (const rate of ["", "1.9", "100.1", "abc"]) {
+      expect(
+        validateAdvertisingStep(makeDraft({ ad_enabled: true, ad_rate: rate, ad_campaign_id: "c-1" }))
+      ).toBe("Ad rate must be between 2 and 100%.");
+    }
+    expect(
+      validateAdvertisingStep(makeDraft({ ad_enabled: true, ad_rate: "13.25", ad_campaign_id: "c-1" }))
+    ).toBe("Ad rate can have at most one decimal place.");
+  });
+
+  it("requires a campaign choice, where auto-create counts as one", () => {
+    expect(validateAdvertisingStep(makeDraft({ ad_enabled: true, ad_rate: "13" }))).toBe(
+      "Choose a campaign for the ad."
+    );
+    expect(
+      validateAdvertisingStep(
+        makeDraft({ ad_enabled: true, ad_rate: "13", ad_campaign_id: NEW_CAMPAIGN })
+      )
+    ).toBeNull();
   });
 });

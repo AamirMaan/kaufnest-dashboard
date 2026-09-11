@@ -1,7 +1,8 @@
 import { scoreListing, visibleTextLength } from "./listingQuality";
-import type { DraftFormState } from "./wizardValidation";
+import { EMPTY_PRICING_MARKETING, type DraftFormState } from "./wizardValidation";
 
 const emptyDraft: DraftFormState = {
+  ...EMPTY_PRICING_MARKETING,
   source_type: "inventory", product_id: "", source_url: "",
   title: "", description: "", price: "0", currency: "EUR",
   quantity: "1", condition: "new", category_id: "", category_name: "",

@@ -108,6 +108,14 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   exclusion's own `origin="app"` rows unless it's the deliberate SECOND,
   separate reconciliation pass the sync route already does. See the gotcha
   below for why this is load-bearing, not just a style preference.
+- **Pricing / offers / advertising fields (VAT, Best Offer, multi-buy, ad
+  rate, 2026-09-11)**: form state + validators in `_lib/wizardValidation.ts`
+  (`EMPTY_PRICING_MARKETING`, `validatePricingStep`,
+  `validateAdvertisingStep`), DB mapping in `ListingForm.tsx`'s
+  `toFormState`/`toPayload`, UI in `_components/PricingSection.tsx` /
+  `AdvertisingSection.tsx`, eBay side in `publishPayloads.ts` (offer) or
+  `lib/integrations/ebay/marketing.ts` (post-publish). New test fixtures
+  spread `EMPTY_PRICING_MARKETING` instead of listing the 11 keys.
 - **Adding a new required-looking field to `ListingForm.tsx` /
   `EditLiveListing.tsx` (or any new create/edit form anywhere in the app)**:
   it MUST follow
@@ -119,6 +127,12 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 
 ## Gotchas
 
+- **Toggles are form-only; the DB stores values.** `multibuy_enabled` /
+  `ad_enabled` don't exist as columns — `multibuy_2_pct` / `ad_rate` being
+  non-null IS the switch, and `toPayload()` writes null for every field of a
+  switched-off extra. `ad_campaign_id` uses the `NEW_CAMPAIGN` sentinel in
+  form state ("create one at publish", saved as null) so it's distinguishable
+  from `""` ("not chosen yet"), which `validateAdvertisingStep` rejects.
 - **The publish route answers `{ draft, warnings }`, not the bare draft
   (2026-09-11).** Anything dispatching its response must use `json.draft`.
   `warnings` non-empty means the listing is live but the ad and/or

@@ -21,6 +21,10 @@ import {
   validateImagesStep,
   validateAspectsStep,
   validatePoliciesStep,
+  validatePricingStep,
+  validateAdvertisingStep,
+  EMPTY_PRICING_MARKETING,
+  NEW_CAMPAIGN,
   type DraftFormState,
 } from "../_lib/wizardValidation";
 import { toEditorHtml } from "../_lib/descriptionHtml";
@@ -55,6 +59,7 @@ const EMPTY_DRAFT: DraftFormState = {
   payment_policy_id: "",
   return_policy_id: "",
   merchant_location_key: "",
+  ...EMPTY_PRICING_MARKETING,
 };
 
 function toFormState(row: EbayListingDraft): DraftFormState {
@@ -83,7 +88,26 @@ function toFormState(row: EbayListingDraft): DraftFormState {
     payment_policy_id: row.payment_policy_id ?? "",
     return_policy_id: row.return_policy_id ?? "",
     merchant_location_key: row.merchant_location_key ?? "",
+    vat_percentage: row.vat_percentage != null ? String(row.vat_percentage) : "",
+    best_offer_enabled: row.best_offer_enabled,
+    best_offer_auto_accept:
+      row.best_offer_auto_accept != null ? String(row.best_offer_auto_accept) : "",
+    best_offer_auto_decline:
+      row.best_offer_auto_decline != null ? String(row.best_offer_auto_decline) : "",
+    multibuy_enabled: row.multibuy_2_pct != null,
+    multibuy_2_pct: row.multibuy_2_pct != null ? String(row.multibuy_2_pct) : "",
+    multibuy_3_pct: row.multibuy_3_pct != null ? String(row.multibuy_3_pct) : "",
+    multibuy_4_pct: row.multibuy_4_pct != null ? String(row.multibuy_4_pct) : "",
+    ad_enabled: row.ad_rate != null,
+    ad_rate: row.ad_rate != null ? String(row.ad_rate) : "",
+    // A saved ad with no campaign means "create one at publish".
+    ad_campaign_id: row.ad_rate != null ? (row.ad_campaign_id ?? NEW_CAMPAIGN) : "",
   };
+}
+
+/** "" → null, otherwise Number. Used for the optional numeric draft columns. */
+function numberOrNull(value: string): number | null {
+  return value.trim() ? Number(value) : null;
 }
 
 function Section({
@@ -223,6 +247,8 @@ export function ListingForm({ draftId }: Props) {
     validateCategoryStep(draft) ??
     validateAspectsStep(draft) ??
     validateImagesStep(draft) ??
+    validatePricingStep(draft) ??
+    validateAdvertisingStep(draft) ??
     validatePoliciesStep(draft);
 
   const isPublishable = publishError === null;
@@ -258,6 +284,24 @@ export function ListingForm({ draftId }: Props) {
       payment_policy_id: draft.payment_policy_id || null,
       return_policy_id: draft.return_policy_id || null,
       merchant_location_key: draft.merchant_location_key || null,
+      vat_percentage: numberOrNull(draft.vat_percentage),
+      best_offer_enabled: draft.best_offer_enabled,
+      // Switched-off extras are saved as null, so a stale value can never
+      // reach eBay (or trip a DB CHECK) from a hidden field.
+      best_offer_auto_accept: draft.best_offer_enabled
+        ? numberOrNull(draft.best_offer_auto_accept)
+        : null,
+      best_offer_auto_decline: draft.best_offer_enabled
+        ? numberOrNull(draft.best_offer_auto_decline)
+        : null,
+      multibuy_2_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_2_pct) : null,
+      multibuy_3_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_3_pct) : null,
+      multibuy_4_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_4_pct) : null,
+      ad_rate: draft.ad_enabled ? numberOrNull(draft.ad_rate) : null,
+      ad_campaign_id:
+        draft.ad_enabled && draft.ad_campaign_id && draft.ad_campaign_id !== NEW_CAMPAIGN
+          ? draft.ad_campaign_id
+          : null,
     };
   }
 
