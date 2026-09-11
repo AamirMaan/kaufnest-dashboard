@@ -6,6 +6,8 @@ import { Field, Select, Input } from "@/components/ui/FormFields";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import type { DraftFormState } from "../_lib/wizardValidation";
+import { OptionalAspectsGroup } from "./OptionalAspectsGroup";
+import type { OptionalAspect } from "../_lib/aspectFields";
 
 interface RequiredAspect {
   name: string;
@@ -39,6 +41,7 @@ function AiBadge() {
 export function AspectsStep({ draft, setDraft, aiVisible = false, onAiUsed }: Props) {
   const { success, info, error: toastError } = useToast();
   const [required, setRequired] = useState<RequiredAspect[] | null>(null);
+  const [optional, setOptional] = useState<OptionalAspect[]>([]);
   const [notApplicableText, setNotApplicableText] = useState("Does not apply");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function AspectsStep({ draft, setDraft, aiVisible = false, onAiUsed }: Pr
     Promise.resolve().then(async () => {
       if (!draft.category_id) {
         setRequired([]);
+        setOptional([]);
         setAiFilled(new Set());
         setLoading(false);
         return;
@@ -73,6 +77,7 @@ export function AspectsStep({ draft, setDraft, aiVisible = false, onAiUsed }: Pr
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Failed to load required item details");
         setRequired(json.aspects);
+        setOptional(json.optionalAspects ?? []);
         setNotApplicableText(json.notApplicableText);
         // A different category means a different set of aspect names — any
         // "AI" badges still on screen belong to the old set.
@@ -184,11 +189,19 @@ export function AspectsStep({ draft, setDraft, aiVisible = false, onAiUsed }: Pr
   if (error) return <p className="text-sm text-(--color-danger-text)">{error}</p>;
   if (!required) return null;
 
+  const optionalGroup =
+    optional.length > 0 ? (
+      <OptionalAspectsGroup aspects={optional} values={draft.aspects} onChange={updateAspect} />
+    ) : null;
+
   if (required.length === 0) {
     return (
-      <p className="text-sm text-(--color-text-muted)">
-        No additional item details are required for this category.
-      </p>
+      <div className="space-y-4">
+        <p className="text-sm text-(--color-text-muted)">
+          No additional item details are required for this category.
+        </p>
+        {optionalGroup}
+      </div>
     );
   }
 
@@ -286,6 +299,7 @@ export function AspectsStep({ draft, setDraft, aiVisible = false, onAiUsed }: Pr
           </Field>
         );
       })}
+      {optionalGroup}
     </div>
   );
 }

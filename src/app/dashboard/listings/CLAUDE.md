@@ -129,7 +129,17 @@ covers only Part 1; Part 2's design is
   a time. Stores the fetched required-names list on
   `draft.required_aspect_names` (form-only, never persisted — see
   `wizardValidation.ts`) so `validateAspectsStep` can check completeness
-  without re-fetching. `PoliciesStep`
+  without re-fetching.
+  Since 2026-09-11 it also renders `_components/OptionalAspectsGroup.tsx`
+  below the required fields (and under the "No additional item details are
+  required" line when there are none): a collapsed-by-default "Other item
+  specifics (optional)" group fed by the aspects route's `optionalAspects`
+  (RECOMMENDED first). Control per aspect comes from `_lib/aspectFields.ts`'s
+  `optionalAspectControl` (tested): closed list → `<Select>`, free text with
+  suggestions → `<Input list>` + `<datalist>`, otherwise plain `<Input>`.
+  Values go into the same `draft.aspects` map; none are `required`, and
+  "Fill with AI" still only covers the required set.
+  `PoliciesStep`
   fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
   on mount (in parallel) — the latter lets the tenant pick their own eBay
   inventory location (`merchant_location_key`), auto-selected when they have
