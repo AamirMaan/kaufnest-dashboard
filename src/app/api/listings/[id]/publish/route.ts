@@ -5,6 +5,7 @@ import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenS
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { publishListing } from "@/lib/integrations/ebay/publish";
 import { generateListingSku } from "@/lib/integrations/ebay/generateSku";
+import { applyMarketingToDraft } from "@/lib/integrations/ebay/marketing";
 import type { EbayListingDraft, Profile } from "@/types";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -78,6 +79,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
   await client.from("ebay_listing_drafts").update({ status: "publishing" }).eq("id", id);
 
+  let published: EbayListingDraft;
   try {
     const result = await publishListing(
       accessToken,
@@ -103,8 +105,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       .single<EbayListingDraft>();
 
     if (updateError) throw updateError;
-
-    return NextResponse.json(updated);
+    published = updated;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Publish failed";
     console.error("[listings/publish] failed:", message);
@@ -124,4 +125,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       { status: 502 }
     );
   }
+
+  // The listing is live from here on. Ads and multi-buy are optional extras:
+  // nothing below may mark the draft failed or answer with an error status —
+  // failures come back as warnings (and in marketing_error) for the form's
+  // toast and the live page's Retry banner.
+  const { draft: finalDraft, warnings } = await applyMarketingToDraft(
+    client,
+    published,
+    accessToken
+  );
+  return NextResponse.json({ draft: finalDraft, warnings });
 }

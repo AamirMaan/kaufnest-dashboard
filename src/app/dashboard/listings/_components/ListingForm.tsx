@@ -113,7 +113,7 @@ interface Props {
 export function ListingForm({ draftId }: Props) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { success, error: toastError } = useToast();
+  const { success, warning, error: toastError } = useToast();
   const companyCurrency = useAppSelector((s) => s.companyProfile.profile?.currency);
 
   /* AI controls are HIDDEN when the plan doesn't include AI or the platform
@@ -363,8 +363,17 @@ export function ListingForm({ draftId }: Props) {
         if (json.draft) dispatch(updateListingDraft(json.draft));
         throw new Error(json.error ?? "Publish failed");
       }
-      dispatch(updateListingDraft(json));
-      success("Published to eBay.");
+      dispatch(updateListingDraft(json.draft));
+      const warnings: string[] = json.warnings ?? [];
+      if (warnings.length > 0) {
+        // The listing IS live — only the optional ad/multi-buy extras failed.
+        warning(
+          "Published to eBay, but not everything was applied.",
+          `${warnings.join(" ")} You can retry from the listing's edit page.`
+        );
+      } else {
+        success("Published to eBay.");
+      }
       router.push("/dashboard/listings");
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Publish failed");

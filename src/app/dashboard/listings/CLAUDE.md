@@ -339,6 +339,21 @@ scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 `autoAcceptPrice`/`autoDeclinePrice`) only when `best_offer_enabled` —
 thresholds left on a row with Best Offer off are ignored.
 
+**Post-publish marketing (2026-09-11).** Once `publishOffer` has succeeded
+and the row is `published`, the route calls `applyMarketingToDraft`
+(`lib/integrations/ebay/marketing.ts`): add the listing to its campaign
+(creating one first when `ad_campaign_id` is null) and create the multi-buy
+volume promotion. These run **outside** the publish try/catch on purpose —
+a marketing failure never marks the draft `failed`; it returns
+`200 { draft, warnings }` and stores the text in `marketing_error`. The
+form shows a warning toast instead of the success toast.
+`POST /api/listings/[id]/apply-marketing` re-runs only these steps for a
+published row (409 otherwise) — each step is skipped when its id
+(`ebay_ad_id`/`ebay_promotion_id`) is already stored, so retries never
+duplicate. `GET /api/listings/ebay/campaigns` feeds the Advertising
+section: `{ campaigns, needsReconnect }`, where `needsReconnect` is a 403
+from eBay (missing `sell.marketing` scope), returned as a 200.
+
 ## Sync & live-edit flow (Part 2, 2026-08-31)
 
 `ebay_listing_drafts` gained an `origin` column (`"app"` default, or

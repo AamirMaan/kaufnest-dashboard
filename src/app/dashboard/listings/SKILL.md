@@ -119,6 +119,12 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 
 ## Gotchas
 
+- **The publish route answers `{ draft, warnings }`, not the bare draft
+  (2026-09-11).** Anything dispatching its response must use `json.draft`.
+  `warnings` non-empty means the listing is live but the ad and/or
+  multi-buy failed — never treat that as a failed publish, and never move
+  marketing calls inside the publish try/catch (that would mark a live
+  listing `failed` and invite a duplicate publish on retry).
 - **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
   and the create/edit routes had no gate at all until the same change.**
   `hasPlatformIntegrations` (Pro + Business) was the original gate on
