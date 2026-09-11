@@ -4,6 +4,7 @@ import { ImageOff } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/currency";
 import { sanitizeListingHtml } from "@/lib/utils/sanitizeListingHtml";
 import { scoreListing } from "../_lib/listingQuality";
+import { multiBuyPreviewLines } from "../_lib/multiBuy";
 import type { DraftFormState } from "../_lib/wizardValidation";
 
 interface Props {
@@ -29,6 +30,7 @@ export function ListingPreview({ draft }: Props) {
   const { score, checks } = scoreListing(draft);
   const failingChecks = checks.filter((check) => !check.passed);
   const band = scoreBandClasses(score);
+  const multiBuyLines = multiBuyPreviewLines(draft);
 
   return (
     <div className="space-y-4">
@@ -77,6 +79,16 @@ export function ListingPreview({ draft }: Props) {
           <p className="text-xl font-bold text-(--color-text-strong)">
             {formatCurrency(price, draft.currency)}
           </p>
+          {draft.best_offer_enabled && (
+            <p className="text-sm text-(--color-text-muted)">or Best Offer</p>
+          )}
+          {multiBuyLines.length > 0 && (
+            <ul className="text-sm text-(--color-success-text)">
+              {multiBuyLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
           <p className="text-sm text-(--color-text-muted)">
             Condition: {CONDITION_LABELS[draft.condition]}
           </p>

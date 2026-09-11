@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Field, Input, Select, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasAiFeatures } from "@/lib/utils/planGating";
@@ -34,11 +34,12 @@ import { ImageGrid } from "./ImageGrid";
 import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
 import { AdvertisingSection } from "./AdvertisingSection";
+import { PricingSection } from "./PricingSection";
 import { useEbayCampaigns } from "./useEbayCampaigns";
 import { ListingPreview } from "./ListingPreview";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { AiUsageNote } from "@/components/ui/AiUsageNote";
-import type { Currency, EbayListingDraft } from "@/types";
+import type { EbayListingDraft } from "@/types";
 
 const FORM_ID = "listing-form";
 
@@ -538,7 +539,7 @@ export function ListingForm({ draftId }: Props) {
 
           <Section
             title="Listing"
-            description="Category, item specifics and how it is priced."
+            description="Category, item specifics and condition."
           >
             <CategoryStep draft={draft} setDraft={setDraft} />
             <AspectsStep
@@ -548,54 +549,26 @@ export function ListingForm({ draftId }: Props) {
               onAiUsed={() => setAiUsageToken((n) => n + 1)}
             />
 
-            <Row>
-              <Field label="Price" required>
-                <Input
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draft.price}
-                  onChange={(e) => setDraft({ price: e.target.value })}
-                />
-              </Field>
-              <Field label="Currency">
-                <Select
-                  value={draft.currency}
-                  onChange={(e) => setDraft({ currency: e.target.value as Currency })}
-                >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                </Select>
-              </Field>
-            </Row>
+            <Field label="Condition" required>
+              <Select
+                required
+                value={draft.condition}
+                onChange={(e) =>
+                  setDraft({ condition: e.target.value as DraftFormState["condition"] })
+                }
+              >
+                <option value="new">New</option>
+                <option value="used">Used</option>
+                <option value="refurbished">Refurbished</option>
+              </Select>
+            </Field>
+          </Section>
 
-            <Row>
-              <Field label="Quantity" required>
-                <Input
-                  required
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={draft.quantity}
-                  onChange={(e) => setDraft({ quantity: e.target.value })}
-                />
-              </Field>
-              <Field label="Condition" required>
-                <Select
-                  required
-                  value={draft.condition}
-                  onChange={(e) =>
-                    setDraft({ condition: e.target.value as DraftFormState["condition"] })
-                  }
-                >
-                  <option value="new">New</option>
-                  <option value="used">Used</option>
-                  <option value="refurbished">Refurbished</option>
-                </Select>
-              </Field>
-            </Row>
+          <Section
+            title="Pricing"
+            description="Price, stock, VAT and the offers buyers see."
+          >
+            <PricingSection draft={draft} setDraft={setDraft} access={marketingAccess} />
           </Section>
 
           <Section

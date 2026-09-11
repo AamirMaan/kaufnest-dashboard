@@ -56,11 +56,11 @@ covers only Part 1; Part 2's design is
   `POST /api/listings/[id]/publish`).
   **Layout**: a two-column grid (`lg:grid-cols-[1fr_380px]`, single column
   below `lg`). The left column is ONE `<form id="listing-form"
-  onSubmit={handlePublish}>` holding three `<Section>`s — **Item**
+  onSubmit={handlePublish}>` holding five `<Section>`s — **Item**
   (`SourceStep`, title, `DescriptionEditor` + `AiUsageNote` (shared, `components/ui/`), `ImageGrid`),
-  **Listing**
-  (`CategoryStep`, `AspectsStep`, price / currency / quantity / condition)
-  and **Shipping** (`PoliciesStep`). The right column is
+  **Listing** (`CategoryStep`, `AspectsStep`, condition), **Pricing**
+  (`PricingSection`), **Advertising** (`AdvertisingSection`) and
+  **Shipping** (`PoliciesStep`). The right column is
   `<ListingPreview draft={draft} />` in a `lg:sticky lg:top-6` wrapper, so
   the preview and its quality meter track every keystroke. Below the grid
   is a `sticky bottom-0` action bar holding Save Draft and Publish; the
@@ -153,6 +153,15 @@ covers only Part 1; Part 2's design is
   `PricingSection`'s multi-buy toggle needs the same `reconnect` state.
   `access.status === "reconnect"` renders `MarketingReconnectNotice.tsx`
   (link to Integrations) instead of the controls.
+- `_components/PricingSection.tsx` (2026-09-11) — the **Pricing** section:
+  price/currency/quantity (moved from Listing), VAT %, "Allow Best Offer"
+  (+ optional auto-accept/auto-decline), and "Add a multi-buy discount"
+  (Buy 2 required, Buy 3 / Buy 4+ optional, whole % 1–80 from
+  `MULTIBUY_PERCENT_OPTIONS`). The multi-buy controls are replaced by
+  `MarketingReconnectNotice` when `access.status === "reconnect"` (the
+  volume promotion needs the same `sell.marketing` scope as ads). Rules live
+  in `validatePricingStep`. `ListingPreview` shows "or Best Offer" and the
+  tier lines from `_lib/multiBuy.ts`'s `multiBuyPreviewLines` (tested).
 - `_components/DescriptionEditor.tsx` (2026-09-02) — the description field.
   A TipTap (`@tiptap/react` + `@tiptap/starter-kit`) rich-text editor that
   replaced the plain `<Textarea>`; props `{ value, onChange, draft,
