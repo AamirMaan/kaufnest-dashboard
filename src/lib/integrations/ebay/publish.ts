@@ -4,7 +4,7 @@ import { getApplicationToken } from "./appToken";
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
-const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_DE";
+export const MARKETPLACE_ID = process.env.EBAY_MARKETPLACE_ID || "EBAY_DE";
 
 // eBay's Inventory API requires Content-Language to be one of the target
 // marketplace's actual supported locales — an inventory item written with a
@@ -26,7 +26,7 @@ const MARKETPLACE_LANGUAGE: Record<string, string> = {
 };
 const CONTENT_LANGUAGE = MARKETPLACE_LANGUAGE[MARKETPLACE_ID] ?? "en-US";
 
-async function ebayFetch(path: string, accessToken: string, init?: RequestInit): Promise<Response> {
+export async function ebayFetch(path: string, accessToken: string, init?: RequestInit): Promise<Response> {
   return fetch(`${EBAY_BASE}${path}`, {
     ...init,
     headers: {
@@ -39,7 +39,7 @@ async function ebayFetch(path: string, accessToken: string, init?: RequestInit):
   });
 }
 
-async function throwIfNotOk(res: Response, action: string): Promise<void> {
+export async function throwIfNotOk(res: Response, action: string): Promise<void> {
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`eBay ${action} failed: ${res.status} ${body.slice(0, 500)}`);

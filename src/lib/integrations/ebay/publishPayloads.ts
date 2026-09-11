@@ -113,3 +113,99 @@ export function buildOfferPayload(
     merchantLocationKey,
   };
 }
+
+// ─── Marketing API payloads (Promoted Listings + volume discount) ──────────────
+
+export interface MultiBuyTiers {
+  buy2: number;
+  buy3: number | null;
+  buy4: number | null;
+}
+
+/** `multibuy_2_pct` is the on/off switch: no Buy 2 tier means no multi-buy. */
+export function multiBuyTiersFromDraft(draft: EbayListingDraft): MultiBuyTiers | null {
+  if (draft.multibuy_2_pct == null) return null;
+  return { buy2: draft.multibuy_2_pct, buy3: draft.multibuy_3_pct, buy4: draft.multibuy_4_pct };
+}
+
+export interface CampaignPayload {
+  campaignName: string;
+  marketplaceId: string;
+  startDate: string;
+  fundingStrategy: { fundingModel: "COST_PER_SALE"; bidPercentage: string };
+}
+
+// eBay campaign names must be unique per seller, so the name carries the
+// creation time to the second — the same shape Seller Hub uses for its own
+// auto-created campaigns ("Campaign 13.05.2026 17:18:00").
+export function buildCampaignPayload(
+  marketplaceId: string,
+  now: Date,
+  rate: number
+): CampaignPayload {
+  const iso = now.toISOString();
+  return {
+    campaignName: `Boughtopia listings ${iso.slice(0, 19).replace("T", " ")}`,
+    marketplaceId,
+    startDate: iso,
+    fundingStrategy: { fundingModel: "COST_PER_SALE", bidPercentage: rate.toFixed(1) },
+  };
+}
+
+export function buildAdPayload(
+  listingId: string,
+  rate: number
+): { listingId: string; bidPercentage: string } {
+  return { listingId, bidPercentage: rate.toFixed(1) };
+}
+
+interface DiscountRule {
+  ruleOrder: number;
+  discountSpecifier: { minQuantity: number };
+  discountBenefit: { percentageOffItem: string };
+}
+
+export interface VolumeDiscountPayload {
+  name: string;
+  description: string;
+  marketplaceId: string;
+  promotionType: "VOLUME_DISCOUNT";
+  promotionStatus: "SCHEDULED";
+  startDate: string;
+  inventoryCriterion: { inventoryCriterionType: "INVENTORY_BY_VALUE"; listingIds: string[] };
+  discountRules: DiscountRule[];
+}
+
+// eBay volume pricing starts from a mandatory 1-item / 0% rule; the seller's
+// tiers follow it in order, and unset optional tiers are simply left out.
+export function buildVolumeDiscountPayload(
+  listingId: string,
+  tiers: MultiBuyTiers,
+  marketplaceId: string,
+  now: Date
+): VolumeDiscountPayload {
+  const steps: Array<[number, number | null]> = [
+    [1, 0],
+    [2, tiers.buy2],
+    [3, tiers.buy3],
+    [4, tiers.buy4],
+  ];
+  const discountRules = steps
+    .filter((step): step is [number, number] => step[1] != null)
+    .map(([minQuantity, pct], index) => ({
+      ruleOrder: index + 1,
+      discountSpecifier: { minQuantity },
+      discountBenefit: { percentageOffItem: String(pct) },
+    }));
+
+  return {
+    name: `Multi-buy ${listingId}`,
+    description: "Buy more, save more",
+    marketplaceId,
+    promotionType: "VOLUME_DISCOUNT",
+    promotionStatus: "SCHEDULED",
+    startDate: now.toISOString(),
+    inventoryCriterion: { inventoryCriterionType: "INVENTORY_BY_VALUE", listingIds: [listingId] },
+    discountRules,
+  };
+}

@@ -11,14 +11,17 @@ const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
 // (GetMyeBaySelling in listings.ts). sell.account is required for the
 // Business Policies endpoints (fetchBusinessPolicies in publish.ts —
 // /sell/account/v1/{fulfillment,payment,return}_policy), which 403 with
-// errorId 1100 ("Insufficient permissions") without it. Connections
-// authorised before either scope was added must be disconnected and
+// errorId 1100 ("Insufficient permissions") without it. sell.marketing
+// (2026-09-11) is required for Promoted Listings campaigns/ads and
+// multi-buy item promotions (ebay/marketing.ts). Connections
+// authorised before any scope was added must be disconnected and
 // reconnected — a code deploy alone does not retroactively grant scopes to
 // an already-issued token/refresh-token pair.
 const EBAY_SCOPE =
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment" +
   " https://api.ebay.com/oauth/api_scope/sell.inventory" +
-  " https://api.ebay.com/oauth/api_scope/sell.account";
+  " https://api.ebay.com/oauth/api_scope/sell.account" +
+  " https://api.ebay.com/oauth/api_scope/sell.marketing";
 
 interface EbayTokenResponse {
   access_token: string;

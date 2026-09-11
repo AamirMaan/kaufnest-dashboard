@@ -1,4 +1,11 @@
-import { buildInventoryItemPayload, buildOfferPayload } from "./publishPayloads";
+import {
+  buildInventoryItemPayload,
+  buildOfferPayload,
+  buildAdPayload,
+  buildCampaignPayload,
+  buildVolumeDiscountPayload,
+  multiBuyTiersFromDraft,
+} from "./publishPayloads";
 import type { EbayListingDraft } from "@/types";
 
 function makeDraft(overrides: Partial<EbayListingDraft> = {}): EbayListingDraft {
@@ -195,5 +202,80 @@ describe("buildOfferPayload — VAT and Best Offer", () => {
       "loc-1"
     );
     expect(payload.listingPolicies).not.toHaveProperty("bestOfferTerms");
+  });
+});
+
+describe("multiBuyTiersFromDraft", () => {
+  it("returns null when Buy 2 is not set", () => {
+    expect(multiBuyTiersFromDraft(makeDraft())).toBeNull();
+  });
+
+  it("returns every tier, keeping unset ones null", () => {
+    expect(
+      multiBuyTiersFromDraft(makeDraft({ multibuy_2_pct: 2, multibuy_3_pct: 4 }))
+    ).toEqual({ buy2: 2, buy3: 4, buy4: null });
+  });
+});
+
+describe("buildCampaignPayload", () => {
+  it("builds a cost-per-sale campaign named after its creation time", () => {
+    const now = new Date("2026-09-11T14:03:22.000Z");
+    expect(buildCampaignPayload("EBAY_DE", now, 13)).toEqual({
+      campaignName: "Boughtopia listings 2026-09-11 14:03:22",
+      marketplaceId: "EBAY_DE",
+      startDate: "2026-09-11T14:03:22.000Z",
+      fundingStrategy: { fundingModel: "COST_PER_SALE", bidPercentage: "13.0" },
+    });
+  });
+});
+
+describe("buildAdPayload", () => {
+  it("sends the rate as a one-decimal string", () => {
+    expect(buildAdPayload("110553", 13)).toEqual({ listingId: "110553", bidPercentage: "13.0" });
+    expect(buildAdPayload("110553", 16.3)).toEqual({ listingId: "110553", bidPercentage: "16.3" });
+  });
+});
+
+describe("buildVolumeDiscountPayload", () => {
+  const now = new Date("2026-09-11T14:03:22.000Z");
+
+  it("prepends eBay's 0% single-item rule and orders the tiers", () => {
+    const payload = buildVolumeDiscountPayload(
+      "110553",
+      { buy2: 2, buy3: 4, buy4: 15 },
+      "EBAY_DE",
+      now
+    );
+    expect(payload).toEqual({
+      name: "Multi-buy 110553",
+      description: "Buy more, save more",
+      marketplaceId: "EBAY_DE",
+      promotionType: "VOLUME_DISCOUNT",
+      promotionStatus: "SCHEDULED",
+      startDate: "2026-09-11T14:03:22.000Z",
+      inventoryCriterion: {
+        inventoryCriterionType: "INVENTORY_BY_VALUE",
+        listingIds: ["110553"],
+      },
+      discountRules: [
+        { ruleOrder: 1, discountSpecifier: { minQuantity: 1 }, discountBenefit: { percentageOffItem: "0" } },
+        { ruleOrder: 2, discountSpecifier: { minQuantity: 2 }, discountBenefit: { percentageOffItem: "2" } },
+        { ruleOrder: 3, discountSpecifier: { minQuantity: 3 }, discountBenefit: { percentageOffItem: "4" } },
+        { ruleOrder: 4, discountSpecifier: { minQuantity: 4 }, discountBenefit: { percentageOffItem: "15" } },
+      ],
+    });
+  });
+
+  it("drops unset Buy 3 / Buy 4+ tiers", () => {
+    const payload = buildVolumeDiscountPayload(
+      "110553",
+      { buy2: 10, buy3: null, buy4: null },
+      "EBAY_DE",
+      now
+    );
+    expect(payload.discountRules).toEqual([
+      { ruleOrder: 1, discountSpecifier: { minQuantity: 1 }, discountBenefit: { percentageOffItem: "0" } },
+      { ruleOrder: 2, discountSpecifier: { minQuantity: 2 }, discountBenefit: { percentageOffItem: "10" } },
+    ]);
   });
 });

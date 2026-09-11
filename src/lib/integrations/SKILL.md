@@ -287,6 +287,29 @@ save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
   failure. Skipping it means the Retry row never appears, and a stale error
   from an earlier attempt never clears, until a hard page reload.
 
+## eBay marketing (Promoted Listings + multi-buy, 2026-09-11)
+
+`ebay/marketing.ts` wraps the Marketing API for the listing form:
+`fetchManualCampaigns` (running/scheduled cost-per-sale campaigns on
+`MARKETPLACE_ID`, rules-based ones filtered out — eBay rejects hand-added
+ads on those), and `runMarketingSteps` → `createCampaign` (only when the
+draft has no `ad_campaign_id`) → `addListingToCampaign` →
+`createVolumeDiscount`. All create calls read the new id from the 201's
+`Location` header (`idFromLocation`).
+
+- **Scope**: needs `sell.marketing`, added to `EBAY_SCOPE` on 2026-09-11.
+  Existing connections must disconnect + reconnect once. We don't store
+  granted scopes, so **a 403 from the Marketing API is the detection
+  signal**: `fetchManualCampaigns` returns `needsReconnect: true`, and the
+  create calls throw `RECONNECT_MESSAGE`.
+- **Idempotency**: each step persists its id (`ad_campaign_id`,
+  `ebay_ad_id`, `ebay_promotion_id`) immediately and is skipped when the id
+  is already stored, so `POST /api/listings/[id]/apply-marketing` can be
+  retried safely. `runMarketingSteps` never throws — the listing is live by
+  then; failures become warning strings stored in `marketing_error`.
+- `ebayFetch`/`throwIfNotOk`/`MARKETPLACE_ID` are exported from
+  `ebay/publish.ts` for this module — reuse them, don't copy them.
+
 ## Merge rule (re-import field ownership)
 
 `mergeImportedSale(existing, incoming)` in `mergeImportedSale.ts` is the single
