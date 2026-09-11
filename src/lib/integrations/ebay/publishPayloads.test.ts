@@ -144,3 +144,56 @@ describe("description sanitization", () => {
     expect(buildOfferPayload(draft, "EBAY_DE", "loc1").listingDescription).toBe(draft.title);
   });
 });
+
+describe("buildOfferPayload — VAT and Best Offer", () => {
+  it("sends neither tax nor bestOfferTerms when they are not set", () => {
+    const payload = buildOfferPayload(makeDraft(), "EBAY_DE", "loc-1");
+    expect(payload).not.toHaveProperty("tax");
+    expect(payload.listingPolicies).not.toHaveProperty("bestOfferTerms");
+  });
+
+  it("sends VAT as tax.vatPercentage with applyTax", () => {
+    const payload = buildOfferPayload(makeDraft({ vat_percentage: 19 }), "EBAY_DE", "loc-1");
+    expect(payload.tax).toEqual({ vatPercentage: 19, applyTax: true });
+  });
+
+  it("sends a 0% VAT rate instead of dropping it", () => {
+    const payload = buildOfferPayload(makeDraft({ vat_percentage: 0 }), "EBAY_DE", "loc-1");
+    expect(payload.tax).toEqual({ vatPercentage: 0, applyTax: true });
+  });
+
+  it("enables Best Offer without thresholds", () => {
+    const payload = buildOfferPayload(
+      makeDraft({ best_offer_enabled: true }),
+      "EBAY_DE",
+      "loc-1"
+    );
+    expect(payload.listingPolicies.bestOfferTerms).toEqual({ bestOfferEnabled: true });
+  });
+
+  it("formats Best Offer thresholds as two-decimal amounts in the listing currency", () => {
+    const payload = buildOfferPayload(
+      makeDraft({
+        best_offer_enabled: true,
+        best_offer_auto_accept: 18,
+        best_offer_auto_decline: 15.5,
+      }),
+      "EBAY_DE",
+      "loc-1"
+    );
+    expect(payload.listingPolicies.bestOfferTerms).toEqual({
+      bestOfferEnabled: true,
+      autoAcceptPrice: { value: "18.00", currency: "EUR" },
+      autoDeclinePrice: { value: "15.50", currency: "EUR" },
+    });
+  });
+
+  it("ignores thresholds left on the row when Best Offer is off", () => {
+    const payload = buildOfferPayload(
+      makeDraft({ best_offer_enabled: false, best_offer_auto_accept: 18 }),
+      "EBAY_DE",
+      "loc-1"
+    );
+    expect(payload.listingPolicies).not.toHaveProperty("bestOfferTerms");
+  });
+});

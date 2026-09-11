@@ -332,6 +332,13 @@ to `ebay_sku` before the first eBay call, then reused on every retry. See
 `src/lib/integrations/SKILL.md`'s equivalent section for the eBay OAuth
 scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
 
+**VAT and Best Offer (2026-09-11)** ride the same offer call:
+`buildOfferPayload` adds `tax: { vatPercentage, applyTax: true }` when
+`vat_percentage` is non-null (0 is sent — it's a real rate) and
+`listingPolicies.bestOfferTerms` (with optional two-decimal
+`autoAcceptPrice`/`autoDeclinePrice`) only when `best_offer_enabled` —
+thresholds left on a row with Best Offer off are ignored.
+
 ## Sync & live-edit flow (Part 2, 2026-08-31)
 
 `ebay_listing_drafts` gained an `origin` column (`"app"` default, or
