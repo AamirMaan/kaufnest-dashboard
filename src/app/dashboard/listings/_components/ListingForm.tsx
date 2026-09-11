@@ -33,6 +33,8 @@ import { CategoryStep } from "./CategoryStep";
 import { ImageGrid } from "./ImageGrid";
 import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
+import { AdvertisingSection } from "./AdvertisingSection";
+import { useEbayCampaigns } from "./useEbayCampaigns";
 import { ListingPreview } from "./ListingPreview";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { AiUsageNote } from "@/components/ui/AiUsageNote";
@@ -153,6 +155,10 @@ export function ListingForm({ draftId }: Props) {
    * `/api/listings/ai/usage` — otherwise the count only ever reflects the
    * page load and never moves as the seller generates. */
   const [aiUsageToken, setAiUsageToken] = useState(0);
+
+  /* One campaigns fetch for the whole form: Advertising needs the list, and
+   * Pricing's multi-buy toggle needs to know whether eBay must be reconnected. */
+  const { access: marketingAccess, reload: reloadCampaigns } = useEbayCampaigns();
 
   const [draft, setDraftState] = useState<DraftFormState>(
     companyCurrency ? { ...EMPTY_DRAFT, currency: companyCurrency } : EMPTY_DRAFT
@@ -590,6 +596,18 @@ export function ListingForm({ draftId }: Props) {
                 </Select>
               </Field>
             </Row>
+          </Section>
+
+          <Section
+            title="Advertising"
+            description="Promoted Listings: pay a share of the sale price only when an ad leads to a sale."
+          >
+            <AdvertisingSection
+              draft={draft}
+              setDraft={setDraft}
+              access={marketingAccess}
+              onRetry={reloadCampaigns}
+            />
           </Section>
 
           <Section

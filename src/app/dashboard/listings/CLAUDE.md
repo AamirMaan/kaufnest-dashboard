@@ -141,6 +141,18 @@ covers only Part 1; Part 2's design is
   `company_profile` (see `SKILL.md`'s gotcha for why). `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
+- `_components/AdvertisingSection.tsx` (2026-09-11) — the form's
+  **Advertising** section: "Promote this listing" checkbox, ad rate (2–100,
+  one decimal) and campaign `<Select>` (the seller's manual cost-per-sale
+  campaigns + "Create a new campaign automatically" = `NEW_CAMPAIGN`).
+  Prefills rate/campaign on mount from the most recently updated draft with
+  a non-null `ad_rate` (toggle stays off); keeps the dropdown valid via
+  `_lib/campaignSelection.ts`'s `resolveCampaignSelection` (tested).
+  Campaign data comes from `_components/useEbayCampaigns.ts` — called once
+  in `ListingForm.tsx` and passed down as `access`, because
+  `PricingSection`'s multi-buy toggle needs the same `reconnect` state.
+  `access.status === "reconnect"` renders `MarketingReconnectNotice.tsx`
+  (link to Integrations) instead of the controls.
 - `_components/DescriptionEditor.tsx` (2026-09-02) — the description field.
   A TipTap (`@tiptap/react` + `@tiptap/starter-kit`) rich-text editor that
   replaced the plain `<Textarea>`; props `{ value, onChange, draft,
