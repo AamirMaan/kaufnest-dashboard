@@ -263,6 +263,14 @@ covers only Part 1; Part 2's design is
   the Title cell renders plain text instead of a `Link`, and the Actions
   cell renders `—` instead of an Edit/Retry link — there is nothing left to
   edit on an ended eBay listing, so `editHref` is never called for them.
+- `_components/MarketingRetryBanner.tsx` (2026-09-11) — rendered by
+  `[id]/live/page.tsx` above `EditLiveListing`. Reads the row's
+  `marketing_error` directly (tenant client) and renders nothing when it's
+  null. Its Retry button calls `POST /api/listings/[id]/apply-marketing`
+  (busy "Retrying…", toast both ways) and dispatches `updateListingDraft`
+  with the returned row. This is the only live-page change in the
+  2026-09-11 pricing/marketing work — editing ad rates or discounts on live
+  listings is a follow-up.
 - `[id]/live/page.tsx` / `_components/EditLiveListing.tsx` (2026-08-31) —
   the Trading-API-based edit page for any already-published listing,
   whether this app created it or it was imported. See "Sync & live-edit
