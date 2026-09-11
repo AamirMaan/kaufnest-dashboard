@@ -1,6 +1,7 @@
 import type { EbayListingDraft } from "@/types";
 import { buildInventoryItemPayload, buildOfferPayload } from "./publishPayloads";
 import { getApplicationToken } from "./appToken";
+import { splitCategoryAspects, type TaxonomyAspect } from "./aspects";
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -134,51 +135,24 @@ export async function searchCategories(query: string): Promise<CategorySuggestio
 
 // ─── Required item aspects (Taxonomy API) ──────────────────────────────────────
 
-export interface RequiredAspect {
-  name: string;
-  values: string[];
-  isProductIdentifier: boolean;
-}
-
-interface TaxonomyAspectValue {
-  localizedValue: string;
-}
-interface TaxonomyAspect {
-  localizedAspectName: string;
-  aspectConstraint?: { aspectRequired?: boolean; aspectUsage?: string };
-  aspectValues?: TaxonomyAspectValue[];
-}
 interface TaxonomyAspectsResponse {
   aspects?: TaxonomyAspect[];
 }
 
-// Product identifiers (GTIN family: EAN/UPC/ISBN, plus MPN) are a
-// documented eBay concept distinct from ordinary category aspects — many
-// categories require at least one of them (a GTIN, OR a Brand+MPN pair),
-// per eBay's own publishing-offers docs. The trap: eBay's Taxonomy API
-// commonly reports these as aspectUsage "RECOMMENDED" rather than
-// aspectRequired: true, even when publishOffer treats them as mandatory —
-// confirmed live 2026-08-31: "Brand" was correctly caught by
-// `aspectRequired === true`, but "EAN" was NOT, and still made
-// publishOffer 400 with errorId 25002 once Brand was fixed. Recognizing
-// this named, finite set by name (rather than loosening the required-filter
-// to "anything not explicitly OPTIONAL", which would flood every category's
-// step with cosmetic aspects like Color/Style/Material) closes this whole
-// class of failure going forward, not just for EAN.
-const PRODUCT_IDENTIFIER_NAMES = new Set(["ean", "upc", "isbn", "gtin", "mpn"]);
-
-function isProductIdentifierAspect(name: string): boolean {
-  return PRODUCT_IDENTIFIER_NAMES.has(name.trim().toLowerCase());
-}
+export type { RequiredAspect, OptionalAspect } from "./aspects";
 
 // Which item aspects (e.g. Brand — "Marke" on EBAY_DE, per the localized
 // Content-Language this app sends) a category requires varies per category
 // and is only knowable by asking eBay — publishOffer rejects with errorId
 // 25002 one missing aspect at a time otherwise, discovered live 2026-08-31
-// on "Vitamine & Mineralien" requiring Brand, then EAN. Same
-// application-token rationale as searchCategories: category metadata isn't
-// seller-specific.
-export async function fetchRequiredAspects(categoryId: string): Promise<RequiredAspect[]> {
+// on "Vitamine & Mineralien" requiring Brand, then EAN. The same response
+// also carries the category's optional/recommended aspects, which the form
+// offers in its collapsible "Other item specifics" group (2026-09-11).
+// Same application-token rationale as searchCategories: category metadata
+// isn't seller-specific.
+export async function fetchCategoryAspects(
+  categoryId: string
+): Promise<ReturnType<typeof splitCategoryAspects>> {
   const accessToken = await getApplicationToken();
   const params = new URLSearchParams({ category_id: categoryId });
   const res = await ebayFetch(
@@ -188,17 +162,7 @@ export async function fetchRequiredAspects(categoryId: string): Promise<Required
   await throwIfNotOk(res, "getItemAspectsForCategory");
 
   const json = (await res.json()) as TaxonomyAspectsResponse;
-  return (json.aspects ?? [])
-    .filter(
-      (a) =>
-        a.aspectConstraint?.aspectRequired === true ||
-        isProductIdentifierAspect(a.localizedAspectName)
-    )
-    .map((a) => ({
-      name: a.localizedAspectName,
-      values: (a.aspectValues ?? []).map((v) => v.localizedValue),
-      isProductIdentifier: isProductIdentifierAspect(a.localizedAspectName),
-    }));
+  return splitCategoryAspects(json.aspects ?? []);
 }
 
 // eBay's sanctioned "no identifier available" placeholder — using it

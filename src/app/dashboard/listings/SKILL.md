@@ -391,7 +391,7 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   Taxonomy API. Fixed with `AspectsStep.tsx` (a field group rendered in
   `ListingForm.tsx`'s "Listing" section, right under the category picker;
   it was a separate wizard step before 2026-09-02) that fetches
-  `fetchRequiredAspects(categoryId)` (`publish.ts`, Taxonomy API
+  `fetchCategoryAspects(categoryId)` (`publish.ts`, Taxonomy API
   `get_item_aspects_for_category`, application token like
   `searchCategories` — category metadata isn't seller-specific) whenever
   `draft.category_id` changes, and renders a Select (if eBay returned
@@ -414,7 +414,7 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   Brand+MPN pair) — a documented, *separate* requirement from generic
   aspects — but the Taxonomy API commonly reports these as `aspectUsage:
   "RECOMMENDED"` rather than `aspectRequired: true`, even though
-  `publishOffer` treats them as mandatory. `fetchRequiredAspects` now also
+  `publishOffer` treats them as mandatory. `fetchCategoryAspects` now also
   includes any aspect whose name matches a fixed, known set (`ean`, `upc`,
   `isbn`, `gtin`, `mpn` — case-insensitive, see `PRODUCT_IDENTIFIER_NAMES`
   in `publish.ts`) regardless of what `aspectRequired`/`aspectUsage` say,
@@ -432,7 +432,11 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   rule** — if a *third* category of quiet-failure field turns up beyond
   aspects and identifiers, add it as its own recognized case here rather
   than broadening the filter further; the goal is closing named gaps eBay
-  documents, not guessing at every possible one.
+  documents, not guessing at every possible one. The classification now
+  lives in the pure `lib/integrations/ebay/aspects.ts`
+  (`splitCategoryAspects`, tested); `fetchCategoryAspects` returns
+  `{ required, optional }` and the aspects route exposes `optional` as
+  `optionalAspects` (2026-09-11).
 - **Sync must never overwrite an `origin="app"` row — load-bearing, not a
   style choice (2026-08-31).** `POST /api/listings/ebay/sync` upserts by
   `ebay_listing_id`, which is a full (non-partial) unique index across the

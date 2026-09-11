@@ -501,7 +501,7 @@ the XML shapes.
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
-  (`searchCategories`, `fetchRequiredAspects`, `fetchBusinessPolicies`,
+  (`searchCategories`, `fetchCategoryAspects`, `fetchBusinessPolicies`,
   `fetchInventoryLocations`, `createInventoryLocation`, `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getConnection } from "@/lib/integrations/tokenStore";
 import {
-  fetchRequiredAspects,
+  fetchCategoryAspects,
   getProductIdentifierNotApplicableText,
 } from "@/lib/integrations/ebay/publish";
 
@@ -28,8 +28,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const aspects = await fetchRequiredAspects(categoryId);
-    return NextResponse.json({ aspects, notApplicableText: getProductIdentifierNotApplicableText() });
+    const { required, optional } = await fetchCategoryAspects(categoryId);
+    return NextResponse.json({
+      aspects: required,
+      optionalAspects: optional,
+      notApplicableText: getProductIdentifierNotApplicableText(),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch required item aspects";
     console.error("[listings/ebay/aspects] fetch failed:", message);
