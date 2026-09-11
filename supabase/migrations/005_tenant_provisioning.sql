@@ -350,9 +350,26 @@ BEGIN
       ebay_offer_id          text,
       ebay_listing_id        text,
       publish_error          text,
+      vat_percentage         numeric(5,2) CHECK (vat_percentage IS NULL OR (vat_percentage >= 0 AND vat_percentage <= 100)),
+      best_offer_enabled     boolean NOT NULL DEFAULT false,
+      best_offer_auto_accept numeric(12,2) CHECK (best_offer_auto_accept IS NULL OR best_offer_auto_accept > 0),
+      best_offer_auto_decline numeric(12,2) CHECK (best_offer_auto_decline IS NULL OR best_offer_auto_decline > 0),
+      multibuy_2_pct         smallint CHECK (multibuy_2_pct IS NULL OR multibuy_2_pct BETWEEN 1 AND 80),
+      multibuy_3_pct         smallint CHECK (multibuy_3_pct IS NULL OR multibuy_3_pct BETWEEN 1 AND 80),
+      multibuy_4_pct         smallint CHECK (multibuy_4_pct IS NULL OR multibuy_4_pct BETWEEN 1 AND 80),
+      ad_rate                numeric(4,1) CHECK (ad_rate IS NULL OR ad_rate BETWEEN 2 AND 100),
+      ad_campaign_id         text,
+      ebay_ad_id             text,
+      ebay_promotion_id      text,
+      marketing_error        text,
       created_by             uuid NOT NULL REFERENCES %1$I.profiles(id),
       created_at             timestamptz NOT NULL DEFAULT now(),
-      updated_at             timestamptz NOT NULL DEFAULT now()
+      updated_at             timestamptz NOT NULL DEFAULT now(),
+      CONSTRAINT ebay_listing_drafts_best_offer_order CHECK (
+        best_offer_auto_accept IS NULL
+        OR best_offer_auto_decline IS NULL
+        OR best_offer_auto_decline < best_offer_auto_accept
+      )
     )
   $sql$, schema_name);
 
