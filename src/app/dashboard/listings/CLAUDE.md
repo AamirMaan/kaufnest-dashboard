@@ -56,11 +56,11 @@ covers only Part 1; Part 2's design is
   `POST /api/listings/[id]/publish`).
   **Layout**: a two-column grid (`lg:grid-cols-[1fr_380px]`, single column
   below `lg`). The left column is ONE `<form id="listing-form"
-  onSubmit={handlePublish}>` holding three `<Section>`s — **Item**
+  onSubmit={handlePublish}>` holding five `<Section>`s — **Item**
   (`SourceStep`, title, `DescriptionEditor` + `AiUsageNote` (shared, `components/ui/`), `ImageGrid`),
-  **Listing**
-  (`CategoryStep`, `AspectsStep`, price / currency / quantity / condition)
-  and **Shipping** (`PoliciesStep`). The right column is
+  **Listing** (`CategoryStep`, `AspectsStep`, condition), **Pricing**
+  (`PricingSection`), **Advertising** (`AdvertisingSection`) and
+  **Shipping** (`PoliciesStep`). The right column is
   `<ListingPreview draft={draft} />` in a `lg:sticky lg:top-6` wrapper, so
   the preview and its quality meter track every keystroke. Below the grid
   is a `sticky bottom-0` action bar holding Save Draft and Publish; the
@@ -129,7 +129,17 @@ covers only Part 1; Part 2's design is
   a time. Stores the fetched required-names list on
   `draft.required_aspect_names` (form-only, never persisted — see
   `wizardValidation.ts`) so `validateAspectsStep` can check completeness
-  without re-fetching. `PoliciesStep`
+  without re-fetching.
+  Since 2026-09-11 it also renders `_components/OptionalAspectsGroup.tsx`
+  below the required fields (and under the "No additional item details are
+  required" line when there are none): a collapsed-by-default "Other item
+  specifics (optional)" group fed by the aspects route's `optionalAspects`
+  (RECOMMENDED first). Control per aspect comes from `_lib/aspectFields.ts`'s
+  `optionalAspectControl` (tested): closed list → `<Select>`, free text with
+  suggestions → `<Input list>` + `<datalist>`, otherwise plain `<Input>`.
+  Values go into the same `draft.aspects` map; none are `required`, and
+  "Fill with AI" still only covers the required set.
+  `PoliciesStep`
   fetches `/api/listings/ebay/policies` AND `/api/listings/ebay/locations`
   on mount (in parallel) — the latter lets the tenant pick their own eBay
   inventory location (`merchant_location_key`), auto-selected when they have
@@ -141,6 +151,27 @@ covers only Part 1; Part 2's design is
   `company_profile` (see `SKILL.md`'s gotcha for why). `CategoryStep` hits
   `/api/listings/ebay/categories?q=` on explicit Search-button/Enter (not
   live-as-you-type) and lets the user pick a suggestion.
+- `_components/AdvertisingSection.tsx` (2026-09-11) — the form's
+  **Advertising** section: "Promote this listing" checkbox, ad rate (2–100,
+  one decimal) and campaign `<Select>` (the seller's manual cost-per-sale
+  campaigns + "Create a new campaign automatically" = `NEW_CAMPAIGN`).
+  Prefills rate/campaign on mount from the most recently updated draft with
+  a non-null `ad_rate` (toggle stays off); keeps the dropdown valid via
+  `_lib/campaignSelection.ts`'s `resolveCampaignSelection` (tested).
+  Campaign data comes from `_components/useEbayCampaigns.ts` — called once
+  in `ListingForm.tsx` and passed down as `access`, because
+  `PricingSection`'s multi-buy toggle needs the same `reconnect` state.
+  `access.status === "reconnect"` renders `MarketingReconnectNotice.tsx`
+  (link to Integrations) instead of the controls.
+- `_components/PricingSection.tsx` (2026-09-11) — the **Pricing** section:
+  price/currency/quantity (moved from Listing), VAT %, "Allow Best Offer"
+  (+ optional auto-accept/auto-decline), and "Add a multi-buy discount"
+  (Buy 2 required, Buy 3 / Buy 4+ optional, whole % 1–80 from
+  `MULTIBUY_PERCENT_OPTIONS`). The multi-buy controls are replaced by
+  `MarketingReconnectNotice` when `access.status === "reconnect"` (the
+  volume promotion needs the same `sell.marketing` scope as ads). Rules live
+  in `validatePricingStep`. `ListingPreview` shows "or Best Offer" and the
+  tier lines from `_lib/multiBuy.ts`'s `multiBuyPreviewLines` (tested).
 - `_components/DescriptionEditor.tsx` (2026-09-02) — the description field.
   A TipTap (`@tiptap/react` + `@tiptap/starter-kit`) rich-text editor that
   replaced the plain `<Textarea>`; props `{ value, onChange, draft,
@@ -232,6 +263,14 @@ covers only Part 1; Part 2's design is
   the Title cell renders plain text instead of a `Link`, and the Actions
   cell renders `—` instead of an Edit/Retry link — there is nothing left to
   edit on an ended eBay listing, so `editHref` is never called for them.
+- `_components/MarketingRetryBanner.tsx` (2026-09-11) — rendered by
+  `[id]/live/page.tsx` above `EditLiveListing`. Reads the row's
+  `marketing_error` directly (tenant client) and renders nothing when it's
+  null. Its Retry button calls `POST /api/listings/[id]/apply-marketing`
+  (busy "Retrying…", toast both ways) and dispatches `updateListingDraft`
+  with the returned row. This is the only live-page change in the
+  2026-09-11 pricing/marketing work — editing ad rates or discounts on live
+  listings is a follow-up.
 - `[id]/live/page.tsx` / `_components/EditLiveListing.tsx` (2026-08-31) —
   the Trading-API-based edit page for any already-published listing,
   whether this app created it or it was imported. See "Sync & live-edit
@@ -331,6 +370,28 @@ and re-publishable after a failure. The SKU is generated once
 to `ebay_sku` before the first eBay call, then reused on every retry. See
 `src/lib/integrations/SKILL.md`'s equivalent section for the eBay OAuth
 scope/token-refresh mechanics this reuses (`sell.inventory`, already granted).
+
+**VAT and Best Offer (2026-09-11)** ride the same offer call:
+`buildOfferPayload` adds `tax: { vatPercentage, applyTax: true }` when
+`vat_percentage` is non-null (0 is sent — it's a real rate) and
+`listingPolicies.bestOfferTerms` (with optional two-decimal
+`autoAcceptPrice`/`autoDeclinePrice`) only when `best_offer_enabled` —
+thresholds left on a row with Best Offer off are ignored.
+
+**Post-publish marketing (2026-09-11).** Once `publishOffer` has succeeded
+and the row is `published`, the route calls `applyMarketingToDraft`
+(`lib/integrations/ebay/marketing.ts`): add the listing to its campaign
+(creating one first when `ad_campaign_id` is null) and create the multi-buy
+volume promotion. These run **outside** the publish try/catch on purpose —
+a marketing failure never marks the draft `failed`; it returns
+`200 { draft, warnings }` and stores the text in `marketing_error`. The
+form shows a warning toast instead of the success toast.
+`POST /api/listings/[id]/apply-marketing` re-runs only these steps for a
+published row (409 otherwise) — each step is skipped when its id
+(`ebay_ad_id`/`ebay_promotion_id`) is already stored, so retries never
+duplicate. `GET /api/listings/ebay/campaigns` feeds the Advertising
+section: `{ campaigns, needsReconnect }`, where `needsReconnect` is a 403
+from eBay (missing `sell.marketing` scope), returned as a 200.
 
 ## Sync & live-edit flow (Part 2, 2026-08-31)
 
@@ -479,7 +540,7 @@ the XML shapes.
   three API routes, never imported client-side
 - `lib/integrations/ebay/{generateSku,publishPayloads,publish}` — SKU
   generation, pure payload builders, and the actual eBay HTTP calls
-  (`searchCategories`, `fetchRequiredAspects`, `fetchBusinessPolicies`,
+  (`searchCategories`, `fetchCategoryAspects`, `fetchBusinessPolicies`,
   `fetchInventoryLocations`, `createInventoryLocation`, `publishListing`).
   `searchCategories` uses `lib/integrations/ebay/appToken.ts`'s application
   token internally, not the tenant's connection token — see SKILL.md's

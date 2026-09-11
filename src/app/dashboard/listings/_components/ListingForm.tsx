@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Field, Input, Select, Row } from "@/components/ui/FormFields";
+import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasAiFeatures } from "@/lib/utils/planGating";
@@ -21,6 +21,10 @@ import {
   validateImagesStep,
   validateAspectsStep,
   validatePoliciesStep,
+  validatePricingStep,
+  validateAdvertisingStep,
+  EMPTY_PRICING_MARKETING,
+  NEW_CAMPAIGN,
   type DraftFormState,
 } from "../_lib/wizardValidation";
 import { toEditorHtml } from "../_lib/descriptionHtml";
@@ -29,10 +33,13 @@ import { CategoryStep } from "./CategoryStep";
 import { ImageGrid } from "./ImageGrid";
 import { AspectsStep } from "./AspectsStep";
 import { PoliciesStep } from "./PoliciesStep";
+import { AdvertisingSection } from "./AdvertisingSection";
+import { PricingSection } from "./PricingSection";
+import { useEbayCampaigns } from "./useEbayCampaigns";
 import { ListingPreview } from "./ListingPreview";
 import { DescriptionEditor } from "./DescriptionEditor";
 import { AiUsageNote } from "@/components/ui/AiUsageNote";
-import type { Currency, EbayListingDraft } from "@/types";
+import type { EbayListingDraft } from "@/types";
 
 const FORM_ID = "listing-form";
 
@@ -55,6 +62,7 @@ const EMPTY_DRAFT: DraftFormState = {
   payment_policy_id: "",
   return_policy_id: "",
   merchant_location_key: "",
+  ...EMPTY_PRICING_MARKETING,
 };
 
 function toFormState(row: EbayListingDraft): DraftFormState {
@@ -83,7 +91,26 @@ function toFormState(row: EbayListingDraft): DraftFormState {
     payment_policy_id: row.payment_policy_id ?? "",
     return_policy_id: row.return_policy_id ?? "",
     merchant_location_key: row.merchant_location_key ?? "",
+    vat_percentage: row.vat_percentage != null ? String(row.vat_percentage) : "",
+    best_offer_enabled: row.best_offer_enabled,
+    best_offer_auto_accept:
+      row.best_offer_auto_accept != null ? String(row.best_offer_auto_accept) : "",
+    best_offer_auto_decline:
+      row.best_offer_auto_decline != null ? String(row.best_offer_auto_decline) : "",
+    multibuy_enabled: row.multibuy_2_pct != null,
+    multibuy_2_pct: row.multibuy_2_pct != null ? String(row.multibuy_2_pct) : "",
+    multibuy_3_pct: row.multibuy_3_pct != null ? String(row.multibuy_3_pct) : "",
+    multibuy_4_pct: row.multibuy_4_pct != null ? String(row.multibuy_4_pct) : "",
+    ad_enabled: row.ad_rate != null,
+    ad_rate: row.ad_rate != null ? String(row.ad_rate) : "",
+    // A saved ad with no campaign means "create one at publish".
+    ad_campaign_id: row.ad_rate != null ? (row.ad_campaign_id ?? NEW_CAMPAIGN) : "",
   };
+}
+
+/** "" → null, otherwise Number. Used for the optional numeric draft columns. */
+function numberOrNull(value: string): number | null {
+  return value.trim() ? Number(value) : null;
 }
 
 function Section({
@@ -113,7 +140,7 @@ interface Props {
 export function ListingForm({ draftId }: Props) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { success, error: toastError } = useToast();
+  const { success, warning, error: toastError } = useToast();
   const companyCurrency = useAppSelector((s) => s.companyProfile.profile?.currency);
 
   /* AI controls are HIDDEN when the plan doesn't include AI or the platform
@@ -129,6 +156,10 @@ export function ListingForm({ draftId }: Props) {
    * `/api/listings/ai/usage` — otherwise the count only ever reflects the
    * page load and never moves as the seller generates. */
   const [aiUsageToken, setAiUsageToken] = useState(0);
+
+  /* One campaigns fetch for the whole form: Advertising needs the list, and
+   * Pricing's multi-buy toggle needs to know whether eBay must be reconnected. */
+  const { access: marketingAccess, reload: reloadCampaigns } = useEbayCampaigns();
 
   const [draft, setDraftState] = useState<DraftFormState>(
     companyCurrency ? { ...EMPTY_DRAFT, currency: companyCurrency } : EMPTY_DRAFT
@@ -223,6 +254,8 @@ export function ListingForm({ draftId }: Props) {
     validateCategoryStep(draft) ??
     validateAspectsStep(draft) ??
     validateImagesStep(draft) ??
+    validatePricingStep(draft) ??
+    validateAdvertisingStep(draft) ??
     validatePoliciesStep(draft);
 
   const isPublishable = publishError === null;
@@ -258,6 +291,24 @@ export function ListingForm({ draftId }: Props) {
       payment_policy_id: draft.payment_policy_id || null,
       return_policy_id: draft.return_policy_id || null,
       merchant_location_key: draft.merchant_location_key || null,
+      vat_percentage: numberOrNull(draft.vat_percentage),
+      best_offer_enabled: draft.best_offer_enabled,
+      // Switched-off extras are saved as null, so a stale value can never
+      // reach eBay (or trip a DB CHECK) from a hidden field.
+      best_offer_auto_accept: draft.best_offer_enabled
+        ? numberOrNull(draft.best_offer_auto_accept)
+        : null,
+      best_offer_auto_decline: draft.best_offer_enabled
+        ? numberOrNull(draft.best_offer_auto_decline)
+        : null,
+      multibuy_2_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_2_pct) : null,
+      multibuy_3_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_3_pct) : null,
+      multibuy_4_pct: draft.multibuy_enabled ? numberOrNull(draft.multibuy_4_pct) : null,
+      ad_rate: draft.ad_enabled ? numberOrNull(draft.ad_rate) : null,
+      ad_campaign_id:
+        draft.ad_enabled && draft.ad_campaign_id && draft.ad_campaign_id !== NEW_CAMPAIGN
+          ? draft.ad_campaign_id
+          : null,
     };
   }
 
@@ -363,8 +414,17 @@ export function ListingForm({ draftId }: Props) {
         if (json.draft) dispatch(updateListingDraft(json.draft));
         throw new Error(json.error ?? "Publish failed");
       }
-      dispatch(updateListingDraft(json));
-      success("Published to eBay.");
+      dispatch(updateListingDraft(json.draft));
+      const warnings: string[] = json.warnings ?? [];
+      if (warnings.length > 0) {
+        // The listing IS live — only the optional ad/multi-buy extras failed.
+        warning(
+          "Published to eBay, but not everything was applied.",
+          `${warnings.join(" ")} You can retry from the listing's edit page.`
+        );
+      } else {
+        success("Published to eBay.");
+      }
       router.push("/dashboard/listings");
     } catch (err) {
       toastError(err instanceof Error ? err.message : "Publish failed");
@@ -479,7 +539,7 @@ export function ListingForm({ draftId }: Props) {
 
           <Section
             title="Listing"
-            description="Category, item specifics and how it is priced."
+            description="Category, item specifics and condition."
           >
             <CategoryStep draft={draft} setDraft={setDraft} />
             <AspectsStep
@@ -489,54 +549,38 @@ export function ListingForm({ draftId }: Props) {
               onAiUsed={() => setAiUsageToken((n) => n + 1)}
             />
 
-            <Row>
-              <Field label="Price" required>
-                <Input
-                  required
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={draft.price}
-                  onChange={(e) => setDraft({ price: e.target.value })}
-                />
-              </Field>
-              <Field label="Currency">
-                <Select
-                  value={draft.currency}
-                  onChange={(e) => setDraft({ currency: e.target.value as Currency })}
-                >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                </Select>
-              </Field>
-            </Row>
+            <Field label="Condition" required>
+              <Select
+                required
+                value={draft.condition}
+                onChange={(e) =>
+                  setDraft({ condition: e.target.value as DraftFormState["condition"] })
+                }
+              >
+                <option value="new">New</option>
+                <option value="used">Used</option>
+                <option value="refurbished">Refurbished</option>
+              </Select>
+            </Field>
+          </Section>
 
-            <Row>
-              <Field label="Quantity" required>
-                <Input
-                  required
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={draft.quantity}
-                  onChange={(e) => setDraft({ quantity: e.target.value })}
-                />
-              </Field>
-              <Field label="Condition" required>
-                <Select
-                  required
-                  value={draft.condition}
-                  onChange={(e) =>
-                    setDraft({ condition: e.target.value as DraftFormState["condition"] })
-                  }
-                >
-                  <option value="new">New</option>
-                  <option value="used">Used</option>
-                  <option value="refurbished">Refurbished</option>
-                </Select>
-              </Field>
-            </Row>
+          <Section
+            title="Pricing"
+            description="Price, stock, VAT and the offers buyers see."
+          >
+            <PricingSection draft={draft} setDraft={setDraft} access={marketingAccess} />
+          </Section>
+
+          <Section
+            title="Advertising"
+            description="Promoted Listings: pay a share of the sale price only when an ad leads to a sale."
+          >
+            <AdvertisingSection
+              draft={draft}
+              setDraft={setDraft}
+              access={marketingAccess}
+              onRetry={reloadCampaigns}
+            />
           </Section>
 
           <Section

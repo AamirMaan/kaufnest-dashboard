@@ -387,6 +387,24 @@ export interface EbayListingDraft {
   ebay_offer_id: string | null;
   ebay_listing_id: string | null;
   publish_error: string | null;
+  /** VAT % sent as the offer's tax.vatPercentage; null = not sent. */
+  vat_percentage: number | null;
+  best_offer_enabled: boolean;
+  best_offer_auto_accept: number | null;
+  best_offer_auto_decline: number | null;
+  /** Multi-buy tiers (whole %). multibuy_2_pct non-null = multi-buy on. */
+  multibuy_2_pct: number | null;
+  multibuy_3_pct: number | null;
+  multibuy_4_pct: number | null;
+  /** Promoted Listings ad rate %; null = not promoted. */
+  ad_rate: number | null;
+  /** Chosen campaign; null with ad_rate set = create one at publish. */
+  ad_campaign_id: string | null;
+  /** What eBay created after publish — retries skip a step whose id is set. */
+  ebay_ad_id: string | null;
+  ebay_promotion_id: string | null;
+  /** Last post-publish marketing failure; the listing itself stays live. */
+  marketing_error: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
