@@ -227,7 +227,8 @@ connected eBay account). Returns `{ campaigns, needsReconnect }`.
    - The two steps are independent: one failing doesn't skip the other.
      Failure messages are joined into `marketing_error`; full success clears
      it.
-3. Response: `200 { listingId, warnings: string[] }` — `warnings` empty on
+3. Response: `200 { draft, warnings: string[] }` (the full row, which the
+   form already dispatches to `listingsSlice`) — `warnings` empty on
    full success.
 
 ### Route: `POST /api/listings/[id]/apply-marketing`
