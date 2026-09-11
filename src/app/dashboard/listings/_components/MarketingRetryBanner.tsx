@@ -13,7 +13,7 @@ import type { EbayListingDraft } from "@/types";
  *  publish. Retry re-runs only the missing steps (never duplicates). */
 export function MarketingRetryBanner({ draftId }: { draftId: string }) {
   const dispatch = useAppDispatch();
-  const { success, error: toastError } = useToast();
+  const { success, error: toastError, warning } = useToast();
   const [message, setMessage] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
 
@@ -43,7 +43,7 @@ export function MarketingRetryBanner({ draftId }: { draftId: string }) {
       const warnings: string[] = json.warnings ?? [];
       if (warnings.length > 0) {
         setMessage(warnings.join(" "));
-        toastError("Still couldn't apply everything.", warnings.join(" "));
+        warning("Still couldn't apply everything.", warnings.join(" "));
       } else {
         setMessage(null);
         success("Advertising and discounts applied.");
