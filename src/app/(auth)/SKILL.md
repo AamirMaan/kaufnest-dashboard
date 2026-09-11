@@ -31,6 +31,12 @@ No test suite targets these pages — they're thin wrappers over
 - These pages run with no Redux store and no session yet — use
   `createClient()` from `@/lib/supabase/client` directly, don't reach for
   `useAppSelector`/`useAppDispatch`.
+- The brand mark on every page is `BrandMark` (`components/layout/BrandMark`),
+  not a hardcoded `<img>` — it switches SVG with the theme via `useTheme()`,
+  so it needs `ThemeProvider` context. That's already wired app-wide in
+  `app/layout.tsx`; no extra setup here. Don't swap it back to a fixed
+  `boughtopia-icon-bag-mono-light.svg` — these pages follow the light/dark
+  theme now (2026-09-09), and the white icon vanishes on the light surface.
 - The Supabase redirect URL (`/auth/confirm`) and the invite/reset email
   templates are configured outside this codebase (Supabase Dashboard) — if you
   change a route path here, that config must be updated too.
