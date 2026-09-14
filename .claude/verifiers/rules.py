@@ -391,6 +391,7 @@ def _suppressed(lines: list[str], index: int, rule_id: str) -> bool:
 _AUTH_MARKERS = re.compile(
     r"auth\.getUser\(\)|verifyPlatformAdmin|requireIntegrationAdmin|requireBillingAdmin"
     r"|requirePermission|verifySignature|constructEvent|verifyNotificationSignature"
+    r"|verifyWebhookSignature"
 )
 # Only routes that actually reach data need a guard; a cookie-clearing route
 # (e.g. admin/exit-impersonation) legitimately has none.

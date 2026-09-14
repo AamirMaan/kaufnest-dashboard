@@ -157,6 +157,11 @@ ROUTE_CASES: list[tuple[str, str, str | None]] = [
      "  const event = stripe.webhooks.constructEvent(raw, sig, secret);\n"
      '  await c.from("tenants").update({});\n}',
      None),
+    ("trello webhook with HMAC signature check",
+     "export async function POST() {\n"
+     "  if (!verifyWebhookSignature(raw, header, secret, callbackUrl)) return;\n"
+     '  const c = createControlClient();\n  await c.from("bug_reports").update({});\n}',
+     None),
     ("route with no db access needs no guard",
      "export async function POST() {\n"
      '  const r = NextResponse.json({ ok: true });\n'

@@ -30,6 +30,7 @@ export async function POST() {
 
   const env = trelloEnv();
   let updated = 0;
+  let failed = 0;
 
   for (const report of reports ?? []) {
     try {
@@ -43,12 +44,18 @@ export async function POST() {
         updated += 1;
       }
 
-      await control.schema("control").from("bug_reports").update(patch).eq("id", report.id);
+      const { error: updateError } = await control
+        .schema("control").from("bug_reports").update(patch).eq("id", report.id);
+      if (updateError) {
+        console.error(`[support/resync] update failed for report ${report.id}:`, updateError.message);
+        failed += 1;
+      }
     } catch (err) {
       // A deleted card shouldn't abort the sweep.
       console.error(`[support/resync] card ${report.trello_card_id} failed:`, err);
+      failed += 1;
     }
   }
 
-  return NextResponse.json({ checked: reports?.length ?? 0, updated });
+  return NextResponse.json({ checked: reports?.length ?? 0, updated, failed });
 }

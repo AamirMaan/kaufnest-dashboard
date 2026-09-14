@@ -21,12 +21,19 @@ export function ResyncButton() {
     setSyncing(true);
     try {
       const res = await fetch("/api/support/resync", { method: "POST" });
-      const data = (await res.json()) as { checked?: number; updated?: number; error?: string };
+      const data = (await res.json()) as {
+        checked?: number;
+        updated?: number;
+        failed?: number;
+        error?: string;
+      };
 
       if (res.ok) {
+        const failed = data.failed ?? 0;
         success(
           "Synced with Trello",
-          `Checked ${data.checked ?? 0} report${data.checked === 1 ? "" : "s"}, updated ${data.updated ?? 0}.`
+          `Checked ${data.checked ?? 0} report${data.checked === 1 ? "" : "s"}, updated ${data.updated ?? 0}.` +
+            (failed > 0 ? ` ${failed} failed — see server logs.` : "")
         );
         router.refresh();
       } else {

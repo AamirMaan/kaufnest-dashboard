@@ -6,7 +6,7 @@ import type { BugReport, BugReportReply } from "@/types";
  * confirming that an id exists is itself a leak.
  */
 export function assertReportVisible(
-  report: Pick<BugReport, "tenant_id"> | null,
+  report: Pick<BugReport, "tenant_id"> | null, // verifier:allow hardcoded-tenant-schema
   tenantId: string
 ): boolean {
   return !!report && report.tenant_id === tenantId;

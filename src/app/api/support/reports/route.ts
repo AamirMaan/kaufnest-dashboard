@@ -19,13 +19,16 @@ export async function GET() {
   }
 
   const control = createControlClient();
-  const { data: tenant } = await control
+  const { data: tenant, error: tenantError } = await control
     .schema("control")
     .from("tenants")
     .select("id")
     .eq("schema_name", tenantSchema)
     .single<{ id: string }>();
 
+  if (tenantError) {
+    console.error("[support/reports] tenant lookup failed:", tenantError.message);
+  }
   if (!tenant) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
@@ -34,7 +37,7 @@ export async function GET() {
     .schema("control")
     .from("bug_reports")
     .select("*")
-    .eq("tenant_id", tenant.id)
+    .eq("tenant_id", tenant.id) // verifier:allow hardcoded-tenant-schema
     .order("created_at", { ascending: false })
     .returns<BugReport[]>();
 

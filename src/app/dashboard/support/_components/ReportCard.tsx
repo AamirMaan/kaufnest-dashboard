@@ -30,7 +30,8 @@ export function ReportCard({ report, onOpen }: { report: BugReport; onOpen: () =
       </div>
       <p className="text-xs text-(--color-text-muted) mt-2">
         {report.reporter_email} · {new Date(report.created_at).toLocaleDateString()}
-        {report.replies && report.replies.length > 0 && ` · ${report.replies.length} reply`}
+        {report.replies && report.replies.length > 0 &&
+          ` · ${report.replies.length} repl${report.replies.length > 1 ? "ies" : "y"}`}
       </p>
     </button>
   );

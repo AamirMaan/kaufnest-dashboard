@@ -7,7 +7,7 @@ import { Field, Input, Select, Textarea, Row } from "@/components/ui/FormFields"
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch } from "@/store/hooks";
 import { submitReport, fetchReports } from "../_store/supportSlice";
-import { validateAttachments, ALLOWED_MIME_TYPES } from "../_lib/attachmentRules";
+import { validateAttachments, ALLOWED_MIME_TYPES, MAX_FILES, MAX_TOTAL_BYTES } from "../_lib/attachmentRules";
 import type { BugReportType, BugSeverity } from "@/types";
 
 const FORM_ID = "report-issue-form";
@@ -176,7 +176,7 @@ export function ReportIssueModal({
             onChange={(e) => onFilesPicked(e.target.files)}
           />
           <p className="mt-1 text-xs text-[var(--color-text-faint)]">
-            Up to 3 images, 4 MB total.
+            Up to {MAX_FILES} images, {MAX_TOTAL_BYTES / (1024 * 1024)} MB total.
           </p>
         </Field>
       </form>

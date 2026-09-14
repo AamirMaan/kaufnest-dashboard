@@ -116,11 +116,11 @@ export async function POST(req: NextRequest) {
         attachments.push(await attachFile({ env, cardId: card.id, file }));
       } catch (err) {
         console.error("[support/report] attachment upload failed:", err);
-        warning = "Your report was sent, but a screenshot could not be attached. You can add it from the report.";
+        warning = "Your report was sent, but a screenshot could not be attached. Reply to the report once we're in touch and we'll pick it up.";
       }
     }
 
-    await control
+    const { error: persistError } = await control
       .schema("control")
       .from("bug_reports")
       .update({
@@ -130,6 +130,11 @@ export async function POST(req: NextRequest) {
         last_synced_at: new Date().toISOString(),
       })
       .eq("id", report.id);
+
+    if (persistError) {
+      console.error("[support/report] persisting Trello card details failed:", persistError.message);
+      warning = warning ?? "Your report was sent, but syncing it with the tracker is still catching up.";
+    }
 
     report.trello_card_id = card.id;
     report.trello_card_url = card.url;

@@ -52,9 +52,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   );
   if (fileError) return NextResponse.json({ error: fileError }, { status: 400 });
 
-  const env = trelloEnv();
   const added: BugAttachment[] = [];
   try {
+    const env = trelloEnv();
     for (const file of files) {
       added.push(await attachFile({ env, cardId: report.trello_card_id, file }));
     }
@@ -64,10 +64,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const attachments = [...existing, ...added];
-  await control
+  const { error: updateError } = await control
     .schema("control").from("bug_reports")
     .update({ attachments, updated_at: new Date().toISOString() })
     .eq("id", report.id);
+
+  if (updateError) {
+    console.error("[support/attachments] persisting attachments failed:", updateError.message);
+  }
 
   return NextResponse.json({ attachments });
 }
