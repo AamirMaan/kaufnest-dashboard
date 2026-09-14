@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +10,7 @@ import { fetchReports, selectReport } from "./_store/supportSlice";
 import { groupByStatus, STATUS_COLUMNS, STATUS_LABELS, STATUS_EMPTY_MESSAGES } from "./_lib/groupReports";
 import { ReportCard } from "./_components/ReportCard";
 import { ReportDetailPanel } from "./_components/ReportDetailPanel";
+import { ReportIssueModal } from "./_components/ReportIssueModal";
 import type { BugReportStatus } from "@/types";
 
 const filterInputCls =
@@ -16,6 +18,7 @@ const filterInputCls =
 
 export default function SupportPage() {
   const dispatch = useAppDispatch();
+  const pathname = usePathname();
   const items = useAppSelector((s) => s.support.items);
   const loaded = useAppSelector((s) => s.support.loaded);
   const isFetching = useAppSelector((s) => s.support.isFetching);
@@ -23,6 +26,7 @@ export default function SupportPage() {
   const selectedId = useAppSelector((s) => s.support.selectedId);
 
   const [mobileFilter, setMobileFilter] = useState<BugReportStatus>("reported");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   useEffect(() => {
     dispatch(fetchReports());
@@ -37,10 +41,9 @@ export default function SupportPage() {
         title="Support"
         description="Bugs, feature requests, and questions you've reported"
         action={
-          <Button>
+          <Button onClick={() => setReportModalOpen(true)}>
             <Plus size={15} />
             Report an issue
-            {/* TODO: wire in Task 13 (ReportIssueModal) */}
           </Button>
         }
       />
@@ -122,6 +125,12 @@ export default function SupportPage() {
       )}
 
       <ReportDetailPanel report={selectedReport} onClose={() => dispatch(selectReport(null))} />
+
+      <ReportIssueModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        pageUrl={pathname ?? undefined}
+      />
     </div>
   );
 }
