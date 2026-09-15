@@ -11,9 +11,10 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `FilterBar` (date preset, currency, platform, status, general keyword
   search across product name/order ID/description), row selection, invoice
   trigger, Gross/VAT/Net summary **(this page)**, **Export CSV** button
-  (server-side query, no `.range()`, capped at 5 000 rows), **Import CSV**
-  button, wires up the modals below. Product-name cells are `<Link>`s to
-  `/dashboard/sales/[id]`.
+  (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
+  5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
+  Max Rows gotcha), **Import CSV** button, wires up the modals below.
+  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -165,8 +166,11 @@ in memory** — all filtering happens in `fetchSalesPage` (the thunk in
 labelled in the UI.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
-with the same filter predicates but **no `.range()`**, capped at 5 000 rows, so
-the export always covers all matching records regardless of which page is shown.
+with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up to
+a 5 000-row overall cap (NOT a single `.limit(5000)` — see
+`dashboard/SKILL.md`'s Max Rows gotcha, fixed 2026-09-15 after a
+`tenant_k2_textil` Overview report of the same underlying truncation), so the
+export always covers all matching records regardless of which page is shown.
 
 **DataTable sorting** sorts within the current page only (v1 behaviour) — noted
 in SKILL.md gotchas.
@@ -408,7 +412,7 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
 - `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
   by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
   direct-URL load; `state.purchases.items` is also read for the fast path
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `lib/utils/importAliases.ts` — shared header-alias vocabulary and
   `resolveHeaders`/`canonicalizeRow` (also used by Expenses); `importFormats.ts`

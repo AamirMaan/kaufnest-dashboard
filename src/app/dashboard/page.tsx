@@ -26,7 +26,7 @@ import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
 import { aggregateSaleRevenue } from "./_lib/aggregateSales";
 import { computePending } from "./_lib/platformBalance";
-import { fetchAllRows } from "./_lib/fetchAllRows";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
 

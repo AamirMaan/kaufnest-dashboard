@@ -46,17 +46,19 @@ wrong Overview aggregates (revenue, VAT, net profit, order count) computed
 from only the most recent N rows — no loading error, so it looks like correct
 but small numbers, not a failure.
 
-**Fix**: use `_lib/fetchAllRows.ts`, not a bare `.limit(N)` single request.
-It pages through `.range()` calls, using each response's *actual* returned
-row count (not the requested width) to advance the offset — so it self-adapts
-to whatever the server's real per-request cap is instead of assuming the
-requested width was honored. The 4 Overview queries in `page.tsx` all go
-through it. If you add a 5th query here, or touch the CSV export queries in
-Sales/Expenses/Purchases (`page.tsx`'s `handleExport`, same `.limit(5000)`
-pattern, same exposure — not yet migrated to `fetchAllRows` as of this
-writing), use the same helper.
+**Fix**: use `@/lib/utils/fetchAllRows`, not a bare `.limit(N)` single
+request. It pages through `.range()` calls, using each response's *actual*
+returned row count (not the requested width) to advance the offset — so it
+self-adapts to whatever the server's real per-request cap is instead of
+assuming the requested width was honored. The 4 Overview queries in
+`page.tsx` and the Sales/Expenses/Purchases CSV export queries
+(`handleExport` in each feature's `page.tsx`) all go through it. It lives in
+`src/lib/utils/` (not this folder's `_lib/`) since it now services 4
+features — see AGENTS.md's shared-vs-feature-private rule. If you add a new
+"fetch everything matching a filter" query anywhere, use the same helper
+rather than a single `.limit()`.
 
 ## Test command
 
-`npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`,
-`fetchAllRows.test.ts`).
+`npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`)
++ `npx jest lib/utils/fetchAllRows` for the shared helper itself.
