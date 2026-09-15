@@ -77,6 +77,21 @@ export function parseLocaleRate(input: string | undefined): number | null {
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DE_DATE = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/;
 
+/**
+ * True when a string looks like a date in one of the formats this module
+ * parses (ISO or DD/MM/YYYY-shaped). Used by `excel.ts` to flag an Excel
+ * column that mixes native date-typed cells with plain-text date strings —
+ * the fingerprint of Excel silently auto-converting only the values its
+ * locale could read as a valid date, corrupting the rest in the process (see
+ * that module's `mixedDateTypeColumns`). Doesn't validate the date is real
+ * (that's `parseFlexibleDate`'s job) — this only needs to recognize the
+ * shape.
+ */
+export function looksLikeDate(s: string): boolean {
+  const t = s.trim();
+  return ISO_DATE.test(t) || DE_DATE.test(t);
+}
+
 export type DateOrder = "dmy" | "mdy";
 
 export interface DateOrderDetection {

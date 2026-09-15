@@ -5,6 +5,7 @@ import {
   firstAmbiguousDate,
   hasOrderSensitiveDate,
   parseLocaleRate,
+  looksLikeDate,
 } from "./localeParse";
 
 describe("parseLocaleNumber", () => {
@@ -228,5 +229,32 @@ describe("parseLocaleRate", () => {
     expect(parseLocaleRate("")).toBeNull();
     expect(parseLocaleRate(undefined)).toBeNull();
     expect(parseLocaleRate("abc")).toBeNull();
+  });
+});
+
+describe("looksLikeDate", () => {
+  it("recognizes ISO dates", () => {
+    expect(looksLikeDate("2026-05-03")).toBe(true);
+  });
+
+  it("recognizes DD/MM/YYYY-shaped dates with any of the three separators", () => {
+    expect(looksLikeDate("03-05-2026")).toBe(true);
+    expect(looksLikeDate("03.05.2026")).toBe(true);
+    expect(looksLikeDate("03/05/2026")).toBe(true);
+  });
+
+  it("tolerates surrounding whitespace", () => {
+    expect(looksLikeDate("  03-05-2026  ")).toBe(true);
+  });
+
+  it("does not validate the date is real — that's parseFlexibleDate's job", () => {
+    expect(looksLikeDate("31-13-2026")).toBe(true);
+  });
+
+  it("rejects non-date text", () => {
+    expect(looksLikeDate("")).toBe(false);
+    expect(looksLikeDate("n/a")).toBe(false);
+    expect(looksLikeDate("Blue Widget")).toBe(false);
+    expect(looksLikeDate("2026")).toBe(false);
   });
 });

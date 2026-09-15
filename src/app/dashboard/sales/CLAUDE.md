@@ -564,6 +564,23 @@ day-first regardless. Outcomes:
   has no effect at all (dot dates are always day-first — see below), so the
   Day-first/Month-first selector is disabled with a one-line explanation
   instead of silently doing nothing.
+- **Excel-only corruption `detectDateOrder` can't see at all** (2026-09-15,
+  real k2_textil import): an `.xlsx` upload's "date" column can mix native
+  Excel date-typed cells with plain-text dates — Excel only auto-converts a
+  value into a real date cell when its OWN locale reads it as valid, so an
+  unambiguous date (`31-05-2026`, invalid as month=31) survives as text and
+  parses correctly, while an ambiguous one (`03-05-2026`, valid as
+  month=03/day=05) gets silently converted to a native date cell reading
+  March 5th instead of May 3rd — with no text left for `detectDateOrder` to
+  evaluate. `parseAndValidate` checks `parseExcelBuffer`'s
+  `mixedDateTypeColumns` (`lib/utils/excel.ts`) and refuses the import
+  BEFORE `detectDateOrder` runs when the `date` column is flagged — a file
+  this corrupted can't be salvaged by re-detecting order, only by
+  re-exporting as CSV/text or fixing the column's Excel cell format to Text.
+  This is a plain-text CSV upload's `/`-vs-`-` separator-conflict case
+  (above), one layer earlier — same "refuse, don't guess" philosophy, but
+  Excel's binary date-cell typing has already destroyed the original
+  ambiguous text by the time the corruption could otherwise be evaluated.
 
 The user can override the detected/assumed order via the "Date format"
 dropdown next to the format dropdown (Auto / Day first / Month first) —
