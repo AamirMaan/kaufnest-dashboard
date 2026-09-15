@@ -103,21 +103,53 @@ Export and import primitives for the CSV round-trip on Sales/Expenses/Purchases.
 
 ## excel.ts
 
-`parseExcelBuffer(buffer) → { headers, rows }` — parses `.xlsx`/`.xls` from an
-`ArrayBuffer` via SheetJS.
+`parseExcelBuffer(buffer) → { headers, rows, mixedDateTypeColumns }` — parses
+`.xlsx`/`.xls` from an `ArrayBuffer` via SheetJS.
 
-**Returns exactly the same shape as `parseCsvText`**, which is the entire point:
-the Sales import modal feeds both file types through one unchanged pipeline.
-Preserve that contract if you touch either module.
+**`headers`/`rows` are exactly the same shape as `parseCsvText`**, which is
+the entire point: the Sales import modal feeds both file types through one
+unchanged pipeline. Preserve that contract if you touch either module.
 
 - First worksheet only.
 - Headers lowercased + trimmed (matching `parseCsvText`).
 - Entirely blank rows dropped.
-- Dates are emitted as `YYYY-MM-DD` strings so `parseFlexibleDate` accepts them.
+- Dates are emitted as `YYYY-MM-DD` strings so `parseFlexibleDate` accepts them
+  — **except when they can't be trusted at all**, see `mixedDateTypeColumns`
+  below.
 
 > `xlsx` is the dependency flagged in `AUDIT_2026-07-24.md` §2.3 (prototype
 > pollution + ReDoS, no npm fix). It only ever parses a file the user picked
 > themselves, but keep the blast radius in mind before reusing it server-side.
+
+**`mixedDateTypeColumns: Set<string>`** (2026-09-15, real k2_textil import
+bug) — headers whose column mixes a native Excel date-typed cell with a
+plain-text, date-shaped cell. This is a DIFFERENT corruption signature than
+the CSV-only "mixed separator" one `detectDateOrder` already catches
+(`localeParse.ts`), and neither `detectDateOrder` nor `parseFlexibleDate` can
+see it: Excel only auto-converts a typed/pasted value into a real date cell
+when it forms a VALID date under Excel's OWN locale — `31-05-2026` fails as
+month=31 under a month-first locale and survives as plain text (which DOES
+reach `detectDateOrder`/`parseFlexibleDate` and parses correctly), but
+`03-05-2026` is a valid month=03/day=05 reading under that same locale, so
+Excel silently converts it to a native date cell — permanently losing the
+intended day-first meaning (May 3rd becomes March 5th) before our code ever
+sees text. `cellToString`'s `Date` branch just reads `getMonth()`/`getDate()`
+off whatever Excel already resolved; there is no ambiguous string left to
+evaluate, so this can ONLY be caught by noticing the mix itself. Computed
+over the RAW (pre-`cellToString`) cell values, across every data row
+including ones later dropped as blank — the mix is what's diagnostic, not
+which rows survive. `ImportSalesModal.tsx`'s `parseAndValidate` checks
+whether the raw header the `date` key resolved to is in this set and refuses
+the import with a clear error (same "don't guess, refuse" philosophy as
+`detectDateOrder`'s conflict cases) — **before** `detectDateOrder` even runs,
+since a file this corrupted can't be salvaged by re-detecting order. Already
+-imported bad data from before this fix needs a manual per-batch SQL
+correction (`created_at`-scoped `UPDATE`), not a re-import — the original
+ambiguous text is gone from the file forever once Excel has done this.
+**Only wired into Sales's Excel import path** — Purchases/Expenses also call
+`parseExcelBuffer` (`ImportPurchasesModal.tsx`/`ImportExpensesModal.tsx`) but
+don't check `mixedDateTypeColumns` yet, so they're still exposed to the same
+corruption on an `.xlsx` upload with an ambiguous date column.
 
 ## localeParse.ts
 

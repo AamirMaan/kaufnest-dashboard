@@ -32,7 +32,12 @@ import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
 
-type ParsedSource = { headers: string[]; rows: Record<string, string>[] };
+type ParsedSource = {
+  headers: string[];
+  rows: Record<string, string>[];
+  /** Set only by the Excel path — see `parseExcelBuffer`'s doc comment. */
+  mixedDateTypeColumns?: Set<string>;
+};
 
 /**
  * Read a CSV file as text. Tries UTF-8 first; if the decode produced
@@ -330,6 +335,26 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       }]);
       return;
     }
+    // Excel-only corruption (see `parseExcelBuffer`'s `mixedDateTypeColumns`
+    // doc comment): Excel silently auto-converts only the date values its
+    // OWN locale can read as valid, permanently losing the day-first meaning
+    // of the rest (an intended "03-05-2026"/May 3rd can become a native date
+    // cell read as March 5th) before our code ever sees text to evaluate.
+    // This can't be caught by `detectDateOrder` below — there's no ambiguous
+    // string left, just an already-wrong resolved date — so it must be
+    // checked separately, against the raw header the `date` key resolved to.
+    if (source.mixedDateTypeColumns?.size) {
+      const dateRawHeader = [...mapping.entries()].find(([, key]) => key === "date")?.[0];
+      if (dateRawHeader && source.mixedDateTypeColumns.has(dateRawHeader)) {
+        setParsed([{
+          rowNum: 0,
+          data: null,
+          error: `This Excel file's "date" column mixes real date cells with plain-text dates. Excel only auto-converts values its own locale can read as a valid date, which silently corrupts the rest — an ambiguous date like "03-05-2026" can become a date cell read as March 5th instead of May 3rd, with no way for this importer to detect or recover the original value. Re-export this report as CSV/text (Excel never does this to plain text), or set the date column's format to Text in Excel before re-uploading.`,
+        }]);
+        return;
+      }
+    }
+
     // Canonicalise first so the `date` column is resolved, then decide the
     // order from the whole file BEFORE validating any row. Guessing per-row is
     // what mis-dated 145 live orders.
