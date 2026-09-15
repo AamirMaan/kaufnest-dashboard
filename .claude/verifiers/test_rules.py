@@ -133,6 +133,22 @@ CASES: list[tuple[str, str, str, str | None]] = [
     ("any allowed in tests", "src/lib/x.test.ts", "function f(doc: any) {}", None),
     ("console.log", "src/lib/x.ts", "console.log(payload);", "console-log"),
     ("console.error is fine", "src/lib/x.ts", "console.error(payload);", None),
+
+    # ---- scalability ----
+    ("unbounded limit over the Max Rows default", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(5000);',
+     "unbounded-limit"),
+    ("limit at exactly 1000 still warns — no safety margin", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(1000);',
+     "unbounded-limit"),
+    ("small named-constant limit is fine", "src/app/dashboard/messages/_store/x.ts",
+     'const q = supabase.from("ebay_messages").select("*").limit(SEARCH_RESULT_LIMIT);',
+     None),
+    ("limit(1) single-row lookup is fine", "src/lib/x.ts",
+     'const q = supabase.from("sales").select("*").limit(1);', None),
+    ("suppressed large limit", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(5000); // verifier:allow unbounded-limit',
+     None),
 ]
 
 # route-without-auth is a file-level rule; give it its own cases.

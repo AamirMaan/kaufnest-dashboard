@@ -296,6 +296,33 @@ RULES: list[Rule] = [
         tags=("security", "api"),
     ),
 
+    # ---- Data & scalability -------------------------------------------------
+    Rule(
+        id="unbounded-limit",
+        severity=WARN,
+        message=(
+            "`.limit(N)` with N at or above 1000 is silently truncated by "
+            "Supabase's PostgREST Max Rows setting (default 1000) regardless "
+            "of what you asked for. Use fetchAllRows "
+            "(src/lib/utils/fetchAllRows.ts) to page past it instead of one "
+            "big .limit() call."
+        ),
+        why=(
+            "PR #103: a .limit(5000) Overview/CSV-export query returned only "
+            "1000 rows on a tenant with 1510 sales, with no error — see "
+            "BACKEND_ARCHITECTURE_PRINCIPLES.md. Known gap: this only "
+            "catches a literal numeric argument — `.limit(SOME_CONSTANT)` "
+            "where SOME_CONSTANT resolves to >=1000 is invisible to a "
+            "single-line regex (this was true of the actual "
+            "`.limit(OVERVIEW_ROW_CAP)` bug in dashboard/page.tsx before the "
+            "fix) — a human/agent review still matters for named constants."
+        ),
+        pattern=re.compile(r"\.limit\(\s*(\d{4,})\s*\)"),
+        path_include=(r"^src/.*\.tsx?$",),
+        path_exclude=(r"\.test\.tsx?$",),
+        tags=("scalability",),
+    ),
+
     # ---- Code standards ----------------------------------------------------
     Rule(
         id="ts-escape-hatch",

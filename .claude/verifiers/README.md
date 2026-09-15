@@ -64,6 +64,7 @@ judgement calls (`any`, a leaked Postgres error message) where a human decides.
 | `no-any` | WARN | Explicit `any` outside tests |
 | `dangerous-html` | WARN | `dangerouslySetInnerHTML` (eBay listing/message bodies are untrusted) |
 | `console-log` | WARN | Leftover `console.log` |
+| `unbounded-limit` | WARN | `.limit(N)` with N >= 1000 — Supabase's Max Rows setting truncates it silently regardless (PR #103) |
 
 ## Suppressing a rule
 
