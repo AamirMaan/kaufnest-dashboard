@@ -117,12 +117,20 @@ edit to its own tests.
   `ebay-account-deletion/route.ts`'s tenant-count-bounded read).
 - 17 × `hardcoded-tenant-schema` (16) / `dangerous-html` (1) — pre-existing
   hits this section had not previously accounted for (the "10 warnings"
-  figure above predates both counts growing); each is either the documented
-  Dropshipping/KaufNest-only exception or a static literal, not yet
-  reviewed/suppressed. Out of scope for this task — flagged here so the
-  total stays reconcilable against `verify_changes.py --all`'s real output
-  instead of drifting the way the two-lists problem in AGENTS.md warns
-  about.
+  figure above predates both counts growing). Spot-checking shows these are
+  predominantly test fixtures (`storagePath.test.ts`, `managementApi.test.ts`,
+  `tenantSlug.test.ts` — 11 of the 16) plus a handful of pending/false-positive
+  rule matches — a comment merely mentioning a tenant name
+  (`welcome/page.tsx`, `fetchAllRows.ts`), and a table/column literal
+  containing the substring "tenant" rather than an actual hardcoded schema
+  (`quota.ts`'s `tenant_ai_usage` table and `tenant_id` column,
+  `api/admin/ai-usage/route.ts`'s `tenant_ai_usage`). The lone `dangerous-html`
+  hit (`ListingPreview.tsx`) is a sanitized dynamic render, not a static
+  literal — not a case this rule should really be flagging, either. None of
+  the 17 are yet triaged or suppressed. Out of scope for this task — flagged
+  here so the total stays reconcilable against `verify_changes.py --all`'s
+  real output instead of drifting the way the two-lists problem in AGENTS.md
+  warns about.
 
 Keep the blocking count at zero. If a new BLOCK finding appears, fix the code
 rather than the rule — the rules were calibrated against a clean tree at
