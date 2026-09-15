@@ -65,6 +65,7 @@ judgement calls (`any`, a leaked Postgres error message) where a human decides.
 | `dangerous-html` | WARN | `dangerouslySetInnerHTML` (eBay listing/message bodies are untrusted) |
 | `console-log` | WARN | Leftover `console.log` |
 | `unbounded-limit` | WARN | `.limit(N)` with N >= 1000 — Supabase's Max Rows setting truncates it silently regardless (PR #103) |
+| `unpaginated-collection-read` | WARN | `.select()` on a growth table (sales/expenses/profiles/tenants/…) with no `.range()`/`.single()`/`.limit()`/`.eq(id)`/`fetchAllRows` in the same statement |
 
 ## Suppressing a rule
 

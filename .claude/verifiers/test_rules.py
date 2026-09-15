@@ -149,6 +149,55 @@ CASES: list[tuple[str, str, str, str | None]] = [
     ("suppressed large limit", "src/app/dashboard/x.tsx",
      'let q = supabase.from("sales").select("*").limit(5000); // verifier:allow unbounded-limit',
      None),
+    ("unpaginated read on control.tenants", "src/app/api/admin/tenants/route.ts",
+     'const { data: tenants, error } = await control\n'
+     '  .schema("control")\n'
+     '  .from("tenants")\n'
+     '  .select("*")\n'
+     '  .order("created_at", { ascending: false });',
+     "unpaginated-collection-read"),
+    ("unpaginated read on notification_reads", "src/store/slices/notificationsSlice.ts",
+     'supabase.from("notification_reads").select("notification_id"),',
+     "unpaginated-collection-read"),
+    ("unpaginated read on profiles", "src/app/dashboard/layout.tsx",
+     'const { data: profiles } = await supabase.from("profiles").select("*");',
+     "unpaginated-collection-read"),
+    ("unbatched .in() dedup is still unbounded", "src/app/api/integrations/review/import/route.ts",
+     'const { data: existingRows } = await client\n'
+     '  .from("sales")\n'
+     '  .select("*")\n'
+     '  .in("external_order_id", extIds);',
+     "unpaginated-collection-read"),
+    ("paginated thunk with .range() is fine", "src/app/dashboard/sales/_store/salesSlice.ts",
+     'let query = supabase\n'
+     '  .from("sales")\n'
+     '  .select("*", { count: "exact" })\n'
+     '  .range(from, to);',
+     None),
+    ("single-row lookup with .eq id is fine", "src/lib/x.ts",
+     'const { data } = await supabase.from("sales").select("*").eq("id", id).single();',
+     None),
+    ("small named-constant limit is fine (shared with unbounded-limit case)",
+     "src/app/dashboard/messages/_store/x.ts",
+     'const q = supabase.from("ebay_messages").select("*").limit(SEARCH_RESULT_LIMIT);',
+     None),
+    ("write (not a read) on a growth table is fine", "src/app/dashboard/admin/x.ts",
+     'await c.from("tenants").update({ name: "Acme Corp" }).eq("id", id);', None),
+    ("suppressed chunked .in() read", "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
+     'const { data, error } = await supabase\n'
+     '  .from("sales") // verifier:allow unpaginated-collection-read — chunked via IN_CHUNK above\n'
+     '  .select("external_order_id")\n'
+     '  .eq("platform", platform)\n'
+     '  .in("external_order_id", chunk);',
+     None),
+    ("suppressed platform-wide tenant count read", "src/app/api/notifications/ebay-account-deletion/route.ts",
+     "verifyNotificationSignature(req);\n"
+     'const { data: tenants } = await control\n'
+     '  .schema("control")\n'
+     '  .from("tenants") // verifier:allow unpaginated-collection-read — bounded by active tenant count\n'
+     '  .select("schema_name")\n'
+     '  .eq("status", "active");',
+     None),
 ]
 
 # route-without-auth is a file-level rule; give it its own cases.
@@ -161,12 +210,12 @@ ROUTE_CASES: list[tuple[str, str, str | None]] = [
     ("route with getUser guard",
      'export async function POST() {\n'
      "  const { data } = await supabase.auth.getUser();\n"
-     '  await supabase.from("sales").select();\n}',
+     '  await supabase.from("sales").select().limit(1);\n}',
      None),
     ("route with platform-admin guard",
      'export async function POST() {\n'
      "  await verifyPlatformAdmin(req);\n"
-     '  const c = createControlClient();\n  await c.from("tenants").select();\n}',
+     '  const c = createControlClient();\n  await c.from("tenants").select().limit(1);\n}',
      None),
     ("webhook with signature check",
      "export async function POST() {\n"

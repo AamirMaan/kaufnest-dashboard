@@ -322,6 +322,30 @@ RULES: list[Rule] = [
         path_exclude=(r"\.test\.tsx?$",),
         tags=("scalability",),
     ),
+    Rule(
+        id="unpaginated-collection-read",
+        severity=WARN,
+        message=(
+            "A .select() on a table that grows with tenant/platform data, "
+            "with no .range(), .single()/.maybeSingle(), .limit(), "
+            "fetchAllRows, or .eq() on an id column in the same statement. "
+            "Supabase's PostgREST Max Rows setting silently truncates this "
+            "at its cap (default 1000) once the table grows past it — see "
+            "BACKEND_ARCHITECTURE_PRINCIPLES.md section 1."
+        ),
+        why=(
+            "Appendix A of BACKEND_ARCHITECTURE_PRINCIPLES.md's design spec "
+            "found 13 of these (5 are latent correctness bugs, not just "
+            "display truncation) by manual review; this rule catches the "
+            "next one automatically. The table list is deliberately an "
+            "allowlist, not every table — it trades missing some growth "
+            "tables for not flagging every small/reference table in the app."
+        ),
+        file_check="unpaginated_collection_read",
+        path_include=(r"^src/.*\.tsx?$",),
+        path_exclude=(r"\.test\.tsx?$",),
+        tags=("scalability",),
+    ),
 
     # ---- Code standards ----------------------------------------------------
     Rule(
@@ -426,6 +450,26 @@ _DATA_ACCESS = re.compile(
     r"|createServiceClientForTenant\(|\.from\("
 )
 
+# Tables whose row count grows with tenant/platform activity rather than a
+# small, fixed set. Deliberately an allowlist — see the Rule's `why`.
+_GROWTH_TABLES = (
+    "sales", "expenses", "purchases", "products", "profiles",
+    "notifications", "notification_reads", "audit_logs",
+    "dropship_listings", "platform_payouts", "ebay_messages",
+    "ebay_listing_drafts", "tenants", "tenant_ai_usage",
+)
+_TABLE_READ = re.compile(
+    r'\.from\(\s*[\'"](' + "|".join(_GROWTH_TABLES) + r')[\'"]\s*\)'
+)
+# Any one of these appearing in the same statement window means the read is
+# bounded. `.limit(` matches ANY argument (not just a literal 1) — whether
+# the limit is the RIGHT size is unbounded-limit's job, not this one's.
+_READ_BOUNDED = re.compile(
+    r'\.range\(|\.single\(|\.maybeSingle\(|\.limit\(|fetchAllRows'
+    r'|\.eq\(\s*[\'"]\w*[Ii]d[\'"]'
+)
+_STATEMENT_WINDOW_MAX_LINES = 20
+
 
 def _route_auth_finding(rule: Rule, rel_path: str, text: str) -> list[Finding]:
     if not _DATA_ACCESS.search(text):
@@ -435,6 +479,38 @@ def _route_auth_finding(rule: Rule, rel_path: str, text: str) -> list[Finding]:
     if "verifier:allow route-without-auth" in text:
         return []
     return [Finding(rule=rule, path=rel_path, line_no=1, line="(whole file)")]
+
+
+def _unpaginated_collection_read_finding(
+    rule: Rule, rel_path: str, text: str
+) -> list[Finding]:
+    lines = text.splitlines()
+    findings: list[Finding] = []
+    for index, line in enumerate(lines):
+        if not _TABLE_READ.search(line):
+            continue
+        window_end = index
+        for offset in range(_STATEMENT_WINDOW_MAX_LINES):
+            window_end = index + offset
+            if window_end >= len(lines):
+                window_end -= 1
+                break
+            if ";" in lines[window_end]:
+                break
+        window_lines = lines[index : window_end + 1]
+        window_text = "\n".join(window_lines)
+        # .update()/.delete()/.insert()/.upsert() on the same table is a
+        # write, not an unpaginated read — out of scope for this rule.
+        if ".select(" not in window_text:
+            continue
+        if _READ_BOUNDED.search(window_text):
+            continue
+        if any(_suppressed(lines, i, rule.id) for i in range(index, window_end + 1)):
+            continue
+        findings.append(
+            Finding(rule=rule, path=rel_path, line_no=index + 1, line=line.strip())
+        )
+    return findings
 
 
 def scan_text(rel_path: str, text: str, severities: tuple[str, ...] = (BLOCK, WARN)) -> list[Finding]:
@@ -458,6 +534,10 @@ def scan_text(rel_path: str, text: str, severities: tuple[str, ...] = (BLOCK, WA
 
         if rule.file_check == "route_auth":
             findings.extend(_route_auth_finding(rule, rel_path, text))
+            continue
+
+        if rule.file_check == "unpaginated_collection_read":
+            findings.extend(_unpaginated_collection_read_finding(rule, rel_path, text))
             continue
 
         if rule.requires_file_pattern and not rule.requires_file_pattern.search(text):
