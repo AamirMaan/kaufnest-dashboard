@@ -394,9 +394,14 @@ owns it. Current shared locations:
 - `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + `src/store/slices/{auditLogsSlice,currentUserSlice}`
   — `auditLogsSlice` is written to by every CRUD feature; `currentUserSlice` is
   read directly by Sales/Expenses/Purchases for role checks
-- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice}`
+- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows}`
   (`generateInvoice` is also used by the shared `InvoiceModal`, both read
-  company/invoice settings from `src/store/slices/companyProfileSlice`)
+  company/invoice settings from `src/store/slices/companyProfileSlice`;
+  `fetchAllRows` pages a Supabase query past the project's PostgREST "Max
+  Rows" setting, which silently truncates a single `.limit()`/`.range()`
+  request to its own cap — default 1000 — with no error; used by the
+  Overview page and the Sales/Expenses/Purchases CSV exports, see
+  `src/app/dashboard/SKILL.md`'s gotcha)
 - `src/types/index.ts` — single source of truth for all domain types
 
 Two routes are conceptually part of a feature but **cannot** be colocated

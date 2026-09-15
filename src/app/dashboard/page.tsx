@@ -26,11 +26,17 @@ import { formatDate } from "@/lib/utils/date";
 import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
 import { aggregateSaleRevenue } from "./_lib/aggregateSales";
 import { computePending } from "./_lib/platformBalance";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
 
-// Row cap for each of the four queries below — matches the "capped at 5 000
-// rows" convention already used by Sales/Expenses/Purchases' CSV export.
+// Overall row cap per table below, fetched across as many .range() pages as
+// needed (see fetchAllRows) — matches the "capped at 5 000 rows" convention
+// already used by Sales/Expenses/Purchases' CSV export. A single-request
+// .limit(5000) is NOT enough: the Supabase project's PostgREST "Max Rows"
+// API setting silently truncates any one request to its own configured cap
+// (default 1000) regardless of .limit(), with no error — confirmed live on
+// tenant_k2_textil (1510 sales rows, Content-Range: 0-999/1510).
 const OVERVIEW_ROW_CAP = 5000;
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
@@ -118,30 +124,32 @@ export default function DashboardPage() {
       setIsLoading(true);
       const supabase = await createTenantClient();
 
-      let salesQuery = supabase.from("sales").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
-      let expensesQuery = supabase.from("expenses").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
-      let purchasesQuery = supabase.from("purchases").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
-      let payoutsQuery = supabase.from("platform_payouts").select("*").order("date", { ascending: false }).limit(OVERVIEW_ROW_CAP);
-
-      if (range) {
-        salesQuery = salesQuery.gte("date", range.from).lte("date", range.to);
-        expensesQuery = expensesQuery.gte("date", range.from).lte("date", range.to);
-        purchasesQuery = purchasesQuery.gte("date", range.from).lte("date", range.to);
-        payoutsQuery = payoutsQuery.gte("date", range.from).lte("date", range.to);
+      function pageFetcher<T>(table: string) {
+        return async (from: number, to: number) => {
+          let query = supabase
+            .from(table)
+            .select("*", { count: "exact" })
+            .order("date", { ascending: false })
+            .range(from, to);
+          if (range) {
+            query = query.gte("date", range.from).lte("date", range.to);
+          }
+          return query.returns<T[]>();
+        };
       }
 
-      const [salesRes, expensesRes, purchasesRes, payoutsRes] = await Promise.all([
-        salesQuery.returns<Sale[]>(),
-        expensesQuery.returns<Expense[]>(),
-        purchasesQuery.returns<Purchase[]>(),
-        payoutsQuery.returns<PlatformPayout[]>(),
+      const [salesRows, expensesRows, purchasesRows, payoutsRows] = await Promise.all([
+        fetchAllRows<Sale>(pageFetcher("sales"), OVERVIEW_ROW_CAP),
+        fetchAllRows<Expense>(pageFetcher("expenses"), OVERVIEW_ROW_CAP),
+        fetchAllRows<Purchase>(pageFetcher("purchases"), OVERVIEW_ROW_CAP),
+        fetchAllRows<PlatformPayout>(pageFetcher("platform_payouts"), OVERVIEW_ROW_CAP),
       ]);
 
       if (cancelled) return;
-      setSales(salesRes.data ?? []);
-      setExpenses(expensesRes.data ?? []);
-      setPurchases(purchasesRes.data ?? []);
-      setPayouts(payoutsRes.data ?? []);
+      setSales(salesRows);
+      setExpenses(expensesRows);
+      setPurchases(purchasesRows);
+      setPayouts(payoutsRows);
       setIsLoading(false);
     }
 

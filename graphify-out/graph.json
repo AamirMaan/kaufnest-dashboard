@@ -3886,6 +3886,38 @@
       "_origin": "ast"
     },
     {
+      "id": "src_app_dashboard_lib_fetchallrows_test",
+      "label": "fetchAllRows.test.ts",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.test.ts",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_dashboard_lib_fetchallrows_test_servercappedfetcher",
+      "label": "serverCappedFetcher()",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.test.ts",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_dashboard_lib_fetchallrows",
+      "label": "fetchAllRows.ts",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.ts",
+      "source_location": "L1",
+      "_origin": "ast"
+    },
+    {
+      "id": "src_app_dashboard_lib_fetchallrows_fetchallrows",
+      "label": "fetchAllRows()",
+      "file_type": "code",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.ts",
+      "source_location": "L17",
+      "_origin": "ast"
+    },
+    {
       "id": "src_app_dashboard_lib_platformbalance_test",
       "label": "platformBalance.test.ts",
       "file_type": "code",
@@ -6602,7 +6634,7 @@
       "label": "RANGE_PRESETS",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L36",
+      "source_location": "L42",
       "_origin": "ast"
     },
     {
@@ -6610,7 +6642,7 @@
       "label": "PLATFORM_COLORS",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L45",
+      "source_location": "L51",
       "_origin": "ast"
     },
     {
@@ -6618,7 +6650,7 @@
       "label": "FALLBACK_COLORS",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L52",
+      "source_location": "L58",
       "_origin": "ast"
     },
     {
@@ -6626,7 +6658,7 @@
       "label": "platformColor()",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L54",
+      "source_location": "L60",
       "_origin": "ast"
     },
     {
@@ -6634,7 +6666,7 @@
       "label": "describeRange()",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L65",
+      "source_location": "L71",
       "_origin": "ast"
     },
     {
@@ -6642,7 +6674,7 @@
       "label": "compactEur()",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L75",
+      "source_location": "L81",
       "_origin": "ast"
     },
     {
@@ -6650,7 +6682,7 @@
       "label": "DashboardPage()",
       "file_type": "code",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L81",
+      "source_location": "L87",
       "_origin": "ast"
     },
     {
@@ -7530,7 +7562,7 @@
       "label": "readFileText()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L42",
+      "source_location": "L47",
       "_origin": "ast"
     },
     {
@@ -7538,7 +7570,7 @@
       "label": "readFileBuffer()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L53",
+      "source_location": "L58",
       "_origin": "ast"
     },
     {
@@ -7546,7 +7578,7 @@
       "label": "isExcelFile()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L62",
+      "source_location": "L67",
       "_origin": "ast"
     },
     {
@@ -7554,7 +7586,7 @@
       "label": "MONTH_NAMES",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L66",
+      "source_location": "L71",
       "_origin": "ast"
     },
     {
@@ -7562,7 +7594,7 @@
       "label": "formatIsoHuman()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L74",
+      "source_location": "L79",
       "_origin": "ast"
     },
     {
@@ -7570,7 +7602,7 @@
       "label": "round2()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L79",
+      "source_location": "L84",
       "_origin": "ast"
     },
     {
@@ -7578,7 +7610,7 @@
       "label": "ImportSummary",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L93",
+      "source_location": "L98",
       "_origin": "ast"
     },
     {
@@ -7586,7 +7618,7 @@
       "label": "Props",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L107",
+      "source_location": "L112",
       "_origin": "ast"
     },
     {
@@ -7594,7 +7626,7 @@
       "label": "ImportSalesModal()",
       "file_type": "code",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L113",
+      "source_location": "L118",
       "_origin": "ast"
     },
     {
@@ -12318,11 +12350,19 @@
       "_origin": "ast"
     },
     {
+      "id": "src_lib_utils_excel_excelparseresult",
+      "label": "ExcelParseResult",
+      "file_type": "code",
+      "source_file": "src/lib/utils/excel.ts",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
       "id": "src_lib_utils_excel_celltostring",
       "label": "cellToString()",
       "file_type": "code",
       "source_file": "src/lib/utils/excel.ts",
-      "source_location": "L14",
+      "source_location": "L38",
       "_origin": "ast"
     },
     {
@@ -12330,7 +12370,7 @@
       "label": "parseExcelBuffer()",
       "file_type": "code",
       "source_file": "src/lib/utils/excel.ts",
-      "source_location": "L39",
+      "source_location": "L63",
       "_origin": "ast"
     },
     {
@@ -12806,11 +12846,19 @@
       "_origin": "ast"
     },
     {
+      "id": "src_lib_utils_localeparse_lookslikedate",
+      "label": "looksLikeDate()",
+      "file_type": "code",
+      "source_file": "src/lib/utils/localeParse.ts",
+      "source_location": "L90",
+      "_origin": "ast"
+    },
+    {
       "id": "src_lib_utils_localeparse_dateorder",
       "label": "DateOrder",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L80",
+      "source_location": "L95",
       "_origin": "ast"
     },
     {
@@ -12818,7 +12866,7 @@
       "label": "DateOrderDetection",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L82",
+      "source_location": "L97",
       "_origin": "ast"
     },
     {
@@ -12826,7 +12874,7 @@
       "label": "detectDateOrder()",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L122",
+      "source_location": "L137",
       "_origin": "ast"
     },
     {
@@ -12834,7 +12882,7 @@
       "label": "firstAmbiguousDate()",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L164",
+      "source_location": "L179",
       "_origin": "ast"
     },
     {
@@ -12842,7 +12890,7 @@
       "label": "hasOrderSensitiveDate()",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L183",
+      "source_location": "L198",
       "_origin": "ast"
     },
     {
@@ -12850,7 +12898,7 @@
       "label": "parseFlexibleDate()",
       "file_type": "code",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L203",
+      "source_location": "L218",
       "_origin": "ast"
     },
     {
@@ -22566,11 +22614,19 @@
       "_origin": "ast"
     },
     {
+      "id": "src_app_dashboard_skill_gotcha_supabase_s_postgrest_max_rows_setting_silently_truncates_below_your_limit",
+      "label": "Gotcha: Supabase's PostgREST \"Max Rows\" setting silently truncates below your `.limit()`",
+      "file_type": "document",
+      "source_file": "src/app/dashboard/SKILL.md",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
       "id": "src_app_dashboard_skill_test_command",
       "label": "Test command",
       "file_type": "document",
       "source_file": "src/app/dashboard/SKILL.md",
-      "source_location": "L34",
+      "source_location": "L59",
       "_origin": "ast"
     },
     {
@@ -23650,7 +23706,7 @@
       "label": "Shipping labels (`src/lib/shipping/`)",
       "file_type": "document",
       "source_file": "src/app/dashboard/sales/CLAUDE.md",
-      "source_location": "L767",
+      "source_location": "L784",
       "_origin": "ast"
     },
     {
@@ -23658,7 +23714,7 @@
       "label": "Tests",
       "file_type": "document",
       "source_file": "src/app/dashboard/sales/CLAUDE.md",
-      "source_location": "L825",
+      "source_location": "L842",
       "_origin": "ast"
     },
     {
@@ -24386,7 +24442,7 @@
       "label": "localeParse.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L122",
+      "source_location": "L154",
       "_origin": "ast"
     },
     {
@@ -24394,7 +24450,7 @@
       "label": "detectPlatform.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L153",
+      "source_location": "L185",
       "_origin": "ast"
     },
     {
@@ -24402,7 +24458,7 @@
       "label": "pagedQuery.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L165",
+      "source_location": "L197",
       "_origin": "ast"
     },
     {
@@ -24410,7 +24466,7 @@
       "label": "planGating.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L175",
+      "source_location": "L207",
       "_origin": "ast"
     },
     {
@@ -24418,7 +24474,7 @@
       "label": "pricing.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L193",
+      "source_location": "L225",
       "_origin": "ast"
     },
     {
@@ -24426,7 +24482,7 @@
       "label": "validation.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L213",
+      "source_location": "L245",
       "_origin": "ast"
     },
     {
@@ -24434,7 +24490,7 @@
       "label": "permissions.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L227",
+      "source_location": "L259",
       "_origin": "ast"
     },
     {
@@ -24442,7 +24498,7 @@
       "label": "invoiceMath.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L278",
+      "source_location": "L310",
       "_origin": "ast"
     },
     {
@@ -24450,7 +24506,7 @@
       "label": "tenantSlug.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L298",
+      "source_location": "L330",
       "_origin": "ast"
     },
     {
@@ -24458,7 +24514,7 @@
       "label": "Gotchas",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L326",
+      "source_location": "L358",
       "_origin": "ast"
     },
     {
@@ -24466,15 +24522,15 @@
       "label": "generateInvoice.ts",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L335",
+      "source_location": "L367",
       "_origin": "ast"
     },
     {
-      "id": "src_lib_utils_skill_gotchas_365",
+      "id": "src_lib_utils_skill_gotchas_397",
       "label": "Gotchas",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L365",
+      "source_location": "L397",
       "_origin": "ast"
     },
     {
@@ -24482,7 +24538,7 @@
       "label": "Where these are used",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L378",
+      "source_location": "L410",
       "_origin": "ast"
     },
     {
@@ -24490,7 +24546,7 @@
       "label": "Testing",
       "file_type": "document",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L393",
+      "source_location": "L425",
       "_origin": "ast"
     },
     {
@@ -38365,6 +38421,48 @@
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/_lib/aggregateSales.ts",
       "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_lib_fetchallrows_test",
+      "target": "src_app_dashboard_lib_fetchallrows",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_lib_fetchallrows_test",
+      "target": "src_app_dashboard_lib_fetchallrows_fetchallrows",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_lib_fetchallrows_test",
+      "target": "src_app_dashboard_lib_fetchallrows_test_servercappedfetcher",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.test.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_lib_fetchallrows",
+      "target": "src_app_dashboard_lib_fetchallrows_fetchallrows",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/_lib/fetchAllRows.ts",
+      "source_location": "L17",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -52938,7 +53036,7 @@
     },
     {
       "source": "src_app_dashboard_page",
-      "target": "src_app_dashboard_components_recordtransfermodal",
+      "target": "src_app_dashboard_lib_fetchallrows",
       "relation": "imports_from",
       "context": "import",
       "confidence": "EXTRACTED",
@@ -52949,7 +53047,7 @@
     },
     {
       "source": "src_app_dashboard_page",
-      "target": "src_app_dashboard_components_recordtransfermodal_recordtransfermodal",
+      "target": "src_app_dashboard_lib_fetchallrows_fetchallrows",
       "relation": "imports",
       "context": "import",
       "confidence": "EXTRACTED",
@@ -52960,7 +53058,18 @@
     },
     {
       "source": "src_app_dashboard_page",
-      "target": "src_types_index_expensecategory",
+      "target": "src_app_dashboard_components_recordtransfermodal",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/page.tsx",
+      "source_location": "L30",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_page",
+      "target": "src_app_dashboard_components_recordtransfermodal_recordtransfermodal",
       "relation": "imports",
       "context": "import",
       "confidence": "EXTRACTED",
@@ -52971,11 +53080,22 @@
     },
     {
       "source": "src_app_dashboard_page",
+      "target": "src_types_index_expensecategory",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/page.tsx",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_app_dashboard_page",
       "target": "src_app_dashboard_page_range_presets",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L36",
+      "source_location": "L42",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -52985,7 +53105,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L45",
+      "source_location": "L51",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -52995,7 +53115,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L52",
+      "source_location": "L58",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53005,7 +53125,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L54",
+      "source_location": "L60",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53015,7 +53135,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L65",
+      "source_location": "L71",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53025,7 +53145,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L75",
+      "source_location": "L81",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53035,7 +53155,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L81",
+      "source_location": "L87",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53046,7 +53166,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L271",
+      "source_location": "L279",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -53057,7 +53177,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L364",
+      "source_location": "L372",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58830,7 +58950,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L42",
+      "source_location": "L47",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58840,7 +58960,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L53",
+      "source_location": "L58",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58850,7 +58970,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L62",
+      "source_location": "L67",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58860,7 +58980,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L66",
+      "source_location": "L71",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58870,7 +58990,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L74",
+      "source_location": "L79",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58880,7 +59000,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L79",
+      "source_location": "L84",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58890,7 +59010,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L93",
+      "source_location": "L98",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58900,7 +59020,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L107",
+      "source_location": "L112",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58910,7 +59030,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L113",
+      "source_location": "L118",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -58921,7 +59041,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L194",
+      "source_location": "L199",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -72370,7 +72490,29 @@
     },
     {
       "source": "src_lib_utils_excel",
-      "target": "src_lib_utils_excel_celltostring",
+      "target": "src_lib_utils_localeparse",
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/excel.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_lib_utils_excel",
+      "target": "src_lib_utils_localeparse_lookslikedate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/excel.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_lib_utils_excel",
+      "target": "src_lib_utils_excel_excelparseresult",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/excel.ts",
@@ -72380,11 +72522,21 @@
     },
     {
       "source": "src_lib_utils_excel",
+      "target": "src_lib_utils_excel_celltostring",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/excel.ts",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_lib_utils_excel",
       "target": "src_lib_utils_excel_parseexcelbuffer",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/excel.ts",
-      "source_location": "L39",
+      "source_location": "L63",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -72395,7 +72547,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/excel.ts",
-      "source_location": "L61",
+      "source_location": "L102",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -73938,6 +74090,17 @@
       "_origin": "ast"
     },
     {
+      "source": "src_lib_utils_localeparse_test",
+      "target": "src_lib_utils_localeparse_lookslikedate",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/localeParse.test.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
       "source": "src_lib_utils_localeparse",
       "target": "src_lib_utils_localeparse_parselocalenumber",
       "relation": "contains",
@@ -73959,11 +74122,21 @@
     },
     {
       "source": "src_lib_utils_localeparse",
+      "target": "src_lib_utils_localeparse_lookslikedate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/utils/localeParse.ts",
+      "source_location": "L90",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "src_lib_utils_localeparse",
       "target": "src_lib_utils_localeparse_dateorder",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L80",
+      "source_location": "L95",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -73973,7 +74146,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L82",
+      "source_location": "L97",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -73983,7 +74156,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L122",
+      "source_location": "L137",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -73993,7 +74166,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L164",
+      "source_location": "L179",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -74003,7 +74176,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L183",
+      "source_location": "L198",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -74013,7 +74186,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/localeParse.ts",
-      "source_location": "L203",
+      "source_location": "L218",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -87483,12 +87656,22 @@
       "_origin": "ast"
     },
     {
+      "source": "src_app_dashboard_skill_overview_page_changes",
+      "target": "src_app_dashboard_skill_gotcha_supabase_s_postgrest_max_rows_setting_silently_truncates_below_your_limit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/app/dashboard/SKILL.md",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
       "source": "src_app_dashboard_skill_working_on_the_dashboard_shell_overview",
       "target": "src_app_dashboard_skill_test_command",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/SKILL.md",
-      "source_location": "L34",
+      "source_location": "L59",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -88648,7 +88831,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/CLAUDE.md",
-      "source_location": "L767",
+      "source_location": "L784",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -88658,7 +88841,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/CLAUDE.md",
-      "source_location": "L825",
+      "source_location": "L842",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89468,7 +89651,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L122",
+      "source_location": "L154",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89478,7 +89661,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L153",
+      "source_location": "L185",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89488,7 +89671,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L165",
+      "source_location": "L197",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89498,7 +89681,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L175",
+      "source_location": "L207",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89508,7 +89691,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L193",
+      "source_location": "L225",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89518,7 +89701,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L213",
+      "source_location": "L245",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89528,7 +89711,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L227",
+      "source_location": "L259",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89538,7 +89721,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L278",
+      "source_location": "L310",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89548,7 +89731,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L298",
+      "source_location": "L330",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89558,7 +89741,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L326",
+      "source_location": "L358",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89568,17 +89751,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L335",
+      "source_location": "L367",
       "weight": 1.0,
       "_origin": "ast"
     },
     {
       "source": "src_lib_utils_skill_generateinvoice_ts",
-      "target": "src_lib_utils_skill_gotchas_365",
+      "target": "src_lib_utils_skill_gotchas_397",
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L365",
+      "source_location": "L397",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89588,7 +89771,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L378",
+      "source_location": "L410",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -89598,7 +89781,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/utils/SKILL.md",
-      "source_location": "L393",
+      "source_location": "L425",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90413,7 +90596,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L69",
+      "source_location": "L75",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90622,7 +90805,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L274",
+      "source_location": "L279",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90633,7 +90816,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L324",
+      "source_location": "L329",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90644,7 +90827,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L336",
+      "source_location": "L361",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90655,7 +90838,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L338",
+      "source_location": "L363",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90666,7 +90849,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L339",
+      "source_location": "L364",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90677,7 +90860,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L341",
+      "source_location": "L366",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90688,7 +90871,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L366",
+      "source_location": "L391",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90699,7 +90882,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L406",
+      "source_location": "L431",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90710,7 +90893,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L407",
+      "source_location": "L432",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90721,7 +90904,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L423",
+      "source_location": "L448",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -90732,7 +90915,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L476",
+      "source_location": "L501",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96581,7 +96764,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L83",
+      "source_location": "L89",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96593,7 +96776,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L84",
+      "source_location": "L90",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96605,7 +96788,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L95",
+      "source_location": "L101",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96617,7 +96800,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.8,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L197",
+      "source_location": "L205",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96629,7 +96812,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L202",
+      "source_location": "L210",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96641,7 +96824,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L207",
+      "source_location": "L215",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96653,7 +96836,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L320",
+      "source_location": "L328",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -96665,7 +96848,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/page.tsx",
-      "source_location": "L413",
+      "source_location": "L421",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -97241,7 +97424,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L114",
+      "source_location": "L119",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -97253,7 +97436,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L115",
+      "source_location": "L120",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -97265,7 +97448,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L192",
+      "source_location": "L197",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -97277,7 +97460,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
-      "source_location": "L783",
+      "source_location": "L808",
       "weight": 1.0,
       "_origin": "ast"
     },
@@ -98542,6 +98725,18 @@
       "_origin": "ast"
     },
     {
+      "source": "src_lib_utils_excel_parseexcelbuffer",
+      "target": "src_lib_utils_localeparse_lookslikedate",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/utils/excel.ts",
+      "source_location": "L93",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
       "source": "src_lib_utils_generateinvoice_generatesalesinvoice",
       "target": "src_lib_utils_invoicemath_computebulktotals",
       "relation": "calls",
@@ -98945,7 +99140,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/lib/utils/excel.ts",
-      "source_location": "L42",
+      "source_location": "L64",
       "weight": 1.0,
       "_origin": "ast"
     },

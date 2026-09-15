@@ -43,12 +43,18 @@ broadly when working on a specific feature.**
   than one page of records, or had recently paged through those tables
   elsewhere in the app (see the 2026-07-27 fix). Instead, on mount and
   whenever the date-range filter changes, it fetches all four tables
-  directly via `createTenantClient()` (`.select("*").order("date", {
-  ascending: false }).limit(5000)`, plus `.gte`/`.lte` when a range is
-  selected — same shape as the CSV-export queries in Sales/Expenses/
-  Purchases), into **local `useState`**, not a Redux slice (page-only data,
-  no other feature needs it). `isLoading` drives the same "opacity-60
-  pointer-events-none" overlay convention used by the paginated list pages.
+  directly via `createTenantClient()`, paginated through `@/lib/utils/fetchAllRows`
+  in `.range()` pages up to a 5 000-row overall cap (`OVERVIEW_ROW_CAP`), plus
+  `.gte`/`.lte` when a range is selected — same overall cap as the CSV-export
+  queries in Sales/Expenses/Purchases, but NOT the same single-request shape:
+  a bare `.limit(5000)` gets silently truncated to the Supabase project's
+  PostgREST "Max Rows" setting (default 1000, confirmed live on
+  `tenant_k2_textil`'s 1510-row `sales` table) with no error, so this page
+  pages past that cap instead of trusting one request to honor `.limit()` —
+  see `SKILL.md`'s gotcha. Fetched into **local `useState`**, not a Redux
+  slice (page-only data, no other feature needs it). `isLoading` drives the
+  same "opacity-60 pointer-events-none" overlay convention used by the
+  paginated list pages.
   Applies a user-controlled date-range filter (`resolveDateRange` from
   `lib/utils/filters`, preset + custom from/to) on top of the already
   range-scoped fetch, derives `effectiveSales = periodSales.filter(isRevenueSale)`
@@ -90,7 +96,7 @@ broadly when working on a specific feature.**
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
   `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
-  `lib/supabase/client` (`createTenantClient`).
+  `lib/supabase/client` (`createTenantClient`), `lib/utils/fetchAllRows`.
 
 ## `_lib/` — pure helpers for the Overview page
 
@@ -107,6 +113,13 @@ this shape: extracting it is what makes it testable without rendering the page.
 - `platformBalance.ts` — `computePending(balance, periodPlatformPayouts) → number`.
   Subtracts recorded payouts from a **pre-computed** balance; the caller is
   responsible for filtering payouts by date range and platform first.
+- `fetchAllRows` moved to `src/lib/utils/fetchAllRows.ts` (2026-09-15) once
+  Sales/Expenses/Purchases' CSV exports adopted it alongside the 4 Overview
+  queries — 4 features crossed the "3+ features" promotion threshold (see
+  AGENTS.md's shared-vs-feature-private rule). See its bullet in the repo
+  root `AGENTS.md`'s shared `src/lib/*` list, and `SKILL.md`'s gotcha here for
+  the "why" (Supabase's PostgREST "Max Rows" setting silently truncating a
+  single `.limit()`/`.range()` request).
 
 ## Feature folders (each documents itself — start there)
 

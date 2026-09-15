@@ -9,8 +9,9 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `FilterBar` (date preset, currency, category, general keyword search across
   title/vendor/description/invoice number), row selection, invoice trigger,
   Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
-  query, no `.range()`, capped at 5 000 rows), **Import CSV** button, wires up
-  the modals below.
+  query, paginated via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see
+  "CSV import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha),
+  **Import CSV** button, wires up the modals below.
   Two sign-aware details, both because expenses may be negative: the Amount
   cell colours by sign (negative `--color-success`, positive `--color-danger`,
   matching the Overview page's Expenses-by-Category list), and the VAT
@@ -107,7 +108,9 @@ in memory** — all filtering happens in `fetchExpensesPage` (the thunk in
 (current page). Clearly labelled in the UI.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
-with the same filter predicates but **no `.range()`**, capped at 5 000 rows.
+with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
+to a 5 000-row overall cap (NOT a single `.limit(5000)` — see
+`dashboard/SKILL.md`'s Max Rows gotcha).
 
 ## Data flow (the pattern every mutation follows)
 
@@ -145,13 +148,14 @@ editable fields.
   confirmation, all defaulting to the original "Delete" wording)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
 - `types` (`Expense`, `ExpenseCategory`)
 
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates (no `.range()`, capped at 5 000 rows) and calls
+same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
+cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
 `exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
 vat_rate, vat_amount, description`.
 

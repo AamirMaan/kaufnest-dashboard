@@ -8,9 +8,10 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 - `page.tsx` — list view: server-side pagination (`fetchPurchasesPage` thunk),
   `FilterBar` (date preset, currency, general keyword search across product
   name/vendor/description), `<Pagination>`, loading overlay, Gross/VAT/Net
-  summary **(this page)**, **Export CSV** button (server-side query, no
-  `.range()`, capped at 5 000 rows), **Import CSV** button, wires up the
-  modals below.
+  summary **(this page)**, **Export CSV** button (server-side query, paginated
+  via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see "CSV
+  import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha), **Import
+  CSV** button, wires up the modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
   `loaded`, `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),
@@ -61,7 +62,9 @@ in memory** — all filtering happens in `fetchPurchasesPage` (the thunk in
 `state.purchases.items` (current page). Clearly labelled in the UI.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
-with the same filter predicates but **no `.range()`**, capped at 5 000 rows.
+with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
+to a 5 000-row overall cap (NOT a single `.limit(5000)` — see
+`dashboard/SKILL.md`'s Max Rows gotcha).
 
 ## Data flow (the pattern every mutation follows)
 
@@ -112,13 +115,14 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,pagedQuery}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,pagedQuery,fetchAllRows}`, `store/slices/companyProfileSlice`
 - `types` (`Purchase`, `Product`)
 
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates (no `.range()`, capped at 5 000 rows) and calls
+same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
+cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
 `exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
 total_amount, currency, vat_rate, vat_amount, description`.
 

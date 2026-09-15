@@ -23,6 +23,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import {
   isDefaultFilters,
   isRevenueSale,
@@ -122,39 +123,45 @@ export default function SalesPage() {
     applyFilters(DEFAULT_SALES_FILTERS);
   }
 
-  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+  // ── CSV export — fetches ALL matching rows, paginated past the server's
+  // Max Rows cap (see @/lib/utils/fetchAllRows), up to a 5 000-row safety cap ─
 
   async function handleExport() {
     const supabase = await createTenantClient();
-    let query = supabase
-      .from("sales")
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(5000);
 
     const range =
       filters.preset === "custom"
         ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
         : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-    if (filters.platform !== "all") query = query.eq("platform", filters.platform);
-    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-    if (filters.status !== "all") query = query.eq("status", filters.status);
 
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
-      query = query.or(
-        `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
-      );
-    }
+    const allRows = await fetchAllRows<Sale>(async (from, to) => {
+      let query = supabase
+        .from("sales")
+        .select("*", { count: "exact" })
+        .order("date", { ascending: false })
+        .range(from, to);
 
-    const { data: allRows } = await query;
-    if (!allRows || allRows.length === 0) return;
+      if (range && filters.preset !== "all") {
+        query = query.gte("date", range.from).lte("date", range.to);
+      }
+      if (filters.platform !== "all") query = query.eq("platform", filters.platform);
+      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+      if (filters.status !== "all") query = query.eq("status", filters.status);
+
+      if (filters.search.trim() !== "") {
+        const term = sanitizeIlikeSearchTerm(filters.search);
+        query = query.or(
+          `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
+        );
+      }
+
+      return query.returns<Sale[]>();
+    }, 5000);
+
+    if (allRows.length === 0) return;
 
     const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
-    const rows = (allRows as Sale[]).map((s) => [
+    const rows = allRows.map((s) => [
       s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
       s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "", s.platform_fee ?? "",
