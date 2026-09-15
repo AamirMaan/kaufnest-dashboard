@@ -120,11 +120,21 @@ two rules make the central invariant mechanical. Both are added to `RULES` in
 `Rule.pattern` matches a *single line* (see the `Rule` docstring in
 `rules.py`), and this codebase's query style puts `.select()` and `.range()`
 on different lines. So `unbounded-limit` is a plain single-line `pattern`,
-but `unpaginated-collection-read` must use the `file_check` escape hatch with
-its own handler — the same shape as the existing `_route_auth_finding`,
-scanning a statement window (the `.select(` line through the next `;`) rather
-than one line. That handler is where the Appendix A predicate lives; it is
-already written and validated, since it is what produced Appendix A.
+but `unpaginated-collection-read` needs the `file_check` escape hatch with a
+**new** handler that scans a statement window (the `.select(` line through
+the next `;`) rather than one line. `file_check` currently has exactly one
+handler, `_route_auth_finding` (`rules.py:403`), and it is *not* a model for
+the window-scan logic itself — it does a whole-file presence/absence check
+(`_DATA_ACCESS.search(text)` / `_AUTH_MARKERS.search(text)` over the entire
+file text, no windowing at all). What it *does* establish is that
+`file_check` is a real, working escape hatch for a rule too complex for a
+single-line `pattern` — precedent for the mechanism, not a template for the
+implementation. The windowed-scan handler for
+`unpaginated-collection-read` is new code, not yet written. **Appendix A was
+produced by manual/agent code review, not by running an existing verifier —
+treat it as the fixture the new handler must reproduce (every listed site
+should fire; the three "deliberate and correct" examples should not), not as
+evidence the handler already exists.**
 
 Baseline bookkeeping: `--all` currently reports **10 warnings, 0 blocking**
 (7 × `db-error-to-client`, 3 × `no-any`). Adding these rules takes it to
@@ -309,10 +319,13 @@ the existing `db-error-to-client` baseline, not this audit.
 
 - Scope check: one root doc + one AGENTS.md edit + a `fetchAllRows` warn line
   + two verifier rules with tests. Larger than the original single-file
-  scope, but the verifier rules are the deliverable that makes the doc stick,
-  and they reuse existing machinery — one single-line `pattern`, one
-  `file_check` handler modelled on `_route_auth_finding`, both against a
-  table allowlist. No new subsystem; still one implementation plan.
+  scope, but the verifier rules are the deliverable that makes the doc stick.
+  One is a plain single-line `pattern` (existing machinery, no new code);
+  the other reuses the `file_check` escape hatch (currently exercised only by
+  `_route_auth_finding`, which is whole-file presence/absence, not a
+  windowed scan) but needs a genuinely new handler and its own test
+  fixtures. No new subsystem, but real new logic — still one implementation
+  plan, just not a trivial one.
 - No placeholders — every section above states its actual content, not "TBD."
 - Consistency check: section 2's RPC-vs-client threshold and section 5's DDL
   pointer were written together specifically so they don't contradict (RPC
