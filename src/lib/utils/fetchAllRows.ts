@@ -10,6 +10,12 @@
  * the offset advances, so this self-adapts to whatever the server's true
  * per-request cap is instead of assuming it matches the requested width.
  *
+ * When the real row count exceeds `cap`, logs a structured
+ * `console.warn("[fetchAllRows] cap reached", { cap, total })` — this is
+ * the signal that a table has outgrown client-side aggregation and a
+ * caller (e.g. the Overview page) should move to server-side aggregation.
+ * See BACKEND_ARCHITECTURE_PRINCIPLES.md section 2.
+ *
  * @param fetchPage - given from/to reads one .range(from, to) page
  * @param cap - overall row cap across all pages
  * @returns up to `cap` rows, or fewer accumulated so far if a page errors
@@ -32,6 +38,10 @@ export async function fetchAllRows<T>(
     if (count != null) total = count;
     results.push(...data);
     offset += data.length;
+  }
+
+  if (total > cap) {
+    console.warn("[fetchAllRows] cap reached", { cap, total });
   }
 
   return results;

@@ -63,4 +63,37 @@ describe("fetchAllRows", () => {
 
     expect(result).toHaveLength(1000);
   });
+
+  describe("fetchAllRows cap-reached warning", () => {
+    let warnSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    it("warns when the real row count exceeds the cap", async () => {
+      const allRows = Array.from({ length: 6000 }, (_, i) => ({ id: i }));
+      const fetchPage = serverCappedFetcher(allRows, 1000);
+
+      await fetchAllRows(fetchPage, 5000);
+
+      expect(warnSpy).toHaveBeenCalledWith("[fetchAllRows] cap reached", {
+        cap: 5000,
+        total: 6000,
+      });
+    });
+
+    it("does not warn when the real row count is within the cap", async () => {
+      const allRows = Array.from({ length: 1510 }, (_, i) => ({ id: i }));
+      const fetchPage = serverCappedFetcher(allRows, 1000);
+
+      await fetchAllRows(fetchPage, 5000);
+
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+  });
 });
