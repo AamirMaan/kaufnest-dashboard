@@ -27,10 +27,36 @@ Use this folder when the task is about:
 
 ## Overview page changes
 
-`page.tsx` only reads from Redux (`s.sales.items` etc.) and shared
-`lib/utils/{currency,date}` — it has no private state. Stat cards come from
+`page.tsx` fetches sales/expenses/purchases/platform_payouts directly via
+`createTenantClient()` into local `useState` (NOT Redux — see `dashboard/CLAUDE.md`
+for why) and does its aggregation in `_lib/`. Stat cards come from
 `components/ui/StatCard`.
+
+### Gotcha: Supabase's PostgREST "Max Rows" setting silently truncates below your `.limit()`
+
+A Supabase project's "Max Rows" API setting (Project Settings → API, default
+1000) caps **every** REST request's response at that many rows regardless of
+the `.limit()`/`.range()` width the client actually requested — no error, no
+warning, just fewer rows than asked for. Confirmed live: `tenant_k2_textil`
+has 1510 `sales` rows; a `.limit(5000)` query returned `Content-Range:
+0-999/1510` (curl against `/rest/v1/sales` with `Accept-Profile:
+tenant_k2_textil`, see git history for the fix commit). Any tenant whose row
+count crosses whatever that project's Max Rows setting is will silently get
+wrong Overview aggregates (revenue, VAT, net profit, order count) computed
+from only the most recent N rows — no loading error, so it looks like correct
+but small numbers, not a failure.
+
+**Fix**: use `_lib/fetchAllRows.ts`, not a bare `.limit(N)` single request.
+It pages through `.range()` calls, using each response's *actual* returned
+row count (not the requested width) to advance the offset — so it self-adapts
+to whatever the server's real per-request cap is instead of assuming the
+requested width was honored. The 4 Overview queries in `page.tsx` all go
+through it. If you add a 5th query here, or touch the CSV export queries in
+Sales/Expenses/Purchases (`page.tsx`'s `handleExport`, same `.limit(5000)`
+pattern, same exposure — not yet migrated to `fetchAllRows` as of this
+writing), use the same helper.
 
 ## Test command
 
-No tests at this level currently — feature slices are tested in their own folders.
+`npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`,
+`fetchAllRows.test.ts`).
