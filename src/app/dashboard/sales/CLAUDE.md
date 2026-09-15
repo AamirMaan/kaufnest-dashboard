@@ -93,7 +93,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `refundsApplied` / `refundsSkipped` / `refundsExceeded` /
   `refundsAlreadyApplied` counts). `skippedRows` is the file-level skip count
   and matters more than it looks: on a real Amazon report most of the file is
-  RETURN/FC_TRANSFER/blank/summary noise, so a toast without it reads as
+  RETURN/FC_TRANSFER/INBOUND/blank/summary noise, so a toast without it reads as
   though the import quietly lost hundreds of rows. One clause only — the
   per-reason breakdown stays in the pre-import preview.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
@@ -613,18 +613,23 @@ heuristic is **skipped for `status === "refund"` rows**, which have no `date`
 by design and would otherwise all be swallowed as "summary row"; the
 carve-out is scoped to that one check, not an early return, so a refund is
 still subject to the currency guard), unsupported
-currencies, and **`RETURN`/`FC_TRANSFER`** status rows — pure logistics
-noise, skipped *before* field validation because they legitimately have no
-`date` at all (this ordering is what fixed a prior `Row N: invalid or
-missing "date"` failure on every RETURN line). **`REFUND` is deliberately
-NOT skipped here** — see "Amazon SALE/REFUND rows" below: it parses into a
-`refund` adjustment instead of a row. The format guard (`if
+currencies, and **`RETURN`/`FC_TRANSFER`/`INBOUND`** status rows — pure
+logistics noise, skipped *before* field validation because `RETURN` and
+`FC_TRANSFER` legitimately have no `date` at all (this ordering is what
+fixed a prior `Row N: invalid or missing "date"` failure on every RETURN
+line). `INBOUND` (an FBA warehouse shipment, not a sale) DOES carry a date
+and a quantity/unit-price pair, but those describe inventory value rather
+than a line total, so without this skip it fell through to full validation
+and failed with `Row N: "unit_price" (item line total) or "total" must be a
+positive number` (fixed 2026-09-15, k2_textil import). **`REFUND` is
+deliberately NOT skipped here** — see "Amazon SALE/REFUND rows" below: it
+parses into a `refund` adjustment instead of a row. The format guard (`if
 (!format.priceColumnsAreLineTotals) return null`) must stay the first
 statement in the function — putting the blank-row check above it would make
 `generic` and `ebay` silently skip blank rows instead of erroring them.
 
 **Amazon SALE/REFUND rows:** only `SALE` and `REFUND` carry importable money;
-`RETURN`/`FC_TRANSFER` are skipped as noise (above). Like `RETURN`, a
+`RETURN`/`FC_TRANSFER`/`INBOUND` are skipped as noise (above). Like `RETURN`, a
 `REFUND` row has an EMPTY `date` column (confirmed against a real report
 row — see `importFormats.test.ts`'s "Amazon REFUND rows" tests), so
 `validateRowForFormat`'s refund-parse branch runs *before* the date parse —

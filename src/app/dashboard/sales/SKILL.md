@@ -302,6 +302,14 @@ fixed — don't reintroduce them:
   required field) — Amazon leaves them blank on those row types. Moving the
   `classifySkip` call after date parsing reintroduces a `Row N: invalid or
   missing "date"` failure on every one of them.
+- **`INBOUND` (FBA warehouse shipment) is also in `NON_SALE_STATUSES`**
+  (fixed 2026-09-15, real k2_textil report), but unlike `RETURN`/`FC_TRANSFER`
+  it DOES carry a `date` and a `quantity`/`unit_price` pair — those describe
+  inventory value being shipped in, not a sale. Before this fix the row fell
+  through `classifySkip` into full validation, where those columns don't
+  reconcile like a real SALE row's do, and failed with `Row N: "unit_price"
+  (item line total) or "total" must be a positive number` — blocking the
+  whole file until the user manually deleted every INBOUND row.
 - **`REFUND` rows are exempt from BOTH duplicate pre-check passes**
   (file-level dupes and the DB `.in()` check in `markDuplicates`) — they
   carry the `external_order_id` of an existing sale by definition, so

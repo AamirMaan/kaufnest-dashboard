@@ -220,9 +220,13 @@ export type SkipReason = "blank row" | "summary row" | "not a sale" | "unsupport
  * Amazon row types that carry no importable money. REFUND is deliberately NOT
  * here — its negative amounts are deducted from the sale they belong to. RETURN
  * is pure logistics: it duplicates a refund that already appears separately, and
- * its rows have no `date` at all.
+ * its rows have no `date` at all. INBOUND is a shipment of inventory INTO an FBA
+ * warehouse — same category as FC_TRANSFER (stock movement, not a sale). Its
+ * quantity/unit_price columns describe inventory value, not a line total, so
+ * without this skip the row falls through to full validation and fails with
+ * "unit_price (item line total) or total must be a positive number".
  */
-const NON_SALE_STATUSES = new Set(["return", "fc_transfer"]);
+const NON_SALE_STATUSES = new Set(["return", "fc_transfer", "inbound"]);
 
 /**
  * Classify a row that should be skipped rather than errored. Only applies to

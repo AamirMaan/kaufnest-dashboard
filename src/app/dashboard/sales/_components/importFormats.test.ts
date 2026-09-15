@@ -558,8 +558,32 @@ describe("classifySkip", () => {
     expect(classifySkip(amazon, { ...sale, date: "" })).toBeNull();
   });
 
-  it.each(["RETURN", "FC_TRANSFER"])("skips %s rows", (status) => {
+  it.each(["RETURN", "FC_TRANSFER", "INBOUND"])("skips %s rows", (status) => {
     expect(classifySkip(amazon, { ...sale, status })).toBe("not a sale");
+  });
+
+  // Real report row (2026-09-14 k2_textil import): an INBOUND (FBA warehouse
+  // shipment) row carries a quantity and a per-unit price for the inventory
+  // value, but every VAT/money column is 0 — there is no sale. Before this
+  // status was skipped, the row fell through to full validation and failed
+  // with "Row N: ... must be a positive number" (the money columns didn't
+  // map the way a real SALE row's do), blocking the whole file unless the
+  // user manually deleted every INBOUND row first.
+  it("skips a real INBOUND row that would otherwise fail money validation", () => {
+    const inboundRow = {
+      order_id: "FBA15LQX19BX",
+      date: "",
+      product_name: "LYRVON Premium Baumwolltasche",
+      quantity: "30",
+      unit_price: "",
+      total: "",
+      currency: "EUR",
+      status: "INBOUND",
+    };
+    expect(classifySkip(amazon, inboundRow)).toBe("not a sale");
+    const row = validateRowForFormat(amazon, inboundRow, 416);
+    expect(row.error).toBeNull();
+    expect(row.skipped).toBe("not a sale");
   });
 
   it("skips an unsupported currency", () => {
