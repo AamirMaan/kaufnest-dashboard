@@ -91,7 +91,7 @@ async function cleanupEbayUser(userId?: string, username?: string) {
   const control = createControlClient();
   const { data: tenants } = await control
     .schema("control")
-    .from("tenants")
+    .from("tenants") // verifier:allow unpaginated-collection-read — bounded by active tenant count, not per-tenant data growth
     .select("schema_name")
     .eq("status", "active");
 

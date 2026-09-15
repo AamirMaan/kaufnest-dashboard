@@ -282,7 +282,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         for (let i = 0; i < ids.length; i += IN_CHUNK) {
           const chunk = ids.slice(i, i + IN_CHUNK);
           const { data, error } = await supabase
-            .from("sales")
+            .from("sales") // verifier:allow unpaginated-collection-read — chunked via IN_CHUNK above, each call is bounded to <=200 ids
             .select("external_order_id")
             .eq("platform", platform)
             .in("external_order_id", chunk);

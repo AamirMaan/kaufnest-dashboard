@@ -103,15 +103,33 @@ edit to its own tests.
 
 ## Known baseline
 
-`--all` currently reports 10 warnings and **zero blocking findings**:
+`--all` currently reports 69 warnings and **zero blocking findings**:
 
 - 7 × `db-error-to-client` — open audit finding 2.7, not yet remediated.
 - 3 × `no-any` in `src/lib/utils/generateInvoice.ts` — jsPDF ships no usable
   `doc` type.
+- 42 × `unbounded-limit` / `unpaginated-collection-read` — the Appendix A
+  findings recorded in
+  `docs/superpowers/specs/2026-09-15-backend-architecture-principles-design.md`,
+  not yet remediated (tracked as sub-project 3 of that spec's three-part
+  plan). Two additional legitimate sites are suppressed with
+  `// verifier:allow` (`ImportSalesModal.tsx`'s chunked dedup,
+  `ebay-account-deletion/route.ts`'s tenant-count-bounded read).
+- 17 × `hardcoded-tenant-schema` (16) / `dangerous-html` (1) — pre-existing
+  hits this section had not previously accounted for (the "10 warnings"
+  figure above predates both counts growing); each is either the documented
+  Dropshipping/KaufNest-only exception or a static literal, not yet
+  reviewed/suppressed. Out of scope for this task — flagged here so the
+  total stays reconcilable against `verify_changes.py --all`'s real output
+  instead of drifting the way the two-lists problem in AGENTS.md warns
+  about.
 
 Keep the blocking count at zero. If a new BLOCK finding appears, fix the code
 rather than the rule — the rules were calibrated against a clean tree at
-`bafa506`, so a new one means something genuinely regressed.
+`bafa506`, so a new one means something genuinely regressed. The
+`unbounded-limit`/`unpaginated-collection-read` count above is expected to
+shrink to 0 as sub-project 3 lands, not stay flat — don't treat it as a new
+permanent baseline the way the `db-error-to-client`/`no-any` counts are.
 
 ## Adding a rule
 
