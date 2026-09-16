@@ -38,6 +38,16 @@ existing implementations to copy from: `fetchSalesPage`, `fetchExpensesPage`,
 fetch, which would silently miss anything not yet loaded into the current
 page.
 
+Page 1 is not fetched by the thunk. `src/app/dashboard/layout.tsx` hydrates it
+server-side alongside a row count — `.select("*", { count: "exact" }).range(0,
+DEFAULT_PAGE_SIZE - 1)` — and passes each table's `{ data, count }` through
+`StoreProvider` into that slice's `hydratePage` reducer; the `fetchXPage`
+thunks handle only page 2 onward and filter changes. Two features opt out of
+this shape deliberately: **Users and dropshipping listings paginate
+client-side**, because both are structurally small sets (a tenant's seats, a
+hand-curated supplier list) where a single fetch is honest under the bounded
+test below — not a shortcut to copy for a growth table.
+
 **`fetchAllRows`** (`src/lib/utils/fetchAllRows.ts`) — "I need every row
 matching a filter, up to a bounded safety cap," not a page at a time. Used
 today by the Overview page's four aggregation queries and the
@@ -119,7 +129,7 @@ extIds)` over 1500 ids can still return only 1000 rows if nothing chunks the
 IDS list itself; the 500 missing rows then look like "not found" to the
 caller, which is a correctness bug, not just a display truncation one (see
 `integrations/review/route.ts` and `integrations/review/import/route.ts` in
-the verifiers' current findings — both fixed the eslint/type-check gate but
+the verifiers' current findings — both pass the eslint/type-check gate but
 still need the actual chunking fix, tracked for sub-project 3).
 
 One structural exception, not a violation: the account-deletion webhook
@@ -183,8 +193,9 @@ restatement.
 
 ## 6. New Supabase query checklist
 
-The actionable summary of sections 1–4 — this exact list is also inlined
-into `AGENTS.md` so it's in every agent's context by default:
+The actionable summary of sections 1–4 — a checklist with the same substance
+is also inlined into `AGENTS.md` so it's in every agent's context by default
+(the wording there is condensed; this version is the fuller one):
 
 1. Is this a list a user pages through? Use a `fetchXPage` thunk:
    `.select(..., { count: "exact" }).range(from, to)`.
