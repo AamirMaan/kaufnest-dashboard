@@ -87,6 +87,12 @@ Other verified specifics, easy to get subtly wrong:
 - **Units sold** (`page.tsx:218`) IS over effective sales only
   (`sum(quantity)` where not returned/cancelled) — the opposite filter
   scope from Orders count, on the same stat card.
+- **Average order value** (`page.tsx:217`, the Revenue card's subtext) is
+  `revenue / effectiveSales.length` — a THIRD distinct count, different
+  from both Orders count (unfiltered) and units sold's sum. The function
+  must return this effective-sales count separately (as
+  `effectiveOrderCount`) so the client can divide `revenue` by it — it is
+  not the same number as `orderCount`.
 - **Top products**: top 5 by Formula-B revenue descending
   (`page.tsx:285-294`), grouped by `product_name`, each entry also carries
   summed `quantity`.
@@ -130,6 +136,7 @@ can return `null` for the "all time" preset). Each returns `jsonb`.
 ```json
 {
   "orderCount": 42,
+  "effectiveOrderCount": 39,
   "unitsSold": 87,
   "revenue": 1234.56,
   "fees": 45.00,
@@ -143,9 +150,12 @@ can return `null` for the "all time" preset). Each returns `jsonb`.
   ]
 }
 ```
-`revenue`/`fees`/`vatCollected`/`unitsSold` use Formula A's effective-sales
-filter; `revenueByPlatform`/`topProducts`/`platformBalance.sales` use
-Formula B over the same filter; `orderCount` is unfiltered by status.
+`revenue`/`fees`/`vatCollected`/`unitsSold`/`effectiveOrderCount` use
+Formula A's effective-sales filter (`effectiveOrderCount` is `count(*)`
+over that same filtered set — the client divides `revenue` by it for
+average order value); `revenueByPlatform`/`topProducts`/
+`platformBalance.sales` use Formula B over the same filter; `orderCount`
+alone is unfiltered by status.
 `platformBalance` only computes `ebay`/`amazon` (matching current
 hardcoding — see Business logic inventory).
 
