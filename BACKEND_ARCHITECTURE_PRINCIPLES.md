@@ -98,9 +98,10 @@ stays acceptable WHILE the bounded fetch cap (5000 rows per table) reliably
 covers a tenant's real data. The signal that it's stopped being acceptable is
 observable, not a guess: `fetchAllRows` logs
 `console.warn("[fetchAllRows] cap reached", { cap, total })` whenever a
-table's real row count exceeds the cap it was given. `tenant_k2_textil` is
-already at 1510 sales rows (30% of the 5000 cap) and growing from a two-month
-import — this is the kind of number to watch.
+table's real row count exceeds the cap it was given. `tenant_k2_textil` grew
+from 1510 to 3048 sales rows between 2026-09-15 and 2026-09-16 alone — past
+60% of the 5000 cap — this is the kind of number to watch, and it moves
+fast.
 
 When that signal fires (or a full-table download is clearly wasteful just to
 produce a handful of summary numbers), the correct move is a Postgres RPC
@@ -113,6 +114,45 @@ introduced this way is DDL and must go through `run_on_all_tenant_schemas` /
 `provision_tenant_schema()` like any other tenant-schema change (section 5) —
 it is not exempt from the "2-places" rule just because it's a function
 instead of a table column.
+
+### How to port aggregation to SQL correctly
+
+These are the basics every RPC-aggregation migration needs, distilled from
+doing this once (Overview's sales/expenses/purchases/payouts aggregation,
+`docs/superpowers/specs/2026-09-16-overview-rpc-aggregation-design.md`) —
+read that spec for the concrete worked example.
+
+1. **Inventory the actual business logic before writing any SQL — read the
+   real code, don't assume from the UI.** A page that looks like it has one
+   consistent "revenue" number often doesn't. Overview turned out to have
+   TWO distinct revenue formulas depending on which card was showing it
+   (`total_amount + shipping_charged` for the main stat card and monthly
+   trend, vs. plain `total_amount` for revenue-by-platform, top products,
+   and the platform-balance cards) — and a platform-to-expense match done
+   via `vendor ILIKE '%ebay%' OR title ILIKE '%ebay%'`, not a column. None
+   of that is visible from the UI or guessable from a plausible-sounding
+   spec; it only surfaces by reading the `useMemo`s line by line.
+2. **Reproduce every inconsistency found exactly as-is — do not unify or
+   "fix" it while porting.** Two formulas that disagree is a product
+   question; silently picking one during a migration changes numbers a
+   tenant is already looking at, with no one having decided to change them.
+   If a real inconsistency is worth fixing, that's a separate, explicit
+   decision — never a side effect of a scale migration.
+3. **One function per source table, not one per UI widget and not one
+   giant function.** Each function takes the same shape of parameters the
+   table's existing paginated thunk already filters by (date range,
+   currency), and returns one small JSON of pre-aggregated fields. A page
+   that needs to combine figures across tables (e.g. a balance card needing
+   sales + expenses + payouts together) does that combination client-side,
+   over the already-small aggregated numbers each function returns — not
+   via a fifth cross-table function. Combining ~10 numbers is not a scale
+   concern; only combining raw rows is.
+4. **Verify with an integration test that seeds real rows into a real
+   tenant schema and asserts hand-computed expected values** — not a mock,
+   and not "looks right by inspection." Include at least one test case
+   specifically designed to catch an accidental formula unification (e.g.
+   a row whose two candidate formulas would produce different numbers, so
+   the test fails loudly if a future edit collapses them back into one).
 
 ## 3. N+1 avoidance
 
