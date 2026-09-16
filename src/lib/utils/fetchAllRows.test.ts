@@ -24,10 +24,15 @@ describe("fetchAllRows", () => {
   it("stops at the overall cap even when more rows exist", async () => {
     const allRows = Array.from({ length: 6000 }, (_, i) => ({ id: i }));
     const fetchPage = serverCappedFetcher(allRows, 1000);
+    // This fixture has total > cap, so fetchAllRows legitimately fires its
+    // cap-reached warning — silence it so the suite's output stays clean.
+    // (The warning itself is asserted in the "cap-reached warning" describe.)
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await fetchAllRows(fetchPage, 5000);
 
     expect(result).toHaveLength(5000);
+    warnSpy.mockRestore();
   });
 
   it("returns all rows in a single page when under both caps", async () => {

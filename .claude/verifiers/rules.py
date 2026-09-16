@@ -58,6 +58,10 @@ class Rule:
     requires_file_pattern: re.Pattern | None = None
     # File-level rules (absence checks) can't be expressed as a line match.
     file_check: str = ""
+    # When true, a line whose stripped form starts with a comment marker is not
+    # a match. Opt-in per rule: some rules (ts-escape-hatch) exist precisely to
+    # match text inside a comment, so this can't be a global scanner behaviour.
+    skip_comment_lines: bool = False
     tags: tuple[str, ...] = field(default_factory=tuple)
 
     def applies_to(self, rel_path: str) -> bool:
@@ -318,6 +322,10 @@ RULES: list[Rule] = [
             "fix) — a human/agent review still matters for named constants."
         ),
         pattern=re.compile(r"\.limit\(\s*(\d{4,})\s*\)"),
+        # Prose mentioning `.limit(5000)` — the comment in dashboard/page.tsx
+        # explaining the bug, fetchAllRows.ts's docblock — is documentation of
+        # the hazard, not the hazard. Those were this rule's only two live hits.
+        skip_comment_lines=True,
         path_include=(r"^src/.*\.tsx?$",),
         path_exclude=(r"\.test\.tsx?$",),
         tags=("scalability",),
@@ -417,6 +425,16 @@ class Finding:
         )
 
 
+_COMMENT_PREFIXES = ("//", "*", "/*")
+
+
+def _is_comment_line(line: str) -> bool:
+    """True for a line that is only prose — `//`, a `/* … */` opener, or a
+    JSDoc continuation `*`. Used by rules whose pattern can legitimately
+    appear inside documentation of the very hazard they flag."""
+    return line.strip().startswith(_COMMENT_PREFIXES)
+
+
 def _marks(line: str, rule_id: str) -> bool:
     match = ALLOW_RE.search(line)
     if not match:
@@ -464,10 +482,23 @@ _TABLE_READ = re.compile(
 # Any one of these appearing in the same statement window means the read is
 # bounded. `.limit(` matches ANY argument (not just a literal 1) — whether
 # the limit is the RIGHT size is unbounded-limit's job, not this one's.
+#
+# `.single[<(]` / `.maybeSingle[<(]` rather than `\(`: the dominant idiom in
+# this codebase is the generic form, `.single<{ status: string }>()`.
+#
+# `count: "exact"` is the signature of the paginated fetchXPage thunks, which
+# build the query incrementally — `let query = sb.from(…).select(…, { count:
+# "exact" })` on one statement and `query = query.range(from, to)` on a later
+# one, so the `.range(` lands outside this window. That shape is the doc's own
+# reference pattern; matching the count option is how we recognise it.
 _READ_BOUNDED = re.compile(
-    r'\.range\(|\.single\(|\.maybeSingle\(|\.limit\(|fetchAllRows'
+    r'\.range\(|\.single[<(]|\.maybeSingle[<(]|\.limit\(|fetchAllRows'
+    r'|count:\s*[\'"]exact[\'"]'
     r'|\.eq\(\s*[\'"]\w*[Ii]d[\'"]'
 )
+# An `.insert(…).select().single()` has a `.select(` in its window but is a
+# write returning its own row, not a collection read.
+_WRITE_OP = re.compile(r"\.(insert|upsert|update|delete)\(")
 _STATEMENT_WINDOW_MAX_LINES = 20
 
 
@@ -491,16 +522,26 @@ def _unpaginated_collection_read_finding(
             continue
         window_end = index
         for offset in range(_STATEMENT_WINDOW_MAX_LINES):
-            window_end = index + offset
-            if window_end >= len(lines):
-                window_end -= 1
+            candidate = index + offset
+            if candidate >= len(lines):
                 break
-            if ";" in lines[window_end]:
+            # A later `.from(` is the start of a *different* query. Inside a
+            # `Promise.all([ q1, q2 ])` array each entry ends in `,` not `;`,
+            # so without this the window runs on into the next query and
+            # inherits its bounding marker (this hid 4 real findings).
+            if offset > 0 and ".from(" in lines[candidate]:
+                break
+            window_end = candidate
+            if ";" in lines[candidate]:
                 break
         window_lines = lines[index : window_end + 1]
         window_text = "\n".join(window_lines)
-        # .update()/.delete()/.insert()/.upsert() on the same table is a
-        # write, not an unpaginated read — out of scope for this rule.
+        # .update()/.delete()/.insert()/.upsert() is a write, not an
+        # unpaginated read — out of scope for this rule. Checked before the
+        # `.select(` presence test because a write can chain `.select()` to
+        # return the row it just wrote.
+        if _WRITE_OP.search(window_text):
+            continue
         if ".select(" not in window_text:
             continue
         if _READ_BOUNDED.search(window_text):
@@ -546,6 +587,8 @@ def scan_text(rel_path: str, text: str, severities: tuple[str, ...] = (BLOCK, WA
             continue
 
         for index, line in enumerate(lines):
+            if rule.skip_comment_lines and _is_comment_line(line):
+                continue
             if rule.pattern.search(line) and not _suppressed(lines, index, rule.id):
                 findings.append(
                     Finding(rule=rule, path=rel_path, line_no=index + 1, line=line)
