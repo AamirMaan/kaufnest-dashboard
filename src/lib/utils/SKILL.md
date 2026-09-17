@@ -85,6 +85,20 @@ The date-preset + entity-filter logic backing `FilterBar` (see
 - `isDefaultFilters(f)` — drives the `FilterBar`'s "Clear" button visibility
   (`hasActive = !isDefaultFilters(filters)`); uses `"x" in f` narrowing so one
   function works across all three filter shapes.
+- `PeriodUnit = "full" | "q1" | "q2" | "q3" | "q4" | "01".."12"`,
+  `periodRange(year, unit) → { from, to }`, `describePeriod(from, to) → {
+  year, unit } | null` (2026-09-17) — the "Specific period" date filter's
+  maths (`components/ui/FilterBar.tsx`'s Year/Period selects, and Overview's
+  own bespoke date-range UI in `dashboard/page.tsx`). A period pick is never
+  its own `DatePreset` — it always resolves to `preset: "custom"` plus a
+  concrete pair, so every existing `resolveDateRange`/thunk consumer needs no
+  changes. `describePeriod` is the inverse, used to re-derive which Year/Period
+  a stored `{from, to}` pair represents (e.g. after a remount) — it returns
+  `null` for any pair that is not an EXACT period span, which is what keeps a
+  hand-typed custom range rendering as "Custom Range" instead of being
+  mislabelled. `PERIOD_UNIT_OPTIONS` is the shared `{value, label}[]` list for
+  the Period select, consumed by both `FilterBar.tsx` and `dashboard/page.tsx`
+  so the two don't duplicate the same 17-entry array.
 
 ## csv.ts
 

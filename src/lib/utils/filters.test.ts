@@ -8,6 +8,8 @@ import {
   sanitizeIlikeSearchTerm,
   isDefaultFilters,
   DEFAULT_PURCHASE_FILTERS,
+  periodRange,
+  describePeriod,
 } from "./filters";
 import type { Sale } from "@/types";
 
@@ -197,5 +199,58 @@ describe("isEbayIntegrationSyncedSale", () => {
         external_order_id: "112-1234567-1234567:00000001",
       })
     ).toBe(false);
+  });
+});
+
+describe("periodRange", () => {
+  it("returns the full calendar year", () => {
+    expect(periodRange(2026, "full")).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  });
+
+  it("returns each quarter's exact bounds", () => {
+    expect(periodRange(2026, "q1")).toEqual({ from: "2026-01-01", to: "2026-03-31" });
+    expect(periodRange(2026, "q2")).toEqual({ from: "2026-04-01", to: "2026-06-30" });
+    expect(periodRange(2026, "q3")).toEqual({ from: "2026-07-01", to: "2026-09-30" });
+    expect(periodRange(2026, "q4")).toEqual({ from: "2026-10-01", to: "2026-12-31" });
+  });
+
+  it("returns each month's exact bounds, including short and leap February", () => {
+    expect(periodRange(2026, "01")).toEqual({ from: "2026-01-01", to: "2026-01-31" });
+    expect(periodRange(2026, "02")).toEqual({ from: "2026-02-01", to: "2026-02-28" }); // 2026 is not a leap year
+    expect(periodRange(2028, "02")).toEqual({ from: "2028-02-01", to: "2028-02-29" }); // 2028 is a leap year
+    expect(periodRange(2026, "04")).toEqual({ from: "2026-04-01", to: "2026-04-30" });
+    expect(periodRange(2026, "12")).toEqual({ from: "2026-12-01", to: "2026-12-31" });
+  });
+});
+
+describe("describePeriod", () => {
+  it.each([
+    "full", "q1", "q2", "q3", "q4",
+    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
+  ] as const)("round-trips periodRange(2026, %s)", (unit) => {
+    const range = periodRange(2026, unit);
+    expect(describePeriod(range.from, range.to)).toEqual({ year: 2026, unit });
+  });
+
+  it("round-trips a leap-year February", () => {
+    const range = periodRange(2028, "02");
+    expect(describePeriod(range.from, range.to)).toEqual({ year: 2028, unit: "02" });
+  });
+
+  it("returns null for a range that is not an exact period", () => {
+    expect(describePeriod("2026-01-10", "2026-01-20")).toBeNull();
+  });
+
+  it("returns null for a range spanning parts of two months", () => {
+    expect(describePeriod("2026-01-15", "2026-02-15")).toBeNull();
+  });
+
+  it("returns null for a range that starts on Jan 1 but ends early", () => {
+    expect(describePeriod("2026-01-01", "2026-06-15")).toBeNull();
+  });
+
+  it("returns null for an empty or malformed 'from'", () => {
+    expect(describePeriod("", "2026-12-31")).toBeNull();
+    expect(describePeriod("not-a-date", "2026-12-31")).toBeNull();
   });
 });

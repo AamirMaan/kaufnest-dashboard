@@ -43,6 +43,87 @@ export function getPresetRange(preset: DatePreset): { from: string; to: string }
   }
 }
 
+export type PeriodUnit =
+  | "full" | "q1" | "q2" | "q3" | "q4"
+  | "01" | "02" | "03" | "04" | "05" | "06"
+  | "07" | "08" | "09" | "10" | "11" | "12";
+
+export const PERIOD_UNIT_OPTIONS: { value: PeriodUnit; label: string }[] = [
+  { value: "full", label: "Full Year" },
+  { value: "q1", label: "Q1 (Jan–Mar)" },
+  { value: "q2", label: "Q2 (Apr–Jun)" },
+  { value: "q3", label: "Q3 (Jul–Sep)" },
+  { value: "q4", label: "Q4 (Oct–Dec)" },
+  { value: "01", label: "January" },
+  { value: "02", label: "February" },
+  { value: "03", label: "March" },
+  { value: "04", label: "April" },
+  { value: "05", label: "May" },
+  { value: "06", label: "June" },
+  { value: "07", label: "July" },
+  { value: "08", label: "August" },
+  { value: "09", label: "September" },
+  { value: "10", label: "October" },
+  { value: "11", label: "November" },
+  { value: "12", label: "December" },
+];
+
+const QUARTER_START_MONTH: Record<"q1" | "q2" | "q3" | "q4", number> = {
+  q1: 0, q2: 3, q3: 6, q4: 9,
+};
+
+/**
+ * Resolve a {year, unit} period pick into a concrete `{ from, to }` ISO date
+ * range. Reuses the same `new Date(y, m + 1, 0)` month-end idiom
+ * `getPresetRange` already uses for "this_month"/"this_quarter" — this needs
+ * no leap-year special case, since `new Date` normalizes an out-of-range day
+ * (e.g. `new Date(2026, 2, 0)` for "the day before March 1st" correctly
+ * yields Feb 28, or Feb 29 in a leap year).
+ */
+export function periodRange(year: number, unit: PeriodUnit): { from: string; to: string } {
+  if (unit === "full") {
+    return { from: `${year}-01-01`, to: `${year}-12-31` };
+  }
+  if (unit === "q1" || unit === "q2" || unit === "q3" || unit === "q4") {
+    const startMonth = QUARTER_START_MONTH[unit];
+    return {
+      from: fmt(new Date(year, startMonth, 1)),
+      to: fmt(new Date(year, startMonth + 3, 0)),
+    };
+  }
+  const month = Number(unit) - 1;
+  return {
+    from: fmt(new Date(year, month, 1)),
+    to: fmt(new Date(year, month + 1, 0)),
+  };
+}
+
+/**
+ * Inverse of `periodRange` — used so a filter UI whose only persisted state
+ * is a `{ from, to }` pair (see `FilterBar`'s "Specific period" mode) can
+ * re-derive which Year/Period it should show as selected, including after a
+ * remount where local component state was lost. Returns `null` when the pair
+ * is not an EXACT period span — deliberately, so a hand-typed custom range
+ * that happens to land on a period boundary is the only case that could ever
+ * be ambiguous, and even then this always prefers reporting it AS a period
+ * (there is no meaningful difference once the bounds match exactly).
+ * A pair that does not match any period at all (the common "manual custom
+ * range" case) correctly falls through every candidate and returns `null`.
+ */
+export function describePeriod(from: string, to: string): { year: number; unit: PeriodUnit } | null {
+  const year = Number(from.slice(0, 4));
+  if (!Number.isInteger(year) || from.length < 4) return null;
+  const units: PeriodUnit[] = [
+    "full", "q1", "q2", "q3", "q4",
+    "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12",
+  ];
+  for (const unit of units) {
+    const range = periodRange(year, unit);
+    if (range.from === from && range.to === to) return { year, unit };
+  }
+  return null;
+}
+
 /**
  * Resolve a preset (or custom from/to pair) into a concrete date range.
  * Returns null when no filtering should be applied (e.g. "all").
