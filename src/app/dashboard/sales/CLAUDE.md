@@ -123,6 +123,14 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   otherwise let the net column normalise to `total`, claim the key, and get the
   real `Total` column dropped by the first-wins guard. Pinned by a test in
   `lib/utils/importAliases.test.ts`.
+- `_components/dedupeImportRows.ts` (+ colocated `.test.ts`, 2026-09-17) —
+  pure in-file dedupe for a parsed import batch: merges genuine duplicate
+  lines (same order id + sku) and composes `external_order_id` as
+  `"${orderId}:${sku}"` for `platform === "amazon"` rows so distinct-SKU
+  lines of one multi-line order can all reach `sales` without tripping the
+  non-partial unique index on `(platform, external_order_id)` — see its doc
+  comment and the "Amazon SALE/REFUND rows" → "Match key" bullet below.
+  Called from `ImportSalesModal.tsx`'s `markDuplicates`.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -661,15 +669,18 @@ existing sale instead:
 
 - **Match key**: platform + `external_order_id` + resolved `product_id`
   (from `sku`). Amazon order ids are not unique *within a sheet* — a
-  multi-line order repeats its id once per SKU — but only one of those lines
-  can ever reach `sales`: the unique index on `(platform,
-  external_order_id)` is non-partial, and `markDuplicates`' in-file pass
-  marks the rest `"duplicate in file"`. So the key does not protect against
-  deducting the wrong line (impossible); what it does is make a refund
-  against any *other* line of a multi-line order resolve a `product_id` that
-  matches nothing, so it is reported as "no matching order found" rather than
-  silently deducted from the one line that did import. No `product_id`
-  (unmapped `sku`) → unmatched.
+  multi-line order repeats its id once per SKU — and (2026-09-17, see
+  `dedupeImportRows.ts`) every one of those lines now reaches `sales`, each
+  under a composite `external_order_id` of `"${orderId}:${sku}"` (the same
+  disambiguation eBay sync uses) rather than only the first line
+  surviving. The refund matcher composes the identical key from its own
+  `sku` field before querying — see the block below `unmatchedRefunds.push`
+  in `ImportSalesModal.tsx`'s refund loop. **This composition is scoped to
+  `platform === "amazon"` only** — never applied to an `"ebay"`-platform
+  row, since `isEbayIntegrationSyncedSale` (`lib/utils/filters.ts`) tests
+  `external_order_id?.includes(":")` as its entire signal for "real
+  eBay-synced order," and a composited eBay CSV row would falsely satisfy
+  it. No `product_id` (unmapped `sku`) → unmatched.
 - **Split across two columns**: a SALE's `total_amount` holds the item total
   only — shipping lives in `shipping_charged` — so the refund is parsed
   (`validateRowForFormat` in `importFormats.ts`) into `amount` (full,
@@ -749,9 +760,15 @@ existing sale instead:
 **Duplicate pre-check (I3):** rows carrying an `external_order_id` are checked
 against existing `sales` rows per `(platform, external_order_id)` (chunked
 `.in()` queries, 200 ids per chunk) and against duplicates within the file.
-Matches are marked **skipped** and are never overwritten (same protection as
-the integrations re-sync merge rule). REFUND rows are exempt from both dedup
-passes (file-level and DB-level, `markDuplicates` in `ImportSalesModal.tsx`)
+The in-file pass is `dedupeImportRows.ts` (colocated `.test.ts`) — for
+`platform === "amazon"` rows carrying a `sku`, it rewrites
+`external_order_id` to `"${orderId}:${sku}"` before this DB check ever
+runs, so the check (and the unique index it mirrors) operates on the
+already-disambiguated value; see that file's doc comment for the full
+rationale and the "Match key" bullet above. Matches are marked **skipped**
+and are never overwritten (same protection as the integrations re-sync
+merge rule). REFUND rows are exempt from both dedup passes (file-level and
+DB-level, `markDuplicates` in `ImportSalesModal.tsx`)
 — they carry the `external_order_id` of an *existing* sale by definition, so
 without the carve-out every refund would be marked "order already exists" and
 dropped before the matching path in "Amazon SALE/REFUND rows" above ever

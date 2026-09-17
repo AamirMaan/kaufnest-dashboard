@@ -126,6 +126,19 @@ describe("dedupeImportRows", () => {
     ]);
   });
 
+  it("never composes external_order_id for a non-amazon platform, even with a sku (protects isEbayIntegrationSyncedSale)", () => {
+    // isEbayIntegrationSyncedSale (lib/utils/filters.ts) tests
+    // external_order_id?.includes(":") as its entire signal for "this is a
+    // real eBay-synced order" — a composited eBay row would falsely pass
+    // that check and become eligible for the eBay order-status push-back,
+    // which can only fail for a CSV-imported row (no real lineItemId).
+    const result = dedupeImportRows([
+      row({ sku: "SKU-A", data: { platform: "ebay", external_order_id: "ORDER-1" } }),
+    ]);
+    expect(result[0].data?.external_order_id).toBe("ORDER-1");
+    expect(result[0].data?.external_order_id).not.toContain(":");
+  });
+
   it("falls back to marking a no-sku collision as a duplicate (cannot disambiguate)", () => {
     const rows = [
       row({ sku: null, data: { external_order_id: "ORDER-1" } }),

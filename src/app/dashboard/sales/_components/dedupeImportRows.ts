@@ -28,9 +28,21 @@ import type { ParsedRow } from "./importFormats";
  * summed — rather than composed into two rows, since they'd otherwise
  * collide on the identical composite key anyway.
  *
+ * Scoped to `platform === "amazon"` ONLY — not merely "this row came from
+ * the amazon-format parser" (a generic-format row can carry any typed
+ * platform value). `lib/utils/filters.ts`'s `isEbayIntegrationSyncedSale`
+ * tests `external_order_id?.includes(":")` as its ENTIRE test for "this is
+ * a real eBay-platform-synced order, eligible for the order-status
+ * push-back to eBay's API" — a composited eBay row would satisfy that
+ * check despite never having gone through the Integrations sync pipeline,
+ * wrongly making it eligible for a push-back that can only ever fail (see
+ * that function's doc comment). Amazon has no such identifier collision to
+ * protect, and it's the only platform this bug was ever confirmed on.
+ *
  * A row with no sku that collides on order_id with another row cannot be
  * disambiguated this way — it falls back to the pre-existing behavior
- * (first survives, the rest marked "duplicate in file").
+ * (first survives, the rest marked "duplicate in file"). The same fallback
+ * applies to every non-Amazon row, sku or not.
  *
  * KNOWN TRANSITIONAL CAVEAT: a multi-line order whose extra lines were
  * already dropped by the OLD (pre-fix) behavior has its one surviving line
@@ -57,7 +69,7 @@ export function dedupeImportRows(rows: ParsedRow[]): ParsedRow[] {
       continue;
     }
     const orderId = row.data.external_order_id;
-    const sku = row.sku?.trim() || null;
+    const sku = row.data.platform === "amazon" ? row.sku?.trim() || null : null;
 
     if (!sku) {
       const bareKey = `${row.data.platform}:${orderId}`;
