@@ -403,6 +403,17 @@ owns it. Current shared locations:
   Overview page and the Sales/Expenses/Purchases CSV exports, see
   `src/app/dashboard/SKILL.md`'s gotcha)
 - `src/types/index.ts` — single source of truth for all domain types
+- `src/lib/fx/` (2026-09-17) — `convert.ts` (pure: `convertAmount`,
+  `resolveSheetCurrency`, `applyRate`, `isPlausibleIsoCode`), `ecb.ts`
+  (server-only ECB daily reference rate fetch + `control.fx_rates` cache,
+  weekend/holiday 7-day walk-back), `authGuard.ts` (`requireFxAccess`, backs
+  `POST /api/fx/rates`). Used by all three import paths — Sales/Expenses/
+  Purchases `_components/*ImportFormats.ts` and their import modals.
+- `src/components/import/` (2026-09-17) — `fxReviewState.ts` (pure reducer:
+  per-currency ECB/manual mode, `isReviewComplete`, `resolveRowRate`) and
+  `FxRateReview.tsx` (the shared rate-review UI shown mid-import when a
+  file has non-base-currency rows). The 3rd+ consumer (Sales, Expenses,
+  Purchases) that crossed this section's "3+ features" promotion threshold.
 
 Two routes are conceptually part of a feature but **cannot** be colocated
 because Next.js pins them to fixed URL paths: `app/api/users/invite/route.ts`
