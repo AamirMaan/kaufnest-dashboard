@@ -100,6 +100,25 @@ The date-preset + entity-filter logic backing `FilterBar` (see
   the Period select, consumed by both `FilterBar.tsx` and `dashboard/page.tsx`
   so the two don't duplicate the same 17-entry array.
 
+## fetchEarliestYear.ts
+
+`fetchEarliestYear(fetchEarliestDate, fallback?) → Promise<number>`
+(2026-09-17) — resolves the lower bound for the "Specific period" filter's
+Year select. Same test-friendly callback-injection shape as `fetchAllRows`
+(the caller supplies the actual Supabase query, so this stays unit-testable
+without a live client). `fallback` defaults to the current year, used both
+when the table has no rows and when the fetched value doesn't parse as a
+date. Called once on mount by each of Sales/Expenses/Purchases/Audit Logs'
+`page.tsx` (one call, that feature's own table) and by Overview's `page.tsx`
+(three calls — sales/expenses/purchases — taking the `Math.min` of the
+three, since Overview's date filter spans all of them). Overview does
+**not** derive this from its already-fetched `sales`/`expenses`/`purchases`
+local state, even though that data is sitting right there — that state is
+already scoped to the CURRENTLY SELECTED date range (see its own `.gte`/
+`.lte` fetch), so once any narrower range is selected it would silently
+undercount how far back real data actually goes. This helper always queries
+unfiltered.
+
 ## csv.ts
 
 Export and import primitives for the CSV round-trip on Sales/Expenses/Purchases.
