@@ -103,7 +103,7 @@ edit to its own tests.
 
 ## Known baseline
 
-`--all` currently reports 43 warnings and **zero blocking findings**:
+`--all` currently reports 44 warnings and **zero blocking findings**:
 
 - 7 × `db-error-to-client` — open audit finding 2.7, not yet remediated.
 - 3 × `no-any` in `src/lib/utils/generateInvoice.ts` — jsPDF ships no usable
@@ -131,22 +131,23 @@ edit to its own tests.
   borrowing the *next* query's bound — that had been hiding 4 genuine
   findings, including `notificationsSlice.ts`'s `notification_reads` read
   (Appendix A's highest-severity correctness bug).
-- 17 × `hardcoded-tenant-schema` (16) / `dangerous-html` (1) — pre-existing
+- 18 × `hardcoded-tenant-schema` (17) / `dangerous-html` (1) — pre-existing
   hits this section had not previously accounted for (the "10 warnings"
   figure above predates both counts growing). Spot-checking shows these are
   predominantly test fixtures (`storagePath.test.ts`, `managementApi.test.ts`,
-  `tenantSlug.test.ts` — 11 of the 16) plus a handful of pending/false-positive
-  rule matches — a comment merely mentioning a tenant name
-  (`welcome/page.tsx`, `fetchAllRows.ts`), and a table/column literal
-  containing the substring "tenant" rather than an actual hardcoded schema
-  (`quota.ts`'s `tenant_ai_usage` table and `tenant_id` column,
-  `api/admin/ai-usage/route.ts`'s `tenant_ai_usage`). The lone `dangerous-html`
-  hit (`ListingPreview.tsx`) is a sanitized dynamic render, not a static
-  literal — not a case this rule should really be flagging, either. None of
-  the 17 are yet triaged or suppressed. Out of scope for this task — flagged
-  here so the total stays reconcilable against `verify_changes.py --all`'s
-  real output instead of drifting the way the two-lists problem in AGENTS.md
-  warns about.
+  `tenantSlug.test.ts` — 11, plus `overviewRpc.integration.test.ts`'s
+  literal `"tenant_boughtopia"` — 12 of the 17) plus a handful of
+  pending/false-positive rule matches — a comment merely mentioning a
+  tenant name (`welcome/page.tsx`, `fetchAllRows.ts`), and a table/column
+  literal containing the substring "tenant" rather than an actual
+  hardcoded schema (`quota.ts`'s `tenant_ai_usage` table and `tenant_id`
+  column, `api/admin/ai-usage/route.ts`'s `tenant_ai_usage`). The lone
+  `dangerous-html` hit (`ListingPreview.tsx`) is a sanitized dynamic
+  render, not a static literal — not a case this rule should really be
+  flagging, either. None of the 18 are yet triaged or suppressed. Out of
+  scope for this task — flagged here so the total stays reconcilable
+  against `verify_changes.py --all`'s real output instead of drifting the
+  way the two-lists problem in AGENTS.md warns about.
 
 Keep the blocking count at zero. If a new BLOCK finding appears, fix the code
 rather than the rule — the rules were calibrated against a clean tree at
