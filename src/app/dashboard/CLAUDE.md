@@ -56,8 +56,13 @@ broadly when working on a specific feature.**
   same "opacity-60 pointer-events-none" overlay convention used by the
   paginated list pages.
   Applies a user-controlled date-range filter (`resolveDateRange` from
-  `lib/utils/filters`, preset + custom from/to) on top of the already
-  range-scoped fetch, derives `effectiveSales = periodSales.filter(isRevenueSale)`
+  `lib/utils/filters`, preset + custom from/to — including a "Specific
+  period" mode, any month/quarter/year, added 2026-09-17 via `periodRange`/
+  `describePeriod`/`fetchEarliestYear` from `lib/utils/`; this page has its
+  own bespoke inline date-range UI rather than the shared `FilterBar`
+  component, so it reimplements the same period-picking logic directly —
+  see `components/ui/SKILL.md`'s FilterBar entry for the shared version)
+  on top of the already range-scoped fetch, derives `effectiveSales = periodSales.filter(isRevenueSale)`
   (canonical predicate from `lib/utils/filters` — excludes `status === "returned"`
   AND `status === "cancelled"`) and renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
@@ -95,8 +100,9 @@ broadly when working on a specific feature.**
   No `_components`/`_store` of its own — but see `_lib/` below.
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
-  `lib/supabase/client` (`createTenantClient`), `lib/utils/fetchAllRows`.
+  `resolveDateRange`, `periodRange`/`describePeriod`, `ExpenseCategory` type,
+  `useTheme`, `recharts`, `lib/supabase/client` (`createTenantClient`),
+  `lib/utils/fetchAllRows`, `lib/utils/fetchEarliestYear`.
 
 ## `_lib/` — pure helpers for the Overview page
 
