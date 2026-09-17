@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Button } from "./Button";
-import type { DatePreset } from "@/lib/utils/filters";
+import {
+  type DatePreset,
+  type PeriodUnit,
+  periodRange,
+  describePeriod,
+  PERIOD_UNIT_OPTIONS,
+} from "@/lib/utils/filters";
 
 const PRESETS: { value: DatePreset; label: string }[] = [
   { value: "all", label: "All Time" },
@@ -34,6 +40,26 @@ export interface FilterBarProps {
   onDateFromChange: (v: string) => void;
   dateTo: string;
   onDateToChange: (v: string) => void;
+  /**
+   * Earliest year with data — the lower bound of the "Specific period"
+   * mode's Year select. Only meaningful (and only rendered) when
+   * `onPeriodChange` is also provided; falls back to the current year if
+   * omitted, showing a single-year dropdown.
+   */
+  earliestYear?: number;
+  /**
+   * Atomically applies a period pick's resulting `preset`/`dateFrom`/
+   * `dateTo`. Providing this prop is what enables the "Specific period"
+   * dropdown option. **Required to be atomic**: a caller whose
+   * `preset`/`dateFrom`/`dateTo` live in one merged filter object updated
+   * via three separate single-field setters (the `setFilter(key, value)`
+   * pattern already used by Sales/Expenses/Purchases/Audit Logs) would lose
+   * two of the three fields if this component instead called
+   * `onPresetChange`/`onDateFromChange`/`onDateToChange` separately in the
+   * same handler — each call would compute its `next` object from the same
+   * pre-update `filters` closure, so only the LAST call's field survives.
+   */
+  onPeriodChange?: (preset: DatePreset, dateFrom: string, dateTo: string) => void;
   currency?: string;
   onCurrencyChange?: (v: string) => void;
   searchValue?: string;
@@ -52,6 +78,8 @@ export function FilterBar({
   onDateFromChange,
   dateTo,
   onDateToChange,
+  earliestYear,
+  onPeriodChange,
   currency,
   onCurrencyChange,
   searchValue,
@@ -61,6 +89,53 @@ export function FilterBar({
   onClear,
   children,
 }: FilterBarProps) {
+  const supportsPeriod = onPeriodChange !== undefined;
+
+  // Local UI-only state: whether the "custom" preset is currently showing
+  // the Year/Period selects ("period" mode) or the raw From/To date inputs
+  // ("manual" mode) — both are `preset === "custom"` externally, so this is
+  // the one piece of display state that can't be derived from props on
+  // every render (doing so would flip the UI out from under a user mid-way
+  // through typing a manual custom range that happens to land on an exact
+  // period boundary). Computed ONCE at mount via `describePeriod` — this is
+  // what gives the dropdown its own label back after a remount, per the
+  // design's "re-derive its own label after a remount" requirement — and
+  // changed afterward only by the user's own explicit dropdown choice
+  // (`handlePresetSelect` below), never automatically re-derived again.
+  const [customSubMode, setCustomSubMode] = useState<"period" | "manual">(() =>
+    supportsPeriod && describePeriod(dateFrom, dateTo) ? "period" : "manual"
+  );
+
+  type DisplayValue = DatePreset | "specific_period";
+  const displayValue: DisplayValue =
+    preset === "custom" && customSubMode === "period" ? "specific_period" : preset;
+
+  function handlePresetSelect(v: string) {
+    if (v === "specific_period") {
+      setCustomSubMode("period");
+      const range = periodRange(new Date().getFullYear(), "full");
+      onPeriodChange!("custom", range.from, range.to);
+      return;
+    }
+    if (v === "custom") {
+      setCustomSubMode("manual");
+    }
+    onPresetChange(v as DatePreset);
+  }
+
+  const currentYear = new Date().getFullYear();
+  const firstYear = Math.min(earliestYear ?? currentYear, currentYear);
+  const yearOptions: number[] = [];
+  for (let y = currentYear; y >= firstYear; y--) yearOptions.push(y);
+
+  const currentPeriod: { year: number; unit: PeriodUnit } =
+    describePeriod(dateFrom, dateTo) ?? { year: currentYear, unit: "full" };
+
+  function handlePeriodFieldChange(year: number, unit: PeriodUnit) {
+    const range = periodRange(year, unit);
+    onPeriodChange!("custom", range.from, range.to);
+  }
+
   const [localSearch, setLocalSearch] = useState(searchValue ?? "");
   const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
 
@@ -94,20 +169,56 @@ export function FilterBar({
       <div>
         <FilterLabel>Date Range</FilterLabel>
         <select
-          value={preset}
-          onChange={(e) => onPresetChange(e.target.value as DatePreset)}
+          value={displayValue}
+          onChange={(e) => handlePresetSelect(e.target.value)}
           className={inputCls}
         >
-          {PRESETS.map((p) => (
+          {PRESETS.filter((p) => p.value !== "custom").map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
           ))}
+          {supportsPeriod && <option value="specific_period">Specific Period</option>}
+          <option value="custom">Custom Range</option>
         </select>
       </div>
 
-      {/* Custom date inputs */}
-      {preset === "custom" && (
+      {/* Specific period — Year + Period selects */}
+      {preset === "custom" && customSubMode === "period" && supportsPeriod && (
+        <>
+          <div>
+            <FilterLabel>Year</FilterLabel>
+            <select
+              value={currentPeriod.year}
+              onChange={(e) => handlePeriodFieldChange(Number(e.target.value), currentPeriod.unit)}
+              className={inputCls}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <FilterLabel>Period</FilterLabel>
+            <select
+              value={currentPeriod.unit}
+              onChange={(e) => handlePeriodFieldChange(currentPeriod.year, e.target.value as PeriodUnit)}
+              className={inputCls}
+            >
+              {PERIOD_UNIT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+
+      {/* Custom date inputs — raw manual entry mode */}
+      {preset === "custom" && customSubMode !== "period" && (
         <>
           <div>
             <FilterLabel>From</FilterLabel>
