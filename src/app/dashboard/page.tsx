@@ -129,6 +129,45 @@ function compactEur(v: number): string {
   return `€${v.toFixed(0)}`;
 }
 
+// Platform balance: gross sales minus ad fees, outbound shipping, and any
+// platform-tagged expense subtotal returned by get_expenses_overview,
+// combined with recorded payouts from get_payouts_overview. Returns null
+// when there is no sales bucket for that platform in the period (card is
+// hidden). Module-level and parameterized (not a component-body closure) so
+// it's a stable reference the useMemo hooks below don't need to list as a
+// dependency.
+function computePlatformBalance(
+  platform: "ebay" | "amazon",
+  salesOverview: SalesOverview | null,
+  expensesOverview: ExpensesOverview | null,
+  payoutsOverview: PayoutsOverview | null
+): {
+  balance: number;
+  sales: number;
+  adFees: number;
+  shippingFees: number;
+  expenses: number;
+  transferred: number;
+  pending: number;
+  count: number;
+} | null {
+  const bucket = salesOverview?.platformBalance.find((p) => p.platform === platform);
+  if (!bucket) return null;
+  const expenses = expensesOverview?.platformSubtotal.find((p) => p.platform === platform)?.amount ?? 0;
+  const balance = bucket.sales - bucket.adFees - bucket.shippingFees - expenses;
+  const transferred = payoutsOverview?.transferred.find((p) => p.platform === platform)?.amount ?? 0;
+  return {
+    balance,
+    sales: bucket.sales,
+    adFees: bucket.adFees,
+    shippingFees: bucket.shippingFees,
+    expenses,
+    transferred,
+    pending: computePending(balance, transferred),
+    count: bucket.count,
+  };
+}
+
 export default function DashboardPage() {
   const profileCurrency: Currency =
     useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
@@ -272,45 +311,12 @@ export default function DashboardPage() {
   const expensesByCategory: [ExpenseCategory, number][] =
     (expensesOverview?.byCategory ?? []).map((c) => [c.category, c.amount]);
 
-  // Platform balance helpers: gross sales minus ad fees, outbound shipping, and any
-  // platform-tagged expense subtotal returned by get_expenses_overview, combined
-  // with recorded payouts from get_payouts_overview. Returns null when there is
-  // no sales bucket for that platform in the period (card is hidden).
-  function computePlatformBalance(
-    platform: "ebay" | "amazon"
-  ): {
-    balance: number;
-    sales: number;
-    adFees: number;
-    shippingFees: number;
-    expenses: number;
-    transferred: number;
-    pending: number;
-    count: number;
-  } | null {
-    const bucket = salesOverview?.platformBalance.find((p) => p.platform === platform);
-    if (!bucket) return null;
-    const expenses = expensesOverview?.platformSubtotal.find((p) => p.platform === platform)?.amount ?? 0;
-    const balance = bucket.sales - bucket.adFees - bucket.shippingFees - expenses;
-    const transferred = payoutsOverview?.transferred.find((p) => p.platform === platform)?.amount ?? 0;
-    return {
-      balance,
-      sales: bucket.sales,
-      adFees: bucket.adFees,
-      shippingFees: bucket.shippingFees,
-      expenses,
-      transferred,
-      pending: computePending(balance, transferred),
-      count: bucket.count,
-    };
-  }
-
   const ebayBalance = useMemo(
-    () => computePlatformBalance("ebay"),
+    () => computePlatformBalance("ebay", salesOverview, expensesOverview, payoutsOverview),
     [salesOverview, expensesOverview, payoutsOverview]
   );
   const amazonBalance = useMemo(
-    () => computePlatformBalance("amazon"),
+    () => computePlatformBalance("amazon", salesOverview, expensesOverview, payoutsOverview),
     [salesOverview, expensesOverview, payoutsOverview]
   );
 
