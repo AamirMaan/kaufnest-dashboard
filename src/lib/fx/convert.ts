@@ -19,6 +19,16 @@ export function convertAmount(amount: number, rate: number): number {
 const ISO_CODE_RE = /^[A-Z]{3}$/;
 
 /**
+ * Whether a (trimmed, uppercased) string has a plausible ISO-4217 shape —
+ * 3 letters. Not a real currency-code lookup, just shape validation; the
+ * canonical definition shared with `classifySkip`'s currency guard in
+ * `importFormats.ts`/`expenseImportFormats.ts` so the two never drift.
+ */
+export function isPlausibleIsoCode(code: string): boolean {
+  return ISO_CODE_RE.test(code);
+}
+
+/**
  * Decides whether a sheet's raw currency value needs conversion.
  * - Blank/undefined -> treated as the base currency (no conversion).
  * - Matches the base currency (case-insensitive) -> no conversion.
@@ -35,7 +45,7 @@ export function resolveSheetCurrency(
   if (!trimmed || trimmed === baseCurrency) {
     return { currency: baseCurrency, sheetCurrency: null };
   }
-  if (!ISO_CODE_RE.test(trimmed)) {
+  if (!isPlausibleIsoCode(trimmed)) {
     return { error: `unsupported currency "${raw}"` };
   }
   return { currency: baseCurrency, sheetCurrency: trimmed };

@@ -17,6 +17,7 @@
 
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
 import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
 import {
   ALIASES,
@@ -47,6 +48,15 @@ export interface ParsedRow {
   skipped?: string | null;
   /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
   sku?: string | null;
+  /**
+   * Set to the sheet's raw ISO code when this row's currency differs from
+   * the tenant's base currency — null when no conversion is needed. The
+   * modal groups rows by this field to drive the FX rate review step;
+   * `applyRate` (src/lib/fx/convert.ts) converts `data`'s money fields
+   * in place only after the user confirms a rate, per the two-pass row
+   * lifecycle (see the plan's "Implementation judgment calls").
+   */
+  sheetCurrency?: string | null;
   /**
    * Amazon REFUND row. Never inserted — the modal matches it to an existing
    * sale and deducts the refund from that sale. `data` is null because there
@@ -270,8 +280,17 @@ export function classifySkip(format: ImportFormat, raw: Record<string, string>):
 
   if (NON_SALE_STATUSES.has(status)) return "not a sale";
 
+  // A recognized ISO-4217-shaped code (e.g. SEK) no longer skips — it routes
+  // through the FX rate review step instead (see `validateRowForFormat`'s
+  // `resolveSheetCurrency` call below). Only a non-blank, non-ISO-shaped
+  // value (garbled data) is still treated as unsupported. NOTE: this guard
+  // also gates REFUND rows (classifySkip runs before the refund branch), and
+  // the refund branch does NOT convert its amount — a refund whose currency
+  // differs from the tenant's base currency will be deducted at face value,
+  // uncorrected. Sale-row conversion is this plan's scope (Task 9); refund
+  // conversion is a real gap this change surfaces but does not close.
   const currency = raw.currency?.trim().toUpperCase();
-  if (currency && !VALID_CURRENCIES.includes(currency as Currency)) {
+  if (currency && !isPlausibleIsoCode(currency)) {
     return "unsupported currency";
   }
 
@@ -291,6 +310,13 @@ export function validateRowForFormat(
   raw: Record<string, string>,
   rowNum: number,
   dateOrder: DateOrder = "dmy",
+  // Defaulted to "EUR" (the app's most common tenant base currency) rather
+  // than made a bare required parameter, so the ~69 existing call sites in
+  // importFormats.test.ts that assume no conversion don't all need a
+  // mechanical 4th argument added — a deliberate, minimal deviation from
+  // the plan's literal text. ImportSalesModal.tsx (the real caller) always
+  // passes the tenant's actual base currency explicitly.
+  baseCurrency: Currency = "EUR",
 ): ParsedRow {
   const fail = (error: string): ParsedRow => ({ rowNum, data: null, error: `Row ${rowNum}: ${error}` });
 
@@ -468,10 +494,11 @@ export function validateRowForFormat(
     totalAmount = round2(quantity * up);
   }
 
-  const currency = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currency)) {
-    return fail(`invalid "currency" "${raw.currency}" — use: ${VALID_CURRENCIES.join(", ")}`);
+  const currencyResult = resolveSheetCurrency(raw.currency, baseCurrency);
+  if ("error" in currencyResult) {
+    return fail(currencyResult.error);
   }
+  const { currency, sheetCurrency } = currencyResult;
 
   const vatRateRaw = raw.vat_rate?.trim();
   const parsedVatRate = vatRateRaw ? parseLocaleNumber(vatRateRaw) : null;
@@ -557,9 +584,9 @@ export function validateRowForFormat(
       ebay_fulfillment_id: null,
       ebay_sync_error: null,
       ebay_synced_at: null,
-      // Currency conversion is wired in a later change to this file (Task 9
-      // of the currency-conversion-at-import plan) — every row imports as
-      // base-currency-unconverted for now, matching current behavior.
+      // Left null at parse time regardless of sheetCurrency — the two-pass
+      // row lifecycle only converts (via applyRate) after the user confirms
+      // a rate in the FX review step (see ImportSalesModal.tsx).
       original_currency: null,
       original_total_amount: null,
       fx_rate: null,
@@ -576,5 +603,6 @@ export function validateRowForFormat(
     },
     error: null,
     sku: raw.sku?.trim() || null,
+    sheetCurrency,
   };
 }

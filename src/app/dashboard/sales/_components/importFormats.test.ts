@@ -586,8 +586,15 @@ describe("classifySkip", () => {
     expect(row.skipped).toBe("not a sale");
   });
 
-  it("skips an unsupported currency", () => {
-    expect(classifySkip(amazon, { ...sale, currency: "SEK" })).toBe("unsupported currency");
+  it("no longer skips a plausible ISO code different from the base currency", () => {
+    // SEK now routes through to the FX rate review step instead of being
+    // skipped — see validateRowForFormat's "resolves a non-base ISO
+    // currency" test below.
+    expect(classifySkip(amazon, { ...sale, currency: "SEK" })).toBeNull();
+  });
+
+  it("skips a currency value that isn't a plausible 3-letter ISO code", () => {
+    expect(classifySkip(amazon, { ...sale, currency: "XYZ123" })).toBe("unsupported currency");
   });
 
   it("never skips rows for the generic format", () => {
@@ -607,11 +614,29 @@ describe("classifySkip", () => {
     })).toBe("blank row");
   });
 
-  it("marks the row skipped rather than errored via validateRowForFormat", () => {
-    const row = validateRowForFormat(amazon, { ...sale, currency: "SEK" }, 7);
+  it("still skips a row whose currency isn't a plausible ISO code", () => {
+    const row = validateRowForFormat(amazon, { ...sale, currency: "XYZ123" }, 7);
     expect(row.error).toBeNull();
     expect(row.data).toBeNull();
     expect(row.skipped).toBe("unsupported currency");
+  });
+
+  it("resolves a non-base ISO currency (SEK) instead of skipping — routes to FX review", () => {
+    const row = validateRowForFormat(amazon, { ...sale, currency: "SEK" }, 7, "dmy", "EUR");
+    expect(row.error).toBeNull();
+    expect(row.skipped).toBeUndefined();
+    expect(row.sheetCurrency).toBe("SEK");
+    // Unconverted at parse time — data.currency is the BASE currency, and
+    // total_amount is still the sheet's raw (unconverted) figure. Only
+    // applyRate (after FX review confirmation) converts it.
+    expect(row.data?.currency).toBe("EUR");
+    expect(row.data?.original_currency).toBeNull();
+  });
+
+  it("treats a value matching the base currency as no conversion needed", () => {
+    const row = validateRowForFormat(amazon, { ...sale, currency: "eur" }, 7, "dmy", "EUR");
+    expect(row.sheetCurrency).toBeNull();
+    expect(row.data?.currency).toBe("EUR");
   });
 });
 
@@ -683,10 +708,10 @@ describe("Amazon REFUND rows", () => {
     expect(validateRowForFormat(IMPORT_FORMATS.amazon, bare, 2).isRefund).toBe(true);
   });
 
-  it("still applies the currency guard to a refund row", () => {
+  it("still applies the currency guard to a refund row (implausible code)", () => {
     // The summary-row carve-out is scoped to that one heuristic, not an early
     // return — a refund in an unsupported currency must still be skipped.
-    expect(classifySkip(IMPORT_FORMATS.amazon, { ...refundRow, currency: "JPY" })).toBe(
+    expect(classifySkip(IMPORT_FORMATS.amazon, { ...refundRow, currency: "XYZ123" })).toBe(
       "unsupported currency",
     );
   });

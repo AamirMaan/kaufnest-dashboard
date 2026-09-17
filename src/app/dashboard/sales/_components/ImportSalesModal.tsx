@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useReducer } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale, updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -11,6 +11,9 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
+import { applyRate } from "@/lib/fx/convert";
+import { fxReviewReducer, resolveRowRate } from "@/components/import/fxReviewState";
+import { FxRateReview, type FxRateReviewRow } from "@/components/import/FxRateReview";
 import {
   detectDateOrder,
   firstAmbiguousDate,
@@ -118,6 +121,7 @@ interface Props {
 export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const inventoryItems = useAppSelector((s) => s.inventory.items);
+  const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const fileRef = useRef<HTMLInputElement>(null);
   const [formatId, setFormatId] = useState<ImportFormatId>("generic");
   const [parsedSource, setParsedSource] = useState<ParsedSource | null>(null);
@@ -126,6 +130,14 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [checking, setChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // FX rate review — only entered when the parsed file has rows in a
+  // currency other than `baseCurrency` (see the two-pass row lifecycle in
+  // the currency-conversion-at-import plan's "Implementation judgment
+  // calls").
+  const [fxReviewOpen, setFxReviewOpen] = useState(false);
+  const [fxState, fxDispatch] = useReducer(fxReviewReducer, { entries: {} });
+  const [fxRows, setFxRows] = useState<FxRateReviewRow[]>([]);
+  const [applyingRates, setApplyingRates] = useState(false);
   // null = trust detection. A non-null value is the user forcing an order,
   // which is only honoured when the file has no hard evidence to the contrary.
   const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
@@ -208,6 +220,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setDateDetection(null);
     setDateSample(undefined);
     setOrderSensitiveDates(true);
+    setFxReviewOpen(false);
+    setFxRows([]);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -232,6 +246,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setDateDetection(null);
     setDateSample(undefined);
     setOrderSensitiveDates(true);
+    setFxReviewOpen(false);
+    setFxRows([]);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -388,7 +404,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
     const dateOrder: DateOrder = override ?? detection.order;
     const validated = canonical.map((row, i) =>
-      validateRowForFormat(fmt, row, i + 2, dateOrder),
+      validateRowForFormat(fmt, row, i + 2, dateOrder, baseCurrency),
     );
     if (!isCurrent()) return; // a newer format/date-order change has already superseded this run
     setParsed(validated); // show validation results immediately…
@@ -396,10 +412,107 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       const deduped = await markDuplicates(validated, requestId); // …then refine with the dedup check
       if (!isCurrent()) return; // superseded while the dedup query was in flight
       setParsed(deduped);
+      await detectAndReviewFxRates(deduped, requestId, isCurrent);
     } catch (err) {
       if (!isCurrent()) return;
       setImportError(err instanceof Error ? err.message : "Duplicate check failed");
     }
+  }
+
+  /**
+   * Groups rows carrying a `sheetCurrency` (set by `validateRowForFormat`
+   * when a row's currency differs from `baseCurrency`) and, if any exist,
+   * fetches ECB rates for every (currency, date) pair and opens the FX
+   * review step. Rows already skipped/errored are excluded — there is
+   * nothing to convert in a row that will never be imported.
+   */
+  async function detectAndReviewFxRates(
+    rows: ParsedRow[],
+    requestId: number,
+    isCurrent: () => boolean,
+  ) {
+    const currencyGroups = new Map<string, { count: number; dates: string[] }>();
+    for (const row of rows) {
+      if (!row.sheetCurrency || row.skipped || row.error) continue;
+      const g = currencyGroups.get(row.sheetCurrency) ?? { count: 0, dates: [] };
+      g.count++;
+      if (row.data?.date) g.dates.push(row.data.date);
+      currencyGroups.set(row.sheetCurrency, g);
+    }
+    if (currencyGroups.size === 0) return;
+
+    const rowsSummary: FxRateReviewRow[] = Array.from(currencyGroups.entries()).map(
+      ([currency, g]) => {
+        const sortedDates = g.dates.slice().sort();
+        return {
+          currency,
+          rowCount: g.count,
+          dateSpan: { from: sortedDates[0], to: sortedDates.at(-1)! },
+        };
+      },
+    );
+    setFxRows(rowsSummary);
+
+    const pairs = rowsSummary.flatMap((r) =>
+      Array.from(new Set(currencyGroups.get(r.currency)!.dates)).map((date) => ({
+        currency: r.currency,
+        date,
+      })),
+    );
+
+    let rates: Record<string, { rate: number; rateDate: string }> = {};
+    let unresolved: string[] = [];
+    try {
+      const res = await fetch("/api/fx/rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base: baseCurrency, pairs }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          rates: Record<string, { rate: number; rateDate: string }>;
+          unresolved: string[];
+        };
+        rates = json.rates;
+        unresolved = json.unresolved;
+      } else {
+        // Every pair falls to manual entry — the review step still works,
+        // just without any ECB-resolved starting point.
+        unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
+      }
+    } catch {
+      unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
+    }
+    if (!isCurrent()) return; // superseded while the FX rate fetch was in flight
+
+    fxDispatch({
+      type: "init",
+      currencies: rowsSummary.map((r) => r.currency),
+      unresolvedCurrencies: Array.from(new Set(unresolved.map((k) => k.split(":")[0]))),
+    });
+    fxDispatch({ type: "ratesResolved", rates });
+    setFxReviewOpen(true);
+  }
+
+  async function handleConfirmRates() {
+    setApplyingRates(true);
+    const updated = parsed.map((row) => {
+      if (!row.sheetCurrency || !row.data) return row;
+      const resolved = resolveRowRate(row.sheetCurrency, row.data.date, fxState);
+      if (!resolved) return row; // shouldn't happen if isReviewComplete gated the button; defensive no-op
+      return { ...row, data: applyRate(row.data, row.sheetCurrency, resolved.rate, resolved.rateDate) };
+    });
+    setParsed(updated);
+    setFxReviewOpen(false);
+    setApplyingRates(false);
+  }
+
+  function handleCancelFxReview() {
+    // Cancelling the review abandons the whole file — there is no safe
+    // partial state where some rows are converted and others aren't, and
+    // re-selecting the file re-triggers the review from scratch.
+    blockRetry();
+    setImportError(null);
   }
 
   function handleFormatChange(next: ImportFormatId) {
@@ -733,14 +846,26 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       onClose={handleClose}
       title="Import Orders"
       footer={
-        <>
-          <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleImport} disabled={!canImport || loading}>
-            {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
-          </Button>
-        </>
+        fxReviewOpen ? undefined : (
+          <>
+            <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
+            <Button onClick={handleImport} disabled={!canImport || loading}>
+              {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
+            </Button>
+          </>
+        )
       }
     >
+      {fxReviewOpen ? (
+        <FxRateReview
+          rows={fxRows}
+          state={fxState}
+          dispatch={fxDispatch}
+          onCancel={handleCancelFxReview}
+          onConfirm={handleConfirmRates}
+          confirming={applyingRates}
+        />
+      ) : (
       <div className="space-y-4">
         <Field label="Import format">
           <Select
@@ -875,6 +1000,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
         )}
       </div>
+      )}
     </Modal>
   );
 }
