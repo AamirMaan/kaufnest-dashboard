@@ -99,6 +99,10 @@ function makeSale(overrides: Partial<Sale> = {}): Sale {
     shipping_country: null,
     buyer_phone: null,
     buyer_email: null,
+    original_currency: null,
+    original_total_amount: null,
+    fx_rate: null,
+    fx_rate_date: null,
     ...overrides,
   };
 }

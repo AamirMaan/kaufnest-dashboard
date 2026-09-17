@@ -70,6 +70,13 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   No plan tie — mirrors `ai_enabled`'s shape (007) but is a pure on/off
   toggle, not plan-gated. See
   `docs/superpowers/specs/2026-09-07-shipping-label-gating-and-detail-layout-design.md`.
+- `control-plane/011_fx_rates_cache.sql` — creates `control.fx_rates` cache
+  table (rate_date, currency, quote). Caches ECB daily reference rates (quote
+  per 1 EUR, not a derived pair rate) so repeated imports don't refetch the
+  same date. Global reference data, hence the control plane rather than a
+  tenant schema. See
+  `docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md`
+  section 1. Not yet applied to the live control-plane database.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,

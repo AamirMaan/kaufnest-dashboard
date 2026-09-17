@@ -222,6 +222,14 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
           </Field>
         </Row>
 
+        {expense?.original_currency && expense.original_total_amount !== null && expense.fx_rate !== null && (
+          <p className="text-xs text-[var(--color-text-faint)]">
+            Originally {expense.original_currency} {expense.original_total_amount.toFixed(2)} @{" "}
+            {expense.fx_rate.toFixed(5)}
+            {expense.fx_rate_date ? ` (ECB ${expense.fx_rate_date})` : ""}
+          </p>
+        )}
+
         <Field label="Vendor">
           <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
         </Field>

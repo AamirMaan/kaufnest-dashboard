@@ -35,10 +35,10 @@ export function normalizeHeader(raw: string): string {
 export const ALIASES: Record<string, string[]> = {
   // — shared —
   date: ["date", "datum", "bestelldatum", "verkaufsdatum", "rechnungsdatum", "belegdatum"],
-  currency: ["currency", "währung", "waehrung"],
+  currency: ["currency", "währung", "waehrung", "transaction_currency_code"],
   description: ["description", "beschreibung", "bemerkung", "notiz", "kommentar"],
   vat_rate: ["vat_rate", "vat rate", "vat", "mwst", "mwst-satz", "mwst.", "ust", "ust-satz", "steuersatz"],
-  vat_amount: ["vat_amount", "vat amount", "vat_betrag", "mwst_betrag", "mwstbetrag", "steuerbetrag"],
+  vat_amount: ["vat_amount", "vat amount", "vat_betrag", "mwst_betrag", "mwstbetrag", "steuerbetrag", "total_activity_value_vat_amt"],
 
   // — sales —
   product_name: ["product_name", "product", "artikel", "artikelname", "artikelbezeichnung", "titel", "produktname", "produkt"],

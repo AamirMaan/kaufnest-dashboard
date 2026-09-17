@@ -26,6 +26,7 @@ import {
   type DateOrder,
 } from "@/lib/utils/localeParse";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
 import { categoryFor } from "../_lib/expenseCategory";
 
 // No re-export of `resolveHeaders`/`canonicalizeRow` here. Sales re-exports
@@ -33,7 +34,6 @@ import { categoryFor } from "../_lib/expenseCategory";
 // the expenses modal is new code and imports them straight from
 // @/lib/utils/importAliases.
 
-const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 const VALID_CATEGORIES: ExpenseCategory[] = [
   "shipping", "advertising", "software", "office", "inventory", "tax", "salary", "other",
 ];
@@ -69,6 +69,13 @@ export interface ParsedExpenseRow {
   error: string | null;
   /** Set when the row is deliberately not imported rather than errored. */
   skipped?: SkipReason;
+  /**
+   * Set to the sheet's raw ISO code when this row's currency differs from
+   * the tenant's base currency — null when no conversion is needed. See
+   * `sheetCurrency` on Sales' `ParsedRow` (`importFormats.ts`) for the full
+   * two-pass row lifecycle this drives.
+   */
+  sheetCurrency?: string | null;
 }
 
 // ─── Header aliases (shared with Sales — see `lib/utils/importAliases`) ───────
@@ -180,8 +187,12 @@ export function classifySkip(
   const amount = parseLocaleNumber(amountRaw);
   if (amount === 0) return "zero amount";
 
+  // A recognized ISO-4217-shaped code (e.g. SEK) no longer skips — it routes
+  // through the FX rate review step instead (see `validateExpenseRow`'s
+  // `resolveSheetCurrency` call below). Only a non-blank, non-ISO-shaped
+  // value (garbled data) is still treated as unsupported.
   const currency = raw.currency?.trim().toUpperCase();
-  if (currency && !VALID_CURRENCIES.includes(currency as Currency)) {
+  if (currency && !isPlausibleIsoCode(currency)) {
     return "unsupported currency";
   }
   return null;
@@ -200,6 +211,11 @@ export function validateExpenseRow(
   raw: Record<string, string>,
   rowNum: number,
   dateOrder: DateOrder = "dmy",
+  // Defaulted to "EUR" for the same reason as Sales' validateRowForFormat
+  // (importFormats.ts) — avoids a mechanical argument addition across every
+  // existing test call site; ImportExpensesModal.tsx always passes the
+  // tenant's actual base currency.
+  baseCurrency: Currency = "EUR",
 ): ParsedExpenseRow {
   const fail = (error: string): ParsedExpenseRow => ({
     rowNum,
@@ -232,10 +248,11 @@ export function validateExpenseRow(
   }
   const amount = round2(parsedAmount);
 
-  const currency = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currency)) {
-    return fail(`invalid "currency" "${raw.currency}" — use: ${VALID_CURRENCIES.join(", ")}`);
+  const currencyResult = resolveSheetCurrency(raw.currency, baseCurrency);
+  if ("error" in currencyResult) {
+    return fail(currencyResult.error);
   }
+  const { currency, sheetCurrency } = currencyResult;
 
   // German ledgers write the rate as "19%"; `parseLocaleNumber` rejects the
   // percent sign outright, so rates go through `parseLocaleRate`.
@@ -397,7 +414,15 @@ export function validateExpenseRow(
       vat_amount: vatAmount,
       vendor_vat_number: vendorVatNumber,
       invoice_number: raw.invoice_number?.trim() || null,
+      // Left null at parse time regardless of sheetCurrency — the two-pass
+      // row lifecycle only converts (via applyRate) after the user confirms
+      // a rate in the FX review step (see ImportExpensesModal.tsx).
+      original_currency: null,
+      original_total_amount: null,
+      fx_rate: null,
+      fx_rate_date: null,
     },
     error: null,
+    sheetCurrency,
   };
 }

@@ -434,9 +434,18 @@ export default function SaleDetailPage({ params }: PageProps) {
             <FinRow
               label="Item Total"
               value={
-                <span className="font-semibold text-(--color-success)">
-                  {formatCurrency(sale.total_amount, sale.currency)}
-                </span>
+                <div>
+                  <span className="font-semibold text-(--color-success)">
+                    {formatCurrency(sale.total_amount, sale.currency)}
+                  </span>
+                  {sale.original_currency && sale.original_total_amount !== null && sale.fx_rate !== null && (
+                    <p className="text-xs text-(--color-text-faint) mt-1">
+                      Originally {sale.original_currency} {sale.original_total_amount.toFixed(2)} @{" "}
+                      {sale.fx_rate.toFixed(5)}
+                      {sale.fx_rate_date ? ` (ECB ${sale.fx_rate_date})` : ""}
+                    </p>
+                  )}
+                </div>
               }
             />
 

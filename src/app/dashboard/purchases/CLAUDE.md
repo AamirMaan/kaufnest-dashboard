@@ -30,6 +30,14 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 - `_components/AddPurchaseModal.tsx` / `EditPurchaseModal.tsx` — create/edit forms.
 - `_components/ImportPurchasesModal.tsx` — bulk CSV import: same pattern as
   `ImportSalesModal` but for purchases. See "CSV import/export" below.
+- `_components/purchaseImportFormats.ts` (+ colocated `.test.ts`, 2026-09-17)
+  — pure single-format registry (no format dropdown, unlike Sales — closer
+  to Expenses' shape): `PURCHASE_IMPORT_COLUMNS`, `TEMPLATE_HEADERS`
+  (derived from the columns so the two can't drift), `TEMPLATE_EXAMPLE`,
+  and `validatePurchaseRow(raw, rowNum, dateOrder, baseCurrency)`. Extracted
+  from what was previously inline in the modal — see "CSV import/export"
+  below for what it gained (German header aliases, flexible dates, decimal
+  commas, FX currency resolution) that the modal never had before.
 
 ## Delete gating (super_admin + permission overrides)
 
@@ -126,12 +134,45 @@ cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
 `exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
 total_amount, currency, vat_rate, vat_amount, description`.
 
-**Import** (`ImportPurchasesModal`): Required: `date` (YYYY-MM-DD),
-`product_name`, `quantity`, `unit_price`. Optional: `vendor`, `currency`
-(default EUR), `vat_rate`, `description`. `product_id` is NOT in the import
-format. `total_amount` and `vat_amount` are computed. All rows must be valid;
-one audit log entry for the batch (omit `entityId`).
+**Import** (`ImportPurchasesModal` + `purchaseImportFormats.ts`, extracted
+2026-09-17): Required: `date`, `product_name`, `quantity`, `unit_price`.
+Optional: `vendor`, `currency` (default EUR), `vat_rate`, `description`.
+`product_id` is NOT in the import format. `total_amount` and `vat_amount`
+are computed. All rows must be valid; one audit log entry for the batch
+(omit `entityId`).
+
+Before the 2026-09-17 extraction this modal read raw CSV header strings as
+row keys directly (`raw.date`, `raw.product_name`, …), so only exact
+English column names ever worked, `date` required the literal
+`YYYY-MM-DD` shape (a strict regex), and numbers went through raw
+`parseInt`/`parseFloat` (no decimal-comma tolerance). It now goes through
+`resolveHeaders`/`canonicalizeRow` (`@/lib/utils/importAliases`, shared
+with Sales/Expenses) and `parseFlexibleDate`/`parseLocaleNumber`
+(`@/lib/utils/localeParse`) — same German-header-alias and locale
+tolerance those two features already had. This is a strict superset: any
+file that imported successfully before still does.
+
+**Currency resolution routes through `resolveSheetCurrency`**
+(`@/lib/fx/convert.ts`) from the start (not a hardcoded EUR/USD/GBP
+allowlist) — a row whose `currency` column names a plausible ISO code
+other than the tenant's base currency sets `ParsedPurchaseRow.sheetCurrency`
+rather than erroring, ready for the FX rate review step.
+
+**FX rate review (Task 14, 2026-09-17)**: `handleFile`'s `.then` now calls
+`detectAndReviewFxRates` after parsing — groups any `sheetCurrency`-carrying
+rows, POSTs `/api/fx/rates`, and opens the shared `<FxRateReview>`
+component in place of the normal form; confirming applies the resolved
+rate via `applyRate` (`lib/fx/convert.ts`) to each row's
+`total_amount`/`vat_amount` directly (unlike Expenses, Purchase's money
+field IS already `total_amount`, so no field-name adapter is needed here).
+This modal has no format dropdown, so `fileReadIdRef` (claimed once per
+file read) is its only staleness guard — re-checked after both the parse
+and the new `/api/fx/rates` round trip, so a newer file selected while
+either is in flight can't land a stale result. Same shared step
+Sales/Expenses use (`ImportSalesModal.tsx`/`ImportExpensesModal.tsx`); see
+either file's CLAUDE.md section for the full two-pass row lifecycle.
 
 ## Tests
 
-`npx jest dashboard/purchases` runs `_store/purchasesSlice.test.ts`.
+`npx jest dashboard/purchases` runs `_store/purchasesSlice.test.ts` and
+`_components/purchaseImportFormats.test.ts`.

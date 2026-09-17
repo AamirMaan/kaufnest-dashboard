@@ -118,6 +118,10 @@ export async function POST(req: NextRequest) {
           vat_amount: null,
           sale_id: saleId,
           created_by: userId,
+          original_currency: null,
+          original_total_amount: null,
+          fx_rate: null,
+          fx_rate_date: null,
         });
       }
     }
