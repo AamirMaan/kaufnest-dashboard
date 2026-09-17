@@ -31,6 +31,7 @@ import {
   type ImportFormatId,
   type ParsedRow,
 } from "./importFormats";
+import { dedupeImportRows } from "./dedupeImportRows";
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
@@ -264,18 +265,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
    * block the import; skips don't.
    */
   async function markDuplicates(rows: ParsedRow[], requestId: number): Promise<ParsedRow[]> {
-    const seen = new Set<string>();
-    const withFileDupes = rows.map((r) => {
-      // REFUND rows are not new orders. They carry the external_order_id of an
-      // EXISTING sale by definition, so the dedup passes would mark every one
-      // "order already exists" and drop it before matching could run.
-      if (r.isRefund) return r;
-      if (!r.data?.external_order_id) return r;
-      const key = `${r.data.platform}:${r.data.external_order_id}`;
-      if (seen.has(key)) return { ...r, skipped: "duplicate in file" };
-      seen.add(key);
-      return r;
-    });
+    // In-file dedupe + composite-key disambiguation (platform, external_order_id,
+    // sku) — see dedupeImportRows.ts for why this must rewrite external_order_id
+    // itself, not just compare on it, given the DB's non-partial unique index on
+    // sales(platform, external_order_id).
+    const withFileDupes = dedupeImportRows(rows);
 
     const byPlatform = new Map<Platform, string[]>();
     for (const r of withFileDupes) {
@@ -655,11 +649,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         unmatchedRefunds.push(target.externalOrderId);
         continue;
       }
+      // The matching SALE line is stored under a composite external_order_id
+      // (`${orderId}:${sku}`, see dedupeImportRows.ts) whenever it has a sku —
+      // guaranteed here since `productId` only resolved above with a non-null
+      // `r.sku`. Querying the bare `target.externalOrderId` would find
+      // nothing for a multi-line order, since no row is stored under the
+      // bare order id anymore.
       const { data: match, error: matchErr } = await supabase
         .from("sales")
         .select("*")
         .eq("platform", target.platform)
-        .eq("external_order_id", target.externalOrderId)
+        .eq("external_order_id", `${target.externalOrderId}:${r.sku}`)
         .eq("product_id", productId)
         .limit(1);
       if (matchErr) {
