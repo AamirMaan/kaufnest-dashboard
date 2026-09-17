@@ -1,83 +1,25 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addPurchase } from "../_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { vatAmountFromGross } from "@/lib/utils/currency";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
-import type { Purchase, Currency } from "@/types";
-
-const VALID_CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
-
-const TEMPLATE_HEADERS = ["date", "product_name", "vendor", "quantity", "unit_price", "currency", "vat_rate", "description"];
-const TEMPLATE_EXAMPLE = ["2024-01-15", "Blue Widget", "Acme Supplies", "50", "4.99", "EUR", "19", "Sample purchase"];
-
-interface ParsedRow {
-  rowNum: number;
-  data: Omit<Purchase, "id" | "created_by" | "created_at" | "product_id"> | null;
-  error: string | null;
-}
-
-function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
-  const date = raw.date?.trim();
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid or missing "date" (expected YYYY-MM-DD)` };
-  }
-  const productName = raw.product_name?.trim();
-  if (!productName) {
-    return { rowNum, data: null, error: `Row ${rowNum}: missing "product_name"` };
-  }
-  const quantity = parseInt(raw.quantity?.trim(), 10);
-  if (!quantity || quantity <= 0) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "quantity" must be a positive integer` };
-  }
-  const unitPrice = parseFloat(raw.unit_price?.trim());
-  if (isNaN(unitPrice) || unitPrice <= 0) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "unit_price" must be a positive number` };
-  }
-  const currencyRaw = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currencyRaw)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: invalid "currency" "${raw.currency}" — use: EUR, USD, GBP` };
-  }
-  const vatRateRaw = raw.vat_rate?.trim();
-  const vatRate = vatRateRaw ? parseFloat(vatRateRaw) : null;
-  if (vatRate !== null && (isNaN(vatRate) || vatRate < 0 || vatRate > 100)) {
-    return { rowNum, data: null, error: `Row ${rowNum}: "vat_rate" must be between 0 and 100` };
-  }
-  const totalAmount = quantity * unitPrice;
-  const vatAmount = vatRate ? vatAmountFromGross(totalAmount, vatRate) : null;
-  return {
-    rowNum,
-    data: {
-      product_name: productName,
-      vendor: raw.vendor?.trim() || null,
-      quantity,
-      unit_price: unitPrice,
-      total_amount: totalAmount,
-      currency: currencyRaw,
-      date,
-      description: raw.description?.trim() || null,
-      vat_rate: vatRate,
-      vat_amount: vatAmount,
-      sale_id: null,
-      // Currency conversion is wired in a later change (Tasks 13-14 of the
-      // currency-conversion-at-import plan, which also extracts this
-      // inline parsing into purchaseImportFormats.ts) — every row imports
-      // as base-currency-unconverted for now, matching current behavior.
-      original_currency: null,
-      original_total_amount: null,
-      fx_rate: null,
-      fx_rate_date: null,
-    },
-    error: null,
-  };
-}
+import {
+  resolveHeaders,
+  canonicalizeRow,
+  validatePurchaseRow,
+  PURCHASE_IMPORT_COLUMNS,
+  TEMPLATE_HEADERS,
+  TEMPLATE_EXAMPLE,
+  type ParsedPurchaseRow,
+} from "./purchaseImportFormats";
+import type { Purchase } from "@/types";
 
 interface Props {
   open: boolean;
@@ -87,8 +29,9 @@ interface Props {
 
 export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const fileRef = useRef<HTMLInputElement>(null);
-  const [parsed, setParsed] = useState<ParsedRow[]>([]);
+  const [parsed, setParsed] = useState<ParsedPurchaseRow[]>([]);
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -118,13 +61,13 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
 
     const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
     const load = isExcel
-      ? new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
+      ? new Promise<{ headers: string[]; rows: Record<string, string>[] }>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (ev) => resolve(parseExcelBuffer(ev.target!.result as ArrayBuffer));
           reader.onerror = () => reject(reader.error);
           reader.readAsArrayBuffer(file);
         })
-      : new Promise<{ rows: Record<string, string>[] }>((resolve, reject) => {
+      : new Promise<{ headers: string[]; rows: Record<string, string>[] }>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (ev) => resolve(parseCsvText(ev.target?.result as string));
           reader.onerror = () => reject(reader.error);
@@ -132,12 +75,26 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
         });
 
     load
-      .then(({ rows }) => {
+      .then(({ headers, rows }) => {
         if (rows.length === 0) {
           setParsed([{ rowNum: 0, data: null, error: "File is empty or has no data rows." }]);
           return;
         }
-        setParsed(rows.map((row, i) => validateRow(row, i + 2)));
+        // Header-alias resolution (German names, unit suffixes) — gained by
+        // this task's parity refactor; the modal previously read raw CSV
+        // header strings as row keys directly, so only exact English
+        // column names ever worked.
+        const { mapping, missingRequired } = resolveHeaders(headers, PURCHASE_IMPORT_COLUMNS);
+        if (missingRequired.length > 0) {
+          setParsed([{
+            rowNum: 0,
+            data: null,
+            error: `Missing required column${missingRequired.length !== 1 ? "s" : ""}: ${missingRequired.join(", ")} — download the template or check your column names.`,
+          }]);
+          return;
+        }
+        const canonical = rows.map((row) => canonicalizeRow(row, mapping));
+        setParsed(canonical.map((row, i) => validatePurchaseRow(row, i + 2, "dmy", baseCurrency)));
       })
       .catch(() => {
         setParsed([{ rowNum: 0, data: null, error: "Could not read the file." }]);
