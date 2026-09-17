@@ -120,7 +120,12 @@ BEGIN
       vat_rate          numeric(5,2),
       vat_amount        numeric(12,2),
       vendor_vat_number text,
-      invoice_number    text
+      invoice_number    text,
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date
     )
   $sql$, schema_name);
 
@@ -142,6 +147,11 @@ BEGIN
       vat_rate     numeric(5,2),
       vat_amount   numeric(12,2),
       refunded_amount   numeric(12,2) CHECK (refunded_amount >= 0),
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date,
       status       text NOT NULL DEFAULT 'pending',
       restock      boolean NOT NULL DEFAULT false,
       external_order_id text,
@@ -189,7 +199,12 @@ BEGIN
       created_at   timestamptz NOT NULL DEFAULT now(),
       updated_at   timestamptz NOT NULL DEFAULT now(),
       vat_rate     numeric(5,2),
-      vat_amount   numeric(12,2)
+      vat_amount   numeric(12,2),
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date
     )
   $sql$, schema_name);
 
