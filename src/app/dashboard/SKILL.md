@@ -34,29 +34,14 @@ for why) and does its aggregation in `_lib/`. Stat cards come from
 
 ### Gotcha: Supabase's PostgREST "Max Rows" setting silently truncates below your `.limit()`
 
-A Supabase project's "Max Rows" API setting (Project Settings → API, default
-1000) caps **every** REST request's response at that many rows regardless of
-the `.limit()`/`.range()` width the client actually requested — no error, no
-warning, just fewer rows than asked for. Confirmed live: `tenant_k2_textil`
-has 1510 `sales` rows; a `.limit(5000)` query returned `Content-Range:
-0-999/1510` (curl against `/rest/v1/sales` with `Accept-Profile:
-tenant_k2_textil`, see git history for the fix commit). Any tenant whose row
-count crosses whatever that project's Max Rows setting is will silently get
-wrong Overview aggregates (revenue, VAT, net profit, order count) computed
-from only the most recent N rows — no loading error, so it looks like correct
-but small numbers, not a failure.
-
-**Fix**: use `@/lib/utils/fetchAllRows`, not a bare `.limit(N)` single
-request. It pages through `.range()` calls, using each response's *actual*
-returned row count (not the requested width) to advance the offset — so it
-self-adapts to whatever the server's real per-request cap is instead of
-assuming the requested width was honored. The 4 Overview queries in
-`page.tsx` and the Sales/Expenses/Purchases CSV export queries
-(`handleExport` in each feature's `page.tsx`) all go through it. It lives in
-`src/lib/utils/` (not this folder's `_lib/`) since it now services 4
-features — see AGENTS.md's shared-vs-feature-private rule. If you add a new
-"fetch everything matching a filter" query anywhere, use the same helper
-rather than a single `.limit()`.
+Full explanation, the decision framework for which fetch pattern to use, and
+the current audit of other places this bites: `BACKEND_ARCHITECTURE_PRINCIPLES.md`
+(sections 1 and Appendix A). Short version: a Supabase project's "Max Rows"
+API setting (default 1000) caps every REST request's response at that many
+rows regardless of the `.limit()`/`.range()` width requested, no error — use
+`@/lib/utils/fetchAllRows`, not a bare `.limit(N)`, for "fetch everything
+matching a filter." The 4 Overview queries in `page.tsx` and the
+Sales/Expenses/Purchases CSV export queries all go through it already.
 
 ## Test command
 
