@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removeExpense, fetchExpensesPage } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -23,6 +23,7 @@ import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
@@ -57,6 +58,28 @@ export default function ExpensesPage() {
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("expenses")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.date ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
@@ -105,6 +128,12 @@ export default function ExpensesPage() {
 
   function setFilter<K extends keyof ExpenseFilters>(key: K, value: ExpenseFilters[K]) {
     const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
     setFilters(next);
     applyFilters(next);
   }
@@ -306,6 +335,8 @@ export default function ExpensesPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         searchValue={filters.search}

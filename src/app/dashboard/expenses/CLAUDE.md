@@ -6,8 +6,10 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchExpensesPage` thunk),
-  `FilterBar` (date preset, currency, category, general keyword search across
-  title/vendor/description/invoice number), row selection, invoice trigger,
+  `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
+  see `components/ui/SKILL.md`'s FilterBar entry — currency, category,
+  general keyword search across title/vendor/description/invoice number),
+  row selection, invoice trigger,
   Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
   query, paginated via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see
   "CSV import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha),
