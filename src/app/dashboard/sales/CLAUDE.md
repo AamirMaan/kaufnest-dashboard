@@ -745,9 +745,20 @@ existing sale instead:
   an existing order id would raise a unique violation and fail the whole
   batch. Unlike the file-level skip reasons above, an unmatched/exceeded/
   already-applied refund is **not** surfaced as a `ParsedRow.skipped` reason
-  in the pre-import preview — matching only happens during `handleImport`,
-  and the outcome is reported post-import via `ImportSummary` (see the
-  `ImportSalesModal.tsx` bullet above) and `page.tsx`'s toast.
+  in the pre-import preview — matching only happens during `handleImport`.
+  **Unmatched refunds specifically (2026-09-17) block the success
+  toast**: `handleImport` builds the final `ImportSummary` as usual (sales
+  inserted, refunds applied/skipped are already committed either way — this
+  is a post-hoc gate, not a pre-write block) but, when `unmatchedRefunds.length
+  > 0`, stores it in `pendingUnmatchedRefunds` state instead of calling
+  `onSuccess`/`onClose` immediately. The modal renders a blocking list of the
+  unmatched order ids with an "Import anyway" button
+  (`finalizeImportAfterUnmatchedRefunds`) that finalizes the stored summary —
+  a real May 2026 sheet had 8 unmatched refunds (EUR 93.21) silently folded
+  into a single count before this. Exceeded/already-applied refunds are
+  unaffected — only a true no-match blocks. `reset()`/`blockRetry()` both
+  clear `pendingUnmatchedRefunds` so a stale warning can't survive a
+  file re-select.
 - **On a Supabase error matching or updating a refund** (`matchErr`/
   `updErr`), the modal clears `parsed` (`blockRetry()`) so Import cannot be
   re-clicked — a retry would re-insert the already-committed SALE rows and
