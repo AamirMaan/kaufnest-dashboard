@@ -325,7 +325,7 @@ export default function DashboardPage() {
       shippingFees,
       expenses,
       transferred,
-      pending: computePending(balance, ebayPayouts),
+      pending: computePending(balance, transferred),
       count: ebaySales.length,
     };
   }, [effectiveSales, periodExpenses, periodPayouts]);
@@ -349,7 +349,7 @@ export default function DashboardPage() {
       shippingFees,
       expenses,
       transferred,
-      pending: computePending(balance, amazonPayouts),
+      pending: computePending(balance, transferred),
       count: amazonSales.length,
     };
   }, [effectiveSales, periodExpenses, periodPayouts]);
