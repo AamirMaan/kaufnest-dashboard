@@ -183,12 +183,17 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
     deliberately does not (see `formatIdRef` below).
   - `requestIdRef`, claimed inside `parseAndValidate`, exists for structural
     parity with `ImportSalesModal` (where the awaited step is the
-    duplicate-check query). **It is currently unreachable**: `parseAndValidate`
-    is declared `async` but contains no `await`, so it runs to completion
-    synchronously and its check can never be false. Treat it as
-    future-proofing, not protection. If you add an `await` to that function,
-    only the writes **after** the existing check are covered — anything added
-    above it needs its own re-check.
+    duplicate-check query). **No longer unreachable** (2026-09-17): the FX
+    rate review step added a real `await fetch("/api/fx/rates")` inside
+    `parseAndValidate`, a genuine async gap. `isCurrent()` now checks
+    **both** `requestIdRef` (a newer format/file re-parse superseding this
+    one) **and** `fileReadIdRef` (a newer file selected while the FX fetch
+    was in flight — a format change alone doesn't bump `fileReadIdRef`, so
+    `requestIdRef` alone would miss that case). `fileReadIdRef.current` is
+    snapshotted at the top of `parseAndValidate`, before either await, and
+    compared again after — this works whether the call came from
+    `handleFormatChange` (no read in flight) or `handleFile`'s `.then` (past
+    its own `fileReadIdRef` check already).
   - `formatIdRef` mirrors `formatId` for the async read path, and
     `handleFormatChange` updates the ref **before** it re-parses. `handleFile`'s
     `.then` parses against `formatIdRef.current`, not the `formatId` its closure
@@ -196,6 +201,20 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
     format now selected.
   - **This is a deliberate divergence from `ImportSalesModal`** — see the
     SKILL.md gotcha before "aligning" the two.
+- **FX rate review (2026-09-17)**: a row whose `currency` column names a
+  plausible ISO code other than the tenant's base currency
+  (`resolveSheetCurrency`, `lib/fx/convert.ts`) no longer errors or gets
+  skipped — `validateExpenseRow` sets `ParsedExpenseRow.sheetCurrency` and
+  leaves the row's money fields unconverted. After `setParsed`,
+  `parseAndValidate` calls `detectAndReviewFxRates`, which groups those rows
+  by currency, POSTs `/api/fx/rates`, and opens the shared
+  `<FxRateReview>` component (`src/components/import/`) in place of the
+  normal form. Confirming (`handleConfirmRates`) applies the resolved rate
+  via `applyRate` (`lib/fx/convert.ts`) to each row's `amount`/`vat_amount`
+  — adapted through a small wrapper object since `applyRate`'s generic
+  constraint expects `total_amount`, not Expense's `amount`. Same shared
+  step Sales uses (`ImportSalesModal.tsx`); see that file's CLAUDE.md
+  section for the full two-pass row lifecycle.
 - **Header resolution**: `resolveHeaders(headers, format.columns)`; a
   non-empty `missingRequired` is a single **file-level** error naming the
   missing columns, and no rows are validated. Otherwise every row goes
