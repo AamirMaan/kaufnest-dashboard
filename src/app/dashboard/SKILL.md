@@ -27,10 +27,18 @@ Use this folder when the task is about:
 
 ## Overview page changes
 
-`page.tsx` fetches sales/expenses/purchases/platform_payouts directly via
-`createTenantClient()` into local `useState` (NOT Redux — see `dashboard/CLAUDE.md`
-for why) and does its aggregation in `_lib/`. Stat cards come from
-`components/ui/StatCard`.
+`page.tsx` fetches its four aggregates via `createTenantClient()` calling
+`supabase.rpc("get_sales_overview" | "get_expenses_overview" |
+"get_purchases_overview" | "get_payouts_overview", { p_from, p_to,
+p_currency })` (2026-09-17 rewire), storing each RPC's JSON result in local
+`useState` (NOT Redux — see `dashboard/CLAUDE.md` for why). Date-range and
+currency filtering happen in SQL now, not client-side. Derived values
+(`totalRevenue`, `monthlyTrend`, `platformData`, `computePlatformBalance()`,
+etc.) are plain reads/reshapes of those four objects — see `_lib/` in
+`dashboard/CLAUDE.md` for the two pure helpers still involved
+(`aggregateSaleRevenue`'s formula moved into the `get_sales_overview` SQL
+function itself; `computePending` still runs client-side). Stat cards come
+from `components/ui/StatCard`.
 
 ### Gotcha: Supabase's PostgREST "Max Rows" setting silently truncates below your `.limit()`
 
@@ -40,8 +48,11 @@ the current audit of other places this bites: `BACKEND_ARCHITECTURE_PRINCIPLES.m
 API setting (default 1000) caps every REST request's response at that many
 rows regardless of the `.limit()`/`.range()` width requested, no error — use
 `@/lib/utils/fetchAllRows`, not a bare `.limit(N)`, for "fetch everything
-matching a filter." The 4 Overview queries in `page.tsx` and the
-Sales/Expenses/Purchases CSV export queries all go through it already.
+matching a filter." **The Overview page (`page.tsx`) no longer exercises this
+gotcha at all** — as of the 2026-09-17 RPC rewire it fetches pre-aggregated
+JSON via `supabase.rpc(...)` instead of paging through raw rows, so don't be
+confused if you don't see a `fetchAllRows` call in `page.tsx` anymore. The
+Sales/Expenses/Purchases CSV export queries still go through it.
 
 ## Test command
 

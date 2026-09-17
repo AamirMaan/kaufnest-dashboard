@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { DollarSign, TrendingDown, ShoppingCart, BarChart3, Package } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
-import { type Currency, type Sale, type Expense, type Purchase, type PlatformPayout } from "@/types";
+import { type Currency } from "@/types";
 import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CategoryBadge } from "@/components/ui/Badge";
@@ -23,21 +23,66 @@ import { useTheme } from "@/components/ui/ThemeProvider";
 import { createTenantClient } from "@/lib/supabase/client";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
-import { resolveDateRange, isRevenueSale, type DatePreset } from "@/lib/utils/filters";
-import { aggregateSaleRevenue } from "./_lib/aggregateSales";
+import { resolveDateRange, type DatePreset } from "@/lib/utils/filters";
 import { computePending } from "./_lib/platformBalance";
-import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
 
-// Overall row cap per table below, fetched across as many .range() pages as
-// needed (see fetchAllRows) — matches the "capped at 5 000 rows" convention
-// already used by Sales/Expenses/Purchases' CSV export. A single-request
-// .limit(5000) is NOT enough: the Supabase project's PostgREST "Max Rows"
-// API setting silently truncates any one request to its own configured cap
-// (default 1000) regardless of .limit(), with no error — confirmed live on
-// tenant_k2_textil (1510 sales rows, Content-Range: 0-999/1510).
-const OVERVIEW_ROW_CAP = 5000;
+interface PlatformBucket {
+  platform: string;
+  value: number;
+}
+
+interface TopProductBucket {
+  name: string;
+  revenue: number;
+  units: number;
+}
+
+interface MonthlyBucket {
+  month: string;
+  revenue?: number;
+  amount?: number;
+}
+
+interface PlatformBalanceBucket {
+  platform: string;
+  sales: number;
+  adFees: number;
+  shippingFees: number;
+  count: number;
+}
+
+interface SalesOverview {
+  orderCount: number;
+  effectiveOrderCount: number;
+  unitsSold: number;
+  revenue: number;
+  fees: number;
+  vatCollected: number;
+  revenueByPlatform: PlatformBucket[];
+  topProducts: TopProductBucket[];
+  monthlyRevenue: MonthlyBucket[];
+  platformBalance: PlatformBalanceBucket[];
+}
+
+interface ExpensesOverview {
+  total: number;
+  vatPaid: number;
+  byCategory: { category: ExpenseCategory; amount: number }[];
+  monthlyExpenses: MonthlyBucket[];
+  platformSubtotal: { platform: string; amount: number }[];
+}
+
+interface PurchasesOverview {
+  total: number;
+  vatPaid: number;
+  monthlyPurchases: MonthlyBucket[];
+}
+
+interface PayoutsOverview {
+  transferred: { platform: string; amount: number }[];
+}
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "this_month", label: "This Month" },
@@ -102,19 +147,20 @@ export default function DashboardPage() {
     [preset, dateFrom, dateTo]
   );
 
-  // Sales/expenses/purchases/payouts for this page are fetched directly,
-  // scoped to the selected date range — NOT read from state.sales.items etc.
-  // Those Redux slices hold only ONE paginated page (50 rows, most-recent-
-  // first, see the Pagination architecture note in this folder's CLAUDE.md)
-  // and get replaced wholesale whenever the Sales/Expenses/Purchases pages
-  // fetch a different page — so deriving Overview's date-ranged aggregates
-  // from them silently produced wrong (often empty) results, e.g. the VAT
-  // Position section disappearing, once a tenant had more than one page of
-  // records or had recently paged through those tables elsewhere.
-  const [sales, setSales] = useState<Sale[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [payouts, setPayouts] = useState<PlatformPayout[]>([]);
+  // Sales/expenses/purchases/payouts aggregates for this page are fetched via
+  // 4 Postgres RPCs, scoped to the selected date range and profile currency —
+  // NOT read from state.sales.items etc. Those Redux slices hold only ONE
+  // paginated page (50 rows, most-recent-first, see the Pagination
+  // architecture note in this folder's CLAUDE.md) and get replaced wholesale
+  // whenever the Sales/Expenses/Purchases pages fetch a different page — so
+  // deriving Overview's date-ranged aggregates from them silently produced
+  // wrong (often empty) results, e.g. the VAT Position section disappearing,
+  // once a tenant had more than one page of records or had recently paged
+  // through those tables elsewhere.
+  const [salesOverview, setSalesOverview] = useState<SalesOverview | null>(null);
+  const [expensesOverview, setExpensesOverview] = useState<ExpensesOverview | null>(null);
+  const [purchasesOverview, setPurchasesOverview] = useState<PurchasesOverview | null>(null);
+  const [payoutsOverview, setPayoutsOverview] = useState<PayoutsOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -123,33 +169,29 @@ export default function DashboardPage() {
     async function load() {
       setIsLoading(true);
       const supabase = await createTenantClient();
+      const rpcParams = {
+        p_from: range?.from ?? null,
+        p_to: range?.to ?? null,
+        p_currency: profileCurrency,
+      };
 
-      function pageFetcher<T>(table: string) {
-        return async (from: number, to: number) => {
-          let query = supabase
-            .from(table)
-            .select("*", { count: "exact" })
-            .order("date", { ascending: false })
-            .range(from, to);
-          if (range) {
-            query = query.gte("date", range.from).lte("date", range.to);
-          }
-          return query.returns<T[]>();
-        };
-      }
-
-      const [salesRows, expensesRows, purchasesRows, payoutsRows] = await Promise.all([
-        fetchAllRows<Sale>(pageFetcher("sales"), OVERVIEW_ROW_CAP),
-        fetchAllRows<Expense>(pageFetcher("expenses"), OVERVIEW_ROW_CAP),
-        fetchAllRows<Purchase>(pageFetcher("purchases"), OVERVIEW_ROW_CAP),
-        fetchAllRows<PlatformPayout>(pageFetcher("platform_payouts"), OVERVIEW_ROW_CAP),
+      const [salesRes, expensesRes, purchasesRes, payoutsRes] = await Promise.all([
+        supabase.rpc("get_sales_overview", rpcParams),
+        supabase.rpc("get_expenses_overview", rpcParams),
+        supabase.rpc("get_purchases_overview", rpcParams),
+        supabase.rpc("get_payouts_overview", rpcParams),
       ]);
 
       if (cancelled) return;
-      setSales(salesRows);
-      setExpenses(expensesRows);
-      setPurchases(purchasesRows);
-      setPayouts(payoutsRows);
+      if (salesRes.error) console.error("get_sales_overview failed", salesRes.error);
+      if (expensesRes.error) console.error("get_expenses_overview failed", expensesRes.error);
+      if (purchasesRes.error) console.error("get_purchases_overview failed", purchasesRes.error);
+      if (payoutsRes.error) console.error("get_payouts_overview failed", payoutsRes.error);
+
+      setSalesOverview(salesRes.error ? null : (salesRes.data as SalesOverview));
+      setExpensesOverview(expensesRes.error ? null : (expensesRes.data as ExpensesOverview));
+      setPurchasesOverview(purchasesRes.error ? null : (purchasesRes.data as PurchasesOverview));
+      setPayoutsOverview(payoutsRes.error ? null : (payoutsRes.data as PayoutsOverview));
       setIsLoading(false);
     }
 
@@ -157,71 +199,27 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [range, profileCurrency]);
 
   // Guard against multi-currency totals: only include records in the profile
   // currency so EUR + USD + GBP are never summed into a single meaningless number.
-  const periodSales = useMemo(
-    () =>
-      sales.filter(
-        (s) =>
-          s.currency === profileCurrency &&
-          (range ? s.date >= range.from && s.date <= range.to : true)
-      ),
-    [sales, range, profileCurrency]
-  );
-  const periodExpenses = useMemo(
-    () =>
-      expenses.filter(
-        (e) =>
-          e.currency === profileCurrency &&
-          (range ? e.date >= range.from && e.date <= range.to : true)
-      ),
-    [expenses, range, profileCurrency]
-  );
-  const periodPurchases = useMemo(
-    () =>
-      purchases.filter(
-        (p) =>
-          p.currency === profileCurrency &&
-          (range ? p.date >= range.from && p.date <= range.to : true)
-      ),
-    [purchases, range, profileCurrency]
-  );
-  const periodPayouts = useMemo(
-    () =>
-      payouts.filter(
-        (p) =>
-          p.currency === profileCurrency &&
-          (range ? p.date >= range.from && p.date <= range.to : true)
-      ),
-    [payouts, range, profileCurrency]
-  );
-
-  // Returned/cancelled orders don't contribute to revenue/profit — exclude them
-  // from every revenue-derived figure below, but keep periodSales.length (total
-  // orders placed, including returns/cancellations) for the "Orders" StatCard.
-  const effectiveSales = useMemo(
-    () => periodSales.filter(isRevenueSale),
-    [periodSales]
-  );
-
-  const { revenue: totalRevenue, fees: totalSaleFees } = useMemo(
-    () => aggregateSaleRevenue(effectiveSales),
-    [effectiveSales]
-  );
-  const totalExpenses = periodExpenses.reduce((s, r) => s + r.amount, 0);
-  const totalPurchases = periodPurchases.reduce((s, r) => s + r.total_amount, 0);
+  // (Currency filtering and date-range filtering now happen in SQL — the RPCs
+  // are called with p_currency/p_from/p_to above.)
+  const totalRevenue = salesOverview?.revenue ?? 0;
+  const totalSaleFees = salesOverview?.fees ?? 0;
+  const totalExpenses = expensesOverview?.total ?? 0;
+  const totalPurchases = purchasesOverview?.total ?? 0;
   const netProfit = calculateNetProfit(totalRevenue, totalExpenses + totalSaleFees, totalPurchases);
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
-  const avgOrderValue = effectiveSales.length > 0 ? totalRevenue / effectiveSales.length : null;
-  const unitsSold = effectiveSales.reduce((s, r) => s + r.quantity, 0);
+  const avgOrderValue =
+    salesOverview && salesOverview.effectiveOrderCount > 0
+      ? totalRevenue / salesOverview.effectiveOrderCount
+      : null;
+  const unitsSold = salesOverview?.unitsSold ?? 0;
 
   // VAT position
-  const vatCollected = effectiveSales.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
-  const vatPaid =
-    periodPurchases.reduce((s, r) => s + (r.vat_amount ?? 0), 0) +
-    periodExpenses.reduce((s, r) => s + (r.vat_amount ?? 0), 0);
+  const vatCollected = salesOverview?.vatCollected ?? 0;
+  const vatPaid = (purchasesOverview?.vatPaid ?? 0) + (expensesOverview?.vatPaid ?? 0);
   const vatPosition = vatCollected - vatPaid;
   // `!== 0`, not `> 0`: expenses may be NEGATIVE (credit notes), so their
   // input tax is negative too. Filter to a period holding only refunds and
@@ -229,132 +227,97 @@ export default function DashboardPage() {
   // entire VAT Position section despite there being real input tax to report.
   const hasVatData = vatCollected !== 0 || vatPaid !== 0;
 
-  // Monthly trend data — grouped by YYYY-MM
+  // Monthly trend data — grouped by YYYY-MM, merging the three RPCs' monthly series
   const monthlyTrend = useMemo(() => {
     const map = new Map<string, { revenue: number; expenses: number; purchases: number }>();
     const get = (k: string) => map.get(k) ?? { revenue: 0, expenses: 0, purchases: 0 };
 
-    // Group sales by month and use aggregateSaleRevenue per month
-    const salesByMonth = new Map<string, typeof effectiveSales>();
-    for (const s of effectiveSales) {
-      const k = s.date.slice(0, 7);
-      if (!salesByMonth.has(k)) salesByMonth.set(k, []);
-      salesByMonth.get(k)!.push(s);
+    for (const { month, revenue } of salesOverview?.monthlyRevenue ?? []) {
+      map.set(month, { ...get(month), revenue: revenue ?? 0 });
     }
-    for (const [k, monthlySales] of salesByMonth) {
-      const { revenue } = aggregateSaleRevenue(monthlySales);
-      const e = get(k);
-      map.set(k, { ...e, revenue });
+    for (const { month, amount } of expensesOverview?.monthlyExpenses ?? []) {
+      const entry = get(month);
+      map.set(month, { ...entry, expenses: entry.expenses + (amount ?? 0) });
+    }
+    for (const { month, amount } of purchasesOverview?.monthlyPurchases ?? []) {
+      const entry = get(month);
+      map.set(month, { ...entry, purchases: entry.purchases + (amount ?? 0) });
     }
 
-    for (const e of periodExpenses) {
-      const k = e.date.slice(0, 7);
-      const entry = get(k);
-      map.set(k, { ...entry, expenses: entry.expenses + e.amount });
-    }
-    for (const p of periodPurchases) {
-      const k = p.date.slice(0, 7);
-      const entry = get(k);
-      map.set(k, { ...entry, purchases: entry.purchases + p.total_amount });
-    }
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([ym, data]) => ({
         month: new Date(`${ym}-15`).toLocaleString("default", { month: "short", year: "2-digit" }),
         ...data,
       }));
-  }, [effectiveSales, periodExpenses, periodPurchases]);
+  }, [salesOverview, expensesOverview, purchasesOverview]);
 
   // Revenue by platform — includes fill colour so recharts v3 Pie can skip Cell
   const platformData = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const s of effectiveSales) {
-      map.set(s.platform, (map.get(s.platform) ?? 0) + s.total_amount);
-    }
-    return Array.from(map.entries())
-      .map(([key, value], index) => ({
-        key,
-        name: key.charAt(0).toUpperCase() + key.slice(1),
+    return (salesOverview?.revenueByPlatform ?? [])
+      .map(({ platform, value }, index) => ({
+        key: platform,
+        name: platform.charAt(0).toUpperCase() + platform.slice(1),
         value,
-        fill: platformColor(key, index),
+        fill: platformColor(platform, index),
       }))
       .sort((a, b) => b.value - a.value);
-  }, [effectiveSales]);
+  }, [salesOverview]);
 
-  // Top 5 products by revenue
-  const topProducts = useMemo(() => {
-    const map = new Map<string, { revenue: number; units: number }>();
-    for (const s of effectiveSales) {
-      const e = map.get(s.product_name) ?? { revenue: 0, units: 0 };
-      map.set(s.product_name, { revenue: e.revenue + s.total_amount, units: e.units + s.quantity });
-    }
-    return Array.from(map.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  }, [effectiveSales]);
+  // Top 5 products by revenue — RPC already grouped and sliced to top 5
+  const topProducts = salesOverview?.topProducts ?? [];
 
-  // Expenses by category
-  const expensesByCategory = useMemo(() => {
-    const map = new Map<ExpenseCategory, number>();
-    for (const e of periodExpenses) {
-      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
-    }
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-  }, [periodExpenses]);
+  // Expenses by category — kept as a [category, amount] tuple array so the
+  // JSX below (which destructures `.map(([category, amount]) => ...)`) is unchanged
+  const expensesByCategory: [ExpenseCategory, number][] =
+    (expensesOverview?.byCategory ?? []).map((c) => [c.category, c.amount]);
 
   // Platform balance helpers: gross sales minus ad fees, outbound shipping, and any
-  // periodExpenses whose vendor or title contains the platform name (case-insensitive).
-  // Returns null when there are no effective sales for that platform (card is hidden).
-  const ebayBalance = useMemo(() => {
-    const ebaySales = effectiveSales.filter((s) => s.platform === "ebay");
-    if (ebaySales.length === 0) return null;
-    const sales = ebaySales.reduce((acc, s) => acc + s.total_amount, 0);
-    const adFees = ebaySales.reduce((acc, s) => acc + (s.advertising_fee ?? 0), 0);
-    const shippingFees = ebaySales.reduce((acc, s) => acc + (s.shipping_cost ?? 0), 0);
-    const expenses = periodExpenses
-      .filter((e) => e.vendor?.toLowerCase().includes("ebay") || e.title.toLowerCase().includes("ebay"))
-      .reduce((acc, e) => acc + e.amount, 0);
-    const balance = sales - adFees - shippingFees - expenses;
-    const ebayPayouts = periodPayouts.filter((p) => p.platform === "ebay");
-    const transferred = ebayPayouts.reduce((acc, p) => acc + p.amount, 0);
+  // platform-tagged expense subtotal returned by get_expenses_overview, combined
+  // with recorded payouts from get_payouts_overview. Returns null when there is
+  // no sales bucket for that platform in the period (card is hidden).
+  function computePlatformBalance(
+    platform: "ebay" | "amazon"
+  ): {
+    balance: number;
+    sales: number;
+    adFees: number;
+    shippingFees: number;
+    expenses: number;
+    transferred: number;
+    pending: number;
+    count: number;
+  } | null {
+    const bucket = salesOverview?.platformBalance.find((p) => p.platform === platform);
+    if (!bucket) return null;
+    const expenses = expensesOverview?.platformSubtotal.find((p) => p.platform === platform)?.amount ?? 0;
+    const balance = bucket.sales - bucket.adFees - bucket.shippingFees - expenses;
+    const transferred = payoutsOverview?.transferred.find((p) => p.platform === platform)?.amount ?? 0;
     return {
       balance,
-      sales,
-      adFees,
-      shippingFees,
+      sales: bucket.sales,
+      adFees: bucket.adFees,
+      shippingFees: bucket.shippingFees,
       expenses,
       transferred,
       pending: computePending(balance, transferred),
-      count: ebaySales.length,
+      count: bucket.count,
     };
-  }, [effectiveSales, periodExpenses, periodPayouts]);
+  }
 
-  const amazonBalance = useMemo(() => {
-    const amazonSales = effectiveSales.filter((s) => s.platform === "amazon");
-    if (amazonSales.length === 0) return null;
-    const sales = amazonSales.reduce((acc, s) => acc + s.total_amount, 0);
-    const adFees = amazonSales.reduce((acc, s) => acc + (s.advertising_fee ?? 0), 0);
-    const shippingFees = amazonSales.reduce((acc, s) => acc + (s.shipping_cost ?? 0), 0);
-    const expenses = periodExpenses
-      .filter((e) => e.vendor?.toLowerCase().includes("amazon") || e.title.toLowerCase().includes("amazon"))
-      .reduce((acc, e) => acc + e.amount, 0);
-    const balance = sales - adFees - shippingFees - expenses;
-    const amazonPayouts = periodPayouts.filter((p) => p.platform === "amazon");
-    const transferred = amazonPayouts.reduce((acc, p) => acc + p.amount, 0);
-    return {
-      balance,
-      sales,
-      adFees,
-      shippingFees,
-      expenses,
-      transferred,
-      pending: computePending(balance, transferred),
-      count: amazonSales.length,
-    };
-  }, [effectiveSales, periodExpenses, periodPayouts]);
+  const ebayBalance = useMemo(
+    () => computePlatformBalance("ebay"),
+    [salesOverview, expensesOverview, payoutsOverview]
+  );
+  const amazonBalance = useMemo(
+    () => computePlatformBalance("amazon"),
+    [salesOverview, expensesOverview, payoutsOverview]
+  );
 
-  const showCharts = periodSales.length > 0 || periodExpenses.length > 0 || periodPurchases.length > 0;
+  const showCharts =
+    (salesOverview?.orderCount ?? 0) > 0 ||
+    (expensesOverview?.monthlyExpenses.length ?? 0) > 0 ||
+    (purchasesOverview?.monthlyPurchases.length ?? 0) > 0;
 
   // Chart palette — recharts props are SVG attributes so CSS vars don't reliably resolve there;
   // use concrete hex values derived from the current theme instead.
@@ -450,7 +413,7 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Orders"
-          value={periodSales.length.toLocaleString()}
+          value={(salesOverview?.orderCount ?? 0).toLocaleString()}
           subtext={`${unitsSold} unit${unitsSold !== 1 ? "s" : ""} sold`}
           trend="neutral"
           icon={<Package size={18} />}
