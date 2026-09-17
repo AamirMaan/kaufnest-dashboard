@@ -139,6 +139,18 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [fxState, fxDispatch] = useReducer(fxReviewReducer, { entries: {} });
   const [fxRows, setFxRows] = useState<FxRateReviewRow[]>([]);
   const [applyingRates, setApplyingRates] = useState(false);
+  // Set once handleImport finishes writing (sales inserted, refunds
+  // applied/skipped) if any refund found no matching order — the writes are
+  // already committed at this point (a real Amazon report bundles a SALE
+  // and its REFUND in the same file, so matching runs after the insert; see
+  // "The insert must stay before the refund loop" in this file). This is a
+  // post-hoc acknowledgement gate on the success toast, not a pre-write
+  // block — non-null blocks `onSuccess`/`onClose` until the user
+  // acknowledges via "Import anyway".
+  const [pendingUnmatchedRefunds, setPendingUnmatchedRefunds] = useState<{
+    orderIds: string[];
+    summary: ImportSummary;
+  } | null>(null);
   // null = trust detection. A non-null value is the user forcing an order,
   // which is only honoured when the file has no hard evidence to the contrary.
   const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
@@ -223,6 +235,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setOrderSensitiveDates(true);
     setFxReviewOpen(false);
     setFxRows([]);
+    setPendingUnmatchedRefunds(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -249,6 +262,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setOrderSensitiveDates(true);
     setFxReviewOpen(false);
     setFxRows([]);
+    setPendingUnmatchedRefunds(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -827,16 +841,36 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       if (refundBatchLog) dispatch(addAuditLog(refundBatchLog));
     }
 
-    setLoading(false);
-    reset();
-    onSuccess({
+    const summary: ImportSummary = {
       inserted: inserted.length,
       skippedRows: skipped.length,
       refundsApplied: appliedRefunds,
       refundsSkipped: unmatchedRefunds.length,
       refundsExceeded: exceededRefunds.length,
       refundsAlreadyApplied: alreadyRefunded.length,
-    });
+    };
+    setLoading(false);
+    // 30 REFUND rows on a real May 2026 sheet; 8 matched no sale in the
+    // file and were counted in the summary, then discarded — an
+    // understatement of returns in a filed VAT figure. Block the success
+    // toast behind an explicit acknowledgement listing the unmatched order
+    // ids, rather than letting them disappear into a single "8 unmatched"
+    // count. The writes above are already committed either way.
+    if (unmatchedRefunds.length > 0) {
+      setPendingUnmatchedRefunds({ orderIds: unmatchedRefunds, summary });
+      return;
+    }
+    reset();
+    onSuccess(summary);
+    onClose();
+  }
+
+  function finalizeImportAfterUnmatchedRefunds() {
+    if (!pendingUnmatchedRefunds) return;
+    const { summary } = pendingUnmatchedRefunds;
+    setPendingUnmatchedRefunds(null);
+    reset();
+    onSuccess(summary);
     onClose();
   }
 
@@ -846,7 +880,12 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       onClose={handleClose}
       title="Import Orders"
       footer={
-        fxReviewOpen ? undefined : (
+        pendingUnmatchedRefunds ? (
+          <>
+            <Button variant="secondary" onClick={handleClose}>Close</Button>
+            <Button onClick={finalizeImportAfterUnmatchedRefunds}>Import anyway</Button>
+          </>
+        ) : fxReviewOpen ? undefined : (
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
@@ -856,7 +895,25 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         )
       }
     >
-      {fxReviewOpen ? (
+      {pendingUnmatchedRefunds ? (
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-danger)]">
+            {pendingUnmatchedRefunds.orderIds.length} refund
+            {pendingUnmatchedRefunds.orderIds.length !== 1 ? "s" : ""} in this file matched no order —
+            the sales rows and any other refunds from this import have already been saved.
+          </p>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            These order ids weren&apos;t found (a different platform, an order outside this
+            file, or one this file didn&apos;t include). Leaving them unacknowledged
+            understates returns in your VAT figures — check them before continuing.
+          </p>
+          <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)] p-3 space-y-1 max-h-40 overflow-y-auto">
+            {pendingUnmatchedRefunds.orderIds.map((id) => (
+              <p key={id} className="text-xs text-[var(--color-danger)]">{id}</p>
+            ))}
+          </div>
+        </div>
+      ) : fxReviewOpen ? (
         <FxRateReview
           rows={fxRows}
           state={fxState}
