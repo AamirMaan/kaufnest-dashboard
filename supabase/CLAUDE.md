@@ -378,6 +378,21 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   shipping-label-generation feature (`src/lib/shipping/`,
   `src/app/api/shipping/`, `src/app/dashboard/sales/[id]/page.tsx`'s
   Shipping card).
+- `migrations/045_overview_aggregation_functions.sql` — adds four
+  `LANGUAGE sql STABLE` functions (`get_sales_overview`,
+  `get_expenses_overview`, `get_purchases_overview`, `get_payouts_overview`)
+  to every tenant schema via `run_on_all_tenant_schemas`; also mirrored
+  into `provision_tenant_schema()` in the same commit. Each takes
+  `(p_from date, p_to date, p_currency text)` and returns a small `jsonb`
+  aggregate instead of rows — replaces the Overview page's
+  `fetchAllRows`-based client-side aggregation. Not `SECURITY DEFINER`, so
+  existing RLS `_select` policies still gate visibility. See
+  `docs/superpowers/specs/2026-09-16-overview-rpc-aggregation-design.md`
+  for the full design, including the "Business logic inventory" of
+  intentional quirks this SQL reproduces exactly (two distinct revenue
+  formulas, `advertising_fee`-only balance-card fees, hardcoded
+  ebay/amazon-only platform breakdowns). Backs the Overview page
+  (`src/app/dashboard/page.tsx`).
 
 ## Related code
 
