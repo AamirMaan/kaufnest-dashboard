@@ -156,10 +156,21 @@ file that imported successfully before still does.
 (`@/lib/fx/convert.ts`) from the start (not a hardcoded EUR/USD/GBP
 allowlist) — a row whose `currency` column names a plausible ISO code
 other than the tenant's base currency sets `ParsedPurchaseRow.sheetCurrency`
-rather than erroring, ready for the FX rate review step. As of this
-extraction (Task 13 of the currency-conversion-at-import plan) the modal
-does not yet ACT on `sheetCurrency` — every row still imports
-base-currency-unconverted regardless — that wiring is Task 14.
+rather than erroring, ready for the FX rate review step.
+
+**FX rate review (Task 14, 2026-09-17)**: `handleFile`'s `.then` now calls
+`detectAndReviewFxRates` after parsing — groups any `sheetCurrency`-carrying
+rows, POSTs `/api/fx/rates`, and opens the shared `<FxRateReview>`
+component in place of the normal form; confirming applies the resolved
+rate via `applyRate` (`lib/fx/convert.ts`) to each row's
+`total_amount`/`vat_amount` directly (unlike Expenses, Purchase's money
+field IS already `total_amount`, so no field-name adapter is needed here).
+This modal has no format dropdown, so `fileReadIdRef` (claimed once per
+file read) is its only staleness guard — re-checked after both the parse
+and the new `/api/fx/rates` round trip, so a newer file selected while
+either is in flight can't land a stale result. Same shared step
+Sales/Expenses use (`ImportSalesModal.tsx`/`ImportExpensesModal.tsx`); see
+either file's CLAUDE.md section for the full two-pass row lifecycle.
 
 ## Tests
 
