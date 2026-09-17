@@ -105,6 +105,10 @@ const completeSale: Sale = {
   ebay_fulfillment_id: null,
   ebay_sync_error: null,
   ebay_synced_at: null,
+  original_currency: null,
+  original_total_amount: null,
+  fx_rate: null,
+  fx_rate_date: null,
 };
 
 describe("addressFromSale", () => {

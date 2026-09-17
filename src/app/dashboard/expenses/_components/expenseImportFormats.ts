@@ -397,6 +397,13 @@ export function validateExpenseRow(
       vat_amount: vatAmount,
       vendor_vat_number: vendorVatNumber,
       invoice_number: raw.invoice_number?.trim() || null,
+      // Currency conversion is wired in a later change to this file (Task
+      // 12 of the currency-conversion-at-import plan) — every row imports
+      // as base-currency-unconverted for now, matching current behavior.
+      original_currency: null,
+      original_total_amount: null,
+      fx_rate: null,
+      fx_rate_date: null,
     },
     error: null,
   };

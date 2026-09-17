@@ -24,6 +24,10 @@ const makePurchase = (overrides: Partial<Purchase> = {}): Purchase => ({
   vat_rate: null,
   vat_amount: null,
   sale_id: null,
+  original_currency: null,
+  original_total_amount: null,
+  fx_rate: null,
+  fx_rate_date: null,
   ...overrides,
 });
 

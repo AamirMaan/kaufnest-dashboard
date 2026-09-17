@@ -66,6 +66,14 @@ function validateRow(raw: Record<string, string>, rowNum: number): ParsedRow {
       vat_rate: vatRate,
       vat_amount: vatAmount,
       sale_id: null,
+      // Currency conversion is wired in a later change (Tasks 13-14 of the
+      // currency-conversion-at-import plan, which also extracts this
+      // inline parsing into purchaseImportFormats.ts) — every row imports
+      // as base-currency-unconverted for now, matching current behavior.
+      original_currency: null,
+      original_total_amount: null,
+      fx_rate: null,
+      fx_rate_date: null,
     },
     error: null,
   };

@@ -39,6 +39,10 @@ const existingSale: Sale = {
   shipping_country: "DE",
   buyer_phone: "+49 30 1234567",
   buyer_email: "jane@example.com",
+  original_currency: null,
+  original_total_amount: null,
+  fx_rate: null,
+  fx_rate_date: null,
 };
 
 // An incoming sync row for the same order (with different platform-owned fields,
@@ -80,6 +84,10 @@ const incomingSale: Sale = {
   shipping_country: null,
   buyer_phone: null,
   buyer_email: null,
+  original_currency: null,
+  original_total_amount: null,
+  fx_rate: null,
+  fx_rate_date: null,
 };
 
 describe("mergeImportedSale", () => {

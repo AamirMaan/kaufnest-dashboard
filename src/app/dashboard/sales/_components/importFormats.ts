@@ -557,6 +557,13 @@ export function validateRowForFormat(
       ebay_fulfillment_id: null,
       ebay_sync_error: null,
       ebay_synced_at: null,
+      // Currency conversion is wired in a later change to this file (Task 9
+      // of the currency-conversion-at-import plan) — every row imports as
+      // base-currency-unconverted for now, matching current behavior.
+      original_currency: null,
+      original_total_amount: null,
+      fx_rate: null,
+      fx_rate_date: null,
       buyer_name: null,
       shipping_address_line1: null,
       shipping_address_line2: null,
