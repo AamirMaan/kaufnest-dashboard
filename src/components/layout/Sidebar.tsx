@@ -18,6 +18,7 @@ import {
   Package,
   Tag,
   MessageSquare,
+  LifeBuoy,
   X,
   ChevronLeft,
   ChevronRight,
@@ -102,6 +103,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Planner",
     href: "/dashboard/planner",
     Icon: Calculator,
+    roles: ["super_admin", "admin", "accountant"],
+  },
+  {
+    label: "Support",
+    href: "/dashboard/support",
+    Icon: LifeBuoy,
     roles: ["super_admin", "admin", "accountant"],
   },
   {

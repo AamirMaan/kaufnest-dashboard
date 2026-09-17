@@ -13,6 +13,7 @@ import { platformPayoutsSlice } from "./slices/platformPayoutsSlice";
 import { listingsSlice } from "@/app/dashboard/listings/_store/listingsSlice";
 import { messagesSlice } from "@/app/dashboard/messages/_store/messagesSlice";
 import { notificationsSlice } from "./slices/notificationsSlice";
+import { supportSlice } from "@/app/dashboard/support/_store/supportSlice";
 
 export const makeStore = () =>
   configureStore({
@@ -31,6 +32,7 @@ export const makeStore = () =>
       listings: listingsSlice.reducer,
       messages: messagesSlice.reducer,
       notifications: notificationsSlice.reducer,
+      support: supportSlice.reducer,
     },
   });
 

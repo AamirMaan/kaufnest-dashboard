@@ -135,6 +135,7 @@ this shape: extracting it is what makes it testable without rendering the page.
 | `integrations/` | `/dashboard/integrations` | eBay/Amazon platform connections, `integrationsSlice` (Pro/Business plans only, see its CLAUDE.md) |
 | `listings/` | `/dashboard/listings` | eBay listing creation (draft → publish), `listingsSlice` (Pro/Business plans only, `manage_listings` permission) |
 | `messages/` | `/dashboard/messages` | eBay buyer message sync/reply, `messagesSlice` (Pro/Business plans only, `manage_messages` permission) |
+| `support/` | `/dashboard/support` | bug reports + tenant-scoped tracker board, `supportSlice` (all roles, all plans, see its CLAUDE.md) |
 
 ## Shared shell components (live outside, in `src/components/layout/`)
 

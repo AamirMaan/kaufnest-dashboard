@@ -192,9 +192,11 @@ export type NotificationType =
   | "sale.created"
   | "purchase.created"
   | "product.low_stock"
-  | "message.received";
+  | "message.received"
+  | "support.status_changed"
+  | "support.replied";
 
-export type NotificationCategory = "orders" | "purchases" | "inventory" | "messages";
+export type NotificationCategory = "orders" | "purchases" | "inventory" | "messages" | "support";
 
 export interface Notification {
   id: string;
@@ -220,6 +222,51 @@ export interface NotificationRead {
   notification_id: string;
   user_id: string;
   read_at: string;
+}
+
+// ─── Support / Bug Tracker ────────────────────────────────────────────────────
+
+export type BugReportType = "bug" | "feature" | "question";
+export type BugSeverity = "low" | "normal" | "high" | "critical";
+export type BugReportStatus = "reported" | "in_progress" | "fixed" | "wont_fix";
+
+/** Trello attachment metadata. The file itself never touches our storage. */
+export interface BugAttachment {
+  id: string;
+  name: string;
+  mime: string;
+  bytes: number;
+}
+
+export interface BugReportReply {
+  id: string;
+  report_id: string;
+  body: string;
+  author: string | null;
+  created_at: string;
+}
+
+export interface BugReport {
+  id: string;
+  tenant_id: string;
+  reporter_user_id: string;
+  reporter_email: string;
+  type: BugReportType;
+  severity: BugSeverity;
+  title: string;
+  description: string;
+  status: BugReportStatus;
+  page_url: string | null;
+  context: Record<string, unknown> | null;
+  attachments: BugAttachment[];
+  /** Null when the Trello card could not be created — see the orphan flow. */
+  trello_card_id: string | null;
+  trello_card_url: string | null;
+  created_at: string;
+  updated_at: string;
+  last_synced_at: string | null;
+  /** Joined by /api/support/reports; absent on optimistic client inserts. */
+  replies?: BugReportReply[];
 }
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
