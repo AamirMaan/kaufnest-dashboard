@@ -21,4 +21,9 @@ CREATE TABLE IF NOT EXISTS control.fx_rates (
   PRIMARY KEY (rate_date, currency)
 );
 
+-- Only service_role (which bypasses RLS) ever touches this table — RLS is
+-- enabled with no policies as defense-in-depth against a future accidental
+-- grant to anon/authenticated, not because any such grant exists today.
+ALTER TABLE control.fx_rates ENABLE ROW LEVEL SECURITY;
+
 GRANT SELECT, INSERT ON control.fx_rates TO service_role;
