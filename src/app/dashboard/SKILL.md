@@ -58,6 +58,15 @@ features — see AGENTS.md's shared-vs-feature-private rule. If you add a new
 "fetch everything matching a filter" query anywhere, use the same helper
 rather than a single `.limit()`.
 
+### Gotcha: "Specific period" filter — Overview does NOT use `FilterBar`
+
+Overview's date filter supports "Specific period" (any month/quarter/full
+year) same as Sales/Expenses/Purchases/Audit Logs, but `page.tsx` has its own
+bespoke inline date-range UI rather than importing the shared `FilterBar`
+component — see `components/ui/SKILL.md`'s FilterBar entry for the shared
+version other features use. If you change the period-picking logic, check
+both places.
+
 ## Test command
 
 `npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`)

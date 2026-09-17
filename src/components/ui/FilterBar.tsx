@@ -112,9 +112,10 @@ export function FilterBar({
 
   function handlePresetSelect(v: string) {
     if (v === "specific_period") {
+      if (!onPeriodChange) return;
       setCustomSubMode("period");
       const range = periodRange(new Date().getFullYear(), "full");
-      onPeriodChange!("custom", range.from, range.to);
+      onPeriodChange("custom", range.from, range.to);
       return;
     }
     if (v === "custom") {
@@ -132,8 +133,9 @@ export function FilterBar({
     describePeriod(dateFrom, dateTo) ?? { year: currentYear, unit: "full" };
 
   function handlePeriodFieldChange(year: number, unit: PeriodUnit) {
+    if (!onPeriodChange) return;
     const range = periodRange(year, unit);
-    onPeriodChange!("custom", range.from, range.to);
+    onPeriodChange("custom", range.from, range.to);
   }
 
   const [localSearch, setLocalSearch] = useState(searchValue ?? "");
@@ -217,8 +219,12 @@ export function FilterBar({
         </>
       )}
 
-      {/* Custom date inputs — raw manual entry mode */}
-      {preset === "custom" && customSubMode !== "period" && (
+      {/* Custom date inputs — raw manual entry mode. Also the fallback when
+          "period" mode is selected but the caller didn't actually wire up
+          onPeriodChange (supportsPeriod false) — without the second clause
+          this and the period-mode block above would both fail to render,
+          leaving no date controls visible at all. */}
+      {preset === "custom" && (customSubMode !== "period" || !supportsPeriod) && (
         <>
           <div>
             <FilterLabel>From</FilterLabel>

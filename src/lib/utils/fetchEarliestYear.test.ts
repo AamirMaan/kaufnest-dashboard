@@ -25,4 +25,9 @@ describe("fetchEarliestYear", () => {
     const year = await fetchEarliestYear(async () => "not-a-date", 2020);
     expect(year).toBe(2020);
   });
+
+  it("falls back on an implausible year (e.g. corrupted Excel import date)", async () => {
+    const year = await fetchEarliestYear(async () => "0001-01-01", 2020);
+    expect(year).toBe(2020);
+  });
 });

@@ -80,6 +80,7 @@ export default function AuditLogsPage() {
     applyFilters(next);
   }
 
+  // Atomic — see sales/page.tsx's setPeriod and FilterBar's SKILL.md entry for why three separate setFilter calls would silently drop two of three fields.
   function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
     const next = { ...filters, preset, dateFrom, dateTo };
     setFilters(next);

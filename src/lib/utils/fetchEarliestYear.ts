@@ -22,8 +22,11 @@
  *
  * @param fetchEarliestDate - resolves the earliest row's date/timestamp
  *   string, or `null` when the table has no rows
- * @param fallback - returned when no date is found, or it can't be parsed;
- *   defaults to the current year
+ * @param fallback - returned when no date is found, it can't be parsed, or
+ *   the parsed year is implausible (outside 1970..currentYear+1 — guards
+ *   against corrupted date cells, e.g. an Excel import gone wrong, feeding
+ *   an unbounded year into the "Specific period" Year select); defaults to
+ *   the current year
  */
 export async function fetchEarliestYear(
   fetchEarliestDate: () => Promise<string | null>,
@@ -32,5 +35,7 @@ export async function fetchEarliestYear(
   const value = await fetchEarliestDate();
   if (!value) return fallback;
   const year = Number(value.slice(0, 4));
-  return Number.isInteger(year) ? year : fallback;
+  return Number.isInteger(year) && year >= 1970 && year <= new Date().getFullYear() + 1
+    ? year
+    : fallback;
 }
