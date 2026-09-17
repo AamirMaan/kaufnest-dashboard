@@ -8,8 +8,10 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchSalesPage` thunk),
-  `FilterBar` (date preset, currency, platform, status, general keyword
-  search across product name/order ID/description), row selection, invoice
+  `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
+  see `components/ui/SKILL.md`'s FilterBar entry — currency, platform,
+  status, general keyword search across product name/order ID/description),
+  row selection, invoice
   trigger, Gross/VAT/Net summary **(this page)**, **Export CSV** button
   (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
   5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
