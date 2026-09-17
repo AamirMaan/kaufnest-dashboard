@@ -120,6 +120,17 @@ this shape: extracting it is what makes it testable without rendering the page.
   root `AGENTS.md`'s shared `src/lib/*` list, and `SKILL.md`'s gotcha here for
   the "why" (Supabase's PostgREST "Max Rows" setting silently truncating a
   single `.limit()`/`.range()` request).
+- `overviewRpc.integration.test.ts` (2026-09-17) — NOT a pure `_lib` unit
+  test like the two above: it hits the four real `get_sales_overview`/
+  `get_expenses_overview`/`get_purchases_overview`/`get_payouts_overview`
+  Postgres functions (migration `045_overview_aggregation_functions.sql`)
+  live over the network against `tenant_boughtopia`, inserting and then
+  deleting real `sales`/`expenses` rows via `createServiceClientForTenant`
+  (`src/lib/supabase/server.ts`) to bypass RLS for setup/teardown. Excluded
+  from `npx jest`'s default run and `.husky/pre-push` — separate config
+  (`jest.integration.config.ts`, repo root) and script (`npm run
+  test:integration`). See `SKILL.md`'s gotcha for why it can't just call
+  `process.loadEnvFile(".env.local")` like the other npm scripts do.
 
 ## Feature folders (each documents itself — start there)
 
