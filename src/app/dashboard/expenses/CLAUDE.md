@@ -42,6 +42,19 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   the Net/VAT/Gross preview is gated on "is a number", not on `> 0`. An
   `amount > 0` guard here makes every imported credit note permanently
   uneditable — see the SKILL.md gotcha before reinstating one.
+- `_components/ReceiptUploader.tsx` — thumbnail strip, add, remove,
+  per-file progress for an expense's image receipts. Used by both
+  `AddExpenseModal` and `EditExpenseModal`. Same model as `ImageGrid.tsx`
+  (`dashboard/listings/`): Storage upload/delete happen immediately, but the
+  `receipts` array itself is local form state until the surrounding modal
+  saves — this component never writes to the `expenses` table. Thumbnails
+  are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
+  bucket is private, unlike `listing-images`.
+- `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
+  `buildReceiptPath(tenantSchema, expenseId, fileName)`,
+  `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
+  is discarded in favour of a UUID, same reasoning as the listings sibling
+  `storagePath.ts`.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -138,6 +151,18 @@ editable fields.
   (`lib/utils/currency`). Both stay `null` when the toggle is off. Unlike
   Sales/Purchases, expenses have **no product link** — they aren't inventory
   items, so there's no `product_id`/`Select`.
+
+## Receipts
+
+`Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
+uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
+(migration `046_expense_receipts.sql`). `AddExpenseModal` supports
+attaching a receipt before the rest of the form is filled in: the row is
+created early (lazy, like `ImageGrid`'s draft creation) so the upload has a
+real `expense_id`; closing the modal without submitting deletes that early
+row (see the modal's own comment) so a receipt attachment never leaves a
+permanent, un-audited, partially-filled expense behind. `EditExpenseModal`
+has no such concern — the row already exists.
 
 ## Shared dependencies (live outside this folder on purpose)
 
