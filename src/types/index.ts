@@ -41,6 +41,18 @@ export type ExpenseCategory =
   | "salary"
   | "other";
 
+/** One uploaded receipt image. `path` is a bare Storage object path — the
+ * `expense-receipts` bucket is private, so there is no public URL to store;
+ * display goes through a signed URL instead. See
+ * `src/app/dashboard/expenses/_lib/receiptPath.ts`. */
+export interface ExpenseReceipt {
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  uploaded_at: string; // ISO timestamp
+}
+
 export interface Expense {
   id: string;
   title: string;
@@ -63,6 +75,7 @@ export interface Expense {
   original_total_amount: number | null;
   fx_rate: number | null;
   fx_rate_date: string | null; // ISO date
+  receipts: ExpenseReceipt[];
 }
 
 export interface PlatformPayout {

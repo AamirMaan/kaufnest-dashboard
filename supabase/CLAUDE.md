@@ -400,6 +400,19 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   formulas, `advertising_fee`-only balance-card fees, hardcoded
   ebay/amazon-only platform breakdowns). Backs the Overview page
   (`src/app/dashboard/page.tsx`).
+- `migrations/046_expense_receipts.sql` — adds `receipts jsonb NOT NULL
+  DEFAULT '[]'::jsonb` to `expenses` in every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. Creates the private `expense-receipts` Storage bucket
+  (first PRIVATE bucket in this codebase — `listing-images`,
+  `022_listing_images_bucket.sql`, is public) with tenant-path-scoped RLS
+  reusing `public.current_tenant_role()` (read/insert/delete all match "any
+  authenticated tenant member" — `current_tenant_role() IS NOT NULL` — the
+  same bar as `expenses_select`/`expenses_update`, unlike `listing-images`'
+  admin-only write). See
+  `docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md`
+  section 2. Backs `src/app/dashboard/expenses/` — see its `SKILL.md` gotcha
+  for the private-bucket/signed-URL/deferred-persistence details.
 
 ## Related code
 

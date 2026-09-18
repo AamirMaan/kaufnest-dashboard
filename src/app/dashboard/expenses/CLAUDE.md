@@ -42,6 +42,19 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   the Net/VAT/Gross preview is gated on "is a number", not on `> 0`. An
   `amount > 0` guard here makes every imported credit note permanently
   uneditable — see the SKILL.md gotcha before reinstating one.
+- `_components/ReceiptUploader.tsx` — thumbnail strip, add, remove,
+  per-file progress for an expense's image receipts. Used by both
+  `AddExpenseModal` and `EditExpenseModal`. Same model as `ImageGrid.tsx`
+  (`dashboard/listings/`): Storage upload/delete happen immediately, but the
+  `receipts` array itself is local form state until the surrounding modal
+  saves — this component never writes to the `expenses` table. Thumbnails
+  are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
+  bucket is private, unlike `listing-images`.
+- `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
+  `buildReceiptPath(tenantSchema, expenseId, fileName)`,
+  `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
+  is discarded in favour of a UUID, same reasoning as the listings sibling
+  `storagePath.ts`.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -138,6 +151,30 @@ editable fields.
   (`lib/utils/currency`). Both stay `null` when the toggle is off. Unlike
   Sales/Purchases, expenses have **no product link** — they aren't inventory
   items, so there's no `product_id`/`Select`.
+
+## Receipts
+
+`Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
+uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
+(migration `046_expense_receipts.sql`). `AddExpenseModal` supports
+attaching a receipt before the rest of the form is filled in: it generates
+the expense's `id` client-side (`crypto.randomUUID()`, held in `pendingId`
+state) as soon as the modal opens, and hands that id to `ReceiptUploader`
+as `expenseId` so the upload has a real Storage path with **no early row
+insert**. The row is only ever written to Postgres at final submit, using
+`pendingId` as the explicit `id` column value — so closing the modal
+without submitting has nothing to clean up (an uploaded Storage object with
+no row pointing at it just becomes an orphan, the same accepted tradeoff
+`ImageGrid.tsx` already has for an abandoned listing draft). An earlier
+version of this modal inserted the row early and deleted it on cancel —
+that cleanup DELETE turned out to silently no-op under RLS for any tenant
+member who isn't admin/super_admin or `delete_expense`-override, since
+`expenses_delete` is far stricter than `expenses_insert` (see
+`supabase/migrations/005_tenant_provisioning.sql`); the client-generated-id
+approach sidesteps the problem instead of working around it.
+`EditExpenseModal` has no such concern — the row already exists, and its
+`expenseToForm` defensively falls back to `e.receipts ?? []` in case a
+tenant hasn't had migration 046 applied yet.
 
 ## Shared dependencies (live outside this folder on purpose)
 
@@ -333,5 +370,5 @@ Rules that are easy to get wrong and are pinned by
 ## Tests
 
 `npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
-`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts` and
-`_components/expenseImportFormats.test.ts`.
+`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts`,
+`_lib/receiptPath.test.ts` and `_components/expenseImportFormats.test.ts`.

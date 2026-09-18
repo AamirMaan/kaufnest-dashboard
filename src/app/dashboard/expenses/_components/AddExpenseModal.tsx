@@ -10,7 +10,8 @@ import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
-import type { ExpenseCategory, Currency, Expense } from "@/types";
+import { ReceiptUploader } from "./ReceiptUploader";
+import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
   "shipping", "advertising", "software", "office",
@@ -36,6 +37,7 @@ interface FormState {
   vat_rate: string;
   vendor_vat_number: string;
   invoice_number: string;
+  receipts: ExpenseReceipt[];
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -53,6 +55,7 @@ function makeDefaults(defaultVatRate: number): FormState {
     vat_rate: String(defaultVatRate),
     vendor_vat_number: "",
     invoice_number: "",
+    receipts: [],
   };
 }
 
@@ -62,6 +65,33 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [receiptsBusy, setReceiptsBusy] = useState(false);
+
+  // Client-generated id for a not-yet-saved expense — lets ReceiptUploader
+  // build a real Storage path immediately with NO early row insert, so
+  // there's nothing to clean up if the user cancels. (An earlier version of
+  // this modal inserted the row early and deleted it on cancel — that
+  // cleanup DELETE silently no-ops under RLS for any tenant member who
+  // isn't admin/super_admin or `delete_expense`-override, since
+  // `expenses_delete` is far stricter than `expenses_insert`. Generating
+  // the id client-side avoids the problem instead of working around it: a
+  // cancelled attachment just orphans a Storage file, the same accepted
+  // tradeoff `ImageGrid.tsx` already has for an abandoned listing draft.)
+  const [pendingId, setPendingId] = useState(() => crypto.randomUUID());
+
+  // The modal never unmounts (page.tsx only toggles `open`) — a fresh id is
+  // needed every time it reopens, or a second Add session would try to
+  // reuse an id already consumed by the first session's successful submit.
+  // Adjusted during render off an `open` transition (the same
+  // React-documented "adjusting state when a prop changes" pattern
+  // `EditExpenseModal` uses for `loadedExpenseId`/`initialForm`), not an
+  // effect — this repo's `react-hooks/set-state-in-effect` lint rule
+  // forbids a synchronous `setState` inside a `useEffect` body.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setPendingId(crypto.randomUUID());
+  }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -81,6 +111,30 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   // negative input tax — the correct sign for a credit note.
   const vatAmount = form.vat_included ? vatAmountFromGross(amount, vatRate) : 0;
 
+  function buildRow() {
+    return {
+      title: form.title.trim(),
+      amount,
+      currency: form.currency,
+      category: form.category,
+      vendor: form.vendor.trim() || null,
+      date: form.date,
+      description: form.description.trim() || null,
+      vat_rate: form.vat_included ? vatRate : null,
+      vat_amount: form.vat_included ? vatAmount : null,
+      vendor_vat_number: form.vendor_vat_number.trim() || null,
+      invoice_number: form.invoice_number.trim() || null,
+      receipts: form.receipts,
+    };
+  }
+
+  // Kept only so ReceiptUploader's prop contract is satisfied — `expenseId`
+  // is never null now (see `pendingId` above), so this is never actually
+  // called. Mirrors EditExpenseModal's own trivial `async () => expense!.id`.
+  async function handleExpenseCreated(): Promise<string> {
+    return pendingId;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.title.trim()) return setError("Title is required.");
@@ -93,20 +147,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
 
     const { data, error: dbError } = await supabase
       .from("expenses")
-      .insert({
-        title: form.title.trim(),
-        amount,
-        currency: form.currency,
-        category: form.category,
-        vendor: form.vendor.trim() || null,
-        date: form.date,
-        description: form.description.trim() || null,
-        created_by: user!.id,
-        vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
-        vendor_vat_number: form.vendor_vat_number.trim() || null,
-        invoice_number: form.invoice_number.trim() || null,
-      })
+      .insert({ id: pendingId, ...buildRow(), created_by: user!.id })
       .select()
       .single<Expense>();
 
@@ -147,11 +188,11 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
       onClose={handleClose}
       footer={
         <>
-          <Button variant="secondary" type="button" onClick={handleClose} disabled={saving}>
+          <Button variant="secondary" type="button" onClick={handleClose} disabled={saving || receiptsBusy}>
             Cancel
           </Button>
-          <Button type="submit" form="add-expense-form" disabled={saving}>
-            {saving ? "Saving…" : "Add Expense"}
+          <Button type="submit" form="add-expense-form" disabled={saving || receiptsBusy}>
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Add Expense"}
           </Button>
         </>
       }
@@ -277,6 +318,17 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+
+        <Field label="Receipts">
+          <ReceiptUploader
+            receipts={form.receipts}
+            setReceipts={(receipts) => set("receipts", receipts)}
+            expenseId={pendingId}
+            onExpenseCreated={handleExpenseCreated}
+            onBusyChange={setReceiptsBusy}
+            disabled={saving}
+          />
+        </Field>
 
         <Field label="Description">
           <Textarea

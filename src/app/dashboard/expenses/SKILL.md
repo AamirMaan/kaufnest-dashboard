@@ -35,6 +35,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   in `EditExpenseModal.tsx`. The comparison must stay against the form's own
   initial snapshot (`EditExpenseModal`'s `initialForm` state), never against
   `expense`'s raw `vat_rate`/`vat_amount` — see the gotcha below for why.
+- **Add/change expense receipts**: `_components/ReceiptUploader.tsx` (the
+  upload/thumbnail/remove UI), `_lib/receiptPath.ts` (bucket id + path
+  helpers), wired into both `AddExpenseModal.tsx` and `EditExpenseModal.tsx`.
+  Schema change: `supabase/migrations/046_expense_receipts.sql` (2-places
+  rule — also mirror into `provision_tenant_schema()`).
 - **Change the import modal's UI/plumbing** (dropdown, summary line, category
   preview, file reading): `_components/ImportExpensesModal.tsx` only — and read
   `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
@@ -352,6 +357,35 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   port Sales' selector *with* its `detectDateOrder` conflict handling — a
   detector without the conflict refusal silently picks an order on a mixed
   file.
+- **Receipts persist to the database only when the modal saves — Storage
+  mutates immediately.** `ReceiptUploader` uploads/deletes Storage objects
+  the moment a file is picked/removed, but never writes to the `expenses`
+  table itself; the `receipts` array is plain form state until
+  `AddExpenseModal`/`EditExpenseModal`'s own insert/update call includes it.
+  This is a direct copy of `listings/_components/ImageGrid.tsx`'s model for
+  `image_urls` — don't "simplify" one without checking the other still needs
+  its own reasoning (that one also decided immediate-Storage/deferred-DB was
+  the right tradeoff, and accepts the same orphan-on-cancel risk this one
+  does).
+- **`expense-receipts` is a PRIVATE bucket — thumbnails need a signed URL,
+  not `getPublicUrl`.** `ReceiptUploader` calls
+  `createSignedUrls(paths, 60)` and refetches whenever the receipt list
+  changes; a thumbnail left open past that 60s window just stops rendering
+  (it never serves a stale or wrong file). This is the deliberate
+  difference from `listing-images` (public, since eBay must fetch those
+  URLs) — see the design doc's section 2 for why a receipt has no such
+  requirement.
+- **`AddExpenseModal` creates the expense row early if a receipt is
+  attached before the rest of the form is submitted** (`handleExpenseCreated`,
+  wired to `ReceiptUploader`'s `onExpenseCreated` — mirrors `ImageGrid`'s
+  `onDraftCreated`). Unlike a listing draft, an expense has no "draft"
+  status, so `handleClose` (Cancel/backdrop/Escape) deletes that early row
+  if the user never actually submits — don't remove that cleanup, an
+  abandoned receipt attachment must never leave a permanent, un-audited,
+  partially-filled expense behind. Exactly one `dispatch(addExpense(...))`
+  and one `"create"` audit-log entry happen regardless of whether the row
+  was inserted early or at final submit — the early insert itself writes
+  neither.
 - The "Search" box in `FilterBar` matches `title`, `vendor`, `description`,
   and `invoice_number` via a Supabase `.or()`/`ilike` clause (see
   `fetchExpensesPage` in `_store/expensesSlice.ts`), sanitized with

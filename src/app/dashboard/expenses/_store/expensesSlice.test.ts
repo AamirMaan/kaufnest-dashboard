@@ -28,6 +28,7 @@ const makeExpense = (overrides: Partial<Expense> = {}): Expense => ({
   original_total_amount: null,
   fx_rate: null,
   fx_rate_date: null,
+  receipts: [],
   ...overrides,
 });
 
