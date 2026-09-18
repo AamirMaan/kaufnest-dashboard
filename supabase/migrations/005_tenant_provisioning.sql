@@ -125,7 +125,9 @@ BEGIN
       original_currency      text,
       original_total_amount  numeric(12,2),
       fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
-      fx_rate_date           date
+      fx_rate_date           date,
+      -- Image receipts — see 046_expense_receipts.sql.
+      receipts                jsonb NOT NULL DEFAULT '[]'::jsonb
     )
   $sql$, schema_name);
 
