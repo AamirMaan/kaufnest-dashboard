@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
@@ -75,6 +75,23 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const createdIdRef = useRef<string | null>(null);
   const [createdExpenseId, setCreatedExpenseId] = useState<string | null>(null);
 
+  // True once the modal has been dismissed (Cancel/backdrop/X/Escape — all
+  // funnel through handleClose) while a receipt-triggered early insert was
+  // still in flight. Checked by `handleExpenseCreated` right after its
+  // insert resolves, so an since-abandoned row is deleted immediately
+  // instead of surviving as a permanent, un-audited orphan — Modal.tsx
+  // deliberately allows closing at any time (AGENTS.md: "never build one
+  // that traps the user"), so the fix has to live on this side, not by
+  // blocking the close.
+  const closedRef = useRef(false);
+
+  // The modal never unmounts (page.tsx only toggles `open`) — reset the
+  // flag whenever it opens again, or every later Add session would find it
+  // stuck `true` from the first close.
+  useEffect(() => {
+    if (open) closedRef.current = false;
+  }, [open]);
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -131,6 +148,16 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
       .single<Expense>();
     if (dbError) throw new Error(dbError.message);
 
+    // The modal may have been closed (Cancel/backdrop/X/Escape) while this
+    // insert was in flight. handleClose's own cleanup only deletes a row it
+    // can already see via createdIdRef, which was still null at that point
+    // — delete this one ourselves instead of leaving a permanent,
+    // un-audited orphan.
+    if (closedRef.current) {
+      await supabase.from("expenses").delete().eq("id", data.id);
+      throw new Error("The expense was closed before the receipt could be saved.");
+    }
+
     createdIdRef.current = data.id;
     setCreatedExpenseId(data.id);
     return data.id;
@@ -186,6 +213,8 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   }
 
   async function handleClose() {
+    closedRef.current = true;
+
     // Orphan rule: a receipt attached before the rest of the form was
     // submitted creates the row early (see `handleExpenseCreated`). Closing
     // without submitting must not leave that partial row behind as a real,
