@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removePurchase, fetchPurchasesPage } from "./_store/purchasesSlice";
@@ -22,6 +22,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import { formatDate } from "@/lib/utils/date";
 import {
   isDefaultFilters,
@@ -50,6 +51,28 @@ export default function PurchasesPage() {
 
   const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_PURCHASE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("purchases")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.date ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
@@ -94,6 +117,13 @@ export default function PurchasesPage() {
 
   function setFilter<K extends keyof PurchaseFilters>(key: K, value: PurchaseFilters[K]) {
     const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  // Atomic — see sales/page.tsx's setPeriod and FilterBar's SKILL.md entry for why three separate setFilter calls would silently drop two of three fields.
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
     setFilters(next);
     applyFilters(next);
   }
@@ -304,6 +334,8 @@ export default function PurchasesPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         searchValue={filters.search}

@@ -54,6 +54,15 @@ JSON via `supabase.rpc(...)` instead of paging through raw rows, so don't be
 confused if you don't see a `fetchAllRows` call in `page.tsx` anymore. The
 Sales/Expenses/Purchases CSV export queries still go through it.
 
+### Gotcha: "Specific period" filter — Overview does NOT use `FilterBar`
+
+Overview's date filter supports "Specific period" (any month/quarter/full
+year) same as Sales/Expenses/Purchases/Audit Logs, but `page.tsx` has its own
+bespoke inline date-range UI rather than importing the shared `FilterBar`
+component — see `components/ui/SKILL.md`'s FilterBar entry for the shared
+version other features use. If you change the period-picking logic, check
+both places.
+
 ## Test command
 
 `npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`)

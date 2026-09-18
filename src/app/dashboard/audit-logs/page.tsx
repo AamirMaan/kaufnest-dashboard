@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { fetchAuditLogsPage } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -19,6 +19,8 @@ import {
   type DatePreset,
 } from "@/lib/utils/filters";
 import type { AuditLog, AuditAction } from "@/types";
+import { createTenantClient } from "@/lib/supabase/client";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 
 const AUDIT_ACTIONS: AuditAction[] = [
   "create", "update", "delete", "login", "logout", "role_change",
@@ -38,6 +40,28 @@ export default function AuditLogsPage() {
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_AUDIT_LOG_FILTERS);
   const hasActive = !isDefaultAuditLogFilters(filters);
 
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("audit_logs")
+          .select("created_at")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.created_at ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [viewTarget, setViewTarget] = useState<AuditLog | null>(null);
 
   // ── Filter helpers ────────────────────────────────────────────────────────
@@ -52,6 +76,13 @@ export default function AuditLogsPage() {
 
   function setFilter<K extends keyof AuditLogFilters>(key: K, value: AuditLogFilters[K]) {
     const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  // Atomic — see sales/page.tsx's setPeriod and FilterBar's SKILL.md entry for why three separate setFilter calls would silently drop two of three fields.
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
     setFilters(next);
     applyFilters(next);
   }
@@ -117,6 +148,8 @@ export default function AuditLogsPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         hasActive={hasActive}
         onClear={clearFilters}
       >

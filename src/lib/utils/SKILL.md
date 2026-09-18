@@ -85,6 +85,39 @@ The date-preset + entity-filter logic backing `FilterBar` (see
 - `isDefaultFilters(f)` — drives the `FilterBar`'s "Clear" button visibility
   (`hasActive = !isDefaultFilters(filters)`); uses `"x" in f` narrowing so one
   function works across all three filter shapes.
+- `PeriodUnit = "full" | "q1" | "q2" | "q3" | "q4" | "01".."12"`,
+  `periodRange(year, unit) → { from, to }`, `describePeriod(from, to) → {
+  year, unit } | null` (2026-09-17) — the "Specific period" date filter's
+  maths (`components/ui/FilterBar.tsx`'s Year/Period selects, and Overview's
+  own bespoke date-range UI in `dashboard/page.tsx`). A period pick is never
+  its own `DatePreset` — it always resolves to `preset: "custom"` plus a
+  concrete pair, so every existing `resolveDateRange`/thunk consumer needs no
+  changes. `describePeriod` is the inverse, used to re-derive which Year/Period
+  a stored `{from, to}` pair represents (e.g. after a remount) — it returns
+  `null` for any pair that is not an EXACT period span, which is what keeps a
+  hand-typed custom range rendering as "Custom Range" instead of being
+  mislabelled. `PERIOD_UNIT_OPTIONS` is the shared `{value, label}[]` list for
+  the Period select, consumed by both `FilterBar.tsx` and `dashboard/page.tsx`
+  so the two don't duplicate the same 17-entry array.
+
+## fetchEarliestYear.ts
+
+`fetchEarliestYear(fetchEarliestDate, fallback?) → Promise<number>`
+(2026-09-17) — resolves the lower bound for the "Specific period" filter's
+Year select. Same test-friendly callback-injection shape as `fetchAllRows`
+(the caller supplies the actual Supabase query, so this stays unit-testable
+without a live client). `fallback` defaults to the current year, used both
+when the table has no rows and when the fetched value doesn't parse as a
+date. Called once on mount by each of Sales/Expenses/Purchases/Audit Logs'
+`page.tsx` (one call, that feature's own table) and by Overview's `page.tsx`
+(three calls — sales/expenses/purchases — taking the `Math.min` of the
+three, since Overview's date filter spans all of them). Overview does
+**not** derive this from its already-fetched `sales`/`expenses`/`purchases`
+local state, even though that data is sitting right there — that state is
+already scoped to the CURRENTLY SELECTED date range (see its own `.gte`/
+`.lte` fetch), so once any narrower range is selected it would silently
+undercount how far back real data actually goes. This helper always queries
+unfiltered.
 
 ## csv.ts
 

@@ -6,12 +6,13 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchPurchasesPage` thunk),
-  `FilterBar` (date preset, currency, general keyword search across product
-  name/vendor/description), `<Pagination>`, loading overlay, Gross/VAT/Net
-  summary **(this page)**, **Export CSV** button (server-side query, paginated
-  via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see "CSV
-  import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha), **Import
-  CSV** button, wires up the modals below.
+  `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
+  see `components/ui/SKILL.md`'s FilterBar entry — currency, general keyword
+  search across product name/vendor/description), `<Pagination>`, loading
+  overlay, Gross/VAT/Net summary **(this page)**, **Export CSV** button
+  (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
+  5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
+  Max Rows gotcha), **Import CSV** button, wires up the modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
   `loaded`, `page`, `pageSize`, `total`, `isFetching`).
   Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),

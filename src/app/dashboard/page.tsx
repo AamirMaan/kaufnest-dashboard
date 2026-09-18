@@ -23,7 +23,15 @@ import { useTheme } from "@/components/ui/ThemeProvider";
 import { createTenantClient } from "@/lib/supabase/client";
 import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
-import { resolveDateRange, type DatePreset } from "@/lib/utils/filters";
+import {
+  resolveDateRange,
+  periodRange,
+  describePeriod,
+  PERIOD_UNIT_OPTIONS,
+  type DatePreset,
+  type PeriodUnit,
+} from "@/lib/utils/filters";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import { computePending } from "./_lib/platformBalance";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
 import type { ExpenseCategory } from "@/types";
@@ -181,10 +189,92 @@ export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  // Local UI-only state, same role as FilterBar.tsx's `customSubMode` — see
+  // that component's SKILL.md entry for the full "why": computed once at
+  // mount, changed afterward only by this page's own explicit dropdown pick.
+  const [periodMode, setPeriodMode] = useState<"period" | "manual">(() =>
+    describePeriod(dateFrom, dateTo) ? "period" : "manual"
+  );
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const years = await Promise.all([
+        fetchEarliestYear(async () => {
+          const { data } = await supabase
+            .from("sales")
+            .select("date")
+            .order("date", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          return data?.date ?? null;
+        }),
+        fetchEarliestYear(async () => {
+          const { data } = await supabase
+            .from("expenses")
+            .select("date")
+            .order("date", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          return data?.date ?? null;
+        }),
+        fetchEarliestYear(async () => {
+          const { data } = await supabase
+            .from("purchases")
+            .select("date")
+            .order("date", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          return data?.date ?? null;
+        }),
+      ]);
+      if (!cancelled) setEarliestYear(Math.min(...years));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const range = useMemo(
     () => resolveDateRange(preset, dateFrom, dateTo),
     [preset, dateFrom, dateTo]
   );
+
+  type OverviewRangeChoice = DatePreset | "specific_period";
+
+  const overviewDisplayValue: OverviewRangeChoice =
+    preset === "custom" && periodMode === "period" ? "specific_period" : preset;
+
+  function handleRangeSelect(v: OverviewRangeChoice) {
+    if (v === "specific_period") {
+      setPeriodMode("period");
+      const computed = periodRange(new Date().getFullYear(), "full");
+      setPreset("custom");
+      setDateFrom(computed.from);
+      setDateTo(computed.to);
+      return;
+    }
+    if (v === "custom") {
+      setPeriodMode("manual");
+    }
+    setPreset(v as DatePreset);
+  }
+
+  const currentYear = new Date().getFullYear();
+  const firstYear = Math.min(earliestYear, currentYear);
+  const yearOptions: number[] = [];
+  for (let y = currentYear; y >= firstYear; y--) yearOptions.push(y);
+
+  const currentPeriod: { year: number; unit: PeriodUnit } =
+    describePeriod(dateFrom, dateTo) ?? { year: currentYear, unit: "full" };
+
+  function handlePeriodFieldChange(year: number, unit: PeriodUnit) {
+    const computed = periodRange(year, unit);
+    setDateFrom(computed.from);
+    setDateTo(computed.to);
+  }
 
   // Sales/expenses/purchases/payouts aggregates for this page are fetched via
   // 4 Postgres RPCs, scoped to the selected date range and profile currency —
@@ -344,18 +434,52 @@ export default function DashboardPage() {
             <div>
               <span className={labelCls}>Date Range</span>
               <select
-                value={preset}
-                onChange={(e) => setPreset(e.target.value as DatePreset)}
+                value={overviewDisplayValue}
+                onChange={(e) => handleRangeSelect(e.target.value as OverviewRangeChoice)}
                 className={inputCls}
               >
-                {RANGE_PRESETS.map((p) => (
+                {RANGE_PRESETS.filter((p) => p.value !== "custom").map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label}
                   </option>
                 ))}
+                <option value="specific_period">Specific Period</option>
+                <option value="custom">Custom Range</option>
               </select>
             </div>
-            {preset === "custom" && (
+            {preset === "custom" && periodMode === "period" && (
+              <>
+                <div>
+                  <span className={labelCls}>Year</span>
+                  <select
+                    value={currentPeriod.year}
+                    onChange={(e) => handlePeriodFieldChange(Number(e.target.value), currentPeriod.unit)}
+                    className={inputCls}
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <span className={labelCls}>Period</span>
+                  <select
+                    value={currentPeriod.unit}
+                    onChange={(e) => handlePeriodFieldChange(currentPeriod.year, e.target.value as PeriodUnit)}
+                    className={inputCls}
+                  >
+                    {PERIOD_UNIT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+            {preset === "custom" && periodMode !== "period" && (
               <>
                 <div>
                   <span className={labelCls}>From</span>

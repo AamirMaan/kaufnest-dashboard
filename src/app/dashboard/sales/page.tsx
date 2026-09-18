@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removeSale, fetchSalesPage } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -24,6 +24,7 @@ import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   isRevenueSale,
@@ -58,6 +59,28 @@ export default function SalesPage() {
 
   const [filters, setFilters] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("sales")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.date ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
@@ -114,6 +137,19 @@ export default function SalesPage() {
 
   function setFilter<K extends keyof SalesFilters>(key: K, value: SalesFilters[K]) {
     const next = { ...filters, [key]: value };
+    setFilters(next);
+    applyFilters(next);
+  }
+
+  /**
+   * Atomic counterpart to `setFilter` for a period pick from FilterBar's
+   * "Specific period" mode — sets preset + dateFrom + dateTo in one update,
+   * required since `setFilter` computes `next` from the `filters` closure
+   * and three separate calls in one handler would silently drop two of the
+   * three fields. See FilterBar.tsx's SKILL.md entry for the full "why".
+   */
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
     setFilters(next);
     applyFilters(next);
   }
@@ -336,6 +372,8 @@ export default function SalesPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         searchValue={filters.search}

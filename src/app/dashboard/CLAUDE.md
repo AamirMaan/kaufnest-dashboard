@@ -54,7 +54,17 @@ broadly when working on a specific feature.**
   slice (page-only data, no other feature needs it). `isLoading` drives the
   same "opacity-60 pointer-events-none" overlay convention used by the
   paginated list pages.
-  Renders:
+  The date-range filter itself (`resolveDateRange` from `lib/utils/filters`,
+  preset + custom from/to — including a "Specific period" mode, any
+  month/quarter/year, added 2026-09-17 via `periodRange`/`describePeriod`/
+  `fetchEarliestYear` from `lib/utils/`; this page has its own bespoke inline
+  date-range UI rather than the shared `FilterBar` component, so it
+  reimplements the same period-picking logic directly — see
+  `components/ui/SKILL.md`'s FilterBar entry for the shared version) resolves
+  to the `{from, to}` pair passed as `p_from`/`p_to` to the 4 RPCs above — no
+  client-side row filtering (`effectiveSales`/`isRevenueSale`) remains in this
+  file as of the RPC rewrite; that predicate now lives in `get_sales_overview`
+  itself. Renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
     units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
     Collected, monthly trend revenue, Revenue by Platform, and Top Products all
@@ -90,9 +100,9 @@ broadly when working on a specific feature.**
   No `_components`/`_store` of its own — but see `_lib/` below.
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
-  `lib/supabase/client` (`createTenantClient`), `_lib/platformBalance`
-  (`computePending`).
+  `resolveDateRange`, `periodRange`/`describePeriod`, `ExpenseCategory` type,
+  `useTheme`, `recharts`, `lib/supabase/client` (`createTenantClient`),
+  `_lib/platformBalance` (`computePending`), `lib/utils/fetchEarliestYear`.
 
 ## `_lib/` — pure helpers for the Overview page
 

@@ -92,7 +92,34 @@ the catch-all, so it renders last, to the right of the more specific dropdowns.
 
 - `preset: DatePreset` (from `@/lib/utils/filters` — `"all" | "this_month" |
   "last_month" | "this_quarter" | "this_year" | "custom"`). Selecting `"custom"`
-  reveals the From/To date inputs.
+  reveals the From/To date inputs — **unless** the "Specific period" mode
+  below is active, in which case it reveals Year/Period selects instead.
+- **"Specific period" mode** (2026-09-17) — two new OPTIONAL props,
+  `earliestYear?: number` and `onPeriodChange?: (preset, dateFrom, dateTo)
+  => void`. A "Specific Period" dropdown option only appears when
+  `onPeriodChange` is provided; picking it (or changing the resulting
+  Year/Period selects) resolves a `{year, unit}` pick via
+  `periodRange`/`describePeriod` (`@/lib/utils/filters`) into a plain
+  `{from, to}` pair and calls `onPeriodChange("custom", from, to)` — **one
+  call, all three values at once**. This is load-bearing, not a style
+  choice: Sales/Expenses/Purchases/Audit Logs each hold `preset`/`dateFrom`/
+  `dateTo` in ONE merged filter object updated via a `setFilter(key, value)`
+  helper that reads the CURRENT `filters` from closure — calling
+  `onPresetChange`/`onDateFromChange`/`onDateToChange` as three separate
+  prop calls in the same handler would have each one compute its `next`
+  object from the same pre-update closure, so only the LAST call's field
+  would survive. Callers must add their own combined setter (see
+  `sales/page.tsx`'s `setPeriod`) and pass it as `onPeriodChange`.
+  `earliestYear` sets the Year select's lower bound (defaults to the
+  current year, showing a single-year dropdown, if omitted) — see
+  `lib/utils/fetchEarliestYear.ts`.
+  Whether "custom" is showing the period selects or the raw date inputs is
+  tracked as local component state (`customSubMode`), computed once at
+  mount via `describePeriod(dateFrom, dateTo)` and changed afterward only by
+  the user's own explicit dropdown pick — NOT re-derived on every prop
+  change, which would otherwise flip the UI out from under someone mid-way
+  through typing a manual custom range that happens to land on a period
+  boundary.
 - Currency options are hardcoded: `["all", "EUR", "USD", "GBP"]`.
 - The Clear button only renders when `hasActive` is true.
 - Pair with `lib/utils/filters.ts` helpers (e.g. `filterSales`/`filterExpenses`)

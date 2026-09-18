@@ -32,6 +32,15 @@ every mutation follows.
 
 `npx jest dashboard/purchases`
 
+## Gotchas — "Specific period" date filter
+
+`page.tsx`'s `FilterBar` gets `earliestYear`/`onPeriodChange` props, which
+enable a "Specific Period" option (any month/quarter/full year) on top of the
+existing date presets. `setPeriod` (the combined preset+dateFrom+dateTo
+setter passed as `onPeriodChange`) MUST update all three fields in one atomic
+call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
+staleness in the `setFilter(key, value)` pattern this page already uses).
+
 ## Gotchas
 
 - `purchasesSlice` is registered centrally in `src/store/store.ts` and hydrated
