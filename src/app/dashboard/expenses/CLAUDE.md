@@ -157,12 +157,24 @@ editable fields.
 `Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
 uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
 (migration `046_expense_receipts.sql`). `AddExpenseModal` supports
-attaching a receipt before the rest of the form is filled in: the row is
-created early (lazy, like `ImageGrid`'s draft creation) so the upload has a
-real `expense_id`; closing the modal without submitting deletes that early
-row (see the modal's own comment) so a receipt attachment never leaves a
-permanent, un-audited, partially-filled expense behind. `EditExpenseModal`
-has no such concern — the row already exists.
+attaching a receipt before the rest of the form is filled in: it generates
+the expense's `id` client-side (`crypto.randomUUID()`, held in `pendingId`
+state) as soon as the modal opens, and hands that id to `ReceiptUploader`
+as `expenseId` so the upload has a real Storage path with **no early row
+insert**. The row is only ever written to Postgres at final submit, using
+`pendingId` as the explicit `id` column value — so closing the modal
+without submitting has nothing to clean up (an uploaded Storage object with
+no row pointing at it just becomes an orphan, the same accepted tradeoff
+`ImageGrid.tsx` already has for an abandoned listing draft). An earlier
+version of this modal inserted the row early and deleted it on cancel —
+that cleanup DELETE turned out to silently no-op under RLS for any tenant
+member who isn't admin/super_admin or `delete_expense`-override, since
+`expenses_delete` is far stricter than `expenses_insert` (see
+`supabase/migrations/005_tenant_provisioning.sql`); the client-generated-id
+approach sidesteps the problem instead of working around it.
+`EditExpenseModal` has no such concern — the row already exists, and its
+`expenseToForm` defensively falls back to `e.receipts ?? []` in case a
+tenant hasn't had migration 046 applied yet.
 
 ## Shared dependencies (live outside this folder on purpose)
 
@@ -358,5 +370,5 @@ Rules that are easy to get wrong and are pinned by
 ## Tests
 
 `npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
-`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts` and
-`_components/expenseImportFormats.test.ts`.
+`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts`,
+`_lib/receiptPath.test.ts` and `_components/expenseImportFormats.test.ts`.

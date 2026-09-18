@@ -55,7 +55,7 @@ function expenseToForm(e: Expense, defaultVatRate: number): FormState {
     vendor_vat_number: e.vendor_vat_number ?? "",
     invoice_number: e.invoice_number ?? "",
     reason: "",
-    receipts: e.receipts,
+    receipts: e.receipts ?? [],
   };
 }
 
@@ -184,7 +184,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         <>
           <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button type="submit" form="edit-expense-form" disabled={saving || receiptsBusy}>
-            {saving ? "Saving…" : "Save Changes"}
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Save Changes"}
           </Button>
         </>
       }

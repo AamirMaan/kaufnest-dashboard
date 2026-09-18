@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
@@ -67,30 +67,31 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [receiptsBusy, setReceiptsBusy] = useState(false);
 
-  // Set the moment a receipt-triggered early insert succeeds (see
-  // `handleExpenseCreated`); read synchronously by `handleSubmit`/
-  // `handleClose` so a save/cancel that races the insert never misses it.
-  // `createdExpenseId` (state) mirrors it purely so it can be passed down as
-  // `ReceiptUploader`'s `expenseId` prop and trigger a re-render.
-  const createdIdRef = useRef<string | null>(null);
-  const [createdExpenseId, setCreatedExpenseId] = useState<string | null>(null);
+  // Client-generated id for a not-yet-saved expense — lets ReceiptUploader
+  // build a real Storage path immediately with NO early row insert, so
+  // there's nothing to clean up if the user cancels. (An earlier version of
+  // this modal inserted the row early and deleted it on cancel — that
+  // cleanup DELETE silently no-ops under RLS for any tenant member who
+  // isn't admin/super_admin or `delete_expense`-override, since
+  // `expenses_delete` is far stricter than `expenses_insert`. Generating
+  // the id client-side avoids the problem instead of working around it: a
+  // cancelled attachment just orphans a Storage file, the same accepted
+  // tradeoff `ImageGrid.tsx` already has for an abandoned listing draft.)
+  const [pendingId, setPendingId] = useState(() => crypto.randomUUID());
 
-  // True once the modal has been dismissed (Cancel/backdrop/X/Escape — all
-  // funnel through handleClose) while a receipt-triggered early insert was
-  // still in flight. Checked by `handleExpenseCreated` right after its
-  // insert resolves, so an since-abandoned row is deleted immediately
-  // instead of surviving as a permanent, un-audited orphan — Modal.tsx
-  // deliberately allows closing at any time (AGENTS.md: "never build one
-  // that traps the user"), so the fix has to live on this side, not by
-  // blocking the close.
-  const closedRef = useRef(false);
-
-  // The modal never unmounts (page.tsx only toggles `open`) — reset the
-  // flag whenever it opens again, or every later Add session would find it
-  // stuck `true` from the first close.
-  useEffect(() => {
-    if (open) closedRef.current = false;
-  }, [open]);
+  // The modal never unmounts (page.tsx only toggles `open`) — a fresh id is
+  // needed every time it reopens, or a second Add session would try to
+  // reuse an id already consumed by the first session's successful submit.
+  // Adjusted during render off an `open` transition (the same
+  // React-documented "adjusting state when a prop changes" pattern
+  // `EditExpenseModal` uses for `loadedExpenseId`/`initialForm`), not an
+  // effect — this repo's `react-hooks/set-state-in-effect` lint rule
+  // forbids a synchronous `setState` inside a `useEffect` body.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setPendingId(crypto.randomUUID());
+  }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -127,40 +128,11 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     };
   }
 
-  // Wired to ReceiptUploader as `onExpenseCreated`: only called when the
-  // user attaches a receipt before clicking "Add Expense" — the row needs a
-  // real id for the receipt's Storage path (`_lib/receiptPath.ts`). Uses
-  // whatever the form holds right now, under the same two guards
-  // `handleSubmit` runs. `handleSubmit` later UPDATEs this same row instead
-  // of inserting a second one; `handleClose` deletes it if the user never
-  // actually submits — see that function's comment.
+  // Kept only so ReceiptUploader's prop contract is satisfied — `expenseId`
+  // is never null now (see `pendingId` above), so this is never actually
+  // called. Mirrors EditExpenseModal's own trivial `async () => expense!.id`.
   async function handleExpenseCreated(): Promise<string> {
-    if (createdIdRef.current) return createdIdRef.current;
-    if (!form.title.trim()) throw new Error("Enter a title before attaching a receipt.");
-    if (!amountIsValid) throw new Error("Enter a valid amount before attaching a receipt.");
-
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data, error: dbError } = await supabase
-      .from("expenses")
-      .insert({ ...buildRow(), created_by: user!.id })
-      .select()
-      .single<Expense>();
-    if (dbError) throw new Error(dbError.message);
-
-    // The modal may have been closed (Cancel/backdrop/X/Escape) while this
-    // insert was in flight. handleClose's own cleanup only deletes a row it
-    // can already see via createdIdRef, which was still null at that point
-    // — delete this one ourselves instead of leaving a permanent,
-    // un-audited orphan.
-    if (closedRef.current) {
-      await supabase.from("expenses").delete().eq("id", data.id);
-      throw new Error("The expense was closed before the receipt could be saved.");
-    }
-
-    createdIdRef.current = data.id;
-    setCreatedExpenseId(data.id);
-    return data.id;
+    return pendingId;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -173,18 +145,11 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     const supabase = await createTenantClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    const { data, error: dbError } = createdIdRef.current
-      ? await supabase
-          .from("expenses")
-          .update(buildRow())
-          .eq("id", createdIdRef.current)
-          .select()
-          .single<Expense>()
-      : await supabase
-          .from("expenses")
-          .insert({ ...buildRow(), created_by: user!.id })
-          .select()
-          .single<Expense>();
+    const { data, error: dbError } = await supabase
+      .from("expenses")
+      .insert({ id: pendingId, ...buildRow(), created_by: user!.id })
+      .select()
+      .single<Expense>();
 
     if (dbError) {
       setError(dbError.message);
@@ -204,31 +169,13 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     });
     if (log) dispatch(addAuditLog(log));
 
-    createdIdRef.current = null;
-    setCreatedExpenseId(null);
     setForm(makeDefaults(defaultVatRate));
     setSaving(false);
     onSuccess?.(data.title);
     onClose();
   }
 
-  async function handleClose() {
-    closedRef.current = true;
-
-    // Orphan rule: a receipt attached before the rest of the form was
-    // submitted creates the row early (see `handleExpenseCreated`). Closing
-    // without submitting must not leave that partial row behind as a real,
-    // permanently incomplete, un-audited expense — delete it. Its uploaded
-    // receipt objects become orphaned Storage files with nothing pointing
-    // at them; that's an accepted, pre-existing tradeoff (see
-    // `ImageGrid.tsx`'s own removal comment), not a ledger-integrity
-    // problem — nothing in the app ever reads a deleted expense's folder.
-    if (createdIdRef.current) {
-      const supabase = await createTenantClient();
-      await supabase.from("expenses").delete().eq("id", createdIdRef.current);
-      createdIdRef.current = null;
-      setCreatedExpenseId(null);
-    }
+  function handleClose() {
     setForm(makeDefaults(defaultVatRate));
     setError(null);
     onClose();
@@ -245,7 +192,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             Cancel
           </Button>
           <Button type="submit" form="add-expense-form" disabled={saving || receiptsBusy}>
-            {saving ? "Saving…" : "Add Expense"}
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Add Expense"}
           </Button>
         </>
       }
@@ -376,7 +323,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
           <ReceiptUploader
             receipts={form.receipts}
             setReceipts={(receipts) => set("receipts", receipts)}
-            expenseId={createdExpenseId}
+            expenseId={pendingId}
             onExpenseCreated={handleExpenseCreated}
             onBusyChange={setReceiptsBusy}
             disabled={saving}

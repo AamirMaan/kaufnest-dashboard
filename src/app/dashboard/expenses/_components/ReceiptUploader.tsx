@@ -51,9 +51,23 @@ export function ReceiptUploader({
     }
     (async () => {
       const supabase = createClient();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const tenantSchema = session?.user.app_metadata?.tenant_schema as string | undefined;
+      if (!tenantSchema) return;
+
+      // Defence in depth, mirroring the same check `removeReceipt` already
+      // applies before a delete — a receipt whose path doesn't belong to
+      // this tenant is never handed to Storage, signed-URL fetch included.
+      const paths = receipts
+        .map((r) => pathFromStoredReceipt(r, tenantSchema))
+        .filter((p): p is string => p !== null);
+      if (paths.length === 0) return;
+
       const { data } = await supabase.storage
         .from(EXPENSE_RECEIPTS_BUCKET)
-        .createSignedUrls(receipts.map((r) => r.path), 60);
+        .createSignedUrls(paths, 60);
       if (cancelled || !data) return;
       const next: Record<string, string> = {};
       for (const entry of data) {
