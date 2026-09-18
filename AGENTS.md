@@ -82,21 +82,14 @@ New shared code from the migration:
   `src/app/api/notifications/` for the bell feature — put anything
   server-side notifications need elsewhere and cross-reference it from
   `src/app/dashboard/CLAUDE.md` instead.
-- **Pagination architecture (Phase 3):** All main data tables use server-side
-  pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
-  row count via `.select("*", { count: "exact" }).range(0,
-  DEFAULT_PAGE_SIZE - 1)` and passes `{data, count}` through `StoreProvider`
-  → each slice's `hydratePage` reducer. Per-feature fetch thunks
-  (`fetchSalesPage`, `fetchExpensesPage`, `fetchPurchasesPage`,
-  `fetchAuditLogsPage`, `fetchInventoryPage`) handle subsequent pages and
-  filter changes — filters are pushed into the Supabase query (`gte`, `lte`,
-  `eq`, `ilike`), not applied client-side. Shared helpers:
-  `src/lib/utils/pagedQuery.ts` (`rangeFor`, `PageRequest`,
-  `DEFAULT_PAGE_SIZE = 50`) and `src/components/ui/Pagination.tsx`. Inventory
-  has a split fetch: paginated `items` for the table + a lightweight
-  full-fetch `selectorItems` (`id, name, current_stock, sku`) for product
-  dropdowns in modals. Users and dropshipping listings use client-side
-  pagination only (small data sets).
+- **Pagination architecture (Phase 3):** All main data tables use
+  server-side pagination via seven `fetchXPage` thunks. Full description —
+  the reference pattern, the `.range()` shape, the shared helpers, and
+  known gaps (Inventory's `selectorItems` full-fetch dropdown is NOT
+  actually bounded, despite the name) — moved to
+  `BACKEND_ARCHITECTURE_PRINCIPLES.md` section 1, to keep this list from
+  drifting out of sync with that doc the way a duplicated list did before
+  (see the 2026-07-24 audit note above this list).
 - `src/lib/ai/` — Anthropic client, prompt builders, quota metering and the
   AI route guard (server-only, never imported client-side). Quota lives in
   `control.tenant_ai_usage` (Project A); the per-plan allowance is
@@ -306,6 +299,35 @@ on the offending line. **See `.claude/verifiers/README.md`** for the full rule
 table, the current known baseline, and how to add a rule. If you add an
 invariant to this file, add the matching rule there too — a rule that only
 exists as prose is one nobody enforces.
+
+## New Supabase query checklist
+
+Full reasoning and the audit that motivated this: `BACKEND_ARCHITECTURE_PRINCIPLES.md`.
+Before writing any new `.from(...).select(...)` call:
+
+1. Is this a list a user pages through? Use a `fetchXPage` thunk:
+   `.select(..., { count: "exact" }).range(from, to)`.
+2. Do you need every row matching a filter, not just one page? Use
+   `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) — never a single
+   `.limit(N)` call, however big N is. Supabase's PostgREST "Max Rows"
+   setting silently truncates any one request to its own cap (default
+   1000), no error, regardless of the `.limit()`/`.range()` you asked for.
+3. Is the result set structurally bounded (not just "small today")? Name
+   the constant that bounds it. A business-growth quantity (customers,
+   orders, products, users) is never bounded.
+4. Do you need a computed summary (sums, group-bys, top-N) rather than
+   rows? Consider a Postgres RPC instead of fetching rows to aggregate
+   client-side (`BACKEND_ARCHITECTURE_PRINCIPLES.md` section 2).
+5. Reading more than one id? Batch via `.in()`/`.upsert()`, chunked if the
+   id list can be large (`IN_CHUNK` in `ImportSalesModal.tsx`) — and
+   remember a batched `.in()` read is STILL subject to the Max Rows cap.
+6. Writing a new mutating API route? Gate it with a `requireXGuard()`-style
+   function (`src/lib/{billing,integrations,shipping,ai}/authGuard.ts`) and
+   never return a raw Postgres error to the client.
+
+Enforced by the `unbounded-limit` and `unpaginated-collection-read` rules
+in `.claude/verifiers/` — see its README for the current count of open
+findings.
 
 ## Keeping the graphify graph current
 

@@ -133,6 +133,144 @@ CASES: list[tuple[str, str, str, str | None]] = [
     ("any allowed in tests", "src/lib/x.test.ts", "function f(doc: any) {}", None),
     ("console.log", "src/lib/x.ts", "console.log(payload);", "console-log"),
     ("console.error is fine", "src/lib/x.ts", "console.error(payload);", None),
+
+    # ---- scalability ----
+    ("unbounded limit over the Max Rows default", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(5000);',
+     "unbounded-limit"),
+    ("limit at exactly 1000 still warns — no safety margin", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(1000);',
+     "unbounded-limit"),
+    ("small named-constant limit is fine", "src/app/dashboard/messages/_store/x.ts",
+     'const q = supabase.from("ebay_messages").select("*").limit(SEARCH_RESULT_LIMIT);',
+     None),
+    ("limit(1) single-row lookup is fine", "src/lib/x.ts",
+     'const q = supabase.from("sales").select("*").limit(1);', None),
+    ("suppressed large limit", "src/app/dashboard/x.tsx",
+     'let q = supabase.from("sales").select("*").limit(5000); // verifier:allow unbounded-limit',
+     None),
+    # A comment *describing* the hazard is documentation, not the hazard.
+    ("large limit inside a line comment is fine", "src/app/dashboard/x.tsx",
+     '// a .limit(5000) here returned only 1000 rows — see the principles doc',
+     None),
+    ("large limit inside a docblock is fine", "src/lib/utils/fetchAllRows.ts",
+     "/**\n * PostgREST caps at 1000, so .limit(5000) silently truncates.\n */",
+     None),
+    ("large limit in real code after a docblock still fires",
+     "src/app/dashboard/x.tsx",
+     "/**\n * PostgREST caps at 1000, so .limit(5000) silently truncates.\n */\n"
+     'const q = supabase.from("sales").select("*").limit(5000);',
+     "unbounded-limit"),
+    ("unpaginated read on control.tenants", "src/app/api/admin/tenants/route.ts",
+     'const { data: tenants, error } = await control\n'
+     '  .schema("control")\n'
+     '  .from("tenants")\n'
+     '  .select("*")\n'
+     '  .order("created_at", { ascending: false });',
+     "unpaginated-collection-read"),
+    ("unpaginated read on notification_reads", "src/store/slices/notificationsSlice.ts",
+     'supabase.from("notification_reads").select("notification_id"),',
+     "unpaginated-collection-read"),
+    ("unpaginated read on profiles", "src/app/dashboard/layout.tsx",
+     'const { data: profiles } = await supabase.from("profiles").select("*");',
+     "unpaginated-collection-read"),
+    ("unbatched .in() dedup is still unbounded", "src/app/api/integrations/review/import/route.ts",
+     'const { data: existingRows } = await client\n'
+     '  .from("sales")\n'
+     '  .select("*")\n'
+     '  .in("external_order_id", extIds);',
+     "unpaginated-collection-read"),
+    ("paginated thunk with .range() is fine", "src/app/dashboard/sales/_store/salesSlice.ts",
+     'let query = supabase\n'
+     '  .from("sales")\n'
+     '  .select("*", { count: "exact" })\n'
+     '  .range(from, to);',
+     None),
+    ("single-row lookup with .eq id is fine", "src/lib/x.ts",
+     'const { data } = await supabase.from("sales").select("*").eq("id", id).single();',
+     None),
+    ("small named-constant limit is fine (shared with unbounded-limit case)",
+     "src/app/dashboard/messages/_store/x.ts",
+     'const q = supabase.from("ebay_messages").select("*").limit(SEARCH_RESULT_LIMIT);',
+     None),
+    ("write (not a read) on a growth table is fine", "src/app/dashboard/admin/x.ts",
+     'await c.from("tenants").update({ name: "Acme Corp" }).eq("id", id);', None),
+    ("suppressed chunked .in() read", "src/app/dashboard/sales/_components/ImportSalesModal.tsx",
+     'const { data, error } = await supabase\n'
+     '  .from("sales") // verifier:allow unpaginated-collection-read — chunked via IN_CHUNK above\n'
+     '  .select("external_order_id")\n'
+     '  .eq("platform", platform)\n'
+     '  .in("external_order_id", chunk);',
+     None),
+    # ---- scalability: the four shapes that caused the 2026-09-16 FP sweep ----
+    # 1. The generic form is this codebase's dominant single-row idiom; the
+    #    rule used to only recognise the bare `.single(`.
+    ("generic .single<T>() is a bounded read", "src/proxy.ts",
+     'const { data: profile } = await supabase\n'
+     '  .from("profiles")\n'
+     '  .select("role")\n'
+     '  .eq("user_id", userId)\n'
+     '  .single<{ role: string }>();',
+     None),
+    ("generic .maybeSingle<T>() is a bounded read", "src/app/api/billing/status/route.ts",
+     "await supabase.auth.getUser();\n"
+     'const { data } = await control\n'
+     '  .from("tenants")\n'
+     '  .select("plan, status")\n'
+     '  .maybeSingle<{ plan: string; status: string }>();',
+     None),
+    # 2. A write that chains .select() to return its own row still has a
+    #    `.select(` in the window — the presence test alone let it through.
+    ("insert chaining .select().single() is a write, not a read", "src/lib/utils/audit.ts",
+     'const { error } = await supabase\n'
+     '  .from("audit_logs")\n'
+     '  .insert({ action, entity })\n'
+     '  .select()\n'
+     '  .single();',
+     None),
+    ("upsert chaining .select() is a write, not a read",
+     "src/app/api/integrations/review/import/route.ts",
+     "await supabase.auth.getUser();\n"
+     'const { data } = await client\n'
+     '  .from("sales")\n'
+     '  .upsert(rows, { onConflict: "external_order_id" })\n'
+     '  .select("id");',
+     None),
+    # 3. Inside a Promise.all([...]) array each entry ends in `,` not `;`, so
+    #    the window used to run on into the NEXT query and inherit its bound.
+    ("unbounded query in a Promise.all array still fires",
+     "src/app/dashboard/layout.tsx",
+     "const [a, b] = await Promise.all([\n"
+     '  supabase.from("notification_reads").select("notification_id"),\n'
+     '  supabase.from("sales").select("*").range(0, 49),\n'
+     "]);",
+     "unpaginated-collection-read"),
+    ("bounded queries in a Promise.all array stay clean",
+     "src/app/dashboard/layout.tsx",
+     "const [a, b] = await Promise.all([\n"
+     '  supabase.from("notifications").select("*").range(0, 49),\n'
+     '  supabase.from("sales").select("*").range(0, 49),\n'
+     "]);",
+     None),
+    # 4. The paginated fetchXPage thunks build the query incrementally, so the
+    #    `.range(` lands in a later statement — `count: "exact"` identifies it.
+    ("incrementally-built paginated thunk is fine",
+     "src/app/dashboard/sales/_store/salesSlice.ts",
+     'let query = supabase\n'
+     '  .from("sales")\n'
+     '  .select("*", { count: "exact" })\n'
+     '  .order("sale_date", { ascending: false });\n'
+     "if (filters.from) query = query.gte(\"sale_date\", filters.from);\n"
+     "query = query.range(from, to);",
+     None),
+    ("suppressed platform-wide tenant count read", "src/app/api/notifications/ebay-account-deletion/route.ts",
+     "verifyNotificationSignature(req);\n"
+     'const { data: tenants } = await control\n'
+     '  .schema("control")\n'
+     '  .from("tenants") // verifier:allow unpaginated-collection-read — bounded by active tenant count\n'
+     '  .select("schema_name")\n'
+     '  .eq("status", "active");',
+     None),
 ]
 
 # route-without-auth is a file-level rule; give it its own cases.
@@ -145,12 +283,12 @@ ROUTE_CASES: list[tuple[str, str, str | None]] = [
     ("route with getUser guard",
      'export async function POST() {\n'
      "  const { data } = await supabase.auth.getUser();\n"
-     '  await supabase.from("sales").select();\n}',
+     '  await supabase.from("sales").select().limit(1);\n}',
      None),
     ("route with platform-admin guard",
      'export async function POST() {\n'
      "  await verifyPlatformAdmin(req);\n"
-     '  const c = createControlClient();\n  await c.from("tenants").select();\n}',
+     '  const c = createControlClient();\n  await c.from("tenants").select().limit(1);\n}',
      None),
     ("webhook with signature check",
      "export async function POST() {\n"

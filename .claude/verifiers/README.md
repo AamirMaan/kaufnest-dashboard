@@ -64,6 +64,8 @@ judgement calls (`any`, a leaked Postgres error message) where a human decides.
 | `no-any` | WARN | Explicit `any` outside tests |
 | `dangerous-html` | WARN | `dangerouslySetInnerHTML` (eBay listing/message bodies are untrusted) |
 | `console-log` | WARN | Leftover `console.log` |
+| `unbounded-limit` | WARN | `.limit(N)` with N >= 1000 — Supabase's Max Rows setting truncates it silently regardless (PR #103). Note: only catches a *literal* number, not `.limit(SOME_CONSTANT)`, and skips comment lines — a named cap still needs a human to spot it |
+| `unpaginated-collection-read` | WARN | `.select()` on a growth table (sales/expenses/profiles/tenants/…) with no `.range()`/`.single()`/`.limit()`/`.eq(id)`/`fetchAllRows` in the same statement |
 
 ## Suppressing a rule
 
@@ -101,15 +103,59 @@ edit to its own tests.
 
 ## Known baseline
 
-`--all` currently reports 10 warnings and **zero blocking findings**:
+`--all` currently reports 44 warnings and **zero blocking findings**:
 
 - 7 × `db-error-to-client` — open audit finding 2.7, not yet remediated.
 - 3 × `no-any` in `src/lib/utils/generateInvoice.ts` — jsPDF ships no usable
   `doc` type.
+- 16 × `unpaginated-collection-read`, 0 × `unbounded-limit` — real unbounded
+  reads, close to the 13 findings Appendix A of
+  `docs/superpowers/specs/2026-09-15-backend-architecture-principles-design.md`
+  recorded by hand (the small excess is Appendix A entries that are one
+  *finding* but two code sites — e.g. the product-selector query in
+  `dashboard/layout.tsx` and its `inventorySlice.ts` refetch twin). Not yet
+  remediated; tracked as sub-project 3 of that spec's three-part plan. Two
+  further legitimate sites are suppressed with `// verifier:allow`
+  (`ImportSalesModal.tsx`'s chunked dedup,
+  `ebay-account-deletion/route.ts`'s tenant-count-bounded read).
+
+  These two rules previously reported **42** here. That number was mostly
+  false positives, not work: the generic `.single<T>()`/`.maybeSingle<T>()`
+  idiom wasn't recognised as a bounded read (10), writes that chain
+  `.select()` to return their own row were read as collection reads (13),
+  the six paginated `fetchXPage` thunks build their query incrementally so
+  the `.range()` fell outside the scanned statement (6), and
+  `unbounded-limit`'s only two hits were comments *describing* the hazard.
+  All four were fixed in the rule on 2026-09-16, which also tightened the
+  statement window so a query inside a `Promise.all([…])` array stops
+  borrowing the *next* query's bound — that had been hiding 4 genuine
+  findings, including `notificationsSlice.ts`'s `notification_reads` read
+  (Appendix A's highest-severity correctness bug).
+- 18 × `hardcoded-tenant-schema` (17) / `dangerous-html` (1) — pre-existing
+  hits this section had not previously accounted for (the "10 warnings"
+  figure above predates both counts growing). Spot-checking shows these are
+  predominantly test fixtures (`storagePath.test.ts`, `managementApi.test.ts`,
+  `tenantSlug.test.ts` — 11, plus `overviewRpc.integration.test.ts`'s
+  literal `"tenant_boughtopia"` — 12 of the 17) plus a handful of
+  pending/false-positive rule matches — a comment merely mentioning a
+  tenant name (`welcome/page.tsx`, `fetchAllRows.ts`), and a table/column
+  literal containing the substring "tenant" rather than an actual
+  hardcoded schema (`quota.ts`'s `tenant_ai_usage` table and `tenant_id`
+  column, `api/admin/ai-usage/route.ts`'s `tenant_ai_usage`). The lone
+  `dangerous-html` hit (`ListingPreview.tsx`) is a sanitized dynamic
+  render, not a static literal — not a case this rule should really be
+  flagging, either. None of the 18 are yet triaged or suppressed. Out of
+  scope for this task — flagged here so the total stays reconcilable
+  against `verify_changes.py --all`'s real output instead of drifting the
+  way the two-lists problem in AGENTS.md warns about.
 
 Keep the blocking count at zero. If a new BLOCK finding appears, fix the code
 rather than the rule — the rules were calibrated against a clean tree at
-`bafa506`, so a new one means something genuinely regressed.
+`bafa506`, so a new one means something genuinely regressed. The 16
+`unpaginated-collection-read` hits above are open bugs, not a tolerated
+baseline: each one is a real unbounded read and the count should reach 0 as
+sub-project 3 lands — don't treat it as permanent the way the
+`db-error-to-client`/`no-any` counts are.
 
 ## Adding a rule
 
