@@ -85,6 +85,39 @@ The date-preset + entity-filter logic backing `FilterBar` (see
 - `isDefaultFilters(f)` — drives the `FilterBar`'s "Clear" button visibility
   (`hasActive = !isDefaultFilters(filters)`); uses `"x" in f` narrowing so one
   function works across all three filter shapes.
+- `PeriodUnit = "full" | "q1" | "q2" | "q3" | "q4" | "01".."12"`,
+  `periodRange(year, unit) → { from, to }`, `describePeriod(from, to) → {
+  year, unit } | null` (2026-09-17) — the "Specific period" date filter's
+  maths (`components/ui/FilterBar.tsx`'s Year/Period selects, and Overview's
+  own bespoke date-range UI in `dashboard/page.tsx`). A period pick is never
+  its own `DatePreset` — it always resolves to `preset: "custom"` plus a
+  concrete pair, so every existing `resolveDateRange`/thunk consumer needs no
+  changes. `describePeriod` is the inverse, used to re-derive which Year/Period
+  a stored `{from, to}` pair represents (e.g. after a remount) — it returns
+  `null` for any pair that is not an EXACT period span, which is what keeps a
+  hand-typed custom range rendering as "Custom Range" instead of being
+  mislabelled. `PERIOD_UNIT_OPTIONS` is the shared `{value, label}[]` list for
+  the Period select, consumed by both `FilterBar.tsx` and `dashboard/page.tsx`
+  so the two don't duplicate the same 17-entry array.
+
+## fetchEarliestYear.ts
+
+`fetchEarliestYear(fetchEarliestDate, fallback?) → Promise<number>`
+(2026-09-17) — resolves the lower bound for the "Specific period" filter's
+Year select. Same test-friendly callback-injection shape as `fetchAllRows`
+(the caller supplies the actual Supabase query, so this stays unit-testable
+without a live client). `fallback` defaults to the current year, used both
+when the table has no rows and when the fetched value doesn't parse as a
+date. Called once on mount by each of Sales/Expenses/Purchases/Audit Logs'
+`page.tsx` (one call, that feature's own table) and by Overview's `page.tsx`
+(three calls — sales/expenses/purchases — taking the `Math.min` of the
+three, since Overview's date filter spans all of them). Overview does
+**not** derive this from its already-fetched `sales`/`expenses`/`purchases`
+local state, even though that data is sitting right there — that state is
+already scoped to the CURRENTLY SELECTED date range (see its own `.gte`/
+`.lte` fetch), so once any narrower range is selected it would silently
+undercount how far back real data actually goes. This helper always queries
+unfiltered.
 
 ## csv.ts
 
@@ -103,21 +136,53 @@ Export and import primitives for the CSV round-trip on Sales/Expenses/Purchases.
 
 ## excel.ts
 
-`parseExcelBuffer(buffer) → { headers, rows }` — parses `.xlsx`/`.xls` from an
-`ArrayBuffer` via SheetJS.
+`parseExcelBuffer(buffer) → { headers, rows, mixedDateTypeColumns }` — parses
+`.xlsx`/`.xls` from an `ArrayBuffer` via SheetJS.
 
-**Returns exactly the same shape as `parseCsvText`**, which is the entire point:
-the Sales import modal feeds both file types through one unchanged pipeline.
-Preserve that contract if you touch either module.
+**`headers`/`rows` are exactly the same shape as `parseCsvText`**, which is
+the entire point: the Sales import modal feeds both file types through one
+unchanged pipeline. Preserve that contract if you touch either module.
 
 - First worksheet only.
 - Headers lowercased + trimmed (matching `parseCsvText`).
 - Entirely blank rows dropped.
-- Dates are emitted as `YYYY-MM-DD` strings so `parseFlexibleDate` accepts them.
+- Dates are emitted as `YYYY-MM-DD` strings so `parseFlexibleDate` accepts them
+  — **except when they can't be trusted at all**, see `mixedDateTypeColumns`
+  below.
 
 > `xlsx` is the dependency flagged in `AUDIT_2026-07-24.md` §2.3 (prototype
 > pollution + ReDoS, no npm fix). It only ever parses a file the user picked
 > themselves, but keep the blast radius in mind before reusing it server-side.
+
+**`mixedDateTypeColumns: Set<string>`** (2026-09-15, real k2_textil import
+bug) — headers whose column mixes a native Excel date-typed cell with a
+plain-text, date-shaped cell. This is a DIFFERENT corruption signature than
+the CSV-only "mixed separator" one `detectDateOrder` already catches
+(`localeParse.ts`), and neither `detectDateOrder` nor `parseFlexibleDate` can
+see it: Excel only auto-converts a typed/pasted value into a real date cell
+when it forms a VALID date under Excel's OWN locale — `31-05-2026` fails as
+month=31 under a month-first locale and survives as plain text (which DOES
+reach `detectDateOrder`/`parseFlexibleDate` and parses correctly), but
+`03-05-2026` is a valid month=03/day=05 reading under that same locale, so
+Excel silently converts it to a native date cell — permanently losing the
+intended day-first meaning (May 3rd becomes March 5th) before our code ever
+sees text. `cellToString`'s `Date` branch just reads `getMonth()`/`getDate()`
+off whatever Excel already resolved; there is no ambiguous string left to
+evaluate, so this can ONLY be caught by noticing the mix itself. Computed
+over the RAW (pre-`cellToString`) cell values, across every data row
+including ones later dropped as blank — the mix is what's diagnostic, not
+which rows survive. `ImportSalesModal.tsx`'s `parseAndValidate` checks
+whether the raw header the `date` key resolved to is in this set and refuses
+the import with a clear error (same "don't guess, refuse" philosophy as
+`detectDateOrder`'s conflict cases) — **before** `detectDateOrder` even runs,
+since a file this corrupted can't be salvaged by re-detecting order. Already
+-imported bad data from before this fix needs a manual per-batch SQL
+correction (`created_at`-scoped `UPDATE`), not a re-import — the original
+ambiguous text is gone from the file forever once Excel has done this.
+**Only wired into Sales's Excel import path** — Purchases/Expenses also call
+`parseExcelBuffer` (`ImportPurchasesModal.tsx`/`ImportExpensesModal.tsx`) but
+don't check `mixedDateTypeColumns` yet, so they're still exposed to the same
+corruption on an `.xlsx` upload with an ambiguous date column.
 
 ## localeParse.ts
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removeSale, fetchSalesPage } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -23,6 +23,8 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   isRevenueSale,
@@ -57,6 +59,28 @@ export default function SalesPage() {
 
   const [filters, setFilters] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("sales")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.date ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
@@ -117,44 +141,63 @@ export default function SalesPage() {
     applyFilters(next);
   }
 
+  /**
+   * Atomic counterpart to `setFilter` for a period pick from FilterBar's
+   * "Specific period" mode — sets preset + dateFrom + dateTo in one update,
+   * required since `setFilter` computes `next` from the `filters` closure
+   * and three separate calls in one handler would silently drop two of the
+   * three fields. See FilterBar.tsx's SKILL.md entry for the full "why".
+   */
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
+    setFilters(next);
+    applyFilters(next);
+  }
+
   function clearFilters() {
     setFilters(DEFAULT_SALES_FILTERS);
     applyFilters(DEFAULT_SALES_FILTERS);
   }
 
-  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+  // ── CSV export — fetches ALL matching rows, paginated past the server's
+  // Max Rows cap (see @/lib/utils/fetchAllRows), up to a 5 000-row safety cap ─
 
   async function handleExport() {
     const supabase = await createTenantClient();
-    let query = supabase
-      .from("sales")
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(5000);
 
     const range =
       filters.preset === "custom"
         ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
         : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-    if (filters.platform !== "all") query = query.eq("platform", filters.platform);
-    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-    if (filters.status !== "all") query = query.eq("status", filters.status);
 
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
-      query = query.or(
-        `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
-      );
-    }
+    const allRows = await fetchAllRows<Sale>(async (from, to) => {
+      let query = supabase
+        .from("sales")
+        .select("*", { count: "exact" })
+        .order("date", { ascending: false })
+        .range(from, to);
 
-    const { data: allRows } = await query;
-    if (!allRows || allRows.length === 0) return;
+      if (range && filters.preset !== "all") {
+        query = query.gte("date", range.from).lte("date", range.to);
+      }
+      if (filters.platform !== "all") query = query.eq("platform", filters.platform);
+      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+      if (filters.status !== "all") query = query.eq("status", filters.status);
+
+      if (filters.search.trim() !== "") {
+        const term = sanitizeIlikeSearchTerm(filters.search);
+        query = query.or(
+          `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
+        );
+      }
+
+      return query.returns<Sale[]>();
+    }, 5000);
+
+    if (allRows.length === 0) return;
 
     const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
-    const rows = (allRows as Sale[]).map((s) => [
+    const rows = allRows.map((s) => [
       s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
       s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "", s.platform_fee ?? "",
@@ -329,6 +372,8 @@ export default function SalesPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         searchValue={filters.search}

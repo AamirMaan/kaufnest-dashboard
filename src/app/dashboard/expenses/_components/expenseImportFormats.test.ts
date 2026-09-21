@@ -265,9 +265,17 @@ describe("classifySkip — vorsteuer only", () => {
     })).toBe("blank row");
   });
 
-  it("skips an unsupported currency", () => {
+  it("no longer skips a plausible ISO code different from the base currency", () => {
+    // JPY now routes through to the FX rate review step instead of being
+    // skipped — see validateExpenseRow's currency-resolution tests below.
     expect(classifySkip(EXPENSE_IMPORT_FORMATS.vorsteuer, {
       ...vorsteuerRow, currency: "JPY",
+    })).toBeNull();
+  });
+
+  it("skips a currency value that isn't a plausible 3-letter ISO code", () => {
+    expect(classifySkip(EXPENSE_IMPORT_FORMATS.vorsteuer, {
+      ...vorsteuerRow, currency: "XYZ123",
     })).toBe("unsupported currency");
   });
 
@@ -329,6 +337,43 @@ describe("generic format", () => {
       date: "", title: "", amount: "",
     }, 2);
     expect(row.error).not.toBeNull();
+  });
+});
+
+describe("currency resolution (FX review)", () => {
+  it("resolves a non-base ISO currency instead of erroring — routes to FX review", () => {
+    const row = validateExpenseRow(
+      EXPENSE_IMPORT_FORMATS.generic,
+      { date: "2026-01-15", title: "Ads", amount: "10", currency: "SEK" },
+      2,
+      "dmy",
+      "EUR",
+    );
+    expect(row.error).toBeNull();
+    expect(row.sheetCurrency).toBe("SEK");
+    // Unconverted at parse time — data.currency is the BASE currency, and
+    // amount is still the sheet's raw (unconverted) figure.
+    expect(row.data?.currency).toBe("EUR");
+    expect(row.data?.original_currency).toBeNull();
+  });
+
+  it("treats a value matching the base currency as no conversion needed", () => {
+    const row = validateExpenseRow(
+      EXPENSE_IMPORT_FORMATS.generic,
+      { date: "2026-01-15", title: "Ads", amount: "10", currency: "eur" },
+      2,
+      "dmy",
+      "EUR",
+    );
+    expect(row.sheetCurrency).toBeNull();
+    expect(row.data?.currency).toBe("EUR");
+  });
+
+  it("still errors on a currency value that isn't a plausible ISO code", () => {
+    const row = validateExpenseRow(EXPENSE_IMPORT_FORMATS.generic, {
+      date: "2026-01-15", title: "Ads", amount: "10", currency: "XYZ123",
+    }, 2);
+    expect(row.error).toContain("unsupported currency");
   });
 });
 

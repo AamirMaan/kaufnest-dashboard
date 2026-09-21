@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removeExpense, fetchExpensesPage } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -22,6 +22,8 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
@@ -56,6 +58,28 @@ export default function ExpensesPage() {
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = await createTenantClient();
+      const year = await fetchEarliestYear(async () => {
+        const { data } = await supabase
+          .from("expenses")
+          .select("date")
+          .order("date", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        return data?.date ?? null;
+      });
+      if (!cancelled) setEarliestYear(year);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedItems = useMemo(
@@ -108,43 +132,56 @@ export default function ExpensesPage() {
     applyFilters(next);
   }
 
+  // Atomic — see sales/page.tsx's setPeriod and FilterBar's SKILL.md entry for why three separate setFilter calls would silently drop two of three fields.
+  function setPeriod(preset: DatePreset, dateFrom: string, dateTo: string) {
+    const next = { ...filters, preset, dateFrom, dateTo };
+    setFilters(next);
+    applyFilters(next);
+  }
+
   function clearFilters() {
     setFilters(DEFAULT_EXPENSE_FILTERS);
     applyFilters(DEFAULT_EXPENSE_FILTERS);
   }
 
-  // ── CSV export — fetches ALL matching rows (no range cap except safety 5000) ─
+  // ── CSV export — fetches ALL matching rows, paginated past the server's
+  // Max Rows cap (see @/lib/utils/fetchAllRows), up to a 5 000-row safety cap ─
 
   async function handleExport() {
     const supabase = await createTenantClient();
-    let query = supabase
-      .from("expenses")
-      .select("*")
-      .order("date", { ascending: false })
-      .limit(5000);
 
     const range =
       filters.preset === "custom"
         ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
         : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-    if (filters.category !== "all") query = query.eq("category", filters.category);
-    if (filters.currency !== "all") query = query.eq("currency", filters.currency);
 
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
-      query = query.or(
-        `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
-      );
-    }
+    const allRows = await fetchAllRows<Expense>(async (from, to) => {
+      let query = supabase
+        .from("expenses")
+        .select("*", { count: "exact" })
+        .order("date", { ascending: false })
+        .range(from, to);
 
-    const { data: allRows } = await query;
-    if (!allRows || allRows.length === 0) return;
+      if (range && filters.preset !== "all") {
+        query = query.gte("date", range.from).lte("date", range.to);
+      }
+      if (filters.category !== "all") query = query.eq("category", filters.category);
+      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
+
+      if (filters.search.trim() !== "") {
+        const term = sanitizeIlikeSearchTerm(filters.search);
+        query = query.or(
+          `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
+        );
+      }
+
+      return query.returns<Expense[]>();
+    }, 5000);
+
+    if (allRows.length === 0) return;
 
     const headers = ["date", "title", "category", "vendor", "amount", "currency", "vat_rate", "vat_amount", "description"];
-    const rows = (allRows as Expense[]).map((e) => [
+    const rows = allRows.map((e) => [
       e.date, e.title, e.category, e.vendor ?? "", e.amount,
       e.currency, e.vat_rate ?? "", e.vat_amount ?? "", e.description ?? "",
     ]);
@@ -299,6 +336,8 @@ export default function ExpensesPage() {
         onDateFromChange={(v) => setFilter("dateFrom", v)}
         dateTo={filters.dateTo}
         onDateToChange={(v) => setFilter("dateTo", v)}
+        earliestYear={earliestYear}
+        onPeriodChange={setPeriod}
         currency={filters.currency}
         onCurrencyChange={(v) => setFilter("currency", v)}
         searchValue={filters.search}

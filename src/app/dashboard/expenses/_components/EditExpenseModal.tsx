@@ -10,7 +10,8 @@ import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { resolveVatAmount } from "../_lib/vatPreservation";
-import type { ExpenseCategory, Currency, Expense } from "@/types";
+import { ReceiptUploader } from "./ReceiptUploader";
+import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
   "shipping", "advertising", "software", "office",
@@ -37,6 +38,7 @@ interface FormState {
   vendor_vat_number: string;
   invoice_number: string;
   reason: string;
+  receipts: ExpenseReceipt[];
 }
 
 function expenseToForm(e: Expense, defaultVatRate: number): FormState {
@@ -53,13 +55,14 @@ function expenseToForm(e: Expense, defaultVatRate: number): FormState {
     vendor_vat_number: e.vendor_vat_number ?? "",
     invoice_number: e.invoice_number ?? "",
     reason: "",
+    receipts: e.receipts ?? [],
   };
 }
 
 const blankForm: FormState = {
   title: "", amount: "", currency: "EUR", category: "other", vendor: "", date: "",
   description: "", vat_included: false, vat_rate: "0",
-  vendor_vat_number: "", invoice_number: "", reason: "",
+  vendor_vat_number: "", invoice_number: "", reason: "", receipts: [],
 };
 
 export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
@@ -68,6 +71,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(() => (expense ? expenseToForm(expense, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [receiptsBusy, setReceiptsBusy] = useState(false);
 
   // Snapshot of the form exactly as it was populated from `expense`, used to
   // decide whether the user has touched any VAT-relevant input at all — see
@@ -138,6 +142,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         vat_amount: vatAmount,
         vendor_vat_number: form.vendor_vat_number.trim() || null,
         invoice_number: form.invoice_number.trim() || null,
+        receipts: form.receipts,
       })
       .eq("id", expense.id)
       .select()
@@ -158,8 +163,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
       entityType: "expense",
       entityId: expense.id,
       metadata: {
-        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date, vat_rate: expense.vat_rate, vat_amount: expense.vat_amount, vendor_vat_number: expense.vendor_vat_number, invoice_number: expense.invoice_number },
-        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount, vendor_vat_number: data.vendor_vat_number, invoice_number: data.invoice_number },
+        before: { title: expense.title, amount: expense.amount, category: expense.category, vendor: expense.vendor, currency: expense.currency, date: expense.date, vat_rate: expense.vat_rate, vat_amount: expense.vat_amount, vendor_vat_number: expense.vendor_vat_number, invoice_number: expense.invoice_number, receipts: expense.receipts },
+        after:  { title: data.title, amount: data.amount, category: data.category, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount, vendor_vat_number: data.vendor_vat_number, invoice_number: data.invoice_number, receipts: data.receipts },
         reason: form.reason.trim(),
       },
     });
@@ -178,8 +183,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
       footer={
         <>
           <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" form="edit-expense-form" disabled={saving}>
-            {saving ? "Saving…" : "Save Changes"}
+          <Button type="submit" form="edit-expense-form" disabled={saving || receiptsBusy}>
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Save Changes"}
           </Button>
         </>
       }
@@ -221,6 +226,14 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
             </Select>
           </Field>
         </Row>
+
+        {expense?.original_currency && expense.original_total_amount !== null && expense.fx_rate !== null && (
+          <p className="text-xs text-[var(--color-text-faint)]">
+            Originally {expense.original_currency} {expense.original_total_amount.toFixed(2)} @{" "}
+            {expense.fx_rate.toFixed(5)}
+            {expense.fx_rate_date ? ` (ECB ${expense.fx_rate_date})` : ""}
+          </p>
+        )}
 
         <Field label="Vendor">
           <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
@@ -271,6 +284,17 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+
+        <Field label="Receipts">
+          <ReceiptUploader
+            receipts={form.receipts}
+            setReceipts={(receipts) => set("receipts", receipts)}
+            expenseId={expense?.id ?? null}
+            onExpenseCreated={async () => expense!.id}
+            onBusyChange={setReceiptsBusy}
+            disabled={saving}
+          />
+        </Field>
 
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />

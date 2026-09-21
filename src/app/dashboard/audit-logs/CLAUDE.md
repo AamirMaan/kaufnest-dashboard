@@ -6,7 +6,11 @@ every create/update/delete/login/logout/role-change across the app.
 ## Files in this folder
 
 - `page.tsx` — table of log entries with server-side pagination and filters
-  (`FilterBar` for date preset/range, action type dropdown). Dispatches
+  (`FilterBar` for date preset/range — incl. "Specific period", any
+  month/quarter/year, see `components/ui/SKILL.md`'s FilterBar entry —
+  action type dropdown). Its `earliestYear` fetch queries `created_at`
+  (timestamptz), not `date` like the other three FilterBar consumers.
+  Dispatches
   `fetchAuditLogsPage` on filter changes and page navigation. Shows a
   `<Pagination>` component and a loading opacity overlay while fetching.
   Opens the detail modal on row "View" click.

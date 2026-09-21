@@ -42,30 +42,41 @@ broadly when working on a specific feature.**
   wrong (e.g. the VAT Position section disappearing) once a tenant had more
   than one page of records, or had recently paged through those tables
   elsewhere in the app (see the 2026-07-27 fix). Instead, on mount and
-  whenever the date-range filter changes, it fetches all four tables
-  directly via `createTenantClient()` (`.select("*").order("date", {
-  ascending: false }).limit(5000)`, plus `.gte`/`.lte` when a range is
-  selected — same shape as the CSV-export queries in Sales/Expenses/
-  Purchases), into **local `useState`**, not a Redux slice (page-only data,
-  no other feature needs it). `isLoading` drives the same "opacity-60
-  pointer-events-none" overlay convention used by the paginated list pages.
-  Applies a user-controlled date-range filter (`resolveDateRange` from
-  `lib/utils/filters`, preset + custom from/to) on top of the already
-  range-scoped fetch, derives `effectiveSales = periodSales.filter(isRevenueSale)`
-  (canonical predicate from `lib/utils/filters` — excludes `status === "returned"`
-  AND `status === "cancelled"`) and renders:
+  whenever the date-range filter or `profileCurrency` changes, it fetches
+  all four tables' aggregates via `supabase.rpc(...)` calls to
+  `get_sales_overview`/`get_expenses_overview`/`get_purchases_overview`/
+  `get_payouts_overview` (see `supabase/CLAUDE.md`'s migration 045 entry and
+  `docs/superpowers/specs/2026-09-16-overview-rpc-aggregation-design.md`),
+  each taking the date-range filter and `profileCurrency` as SQL parameters
+  — no more client-side currency filtering or row-level aggregation. Results
+  are stored as four typed objects (`salesOverview`/`expensesOverview`/
+  `purchasesOverview`/`payoutsOverview`) in **local `useState`**, not a Redux
+  slice (page-only data, no other feature needs it). `isLoading` drives the
+  same "opacity-60 pointer-events-none" overlay convention used by the
+  paginated list pages.
+  The date-range filter itself (`resolveDateRange` from `lib/utils/filters`,
+  preset + custom from/to — including a "Specific period" mode, any
+  month/quarter/year, added 2026-09-17 via `periodRange`/`describePeriod`/
+  `fetchEarliestYear` from `lib/utils/`; this page has its own bespoke inline
+  date-range UI rather than the shared `FilterBar` component, so it
+  reimplements the same period-picking logic directly — see
+  `components/ui/SKILL.md`'s FilterBar entry for the shared version) resolves
+  to the `{from, to}` pair passed as `p_from`/`p_to` to the 4 RPCs above — no
+  client-side row filtering (`effectiveSales`/`isRevenueSale`) remains in this
+  file as of the RPC rewrite; that predicate now lives in `get_sales_overview`
+  itself. Renders:
   - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
     units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
     Collected, monthly trend revenue, Revenue by Platform, and Top Products all
-    use `effectiveSales` (returned and cancelled orders excluded) — only the
-    "Orders" StatCard's count uses the unfiltered `periodSales.length` (total
-    orders placed, including returns/cancellations).
-  - Revenue sums `total_amount + (shipping_charged ?? 0)` per effective sale;
-    costs deduct `(shipping_cost ?? 0) + (advertising_fee ?? 0)` before
-    calling `calculateNetProfit`.
-  - Multi-currency guard: `periodSales`/`periodExpenses`/`periodPurchases` are
-    pre-filtered to `s.currency === profileCurrency` so EUR + USD are never
-    summed into a single meaningless number.
+    come from `get_sales_overview`'s already-effective (returns/cancellations
+    excluded) figures — only the "Orders" StatCard's count uses
+    `salesOverview.orderCount` (total orders placed, including
+    returns/cancellations, vs. `effectiveOrderCount` used for average order
+    value).
+  - Revenue/fees/VAT/monthly-trend/platform/top-product figures are exactly
+    what each RPC returns — the two distinct revenue formulas (per-sale
+    `total_amount + shipping_charged` vs. fees deducting `shipping_cost +
+    advertising_fee`) now live in the SQL functions, not this file.
   - **VAT Position** section (hidden when no VAT data in period): VAT Collected
     (output, from sales), VAT Paid (input, purchases + expenses), net Due to
     Government / Government Refund
@@ -78,35 +89,61 @@ broadly when working on a specific feature.**
     (each hidden when empty)
   - **Platform balance cards** (eBay / Amazon, one per connected platform): each
     card shows 6 tiles in a 2×3 layout — Sales, Ad Fees + Shipping, Expenses,
-    Balance Earned, Transferred, Pending. Platform balance cards also compute
-    `transferred` (sum of `periodPayouts` for the platform) and
-    `pending = balance − transferred`. A "Record Transfer" button
-    (admin/super_admin only) opens `RecordTransferModal`
-    (`_components/RecordTransferModal.tsx`). `periodPayouts` is filtered from
-    the locally-fetched `payouts` state by currency + date range.
+    Balance Earned, Transferred, Pending. `computePlatformBalance("ebay" |
+    "amazon")` combines `salesOverview.platformBalance`,
+    `expensesOverview.platformSubtotal`, and `payoutsOverview.transferred` for
+    that platform, then calls `computePending(balance, transferred)`. A
+    "Record Transfer" button (admin/super_admin only) opens
+    `RecordTransferModal` (`_components/RecordTransferModal.tsx`).
   Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
   are passed to recharts props (CSS variables don't render reliably inside SVG).
   No `_components`/`_store` of its own — but see `_lib/` below.
   Shared deps:
   `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `ExpenseCategory` type, `useTheme`, `recharts`,
-  `lib/supabase/client` (`createTenantClient`).
+  `resolveDateRange`, `periodRange`/`describePeriod`, `ExpenseCategory` type,
+  `useTheme`, `recharts`, `lib/supabase/client` (`createTenantClient`),
+  `_lib/platformBalance` (`computePending`), `lib/utils/fetchEarliestYear`.
 
 ## `_lib/` — pure helpers for the Overview page
 
-`page.tsx` does its aggregation in local `useState`, not Redux, so the maths has
-nowhere to live except here. Both modules are pure (no React/Supabase/Redux) and
-have a colocated test — `npx jest dashboard/_lib`. Keep new Overview maths in
-this shape: extracting it is what makes it testable without rendering the page.
+Both modules below are pure (no React/Supabase/Redux) and have a colocated
+test — `npx jest dashboard/_lib`. Keep new Overview maths in this shape:
+extracting it is what makes it testable without rendering the page.
 
 - `aggregateSales.ts` — `aggregateSaleRevenue(sales) → { revenue, fees }`.
   Filters through `isRevenueSale` first (so returned/cancelled orders are
   excluded — see `lib/utils/filters.ts`), then sums
   `total_amount + (shipping_charged ?? 0)` into `revenue` and
-  `(shipping_cost ?? 0) + (advertising_fee ?? 0)` into `fees`.
-- `platformBalance.ts` — `computePending(balance, periodPlatformPayouts) → number`.
-  Subtracts recorded payouts from a **pre-computed** balance; the caller is
-  responsible for filtering payouts by date range and platform first.
+  `(shipping_cost ?? 0) + (advertising_fee ?? 0)` into `fees`. **As of
+  2026-09-17 `page.tsx` no longer calls this** — the same formula now lives
+  in the `get_sales_overview` Postgres function instead (migration
+  `045_overview_aggregation_functions.sql`). It's kept here because
+  `dashboard/sales/page.tsx` still uses it for its own client-side revenue
+  total; move it into `sales/_lib/` if Sales ever becomes its only caller.
+- `platformBalance.ts` — `computePending(balance: number, transferred: number)
+  → number`. Subtracts a transferred-amount total from a **pre-computed**
+  balance; both are now the corresponding platform's fields read out of
+  `get_sales_overview`/`get_payouts_overview`'s results (via
+  `computePlatformBalance()` in `page.tsx`) rather than reduced from raw
+  payout rows.
+- `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) is **no longer used by this
+  page** as of the 2026-09-17 RPC rewire — `page.tsx` now fetches
+  pre-aggregated JSON via 4 `supabase.rpc(...)` calls instead of paging
+  through raw `sales`/`expenses`/`purchases`/`platform_payouts` rows, so the
+  "Max Rows" gotcha below no longer applies here. It's still used by the
+  Sales/Expenses/Purchases CSV-export queries — see its bullet in the repo
+  root `AGENTS.md`'s shared `src/lib/*` list.
+- `overviewRpc.integration.test.ts` (2026-09-17) — NOT a pure `_lib` unit
+  test like the two above: it hits the four real `get_sales_overview`/
+  `get_expenses_overview`/`get_purchases_overview`/`get_payouts_overview`
+  Postgres functions (migration `045_overview_aggregation_functions.sql`)
+  live over the network against `tenant_boughtopia`, inserting and then
+  deleting real `sales`/`expenses` rows via `createServiceClientForTenant`
+  (`src/lib/supabase/server.ts`) to bypass RLS for setup/teardown. Excluded
+  from `npx jest`'s default run and `.husky/pre-push` — separate config
+  (`jest.integration.config.ts`, repo root) and script (`npm run
+  test:integration`). See `SKILL.md`'s gotcha for why it can't just call
+  `process.loadEnvFile(".env.local")` like the other npm scripts do.
 
 ## Feature folders (each documents itself — start there)
 

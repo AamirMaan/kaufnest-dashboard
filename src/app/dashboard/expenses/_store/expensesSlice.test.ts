@@ -24,6 +24,11 @@ const makeExpense = (overrides: Partial<Expense> = {}): Expense => ({
   vat_amount: null,
   vendor_vat_number: null,
   invoice_number: null,
+  original_currency: null,
+  original_total_amount: null,
+  fx_rate: null,
+  fx_rate_date: null,
+  receipts: [],
   ...overrides,
 });
 

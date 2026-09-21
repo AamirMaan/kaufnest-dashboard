@@ -82,21 +82,14 @@ New shared code from the migration:
   `src/app/api/notifications/` for the bell feature — put anything
   server-side notifications need elsewhere and cross-reference it from
   `src/app/dashboard/CLAUDE.md` instead.
-- **Pagination architecture (Phase 3):** All main data tables use server-side
-  pagination. Layout (`src/app/dashboard/layout.tsx`) hydrates page 1 with a
-  row count via `.select("*", { count: "exact" }).range(0,
-  DEFAULT_PAGE_SIZE - 1)` and passes `{data, count}` through `StoreProvider`
-  → each slice's `hydratePage` reducer. Per-feature fetch thunks
-  (`fetchSalesPage`, `fetchExpensesPage`, `fetchPurchasesPage`,
-  `fetchAuditLogsPage`, `fetchInventoryPage`) handle subsequent pages and
-  filter changes — filters are pushed into the Supabase query (`gte`, `lte`,
-  `eq`, `ilike`), not applied client-side. Shared helpers:
-  `src/lib/utils/pagedQuery.ts` (`rangeFor`, `PageRequest`,
-  `DEFAULT_PAGE_SIZE = 50`) and `src/components/ui/Pagination.tsx`. Inventory
-  has a split fetch: paginated `items` for the table + a lightweight
-  full-fetch `selectorItems` (`id, name, current_stock, sku`) for product
-  dropdowns in modals. Users and dropshipping listings use client-side
-  pagination only (small data sets).
+- **Pagination architecture (Phase 3):** All main data tables use
+  server-side pagination via seven `fetchXPage` thunks. Full description —
+  the reference pattern, the `.range()` shape, the shared helpers, and
+  known gaps (Inventory's `selectorItems` full-fetch dropdown is NOT
+  actually bounded, despite the name) — moved to
+  `BACKEND_ARCHITECTURE_PRINCIPLES.md` section 1, to keep this list from
+  drifting out of sync with that doc the way a duplicated list did before
+  (see the 2026-07-24 audit note above this list).
 - `src/lib/ai/` — Anthropic client, prompt builders, quota metering and the
   AI route guard (server-only, never imported client-side). Quota lives in
   `control.tenant_ai_usage` (Project A); the per-plan allowance is
@@ -313,6 +306,35 @@ table, the current known baseline, and how to add a rule. If you add an
 invariant to this file, add the matching rule there too — a rule that only
 exists as prose is one nobody enforces.
 
+## New Supabase query checklist
+
+Full reasoning and the audit that motivated this: `BACKEND_ARCHITECTURE_PRINCIPLES.md`.
+Before writing any new `.from(...).select(...)` call:
+
+1. Is this a list a user pages through? Use a `fetchXPage` thunk:
+   `.select(..., { count: "exact" }).range(from, to)`.
+2. Do you need every row matching a filter, not just one page? Use
+   `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) — never a single
+   `.limit(N)` call, however big N is. Supabase's PostgREST "Max Rows"
+   setting silently truncates any one request to its own cap (default
+   1000), no error, regardless of the `.limit()`/`.range()` you asked for.
+3. Is the result set structurally bounded (not just "small today")? Name
+   the constant that bounds it. A business-growth quantity (customers,
+   orders, products, users) is never bounded.
+4. Do you need a computed summary (sums, group-bys, top-N) rather than
+   rows? Consider a Postgres RPC instead of fetching rows to aggregate
+   client-side (`BACKEND_ARCHITECTURE_PRINCIPLES.md` section 2).
+5. Reading more than one id? Batch via `.in()`/`.upsert()`, chunked if the
+   id list can be large (`IN_CHUNK` in `ImportSalesModal.tsx`) — and
+   remember a batched `.in()` read is STILL subject to the Max Rows cap.
+6. Writing a new mutating API route? Gate it with a `requireXGuard()`-style
+   function (`src/lib/{billing,integrations,shipping,ai}/authGuard.ts`) and
+   never return a raw Postgres error to the client.
+
+Enforced by the `unbounded-limit` and `unpaginated-collection-read` rules
+in `.claude/verifiers/` — see its README for the current count of open
+findings.
+
 ## Keeping the graphify graph current
 
 `graphify update .` now runs **automatically** in the background at the end of
@@ -401,10 +423,26 @@ owns it. Current shared locations:
 - `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + `src/store/slices/{auditLogsSlice,currentUserSlice}`
   — `auditLogsSlice` is written to by every CRUD feature; `currentUserSlice` is
   read directly by Sales/Expenses/Purchases for role checks
-- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice}`
+- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows}`
   (`generateInvoice` is also used by the shared `InvoiceModal`, both read
-  company/invoice settings from `src/store/slices/companyProfileSlice`)
+  company/invoice settings from `src/store/slices/companyProfileSlice`;
+  `fetchAllRows` pages a Supabase query past the project's PostgREST "Max
+  Rows" setting, which silently truncates a single `.limit()`/`.range()`
+  request to its own cap — default 1000 — with no error; used by the
+  Overview page and the Sales/Expenses/Purchases CSV exports, see
+  `src/app/dashboard/SKILL.md`'s gotcha)
 - `src/types/index.ts` — single source of truth for all domain types
+- `src/lib/fx/` (2026-09-17) — `convert.ts` (pure: `convertAmount`,
+  `resolveSheetCurrency`, `applyRate`, `isPlausibleIsoCode`), `ecb.ts`
+  (server-only ECB daily reference rate fetch + `control.fx_rates` cache,
+  weekend/holiday 7-day walk-back), `authGuard.ts` (`requireFxAccess`, backs
+  `POST /api/fx/rates`). Used by all three import paths — Sales/Expenses/
+  Purchases `_components/*ImportFormats.ts` and their import modals.
+- `src/components/import/` (2026-09-17) — `fxReviewState.ts` (pure reducer:
+  per-currency ECB/manual mode, `isReviewComplete`, `resolveRowRate`) and
+  `FxRateReview.tsx` (the shared rate-review UI shown mid-import when a
+  file has non-base-currency rows). The 3rd+ consumer (Sales, Expenses,
+  Purchases) that crossed this section's "3+ features" promotion threshold.
 
 Two routes are conceptually part of a feature but **cannot** be colocated
 because Next.js pins them to fixed URL paths: `app/api/users/invite/route.ts`

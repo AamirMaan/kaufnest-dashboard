@@ -58,6 +58,10 @@ class Rule:
     requires_file_pattern: re.Pattern | None = None
     # File-level rules (absence checks) can't be expressed as a line match.
     file_check: str = ""
+    # When true, a line whose stripped form starts with a comment marker is not
+    # a match. Opt-in per rule: some rules (ts-escape-hatch) exist precisely to
+    # match text inside a comment, so this can't be a global scanner behaviour.
+    skip_comment_lines: bool = False
     tags: tuple[str, ...] = field(default_factory=tuple)
 
     def applies_to(self, rel_path: str) -> bool:
@@ -296,6 +300,61 @@ RULES: list[Rule] = [
         tags=("security", "api"),
     ),
 
+    # ---- Data & scalability -------------------------------------------------
+    Rule(
+        id="unbounded-limit",
+        severity=WARN,
+        message=(
+            "`.limit(N)` with N at or above 1000 is silently truncated by "
+            "Supabase's PostgREST Max Rows setting (default 1000) regardless "
+            "of what you asked for. Use fetchAllRows "
+            "(src/lib/utils/fetchAllRows.ts) to page past it instead of one "
+            "big .limit() call."
+        ),
+        why=(
+            "PR #103: a .limit(5000) Overview/CSV-export query returned only "
+            "1000 rows on a tenant with 1510 sales, with no error — see "
+            "BACKEND_ARCHITECTURE_PRINCIPLES.md. Known gap: this only "
+            "catches a literal numeric argument — `.limit(SOME_CONSTANT)` "
+            "where SOME_CONSTANT resolves to >=1000 is invisible to a "
+            "single-line regex (this was true of the actual "
+            "`.limit(OVERVIEW_ROW_CAP)` bug in dashboard/page.tsx before the "
+            "fix) — a human/agent review still matters for named constants."
+        ),
+        pattern=re.compile(r"\.limit\(\s*(\d{4,})\s*\)"),
+        # Prose mentioning `.limit(5000)` — the comment in dashboard/page.tsx
+        # explaining the bug, fetchAllRows.ts's docblock — is documentation of
+        # the hazard, not the hazard. Those were this rule's only two live hits.
+        skip_comment_lines=True,
+        path_include=(r"^src/.*\.tsx?$",),
+        path_exclude=(r"\.test\.tsx?$",),
+        tags=("scalability",),
+    ),
+    Rule(
+        id="unpaginated-collection-read",
+        severity=WARN,
+        message=(
+            "A .select() on a table that grows with tenant/platform data, "
+            "with no .range(), .single()/.maybeSingle(), .limit(), "
+            "fetchAllRows, or .eq() on an id column in the same statement. "
+            "Supabase's PostgREST Max Rows setting silently truncates this "
+            "at its cap (default 1000) once the table grows past it — see "
+            "BACKEND_ARCHITECTURE_PRINCIPLES.md section 1."
+        ),
+        why=(
+            "Appendix A of BACKEND_ARCHITECTURE_PRINCIPLES.md's design spec "
+            "found 13 of these (5 are latent correctness bugs, not just "
+            "display truncation) by manual review; this rule catches the "
+            "next one automatically. The table list is deliberately an "
+            "allowlist, not every table — it trades missing some growth "
+            "tables for not flagging every small/reference table in the app."
+        ),
+        file_check="unpaginated_collection_read",
+        path_include=(r"^src/.*\.tsx?$",),
+        path_exclude=(r"\.test\.tsx?$",),
+        tags=("scalability",),
+    ),
+
     # ---- Code standards ----------------------------------------------------
     Rule(
         id="ts-escape-hatch",
@@ -366,6 +425,16 @@ class Finding:
         )
 
 
+_COMMENT_PREFIXES = ("//", "*", "/*")
+
+
+def _is_comment_line(line: str) -> bool:
+    """True for a line that is only prose — `//`, a `/* … */` opener, or a
+    JSDoc continuation `*`. Used by rules whose pattern can legitimately
+    appear inside documentation of the very hazard they flag."""
+    return line.strip().startswith(_COMMENT_PREFIXES)
+
+
 def _marks(line: str, rule_id: str) -> bool:
     match = ALLOW_RE.search(line)
     if not match:
@@ -400,6 +469,39 @@ _DATA_ACCESS = re.compile(
     r"|createServiceClientForTenant\(|\.from\("
 )
 
+# Tables whose row count grows with tenant/platform activity rather than a
+# small, fixed set. Deliberately an allowlist — see the Rule's `why`.
+_GROWTH_TABLES = (
+    "sales", "expenses", "purchases", "products", "profiles",
+    "notifications", "notification_reads", "audit_logs",
+    "dropship_listings", "platform_payouts", "ebay_messages",
+    "ebay_listing_drafts", "tenants", "tenant_ai_usage",
+)
+_TABLE_READ = re.compile(
+    r'\.from\(\s*[\'"](' + "|".join(_GROWTH_TABLES) + r')[\'"]\s*\)'
+)
+# Any one of these appearing in the same statement window means the read is
+# bounded. `.limit(` matches ANY argument (not just a literal 1) — whether
+# the limit is the RIGHT size is unbounded-limit's job, not this one's.
+#
+# `.single[<(]` / `.maybeSingle[<(]` rather than `\(`: the dominant idiom in
+# this codebase is the generic form, `.single<{ status: string }>()`.
+#
+# `count: "exact"` is the signature of the paginated fetchXPage thunks, which
+# build the query incrementally — `let query = sb.from(…).select(…, { count:
+# "exact" })` on one statement and `query = query.range(from, to)` on a later
+# one, so the `.range(` lands outside this window. That shape is the doc's own
+# reference pattern; matching the count option is how we recognise it.
+_READ_BOUNDED = re.compile(
+    r'\.range\(|\.single[<(]|\.maybeSingle[<(]|\.limit\(|fetchAllRows'
+    r'|count:\s*[\'"]exact[\'"]'
+    r'|\.eq\(\s*[\'"]\w*[Ii]d[\'"]'
+)
+# An `.insert(…).select().single()` has a `.select(` in its window but is a
+# write returning its own row, not a collection read.
+_WRITE_OP = re.compile(r"\.(insert|upsert|update|delete)\(")
+_STATEMENT_WINDOW_MAX_LINES = 20
+
 
 def _route_auth_finding(rule: Rule, rel_path: str, text: str) -> list[Finding]:
     if not _DATA_ACCESS.search(text):
@@ -409,6 +511,48 @@ def _route_auth_finding(rule: Rule, rel_path: str, text: str) -> list[Finding]:
     if "verifier:allow route-without-auth" in text:
         return []
     return [Finding(rule=rule, path=rel_path, line_no=1, line="(whole file)")]
+
+
+def _unpaginated_collection_read_finding(
+    rule: Rule, rel_path: str, text: str
+) -> list[Finding]:
+    lines = text.splitlines()
+    findings: list[Finding] = []
+    for index, line in enumerate(lines):
+        if not _TABLE_READ.search(line):
+            continue
+        window_end = index
+        for offset in range(_STATEMENT_WINDOW_MAX_LINES):
+            candidate = index + offset
+            if candidate >= len(lines):
+                break
+            # A later `.from(` is the start of a *different* query. Inside a
+            # `Promise.all([ q1, q2 ])` array each entry ends in `,` not `;`,
+            # so without this the window runs on into the next query and
+            # inherits its bounding marker (this hid 4 real findings).
+            if offset > 0 and ".from(" in lines[candidate]:
+                break
+            window_end = candidate
+            if ";" in lines[candidate]:
+                break
+        window_lines = lines[index : window_end + 1]
+        window_text = "\n".join(window_lines)
+        # .update()/.delete()/.insert()/.upsert() is a write, not an
+        # unpaginated read — out of scope for this rule. Checked before the
+        # `.select(` presence test because a write can chain `.select()` to
+        # return the row it just wrote.
+        if _WRITE_OP.search(window_text):
+            continue
+        if ".select(" not in window_text:
+            continue
+        if _READ_BOUNDED.search(window_text):
+            continue
+        if any(_suppressed(lines, i, rule.id) for i in range(index, window_end + 1)):
+            continue
+        findings.append(
+            Finding(rule=rule, path=rel_path, line_no=index + 1, line=line.strip())
+        )
+    return findings
 
 
 def scan_text(rel_path: str, text: str, severities: tuple[str, ...] = (BLOCK, WARN)) -> list[Finding]:
@@ -434,12 +578,18 @@ def scan_text(rel_path: str, text: str, severities: tuple[str, ...] = (BLOCK, WA
             findings.extend(_route_auth_finding(rule, rel_path, text))
             continue
 
+        if rule.file_check == "unpaginated_collection_read":
+            findings.extend(_unpaginated_collection_read_finding(rule, rel_path, text))
+            continue
+
         if rule.requires_file_pattern and not rule.requires_file_pattern.search(text):
             continue
         if rule.pattern is None:
             continue
 
         for index, line in enumerate(lines):
+            if rule.skip_comment_lines and _is_comment_line(line):
+                continue
             if rule.pattern.search(line) and not _suppressed(lines, index, rule.id):
                 findings.append(
                     Finding(rule=rule, path=rel_path, line_no=index + 1, line=line)

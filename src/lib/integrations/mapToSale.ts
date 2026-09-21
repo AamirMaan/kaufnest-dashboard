@@ -72,5 +72,16 @@ export function normalizedOrderToSaleRow(
     shipping_country: order.shipping?.country ?? null,
     buyer_phone: order.shipping?.phone ?? null,
     buyer_email: order.shipping?.email ?? null,
+    // Platform-synced orders (eBay/Amazon API) are NOT part of this plan's
+    // currency-conversion scope — that's a CSV-import-time, human-reviewed
+    // rate-confirmation flow, which has no equivalent in an automated sync.
+    // normalizeCurrency() above silently defaults an unrecognized currency
+    // to EUR, same bug class this plan fixes for CSV import — worth a
+    // follow-up spec for the sync path specifically (no human in the loop
+    // to review a rate here), not addressed by this change.
+    original_currency: null,
+    original_total_amount: null,
+    fx_rate: null,
+    fx_rate_date: null,
   };
 }

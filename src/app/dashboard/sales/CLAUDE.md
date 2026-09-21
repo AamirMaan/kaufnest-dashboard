@@ -8,12 +8,15 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchSalesPage` thunk),
-  `FilterBar` (date preset, currency, platform, status, general keyword
-  search across product name/order ID/description), row selection, invoice
+  `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
+  see `components/ui/SKILL.md`'s FilterBar entry — currency, platform,
+  status, general keyword search across product name/order ID/description),
+  row selection, invoice
   trigger, Gross/VAT/Net summary **(this page)**, **Export CSV** button
-  (server-side query, no `.range()`, capped at 5 000 rows), **Import CSV**
-  button, wires up the modals below. Product-name cells are `<Link>`s to
-  `/dashboard/sales/[id]`.
+  (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
+  5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
+  Max Rows gotcha), **Import CSV** button, wires up the modals below.
+  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -93,7 +96,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `refundsApplied` / `refundsSkipped` / `refundsExceeded` /
   `refundsAlreadyApplied` counts). `skippedRows` is the file-level skip count
   and matters more than it looks: on a real Amazon report most of the file is
-  RETURN/FC_TRANSFER/blank/summary noise, so a toast without it reads as
+  RETURN/FC_TRANSFER/INBOUND/blank/summary noise, so a toast without it reads as
   though the import quietly lost hundreds of rows. One clause only — the
   per-reason breakdown stays in the pre-import preview.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
@@ -122,6 +125,14 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   otherwise let the net column normalise to `total`, claim the key, and get the
   real `Total` column dropped by the first-wins guard. Pinned by a test in
   `lib/utils/importAliases.test.ts`.
+- `_components/dedupeImportRows.ts` (+ colocated `.test.ts`, 2026-09-17) —
+  pure in-file dedupe for a parsed import batch: merges genuine duplicate
+  lines (same order id + sku) and composes `external_order_id` as
+  `"${orderId}:${sku}"` for `platform === "amazon"` rows so distinct-SKU
+  lines of one multi-line order can all reach `sales` without tripping the
+  non-partial unique index on `(platform, external_order_id)` — see its doc
+  comment and the "Amazon SALE/REFUND rows" → "Match key" bullet below.
+  Called from `ImportSalesModal.tsx`'s `markDuplicates`.
 - `_components/productOptions.ts` (+ colocated `.test.ts`) — pure helpers
   (`selectableProducts`, `productNameFor`) shared by both modals for the
   "Inventory Product" dropdown; see "Inventory link + VAT" below.
@@ -165,8 +176,11 @@ in memory** — all filtering happens in `fetchSalesPage` (the thunk in
 labelled in the UI.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
-with the same filter predicates but **no `.range()`**, capped at 5 000 rows, so
-the export always covers all matching records regardless of which page is shown.
+with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up to
+a 5 000-row overall cap (NOT a single `.limit(5000)` — see
+`dashboard/SKILL.md`'s Max Rows gotcha, fixed 2026-09-15 after a
+`tenant_k2_textil` Overview report of the same underlying truncation), so the
+export always covers all matching records regardless of which page is shown.
 
 **DataTable sorting** sorts within the current page only (v1 behaviour) — noted
 in SKILL.md gotchas.
@@ -408,7 +422,7 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
 - `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
   by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
   direct-URL load; `state.purchases.items` is also read for the fast path
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `lib/utils/importAliases.ts` — shared header-alias vocabulary and
   `resolveHeaders`/`canonicalizeRow` (also used by Expenses); `importFormats.ts`
@@ -564,6 +578,23 @@ day-first regardless. Outcomes:
   has no effect at all (dot dates are always day-first — see below), so the
   Day-first/Month-first selector is disabled with a one-line explanation
   instead of silently doing nothing.
+- **Excel-only corruption `detectDateOrder` can't see at all** (2026-09-15,
+  real k2_textil import): an `.xlsx` upload's "date" column can mix native
+  Excel date-typed cells with plain-text dates — Excel only auto-converts a
+  value into a real date cell when its OWN locale reads it as valid, so an
+  unambiguous date (`31-05-2026`, invalid as month=31) survives as text and
+  parses correctly, while an ambiguous one (`03-05-2026`, valid as
+  month=03/day=05) gets silently converted to a native date cell reading
+  March 5th instead of May 3rd — with no text left for `detectDateOrder` to
+  evaluate. `parseAndValidate` checks `parseExcelBuffer`'s
+  `mixedDateTypeColumns` (`lib/utils/excel.ts`) and refuses the import
+  BEFORE `detectDateOrder` runs when the `date` column is flagged — a file
+  this corrupted can't be salvaged by re-detecting order, only by
+  re-exporting as CSV/text or fixing the column's Excel cell format to Text.
+  This is a plain-text CSV upload's `/`-vs-`-` separator-conflict case
+  (above), one layer earlier — same "refuse, don't guess" philosophy, but
+  Excel's binary date-cell typing has already destroyed the original
+  ambiguous text by the time the corruption could otherwise be evaluated.
 
 The user can override the detected/assumed order via the "Date format"
 dropdown next to the format dropdown (Auto / Day first / Month first) —
@@ -613,18 +644,23 @@ heuristic is **skipped for `status === "refund"` rows**, which have no `date`
 by design and would otherwise all be swallowed as "summary row"; the
 carve-out is scoped to that one check, not an early return, so a refund is
 still subject to the currency guard), unsupported
-currencies, and **`RETURN`/`FC_TRANSFER`** status rows — pure logistics
-noise, skipped *before* field validation because they legitimately have no
-`date` at all (this ordering is what fixed a prior `Row N: invalid or
-missing "date"` failure on every RETURN line). **`REFUND` is deliberately
-NOT skipped here** — see "Amazon SALE/REFUND rows" below: it parses into a
-`refund` adjustment instead of a row. The format guard (`if
+currencies, and **`RETURN`/`FC_TRANSFER`/`INBOUND`** status rows — pure
+logistics noise, skipped *before* field validation because `RETURN` and
+`FC_TRANSFER` legitimately have no `date` at all (this ordering is what
+fixed a prior `Row N: invalid or missing "date"` failure on every RETURN
+line). `INBOUND` (an FBA warehouse shipment, not a sale) DOES carry a date
+and a quantity/unit-price pair, but those describe inventory value rather
+than a line total, so without this skip it fell through to full validation
+and failed with `Row N: "unit_price" (item line total) or "total" must be a
+positive number` (fixed 2026-09-15, k2_textil import). **`REFUND` is
+deliberately NOT skipped here** — see "Amazon SALE/REFUND rows" below: it
+parses into a `refund` adjustment instead of a row. The format guard (`if
 (!format.priceColumnsAreLineTotals) return null`) must stay the first
 statement in the function — putting the blank-row check above it would make
 `generic` and `ebay` silently skip blank rows instead of erroring them.
 
 **Amazon SALE/REFUND rows:** only `SALE` and `REFUND` carry importable money;
-`RETURN`/`FC_TRANSFER` are skipped as noise (above). Like `RETURN`, a
+`RETURN`/`FC_TRANSFER`/`INBOUND` are skipped as noise (above). Like `RETURN`, a
 `REFUND` row has an EMPTY `date` column (confirmed against a real report
 row — see `importFormats.test.ts`'s "Amazon REFUND rows" tests), so
 `validateRowForFormat`'s refund-parse branch runs *before* the date parse —
@@ -635,15 +671,18 @@ existing sale instead:
 
 - **Match key**: platform + `external_order_id` + resolved `product_id`
   (from `sku`). Amazon order ids are not unique *within a sheet* — a
-  multi-line order repeats its id once per SKU — but only one of those lines
-  can ever reach `sales`: the unique index on `(platform,
-  external_order_id)` is non-partial, and `markDuplicates`' in-file pass
-  marks the rest `"duplicate in file"`. So the key does not protect against
-  deducting the wrong line (impossible); what it does is make a refund
-  against any *other* line of a multi-line order resolve a `product_id` that
-  matches nothing, so it is reported as "no matching order found" rather than
-  silently deducted from the one line that did import. No `product_id`
-  (unmapped `sku`) → unmatched.
+  multi-line order repeats its id once per SKU — and (2026-09-17, see
+  `dedupeImportRows.ts`) every one of those lines now reaches `sales`, each
+  under a composite `external_order_id` of `"${orderId}:${sku}"` (the same
+  disambiguation eBay sync uses) rather than only the first line
+  surviving. The refund matcher composes the identical key from its own
+  `sku` field before querying — see the block below `unmatchedRefunds.push`
+  in `ImportSalesModal.tsx`'s refund loop. **This composition is scoped to
+  `platform === "amazon"` only** — never applied to an `"ebay"`-platform
+  row, since `isEbayIntegrationSyncedSale` (`lib/utils/filters.ts`) tests
+  `external_order_id?.includes(":")` as its entire signal for "real
+  eBay-synced order," and a composited eBay CSV row would falsely satisfy
+  it. No `product_id` (unmapped `sku`) → unmatched.
 - **Split across two columns**: a SALE's `total_amount` holds the item total
   only — shipping lives in `shipping_charged` — so the refund is parsed
   (`validateRowForFormat` in `importFormats.ts`) into `amount` (full,
@@ -708,9 +747,20 @@ existing sale instead:
   an existing order id would raise a unique violation and fail the whole
   batch. Unlike the file-level skip reasons above, an unmatched/exceeded/
   already-applied refund is **not** surfaced as a `ParsedRow.skipped` reason
-  in the pre-import preview — matching only happens during `handleImport`,
-  and the outcome is reported post-import via `ImportSummary` (see the
-  `ImportSalesModal.tsx` bullet above) and `page.tsx`'s toast.
+  in the pre-import preview — matching only happens during `handleImport`.
+  **Unmatched refunds specifically (2026-09-17) block the success
+  toast**: `handleImport` builds the final `ImportSummary` as usual (sales
+  inserted, refunds applied/skipped are already committed either way — this
+  is a post-hoc gate, not a pre-write block) but, when `unmatchedRefunds.length
+  > 0`, stores it in `pendingUnmatchedRefunds` state instead of calling
+  `onSuccess`/`onClose` immediately. The modal renders a blocking list of the
+  unmatched order ids with an "Import anyway" button
+  (`finalizeImportAfterUnmatchedRefunds`) that finalizes the stored summary —
+  a real May 2026 sheet had 8 unmatched refunds (EUR 93.21) silently folded
+  into a single count before this. Exceeded/already-applied refunds are
+  unaffected — only a true no-match blocks. `reset()`/`blockRetry()` both
+  clear `pendingUnmatchedRefunds` so a stale warning can't survive a
+  file re-select.
 - **On a Supabase error matching or updating a refund** (`matchErr`/
   `updErr`), the modal clears `parsed` (`blockRetry()`) so Import cannot be
   re-clicked — a retry would re-insert the already-committed SALE rows and
@@ -723,9 +773,15 @@ existing sale instead:
 **Duplicate pre-check (I3):** rows carrying an `external_order_id` are checked
 against existing `sales` rows per `(platform, external_order_id)` (chunked
 `.in()` queries, 200 ids per chunk) and against duplicates within the file.
-Matches are marked **skipped** and are never overwritten (same protection as
-the integrations re-sync merge rule). REFUND rows are exempt from both dedup
-passes (file-level and DB-level, `markDuplicates` in `ImportSalesModal.tsx`)
+The in-file pass is `dedupeImportRows.ts` (colocated `.test.ts`) — for
+`platform === "amazon"` rows carrying a `sku`, it rewrites
+`external_order_id` to `"${orderId}:${sku}"` before this DB check ever
+runs, so the check (and the unique index it mirrors) operates on the
+already-disambiguated value; see that file's doc comment for the full
+rationale and the "Match key" bullet above. Matches are marked **skipped**
+and are never overwritten (same protection as the integrations re-sync
+merge rule). REFUND rows are exempt from both dedup passes (file-level and
+DB-level, `markDuplicates` in `ImportSalesModal.tsx`)
 — they carry the `external_order_id` of an *existing* sale by definition, so
 without the carve-out every refund would be marked "order already exists" and
 dropped before the matching path in "Amazon SALE/REFUND rows" above ever

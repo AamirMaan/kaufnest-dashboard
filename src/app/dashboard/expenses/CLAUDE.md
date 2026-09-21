@@ -6,11 +6,14 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 ## Files in this folder
 
 - `page.tsx` — list view: server-side pagination (`fetchExpensesPage` thunk),
-  `FilterBar` (date preset, currency, category, general keyword search across
-  title/vendor/description/invoice number), row selection, invoice trigger,
+  `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
+  see `components/ui/SKILL.md`'s FilterBar entry — currency, category,
+  general keyword search across title/vendor/description/invoice number),
+  row selection, invoice trigger,
   Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
-  query, no `.range()`, capped at 5 000 rows), **Import CSV** button, wires up
-  the modals below.
+  query, paginated via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see
+  "CSV import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha),
+  **Import CSV** button, wires up the modals below.
   Two sign-aware details, both because expenses may be negative: the Amount
   cell colours by sign (negative `--color-success`, positive `--color-danger`,
   matching the Overview page's Expenses-by-Category list), and the VAT
@@ -39,6 +42,19 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   the Net/VAT/Gross preview is gated on "is a number", not on `> 0`. An
   `amount > 0` guard here makes every imported credit note permanently
   uneditable — see the SKILL.md gotcha before reinstating one.
+- `_components/ReceiptUploader.tsx` — thumbnail strip, add, remove,
+  per-file progress for an expense's image receipts. Used by both
+  `AddExpenseModal` and `EditExpenseModal`. Same model as `ImageGrid.tsx`
+  (`dashboard/listings/`): Storage upload/delete happen immediately, but the
+  `receipts` array itself is local form state until the surrounding modal
+  saves — this component never writes to the `expenses` table. Thumbnails
+  are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
+  bucket is private, unlike `listing-images`.
+- `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
+  `buildReceiptPath(tenantSchema, expenseId, fileName)`,
+  `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
+  is discarded in favour of a UUID, same reasoning as the listings sibling
+  `storagePath.ts`.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -107,7 +123,9 @@ in memory** — all filtering happens in `fetchExpensesPage` (the thunk in
 (current page). Clearly labelled in the UI.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
-with the same filter predicates but **no `.range()`**, capped at 5 000 rows.
+with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
+to a 5 000-row overall cap (NOT a single `.limit(5000)` — see
+`dashboard/SKILL.md`'s Max Rows gotcha).
 
 ## Data flow (the pattern every mutation follows)
 
@@ -134,6 +152,30 @@ editable fields.
   Sales/Purchases, expenses have **no product link** — they aren't inventory
   items, so there's no `product_id`/`Select`.
 
+## Receipts
+
+`Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
+uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
+(migration `046_expense_receipts.sql`). `AddExpenseModal` supports
+attaching a receipt before the rest of the form is filled in: it generates
+the expense's `id` client-side (`crypto.randomUUID()`, held in `pendingId`
+state) as soon as the modal opens, and hands that id to `ReceiptUploader`
+as `expenseId` so the upload has a real Storage path with **no early row
+insert**. The row is only ever written to Postgres at final submit, using
+`pendingId` as the explicit `id` column value — so closing the modal
+without submitting has nothing to clean up (an uploaded Storage object with
+no row pointing at it just becomes an orphan, the same accepted tradeoff
+`ImageGrid.tsx` already has for an abandoned listing draft). An earlier
+version of this modal inserted the row early and deleted it on cancel —
+that cleanup DELETE turned out to silently no-op under RLS for any tenant
+member who isn't admin/super_admin or `delete_expense`-override, since
+`expenses_delete` is far stricter than `expenses_insert` (see
+`supabase/migrations/005_tenant_provisioning.sql`); the client-generated-id
+approach sidesteps the problem instead of working around it.
+`EditExpenseModal` has no such concern — the row already exists, and its
+`expenseToForm` defensively falls back to `e.receipts ?? []` in case a
+tenant hasn't had migration 046 applied yet.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
@@ -145,13 +187,14 @@ editable fields.
   confirmation, all defaulting to the original "Delete" wording)
 - `store/slices/{auditLogsSlice,currentUserSlice}` — cross-cutting state read/written
   by every CRUD feature
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
 - `types` (`Expense`, `ExpenseCategory`)
 
 ## CSV import/export
 
 **Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates (no `.range()`, capped at 5 000 rows) and calls
+same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
+cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
 `exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
 vat_rate, vat_amount, description`.
 
@@ -179,12 +222,17 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
     deliberately does not (see `formatIdRef` below).
   - `requestIdRef`, claimed inside `parseAndValidate`, exists for structural
     parity with `ImportSalesModal` (where the awaited step is the
-    duplicate-check query). **It is currently unreachable**: `parseAndValidate`
-    is declared `async` but contains no `await`, so it runs to completion
-    synchronously and its check can never be false. Treat it as
-    future-proofing, not protection. If you add an `await` to that function,
-    only the writes **after** the existing check are covered — anything added
-    above it needs its own re-check.
+    duplicate-check query). **No longer unreachable** (2026-09-17): the FX
+    rate review step added a real `await fetch("/api/fx/rates")` inside
+    `parseAndValidate`, a genuine async gap. `isCurrent()` now checks
+    **both** `requestIdRef` (a newer format/file re-parse superseding this
+    one) **and** `fileReadIdRef` (a newer file selected while the FX fetch
+    was in flight — a format change alone doesn't bump `fileReadIdRef`, so
+    `requestIdRef` alone would miss that case). `fileReadIdRef.current` is
+    snapshotted at the top of `parseAndValidate`, before either await, and
+    compared again after — this works whether the call came from
+    `handleFormatChange` (no read in flight) or `handleFile`'s `.then` (past
+    its own `fileReadIdRef` check already).
   - `formatIdRef` mirrors `formatId` for the async read path, and
     `handleFormatChange` updates the ref **before** it re-parses. `handleFile`'s
     `.then` parses against `formatIdRef.current`, not the `formatId` its closure
@@ -192,6 +240,20 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
     format now selected.
   - **This is a deliberate divergence from `ImportSalesModal`** — see the
     SKILL.md gotcha before "aligning" the two.
+- **FX rate review (2026-09-17)**: a row whose `currency` column names a
+  plausible ISO code other than the tenant's base currency
+  (`resolveSheetCurrency`, `lib/fx/convert.ts`) no longer errors or gets
+  skipped — `validateExpenseRow` sets `ParsedExpenseRow.sheetCurrency` and
+  leaves the row's money fields unconverted. After `setParsed`,
+  `parseAndValidate` calls `detectAndReviewFxRates`, which groups those rows
+  by currency, POSTs `/api/fx/rates`, and opens the shared
+  `<FxRateReview>` component (`src/components/import/`) in place of the
+  normal form. Confirming (`handleConfirmRates`) applies the resolved rate
+  via `applyRate` (`lib/fx/convert.ts`) to each row's `amount`/`vat_amount`
+  — adapted through a small wrapper object since `applyRate`'s generic
+  constraint expects `total_amount`, not Expense's `amount`. Same shared
+  step Sales uses (`ImportSalesModal.tsx`); see that file's CLAUDE.md
+  section for the full two-pass row lifecycle.
 - **Header resolution**: `resolveHeaders(headers, format.columns)`; a
   non-empty `missingRequired` is a single **file-level** error naming the
   missing columns, and no rows are validated. Otherwise every row goes
@@ -308,5 +370,5 @@ Rules that are easy to get wrong and are pinned by
 ## Tests
 
 `npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
-`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts` and
-`_components/expenseImportFormats.test.ts`.
+`_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts`,
+`_lib/receiptPath.test.ts` and `_components/expenseImportFormats.test.ts`.

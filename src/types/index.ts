@@ -41,6 +41,18 @@ export type ExpenseCategory =
   | "salary"
   | "other";
 
+/** One uploaded receipt image. `path` is a bare Storage object path — the
+ * `expense-receipts` bucket is private, so there is no public URL to store;
+ * display goes through a signed URL instead. See
+ * `src/app/dashboard/expenses/_lib/receiptPath.ts`. */
+export interface ExpenseReceipt {
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  uploaded_at: string; // ISO timestamp
+}
+
 export interface Expense {
   id: string;
   title: string;
@@ -56,6 +68,14 @@ export interface Expense {
   vat_amount: number | null;
   vendor_vat_number: string | null;
   invoice_number: string | null;
+  // Set when this row was imported in a non-base currency and converted at
+  // import time. All four null means no conversion happened (the normal
+  // case) — see docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md.
+  original_currency: string | null;
+  original_total_amount: number | null;
+  fx_rate: number | null;
+  fx_rate_date: string | null; // ISO date
+  receipts: ExpenseReceipt[];
 }
 
 export interface PlatformPayout {
@@ -87,6 +107,13 @@ export interface Purchase {
   vat_rate: number | null;
   vat_amount: number | null;
   sale_id: string | null; // FK to sales.id — set when purchase is a cost-of-goods for a specific order
+  // Set when this row was imported in a non-base currency and converted at
+  // import time. All four null means no conversion happened (the normal
+  // case) — see docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md.
+  original_currency: string | null;
+  original_total_amount: number | null;
+  fx_rate: number | null;
+  fx_rate_date: string | null; // ISO date
 }
 
 export interface Sale {
@@ -146,6 +173,13 @@ export interface Sale {
   /** Last eBay push-back error, if the most recent attempt failed. Cleared on the next successful sync. */
   ebay_sync_error: string | null;
   ebay_synced_at: string | null;
+  // Set when this row was imported in a non-base currency and converted at
+  // import time. All four null means no conversion happened (the normal
+  // case) — see docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md.
+  original_currency: string | null;
+  original_total_amount: number | null;
+  fx_rate: number | null;
+  fx_rate_date: string | null; // ISO date
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────

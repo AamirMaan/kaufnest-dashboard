@@ -120,7 +120,14 @@ BEGIN
       vat_rate          numeric(5,2),
       vat_amount        numeric(12,2),
       vendor_vat_number text,
-      invoice_number    text
+      invoice_number    text,
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date,
+      -- Image receipts — see 046_expense_receipts.sql.
+      receipts                jsonb NOT NULL DEFAULT '[]'::jsonb
     )
   $sql$, schema_name);
 
@@ -142,6 +149,11 @@ BEGIN
       vat_rate     numeric(5,2),
       vat_amount   numeric(12,2),
       refunded_amount   numeric(12,2) CHECK (refunded_amount >= 0),
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date,
       status       text NOT NULL DEFAULT 'pending',
       restock      boolean NOT NULL DEFAULT false,
       external_order_id text,
@@ -189,7 +201,12 @@ BEGIN
       created_at   timestamptz NOT NULL DEFAULT now(),
       updated_at   timestamptz NOT NULL DEFAULT now(),
       vat_rate     numeric(5,2),
-      vat_amount   numeric(12,2)
+      vat_amount   numeric(12,2),
+      -- Currency conversion at import time — see 045_currency_conversion.sql.
+      original_currency      text,
+      original_total_amount  numeric(12,2),
+      fx_rate                numeric(18,8) CHECK (fx_rate IS NULL OR fx_rate > 0),
+      fx_rate_date           date
     )
   $sql$, schema_name);
 
@@ -472,6 +489,196 @@ BEGIN
       );
     $func$;
   $sql$, schema_name);
+
+  -- Overview aggregation functions — see
+  -- 045_overview_aggregation_functions.sql for the full header comment.
+  -- Not SECURITY DEFINER: existing RLS _select policies still gate
+  -- visibility, same as the client-side .select() queries they replace.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_sales_overview(p_from date, p_to date, p_currency text)
+    RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      WITH filtered AS (
+        SELECT *
+        FROM sales
+        WHERE currency = p_currency
+          AND (p_from IS NULL OR date >= p_from)
+          AND (p_to IS NULL OR date <= p_to)
+      ),
+      effective AS (
+        SELECT *
+        FROM filtered
+        WHERE status NOT IN ('returned', 'cancelled')
+      ),
+      by_platform AS (
+        SELECT
+          platform,
+          sum(total_amount) AS sales,
+          sum(coalesce(advertising_fee, 0)) AS ad_fees,
+          sum(coalesce(shipping_cost, 0)) AS shipping_fees,
+          count(*) AS cnt
+        FROM effective
+        GROUP BY platform
+      ),
+      top_products AS (
+        SELECT product_name AS name, sum(total_amount) AS revenue, sum(quantity) AS units
+        FROM effective
+        GROUP BY product_name
+        ORDER BY sum(total_amount) DESC
+        LIMIT 5
+      ),
+      monthly AS (
+        SELECT to_char(date, 'YYYY-MM') AS month,
+               sum(total_amount + coalesce(shipping_charged, 0)) AS revenue
+        FROM effective
+        GROUP BY 1
+      )
+      SELECT jsonb_build_object(
+        'orderCount', (SELECT count(*) FROM filtered),
+        'effectiveOrderCount', (SELECT count(*) FROM effective),
+        'unitsSold', (SELECT coalesce(sum(quantity), 0) FROM effective),
+        'revenue', (SELECT coalesce(sum(total_amount + coalesce(shipping_charged, 0)), 0) FROM effective),
+        'fees', (SELECT coalesce(sum(coalesce(shipping_cost, 0) + coalesce(advertising_fee, 0) + coalesce(platform_fee, 0)), 0) FROM effective),
+        'vatCollected', (SELECT coalesce(sum(vat_amount), 0) FROM effective),
+        'revenueByPlatform', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('platform', platform, 'value', sales) ORDER BY sales DESC), '[]'::jsonb)
+          FROM by_platform
+        ),
+        'topProducts', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('name', name, 'revenue', revenue, 'units', units)), '[]'::jsonb)
+          FROM top_products
+        ),
+        'monthlyRevenue', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('month', month, 'revenue', revenue) ORDER BY month), '[]'::jsonb)
+          FROM monthly
+        ),
+        'platformBalance', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object(
+            'platform', platform, 'sales', sales, 'adFees', ad_fees, 'shippingFees', shipping_fees, 'count', cnt
+          )), '[]'::jsonb)
+          FROM by_platform
+          WHERE platform IN ('ebay', 'amazon')
+        )
+      );
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_overview(date, date, text) TO authenticated', schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_expenses_overview(p_from date, p_to date, p_currency text)
+    RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      WITH filtered AS (
+        SELECT *
+        FROM expenses
+        WHERE currency = p_currency
+          AND (p_from IS NULL OR date >= p_from)
+          AND (p_to IS NULL OR date <= p_to)
+      ),
+      by_category AS (
+        SELECT category, sum(amount) AS amount
+        FROM filtered
+        GROUP BY category
+      ),
+      monthly AS (
+        SELECT to_char(date, 'YYYY-MM') AS month, sum(amount) AS amount
+        FROM filtered
+        GROUP BY 1
+      ),
+      platform_sub AS (
+        SELECT 'ebay' AS platform, coalesce(sum(amount), 0) AS amount
+        FROM filtered
+        WHERE vendor ILIKE '%ebay%' OR title ILIKE '%ebay%'
+        UNION ALL
+        SELECT 'amazon' AS platform, coalesce(sum(amount), 0) AS amount
+        FROM filtered
+        WHERE vendor ILIKE '%amazon%' OR title ILIKE '%amazon%'
+      )
+      SELECT jsonb_build_object(
+        'total', (SELECT coalesce(sum(amount), 0) FROM filtered),
+        'vatPaid', (SELECT coalesce(sum(vat_amount), 0) FROM filtered),
+        'byCategory', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('category', category, 'amount', amount) ORDER BY amount DESC), '[]'::jsonb)
+          FROM by_category
+        ),
+        'monthlyExpenses', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('month', month, 'amount', amount) ORDER BY month), '[]'::jsonb)
+          FROM monthly
+        ),
+        'platformSubtotal', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('platform', platform, 'amount', amount)), '[]'::jsonb)
+          FROM platform_sub
+        )
+      );
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_expenses_overview(date, date, text) TO authenticated', schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_purchases_overview(p_from date, p_to date, p_currency text)
+    RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      WITH filtered AS (
+        SELECT *
+        FROM purchases
+        WHERE currency = p_currency
+          AND (p_from IS NULL OR date >= p_from)
+          AND (p_to IS NULL OR date <= p_to)
+      ),
+      monthly AS (
+        SELECT to_char(date, 'YYYY-MM') AS month, sum(total_amount) AS amount
+        FROM filtered
+        GROUP BY 1
+      )
+      SELECT jsonb_build_object(
+        'total', (SELECT coalesce(sum(total_amount), 0) FROM filtered),
+        'vatPaid', (SELECT coalesce(sum(vat_amount), 0) FROM filtered),
+        'monthlyPurchases', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('month', month, 'amount', amount) ORDER BY month), '[]'::jsonb)
+          FROM monthly
+        )
+      );
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_purchases_overview(date, date, text) TO authenticated', schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_payouts_overview(p_from date, p_to date, p_currency text)
+    RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      WITH filtered AS (
+        SELECT *
+        FROM platform_payouts
+        WHERE currency = p_currency
+          AND (p_from IS NULL OR date >= p_from)
+          AND (p_to IS NULL OR date <= p_to)
+      ),
+      by_platform AS (
+        SELECT platform, sum(amount) AS amount
+        FROM filtered
+        GROUP BY platform
+      )
+      SELECT jsonb_build_object(
+        'transferred', (
+          SELECT coalesce(jsonb_agg(jsonb_build_object('platform', platform, 'amount', amount)), '[]'::jsonb)
+          FROM by_platform
+        )
+      );
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_payouts_overview(date, date, text) TO authenticated', schema_name);
 
   -- ── 4. Stock-sync triggers ─────────────────────────────────
   -- Same INSERT/UPDATE/DELETE-aware logic as the public schema

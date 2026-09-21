@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useReducer } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addSale, updateSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -11,6 +11,9 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
+import { applyRate } from "@/lib/fx/convert";
+import { fxReviewReducer, resolveRowRate } from "@/components/import/fxReviewState";
+import { FxRateReview, type FxRateReviewRow } from "@/components/import/FxRateReview";
 import {
   detectDateOrder,
   firstAmbiguousDate,
@@ -28,11 +31,17 @@ import {
   type ImportFormatId,
   type ParsedRow,
 } from "./importFormats";
+import { dedupeImportRows } from "./dedupeImportRows";
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
 
-type ParsedSource = { headers: string[]; rows: Record<string, string>[] };
+type ParsedSource = {
+  headers: string[];
+  rows: Record<string, string>[];
+  /** Set only by the Excel path — see `parseExcelBuffer`'s doc comment. */
+  mixedDateTypeColumns?: Set<string>;
+};
 
 /**
  * Read a CSV file as text. Tries UTF-8 first; if the decode produced
@@ -113,6 +122,7 @@ interface Props {
 export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const inventoryItems = useAppSelector((s) => s.inventory.items);
+  const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const fileRef = useRef<HTMLInputElement>(null);
   const [formatId, setFormatId] = useState<ImportFormatId>("generic");
   const [parsedSource, setParsedSource] = useState<ParsedSource | null>(null);
@@ -121,6 +131,26 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [checking, setChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // FX rate review — only entered when the parsed file has rows in a
+  // currency other than `baseCurrency` (see the two-pass row lifecycle in
+  // the currency-conversion-at-import plan's "Implementation judgment
+  // calls").
+  const [fxReviewOpen, setFxReviewOpen] = useState(false);
+  const [fxState, fxDispatch] = useReducer(fxReviewReducer, { entries: {} });
+  const [fxRows, setFxRows] = useState<FxRateReviewRow[]>([]);
+  const [applyingRates, setApplyingRates] = useState(false);
+  // Set once handleImport finishes writing (sales inserted, refunds
+  // applied/skipped) if any refund found no matching order — the writes are
+  // already committed at this point (a real Amazon report bundles a SALE
+  // and its REFUND in the same file, so matching runs after the insert; see
+  // "The insert must stay before the refund loop" in this file). This is a
+  // post-hoc acknowledgement gate on the success toast, not a pre-write
+  // block — non-null blocks `onSuccess`/`onClose` until the user
+  // acknowledges via "Import anyway".
+  const [pendingUnmatchedRefunds, setPendingUnmatchedRefunds] = useState<{
+    orderIds: string[];
+    summary: ImportSummary;
+  } | null>(null);
   // null = trust detection. A non-null value is the user forcing an order,
   // which is only honoured when the file has no hard evidence to the contrary.
   const [dateOrderOverride, setDateOrderOverride] = useState<DateOrder | null>(null);
@@ -203,6 +233,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setDateDetection(null);
     setDateSample(undefined);
     setOrderSensitiveDates(true);
+    setFxReviewOpen(false);
+    setFxRows([]);
+    setPendingUnmatchedRefunds(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -227,6 +260,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setDateDetection(null);
     setDateSample(undefined);
     setOrderSensitiveDates(true);
+    setFxReviewOpen(false);
+    setFxRows([]);
+    setPendingUnmatchedRefunds(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -243,18 +279,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
    * block the import; skips don't.
    */
   async function markDuplicates(rows: ParsedRow[], requestId: number): Promise<ParsedRow[]> {
-    const seen = new Set<string>();
-    const withFileDupes = rows.map((r) => {
-      // REFUND rows are not new orders. They carry the external_order_id of an
-      // EXISTING sale by definition, so the dedup passes would mark every one
-      // "order already exists" and drop it before matching could run.
-      if (r.isRefund) return r;
-      if (!r.data?.external_order_id) return r;
-      const key = `${r.data.platform}:${r.data.external_order_id}`;
-      if (seen.has(key)) return { ...r, skipped: "duplicate in file" };
-      seen.add(key);
-      return r;
-    });
+    // In-file dedupe + composite-key disambiguation (platform, external_order_id,
+    // sku) — see dedupeImportRows.ts for why this must rewrite external_order_id
+    // itself, not just compare on it, given the DB's non-partial unique index on
+    // sales(platform, external_order_id).
+    const withFileDupes = dedupeImportRows(rows);
 
     const byPlatform = new Map<Platform, string[]>();
     for (const r of withFileDupes) {
@@ -277,7 +306,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         for (let i = 0; i < ids.length; i += IN_CHUNK) {
           const chunk = ids.slice(i, i + IN_CHUNK);
           const { data, error } = await supabase
-            .from("sales")
+            .from("sales") // verifier:allow unpaginated-collection-read — chunked via IN_CHUNK above, each call is bounded to <=200 ids
             .select("external_order_id")
             .eq("platform", platform)
             .in("external_order_id", chunk);
@@ -330,6 +359,26 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       }]);
       return;
     }
+    // Excel-only corruption (see `parseExcelBuffer`'s `mixedDateTypeColumns`
+    // doc comment): Excel silently auto-converts only the date values its
+    // OWN locale can read as valid, permanently losing the day-first meaning
+    // of the rest (an intended "03-05-2026"/May 3rd can become a native date
+    // cell read as March 5th) before our code ever sees text to evaluate.
+    // This can't be caught by `detectDateOrder` below — there's no ambiguous
+    // string left, just an already-wrong resolved date — so it must be
+    // checked separately, against the raw header the `date` key resolved to.
+    if (source.mixedDateTypeColumns?.size) {
+      const dateRawHeader = [...mapping.entries()].find(([, key]) => key === "date")?.[0];
+      if (dateRawHeader && source.mixedDateTypeColumns.has(dateRawHeader)) {
+        setParsed([{
+          rowNum: 0,
+          data: null,
+          error: `This Excel file's "date" column mixes real date cells with plain-text dates. Excel only auto-converts values its own locale can read as a valid date, which silently corrupts the rest — an ambiguous date like "03-05-2026" can become a date cell read as March 5th instead of May 3rd, with no way for this importer to detect or recover the original value. Re-export this report as CSV/text (Excel never does this to plain text), or set the date column's format to Text in Excel before re-uploading.`,
+        }]);
+        return;
+      }
+    }
+
     // Canonicalise first so the `date` column is resolved, then decide the
     // order from the whole file BEFORE validating any row. Guessing per-row is
     // what mis-dated 145 live orders.
@@ -363,7 +412,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
 
     const dateOrder: DateOrder = override ?? detection.order;
     const validated = canonical.map((row, i) =>
-      validateRowForFormat(fmt, row, i + 2, dateOrder),
+      validateRowForFormat(fmt, row, i + 2, dateOrder, baseCurrency),
     );
     if (!isCurrent()) return; // a newer format/date-order change has already superseded this run
     setParsed(validated); // show validation results immediately…
@@ -371,10 +420,107 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       const deduped = await markDuplicates(validated, requestId); // …then refine with the dedup check
       if (!isCurrent()) return; // superseded while the dedup query was in flight
       setParsed(deduped);
+      await detectAndReviewFxRates(deduped, requestId, isCurrent);
     } catch (err) {
       if (!isCurrent()) return;
       setImportError(err instanceof Error ? err.message : "Duplicate check failed");
     }
+  }
+
+  /**
+   * Groups rows carrying a `sheetCurrency` (set by `validateRowForFormat`
+   * when a row's currency differs from `baseCurrency`) and, if any exist,
+   * fetches ECB rates for every (currency, date) pair and opens the FX
+   * review step. Rows already skipped/errored are excluded — there is
+   * nothing to convert in a row that will never be imported.
+   */
+  async function detectAndReviewFxRates(
+    rows: ParsedRow[],
+    requestId: number,
+    isCurrent: () => boolean,
+  ) {
+    const currencyGroups = new Map<string, { count: number; dates: string[] }>();
+    for (const row of rows) {
+      if (!row.sheetCurrency || row.skipped || row.error) continue;
+      const g = currencyGroups.get(row.sheetCurrency) ?? { count: 0, dates: [] };
+      g.count++;
+      if (row.data?.date) g.dates.push(row.data.date);
+      currencyGroups.set(row.sheetCurrency, g);
+    }
+    if (currencyGroups.size === 0) return;
+
+    const rowsSummary: FxRateReviewRow[] = Array.from(currencyGroups.entries()).map(
+      ([currency, g]) => {
+        const sortedDates = g.dates.slice().sort();
+        return {
+          currency,
+          rowCount: g.count,
+          dateSpan: { from: sortedDates[0], to: sortedDates.at(-1)! },
+        };
+      },
+    );
+    setFxRows(rowsSummary);
+
+    const pairs = rowsSummary.flatMap((r) =>
+      Array.from(new Set(currencyGroups.get(r.currency)!.dates)).map((date) => ({
+        currency: r.currency,
+        date,
+      })),
+    );
+
+    let rates: Record<string, { rate: number; rateDate: string }> = {};
+    let unresolved: string[] = [];
+    try {
+      const res = await fetch("/api/fx/rates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base: baseCurrency, pairs }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          rates: Record<string, { rate: number; rateDate: string }>;
+          unresolved: string[];
+        };
+        rates = json.rates;
+        unresolved = json.unresolved;
+      } else {
+        // Every pair falls to manual entry — the review step still works,
+        // just without any ECB-resolved starting point.
+        unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
+      }
+    } catch {
+      unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
+    }
+    if (!isCurrent()) return; // superseded while the FX rate fetch was in flight
+
+    fxDispatch({
+      type: "init",
+      currencies: rowsSummary.map((r) => r.currency),
+      unresolvedCurrencies: Array.from(new Set(unresolved.map((k) => k.split(":")[0]))),
+    });
+    fxDispatch({ type: "ratesResolved", rates });
+    setFxReviewOpen(true);
+  }
+
+  async function handleConfirmRates() {
+    setApplyingRates(true);
+    const updated = parsed.map((row) => {
+      if (!row.sheetCurrency || !row.data) return row;
+      const resolved = resolveRowRate(row.sheetCurrency, row.data.date, fxState);
+      if (!resolved) return row; // shouldn't happen if isReviewComplete gated the button; defensive no-op
+      return { ...row, data: applyRate(row.data, row.sheetCurrency, resolved.rate, resolved.rateDate) };
+    });
+    setParsed(updated);
+    setFxReviewOpen(false);
+    setApplyingRates(false);
+  }
+
+  function handleCancelFxReview() {
+    // Cancelling the review abandons the whole file — there is no safe
+    // partial state where some rows are converted and others aren't, and
+    // re-selecting the file re-triggers the review from scratch.
+    blockRetry();
+    setImportError(null);
   }
 
   function handleFormatChange(next: ImportFormatId) {
@@ -517,11 +663,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         unmatchedRefunds.push(target.externalOrderId);
         continue;
       }
+      // The matching SALE line is stored under a composite external_order_id
+      // (`${orderId}:${sku}`, see dedupeImportRows.ts) whenever it has a sku —
+      // guaranteed here since `productId` only resolved above with a non-null
+      // `r.sku`. Querying the bare `target.externalOrderId` would find
+      // nothing for a multi-line order, since no row is stored under the
+      // bare order id anymore.
       const { data: match, error: matchErr } = await supabase
         .from("sales")
         .select("*")
         .eq("platform", target.platform)
-        .eq("external_order_id", target.externalOrderId)
+        .eq("external_order_id", `${target.externalOrderId}:${r.sku}`)
         .eq("product_id", productId)
         .limit(1);
       if (matchErr) {
@@ -689,16 +841,36 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       if (refundBatchLog) dispatch(addAuditLog(refundBatchLog));
     }
 
-    setLoading(false);
-    reset();
-    onSuccess({
+    const summary: ImportSummary = {
       inserted: inserted.length,
       skippedRows: skipped.length,
       refundsApplied: appliedRefunds,
       refundsSkipped: unmatchedRefunds.length,
       refundsExceeded: exceededRefunds.length,
       refundsAlreadyApplied: alreadyRefunded.length,
-    });
+    };
+    setLoading(false);
+    // 30 REFUND rows on a real May 2026 sheet; 8 matched no sale in the
+    // file and were counted in the summary, then discarded — an
+    // understatement of returns in a filed VAT figure. Block the success
+    // toast behind an explicit acknowledgement listing the unmatched order
+    // ids, rather than letting them disappear into a single "8 unmatched"
+    // count. The writes above are already committed either way.
+    if (unmatchedRefunds.length > 0) {
+      setPendingUnmatchedRefunds({ orderIds: unmatchedRefunds, summary });
+      return;
+    }
+    reset();
+    onSuccess(summary);
+    onClose();
+  }
+
+  function finalizeImportAfterUnmatchedRefunds() {
+    if (!pendingUnmatchedRefunds) return;
+    const { summary } = pendingUnmatchedRefunds;
+    setPendingUnmatchedRefunds(null);
+    reset();
+    onSuccess(summary);
     onClose();
   }
 
@@ -708,14 +880,49 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       onClose={handleClose}
       title="Import Orders"
       footer={
-        <>
-          <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleImport} disabled={!canImport || loading}>
-            {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
-          </Button>
-        </>
+        pendingUnmatchedRefunds ? (
+          <>
+            <Button variant="secondary" onClick={handleClose}>Close</Button>
+            <Button onClick={finalizeImportAfterUnmatchedRefunds}>Import anyway</Button>
+          </>
+        ) : fxReviewOpen ? undefined : (
+          <>
+            <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
+            <Button onClick={handleImport} disabled={!canImport || loading}>
+              {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
+            </Button>
+          </>
+        )
       }
     >
+      {pendingUnmatchedRefunds ? (
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-danger)]">
+            {pendingUnmatchedRefunds.orderIds.length} refund
+            {pendingUnmatchedRefunds.orderIds.length !== 1 ? "s" : ""} in this file matched no order —
+            the sales rows and any other refunds from this import have already been saved.
+          </p>
+          <p className="text-sm text-[var(--color-text-muted)]">
+            These order ids weren&apos;t found (a different platform, an order outside this
+            file, or one this file didn&apos;t include). Leaving them unacknowledged
+            understates returns in your VAT figures — check them before continuing.
+          </p>
+          <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)] p-3 space-y-1 max-h-40 overflow-y-auto">
+            {pendingUnmatchedRefunds.orderIds.map((id) => (
+              <p key={id} className="text-xs text-[var(--color-danger)]">{id}</p>
+            ))}
+          </div>
+        </div>
+      ) : fxReviewOpen ? (
+        <FxRateReview
+          rows={fxRows}
+          state={fxState}
+          dispatch={fxDispatch}
+          onCancel={handleCancelFxReview}
+          onConfirm={handleConfirmRates}
+          confirming={applyingRates}
+        />
+      ) : (
       <div className="space-y-4">
         <Field label="Import format">
           <Select
@@ -850,6 +1057,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           <p className="text-sm text-[var(--color-danger)]">Import failed: {importError}</p>
         )}
       </div>
+      )}
     </Modal>
   );
 }

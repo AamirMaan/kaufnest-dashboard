@@ -302,6 +302,14 @@ fixed — don't reintroduce them:
   required field) — Amazon leaves them blank on those row types. Moving the
   `classifySkip` call after date parsing reintroduces a `Row N: invalid or
   missing "date"` failure on every one of them.
+- **`INBOUND` (FBA warehouse shipment) is also in `NON_SALE_STATUSES`**
+  (fixed 2026-09-15, real k2_textil report), but unlike `RETURN`/`FC_TRANSFER`
+  it DOES carry a `date` and a `quantity`/`unit_price` pair — those describe
+  inventory value being shipped in, not a sale. Before this fix the row fell
+  through `classifySkip` into full validation, where those columns don't
+  reconcile like a real SALE row's do, and failed with `Row N: "unit_price"
+  (item line total) or "total" must be a positive number` — blocking the
+  whole file until the user manually deleted every INBOUND row.
 - **`REFUND` rows are exempt from BOTH duplicate pre-check passes**
   (file-level dupes and the DB `.in()` check in `markDuplicates`) — they
   carry the `external_order_id` of an existing sale by definition, so
@@ -362,30 +370,46 @@ fixed — don't reintroduce them:
 - **Amazon order ids are NOT unique in the sheet** — a multi-line order (one
   line per SKU) repeats the same `order_id`. Refund matching keys on platform
   + `external_order_id` + resolved `product_id`, never `external_order_id`
-  alone. Note what this does and does not protect against: it canNOT be
-  deducting "the wrong line", because only ONE line of a multi-line order can
-  ever exist in `sales` — `idx_sales_platform_external_order_id` is
-  non-partial, and `markDuplicates`' in-file pass marks the second and later
-  lines `"duplicate in file"`. What actually happens is that a refund against
-  any line OTHER than the imported one resolves a `product_id` that matches
-  nothing and is reported as `refundsSkipped` ("no matching order found").
-  Keep `product_id` in the key — it is correct — but don't justify it with a
-  wrong-line scenario the schema makes impossible.
-- **Unmatched refunds are skipped, not inserted.** A non-partial UNIQUE index
-  on `(platform, external_order_id)` exists in every tenant schema (verified
-  live) — a standalone insert for an order id with no matching line raises a
-  unique violation and fails the *whole* batch, not just that row. Unlike
-  the file-level skip reasons, this is NOT surfaced as a `ParsedRow.skipped`
-  reason in the pre-import preview — matching happens only inside
-  `handleImport`, and the outcome (`refundsSkipped`) is reported post-import
-  via `ImportSummary`/the toast in `page.tsx`.
+  alone. **UPDATED 2026-09-17** (`dedupeImportRows.ts`): before this date,
+  only ONE line of a multi-line order could ever reach `sales` —
+  `idx_sales_platform_external_order_id` is non-partial, and the in-file
+  dedupe dropped every line after the first as `"duplicate in file"`. Now
+  EVERY distinct-SKU line survives, each stored under a composite
+  `external_order_id` of `"${orderId}:${sku}"` (mirroring the composite key
+  eBay sync already uses) so none collide on the unique index. This is
+  scoped to `platform === "amazon"` ONLY — see that file's doc comment for
+  why (a composited eBay row would falsely satisfy
+  `isEbayIntegrationSyncedSale`'s `.includes(":")` check). The refund
+  matcher composes the identical key from its own `sku` field
+  (`ImportSalesModal.tsx`'s refund loop) before querying — a refund against
+  the wrong SKU of a multi-line order still correctly resolves nothing
+  (product_id mismatch), reported as `refundsSkipped`.
+- **Unmatched refunds are skipped, not inserted, AND (2026-09-17) block the
+  success toast.** A non-partial UNIQUE index on `(platform,
+  external_order_id)` exists in every tenant schema (verified live) — a
+  standalone insert for an order id with no matching line raises a unique
+  violation and fails the *whole* batch, not just that row, so an unmatched
+  refund is never inserted on its own. Unlike the file-level skip reasons,
+  this is NOT surfaced as a `ParsedRow.skipped` reason in the pre-import
+  preview — matching happens only inside `handleImport`, after the sales
+  insert (see "The insert runs BEFORE the refund loop" below) — and any
+  unmatched refund now sets `pendingUnmatchedRefunds` state instead of
+  immediately finalizing: the modal renders a blocking list of the
+  unmatched order ids with an "Import anyway" button
+  (`finalizeImportAfterUnmatchedRefunds`) before `onSuccess`/`onClose` fire.
+  The sales insert and any matched refunds are already committed by this
+  point either way — this is a post-hoc acknowledgement gate, not a
+  pre-write block.
 - **Refund matching requires a non-null `product_id`** — it's part of the
   match key (see above). Every integrations-synced Amazon order has
   `product_id: null` by design (see `src/lib/integrations/`'s SKILL.md), and
   so does any CSV row whose SKU isn't in inventory. In a tenant that uses the
   eBay/Amazon platform sync, this means **100% of REFUND rows in a CSV
   import skip** as unmatched — not a bug, just a consequence of the match
-  key, but it reads to a user as "refunds don't work" if you don't know this.
+  key. Before 2026-09-17 this read to a user as "refunds don't work" with
+  no explanation; now the blocking "unmatched refunds" dialog at least
+  surfaces it, even though it can't explain WHY (the dialog only lists
+  order ids, not match-key details).
 - **The insert runs BEFORE the refund loop, not after.** An Amazon monthly
   report routinely contains both the SALE and its REFUND in the same file
   (sold 3 April, refunded 24 April). `handleImport` inserts `insertRows`
@@ -431,6 +455,42 @@ fixed — don't reintroduce them:
   "insert + some refunds applied, no refund-outcomes audit row for any of
   it." Known limitation, not handled.
 
+## Gotchas — FX rate review (currency conversion, 2026-09-17)
+
+- **Two-pass row lifecycle — parse recognizes, `applyRate` converts.**
+  `validateRowForFormat` (`importFormats.ts`) calls `resolveSheetCurrency`
+  (`@/lib/fx/convert.ts`) but does NOT convert a foreign-currency row's
+  money fields at parse time — it only sets `ParsedRow.sheetCurrency` to
+  the raw ISO code and leaves `data.currency` as the tenant's BASE currency
+  with the sheet's UNCONVERTED figures. Conversion happens only in
+  `handleConfirmRates` (`ImportSalesModal.tsx`), after the user confirms a
+  rate in `<FxRateReview>`. Do not "helpfully" convert earlier — a row
+  whose currency matches the base currency must never enter this pipeline
+  at all (`sheetCurrency` stays `null`), preserving every existing
+  base-currency import byte-for-byte.
+- **A recognized ISO code no longer skips or defaults to EUR.**
+  `classifySkip`'s currency guard changed from `VALID_CURRENCIES.includes`
+  (hard EUR/USD/GBP allowlist) to `isPlausibleIsoCode` (any 3-letter
+  shape) — this is the actual fix for the confirmed live bug where 24
+  Swedish orders were booked as EUR instead of SEK. Only a genuinely
+  garbled currency value (not 3 letters) still skips as "unsupported
+  currency".
+- **`validateRowForFormat`'s `baseCurrency` param defaults to `"EUR"`,
+  not required.** Deliberate: ~69 pre-existing test call sites assumed no
+  conversion and would otherwise all need a mechanical 4th argument added
+  for zero behavioral change. `ImportSalesModal.tsx` (the real caller)
+  always passes the tenant's actual base currency explicitly.
+- **The FX rate fetch (`/api/fx/rates`) is a genuine async gap inside
+  `parseAndValidate`** — a format/date-order change or a new file
+  selection while it's in flight must be discarded, not applied. See the
+  `isCurrent()` staleness guard at the top of that function.
+- **Manual-mode rates have no per-row date** — `resolveRowRate` dates a
+  manual entry as the ROW's own date, not "today" or an ECB date, since
+  there is no ECB lookup involved. ECB mode falls back to the nearest
+  resolved date for that currency if a specific row's exact date wasn't
+  covered by the batch fetch (shouldn't happen if `init` covered every
+  date in the file, but defensive).
+
 ## Gotchas — `refunded_amount` idempotency
 
 - `refunded_amount` doubles as both the audit figure (what was refunded) and
@@ -441,6 +501,15 @@ fixed — don't reintroduce them:
   cannot be represented and is silently skipped as `refundsAlreadyApplied`.
   If partial/multiple refunds per order are ever needed, this needs a
   separate ledger table, not a second column on `sales`.
+
+## Gotchas — "Specific period" date filter
+
+`page.tsx`'s `FilterBar` gets `earliestYear`/`onPeriodChange` props, which
+enable a "Specific Period" option (any month/quarter/full year) on top of the
+existing date presets. `setPeriod` (the combined preset+dateFrom+dateTo
+setter passed as `onPeriodChange`) MUST update all three fields in one atomic
+call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
+staleness in the `setFilter(key, value)` pattern this page already uses).
 
 ## Gotchas — server-side pagination
 

@@ -70,6 +70,13 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   No plan tie — mirrors `ai_enabled`'s shape (007) but is a pure on/off
   toggle, not plan-gated. See
   `docs/superpowers/specs/2026-09-07-shipping-label-gating-and-detail-layout-design.md`.
+- `control-plane/011_fx_rates_cache.sql` — creates `control.fx_rates` cache
+  table (rate_date, currency, quote). Caches ECB daily reference rates (quote
+  per 1 EUR, not a derived pair rate) so repeated imports don't refetch the
+  same date. Global reference data, hence the control plane rather than a
+  tenant schema. See
+  `docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md`
+  section 1. Not yet applied to the live control-plane database.
 - `migrations/001_init.sql` — Project B baseline: `public` tables, enums, RLS,
   `current_user_role()`, `handle_new_user()`, indexes.
 - `migrations/002_inventory_and_vat.sql` — `public.products`, VAT columns,
@@ -378,6 +385,34 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   shipping-label-generation feature (`src/lib/shipping/`,
   `src/app/api/shipping/`, `src/app/dashboard/sales/[id]/page.tsx`'s
   Shipping card).
+- `migrations/045_overview_aggregation_functions.sql` — adds four
+  `LANGUAGE sql STABLE` functions (`get_sales_overview`,
+  `get_expenses_overview`, `get_purchases_overview`, `get_payouts_overview`)
+  to every tenant schema via `run_on_all_tenant_schemas`; also mirrored
+  into `provision_tenant_schema()` in the same commit. Each takes
+  `(p_from date, p_to date, p_currency text)` and returns a small `jsonb`
+  aggregate instead of rows — replaces the Overview page's
+  `fetchAllRows`-based client-side aggregation. Not `SECURITY DEFINER`, so
+  existing RLS `_select` policies still gate visibility. See
+  `docs/superpowers/specs/2026-09-16-overview-rpc-aggregation-design.md`
+  for the full design, including the "Business logic inventory" of
+  intentional quirks this SQL reproduces exactly (two distinct revenue
+  formulas, `advertising_fee`-only balance-card fees, hardcoded
+  ebay/amazon-only platform breakdowns). Backs the Overview page
+  (`src/app/dashboard/page.tsx`).
+- `migrations/046_expense_receipts.sql` — adds `receipts jsonb NOT NULL
+  DEFAULT '[]'::jsonb` to `expenses` in every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. Creates the private `expense-receipts` Storage bucket
+  (first PRIVATE bucket in this codebase — `listing-images`,
+  `022_listing_images_bucket.sql`, is public) with tenant-path-scoped RLS
+  reusing `public.current_tenant_role()` (read/insert/delete all match "any
+  authenticated tenant member" — `current_tenant_role() IS NOT NULL` — the
+  same bar as `expenses_select`/`expenses_update`, unlike `listing-images`'
+  admin-only write). See
+  `docs/superpowers/specs/2026-09-15-multicurrency-receipts-date-filters-design.md`
+  section 2. Backs `src/app/dashboard/expenses/` — see its `SKILL.md` gotcha
+  for the private-bucket/signed-URL/deferred-persistence details.
 
 ## Related code
 

@@ -17,6 +17,7 @@
 
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
 import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
 import {
   ALIASES,
@@ -47,6 +48,15 @@ export interface ParsedRow {
   skipped?: string | null;
   /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
   sku?: string | null;
+  /**
+   * Set to the sheet's raw ISO code when this row's currency differs from
+   * the tenant's base currency — null when no conversion is needed. The
+   * modal groups rows by this field to drive the FX rate review step;
+   * `applyRate` (src/lib/fx/convert.ts) converts `data`'s money fields
+   * in place only after the user confirms a rate, per the two-pass row
+   * lifecycle (see the plan's "Implementation judgment calls").
+   */
+  sheetCurrency?: string | null;
   /**
    * Amazon REFUND row. Never inserted — the modal matches it to an existing
    * sale and deducts the refund from that sale. `data` is null because there
@@ -220,9 +230,13 @@ export type SkipReason = "blank row" | "summary row" | "not a sale" | "unsupport
  * Amazon row types that carry no importable money. REFUND is deliberately NOT
  * here — its negative amounts are deducted from the sale they belong to. RETURN
  * is pure logistics: it duplicates a refund that already appears separately, and
- * its rows have no `date` at all.
+ * its rows have no `date` at all. INBOUND is a shipment of inventory INTO an FBA
+ * warehouse — same category as FC_TRANSFER (stock movement, not a sale). Its
+ * quantity/unit_price columns describe inventory value, not a line total, so
+ * without this skip the row falls through to full validation and fails with
+ * "unit_price (item line total) or total must be a positive number".
  */
-const NON_SALE_STATUSES = new Set(["return", "fc_transfer"]);
+const NON_SALE_STATUSES = new Set(["return", "fc_transfer", "inbound"]);
 
 /**
  * Classify a row that should be skipped rather than errored. Only applies to
@@ -266,8 +280,17 @@ export function classifySkip(format: ImportFormat, raw: Record<string, string>):
 
   if (NON_SALE_STATUSES.has(status)) return "not a sale";
 
+  // A recognized ISO-4217-shaped code (e.g. SEK) no longer skips — it routes
+  // through the FX rate review step instead (see `validateRowForFormat`'s
+  // `resolveSheetCurrency` call below). Only a non-blank, non-ISO-shaped
+  // value (garbled data) is still treated as unsupported. NOTE: this guard
+  // also gates REFUND rows (classifySkip runs before the refund branch), and
+  // the refund branch does NOT convert its amount — a refund whose currency
+  // differs from the tenant's base currency will be deducted at face value,
+  // uncorrected. Sale-row conversion is this plan's scope (Task 9); refund
+  // conversion is a real gap this change surfaces but does not close.
   const currency = raw.currency?.trim().toUpperCase();
-  if (currency && !VALID_CURRENCIES.includes(currency as Currency)) {
+  if (currency && !isPlausibleIsoCode(currency)) {
     return "unsupported currency";
   }
 
@@ -287,6 +310,13 @@ export function validateRowForFormat(
   raw: Record<string, string>,
   rowNum: number,
   dateOrder: DateOrder = "dmy",
+  // Defaulted to "EUR" (the app's most common tenant base currency) rather
+  // than made a bare required parameter, so the ~69 existing call sites in
+  // importFormats.test.ts that assume no conversion don't all need a
+  // mechanical 4th argument added — a deliberate, minimal deviation from
+  // the plan's literal text. ImportSalesModal.tsx (the real caller) always
+  // passes the tenant's actual base currency explicitly.
+  baseCurrency: Currency = "EUR",
 ): ParsedRow {
   const fail = (error: string): ParsedRow => ({ rowNum, data: null, error: `Row ${rowNum}: ${error}` });
 
@@ -464,10 +494,11 @@ export function validateRowForFormat(
     totalAmount = round2(quantity * up);
   }
 
-  const currency = (raw.currency?.trim().toUpperCase() || "EUR") as Currency;
-  if (!VALID_CURRENCIES.includes(currency)) {
-    return fail(`invalid "currency" "${raw.currency}" — use: ${VALID_CURRENCIES.join(", ")}`);
+  const currencyResult = resolveSheetCurrency(raw.currency, baseCurrency);
+  if ("error" in currencyResult) {
+    return fail(currencyResult.error);
   }
+  const { currency, sheetCurrency } = currencyResult;
 
   const vatRateRaw = raw.vat_rate?.trim();
   const parsedVatRate = vatRateRaw ? parseLocaleNumber(vatRateRaw) : null;
@@ -553,6 +584,13 @@ export function validateRowForFormat(
       ebay_fulfillment_id: null,
       ebay_sync_error: null,
       ebay_synced_at: null,
+      // Left null at parse time regardless of sheetCurrency — the two-pass
+      // row lifecycle only converts (via applyRate) after the user confirms
+      // a rate in the FX review step (see ImportSalesModal.tsx).
+      original_currency: null,
+      original_total_amount: null,
+      fx_rate: null,
+      fx_rate_date: null,
       buyer_name: null,
       shipping_address_line1: null,
       shipping_address_line2: null,
@@ -565,5 +603,6 @@ export function validateRowForFormat(
     },
     error: null,
     sku: raw.sku?.trim() || null,
+    sheetCurrency,
   };
 }
