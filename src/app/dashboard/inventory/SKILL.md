@@ -116,12 +116,22 @@ since modal dropdowns use a different state key than the table.
   for tenants that only ever used the ledger.
 - **`enable_advanced_inventory()` is service_role-only** because the plan lives
   in the control plane; the route guard is the enforcement point.
-- **Deleting a product skips the purchase-lot drop.** `purchases.product_id` is
-  `ON DELETE SET NULL`, which fires `inv_purchase_after_write` before the
-  `stock_lots` product cascade; the trigger returns early when the product row
-  no longer exists, so the delete isn't blocked by `INV_CONSUMED` and lots/
-  movements cascade away with the product.
+- **Deleting a product skips the purchase-lot drop, keeps sales' booked COGS,
+  and skips the transfer restore.** `purchases.product_id` and
+  `sales.product_id` are both `ON DELETE SET NULL`, which fires
+  `inv_purchase_after_write`/`inv_sale_after_write` before the `stock_lots`
+  product cascade; both triggers return early when the product row no longer
+  exists, so the delete isn't blocked by `INV_CONSUMED`, a sale's
+  `cogs_amount` isn't wiped by the revert-then-NULL path, and lots/movements
+  cascade away with the product on their own. `inv_transfer_before_delete`
+  has the same guard as its first statement, so a pending transfer on a
+  deleted product returns `OLD` immediately instead of trying to restore
+  units to lots that are about to cascade away.
 - **Transfer deletes lock before they check.** `inv_transfer_before_delete`
   takes both (product, location) advisory locks, then checks the destination
   lots are untouched (`FOR UPDATE`), so a concurrent sale can't be cascaded
   away.
+- **No bulk sale deletes while advanced inventory is on.** The BEFORE DELETE
+  revert can recompute a sibling sale's COGS; if that sibling is in the same
+  multi-row DELETE, Postgres raises "tuple to be deleted was already
+  modified". The app deletes one sale at a time.

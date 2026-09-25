@@ -753,6 +753,12 @@ BEGIN
         IF OLD.created_at < v_s.enabled_at THEN
           RETURN NULL; -- pre-enable rows are not part of the ledger
         END IF;
+        -- Product deleted: its FK cascade is nulling sales.product_id. Keep
+        -- the booked COGS; lots/movements cascade from products on their own.
+        IF NEW.product_id IS NULL AND OLD.product_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM products WHERE id = OLD.product_id) THEN
+          RETURN NULL;
+        END IF;
         -- Only stock-relevant edits re-run FIFO; a note/fee edit (or our own
         -- cogs_amount write) must never move an order onto different lots.
         IF NEW.product_id IS NOT DISTINCT FROM OLD.product_id
@@ -914,6 +920,10 @@ BEGIN
       v_sources uuid[] := '{}';
       v_lot     uuid;
     BEGIN
+      -- Product deleted: lots/movements cascade from products; nothing to restore.
+      IF NOT EXISTS (SELECT 1 FROM products WHERE id = OLD.product_id) THEN
+        RETURN OLD;
+      END IF;
       IF OLD.from_location_id::text < OLD.to_location_id::text THEN
         PERFORM inv_lock(OLD.product_id, OLD.from_location_id);
         PERFORM inv_lock(OLD.product_id, OLD.to_location_id);
@@ -990,7 +1000,7 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF NOT EXISTS (SELECT 1 FROM stock_locations WHERE id = p_location_id AND is_active AND type <> 'dropship') THEN
@@ -1007,7 +1017,7 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF p_unit_cost IS NULL OR p_unit_cost < 0 THEN

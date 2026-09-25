@@ -61,6 +61,11 @@ BEGIN
     RAISE EXCEPTION 'FAIL schema: clients cannot insert transfers';
   END IF;
   PERFORM public.install_advanced_inventory('tenant_zz_invtest'); -- idempotent re-run
+  SELECT count(*) INTO v_int FROM pg_constraint
+    WHERE conrelid = 'tenant_zz_invtest.purchases'::regclass AND contype = 'f'
+      AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                          WHERE attrelid = 'tenant_zz_invtest.purchases'::regclass AND attname = 'location_id')];
+  IF v_int <> 1 THEN RAISE EXCEPTION 'FAIL schema: installer re-run duplicated purchases.location_id FK (% FKs)', v_int; END IF;
 
   -- ── Section: purchases + enable (Task 5) ──────────────────
   -- Pre-enable history, backdated so it counts as "before enabled_at".
@@ -112,9 +117,9 @@ BEGIN
 
   -- Quantity edit: 12 units, net 120 + 30 extras = 150 / 12 = 12.5
   UPDATE purchases SET quantity = 12, total_amount = 145.20, vat_amount = 25.20 WHERE id = v_p2;
-  IF (SELECT qty_received FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 12
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 12
-     OR (SELECT unit_cost FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 12.5 THEN
+  IF (SELECT qty_received FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 12
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 12
+     OR (SELECT unit_cost FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 12.5 THEN
     RAISE EXCEPTION 'FAIL purchases: quantity edit not applied to lot';
   END IF;
 
@@ -167,14 +172,14 @@ BEGIN
   END IF;
   SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s1;
   IF v_num IS DISTINCT FROM 25.00 THEN RAISE EXCEPTION 'FAIL sales: FIFO COGS expected 25.00, got %', v_num; END IF;
-  IF (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 0
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 10 THEN
+  IF (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') IS DISTINCT FROM 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 10 THEN
     RAISE EXCEPTION 'FAIL sales: FIFO did not drain the oldest lot first';
   END IF;
 
   -- Clients cannot write cogs_amount
   UPDATE sales SET cogs_amount = 999 WHERE id = v_s1;
-  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 25.00 THEN
+  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) IS DISTINCT FROM 25.00 THEN
     RAISE EXCEPTION 'FAIL sales: client write to cogs_amount stuck';
   END IF;
 
@@ -187,9 +192,9 @@ BEGIN
 
   -- Quantity edit re-runs FIFO: 3 units, all from opening @0
   UPDATE sales SET quantity = 3, total_amount = 90 WHERE id = v_s1;
-  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 0
-     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 2
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 12 THEN
+  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) IS DISTINCT FROM 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') IS DISTINCT FROM 2
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 12 THEN
     RAISE EXCEPTION 'FAIL sales: quantity edit did not revert and re-apply';
   END IF;
 
@@ -232,7 +237,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM stock_lots WHERE product_id = v_prod AND kind = 'shortfall') THEN
     RAISE EXCEPTION 'FAIL sales: shortfall not settled by receipt';
   END IF;
-  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 7 THEN
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') IS DISTINCT FROM 7 THEN
     RAISE EXCEPTION 'FAIL sales: settlement did not draw 3 from the new lot';
   END IF;
   SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s3;
@@ -240,16 +245,16 @@ BEGIN
 
   -- Deleting a sale puts its units back where they came from
   DELETE FROM sales WHERE id = v_s3;
-  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 1
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 10 THEN
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 1
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') IS DISTINCT FROM 10 THEN
     RAISE EXCEPTION 'FAIL sales: delete did not restore lots';
   END IF;
 
   -- Returned + restock consumes nothing; COGS 0; its 3 opening units come back
   UPDATE sales SET status = 'returned', restock = true WHERE id = v_s1;
   IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = v_s1)
-     OR (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 0
-     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 3 THEN
+     OR (SELECT cogs_amount FROM sales WHERE id = v_s1) IS DISTINCT FROM 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') IS DISTINCT FROM 3 THEN
     RAISE EXCEPTION 'FAIL sales: returned+restock not handled';
   END IF;
 
@@ -266,7 +271,7 @@ BEGIN
   INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
     VALUES ('amazon', 'Widget', v_prod, 1, 30, 30, current_date, v_uid) RETURNING id INTO v_sa;
   IF (SELECT fulfillment_location_id FROM sales WHERE id = v_sa) IS DISTINCT FROM v_fba
-     OR (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 10 THEN
+     OR (SELECT cogs_amount FROM sales WHERE id = v_sa) IS DISTINCT FROM 10 THEN
     RAISE EXCEPTION 'FAIL sales: platform default / FBA shortfall wrong';
   END IF;
   DELETE FROM sales WHERE id = v_sa;
@@ -295,24 +300,24 @@ BEGIN
   INSERT INTO stock_transfers (product_id, from_location_id, to_location_id, quantity, transfer_cost, date, created_by)
     VALUES (v_prod, v_main, v_fba, 5, 10, current_date, v_uid) RETURNING id INTO v_t1;
   SELECT count(*), sum(qty_remaining) INTO v_int, v_num FROM stock_lots WHERE location_id = v_fba;
-  IF v_int <> 3 OR v_num <> 5 THEN RAISE EXCEPTION 'FAIL transfers: expected 3 lots / 5 units at FBA, got % / %', v_int, v_num; END IF;
+  IF v_int <> 3 OR v_num IS DISTINCT FROM 5 THEN RAISE EXCEPTION 'FAIL transfers: expected 3 lots / 5 units at FBA, got % / %', v_int, v_num; END IF;
   SELECT string_agg(unit_cost::text, ',' ORDER BY received_at, created_at) INTO v_txt FROM stock_lots WHERE location_id = v_fba;
-  IF v_txt <> '2.0000,15.5000,12.0000' THEN RAISE EXCEPTION 'FAIL transfers: destination costs wrong: %', v_txt; END IF;
-  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 9 THEN
+  IF v_txt IS DISTINCT FROM '2.0000,15.5000,12.0000' THEN RAISE EXCEPTION 'FAIL transfers: destination costs wrong: %', v_txt; END IF;
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') IS DISTINCT FROM 9 THEN
     RAISE EXCEPTION 'FAIL transfers: source not drained FIFO';
   END IF;
 
   -- A sale at FBA consumes the transferred opening units first: 2 × 2 = 4.00
   INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
     VALUES ('amazon', 'Widget', v_prod, 2, 30, 60, current_date, v_uid) RETURNING id INTO v_sa;
-  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 4 THEN
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) IS DISTINCT FROM 4 THEN
     RAISE EXCEPTION 'FAIL transfers: FBA sale COGS expected 4.00';
   END IF;
 
   -- Opening cost edit flows through the transfer lot: (1 + 2) × 2 = 6.00
   SELECT id INTO v_lot FROM stock_lots WHERE product_id = v_prod AND kind = 'opening';
   PERFORM set_opening_lot_cost(v_lot, 1);
-  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 6 THEN
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) IS DISTINCT FROM 6 THEN
     RAISE EXCEPTION 'FAIL transfers: opening re-cost did not reach the FBA sale';
   END IF;
   BEGIN
@@ -340,9 +345,9 @@ BEGIN
   DELETE FROM sales WHERE id = v_sa;
   DELETE FROM stock_transfers WHERE id = v_t1;
   IF EXISTS (SELECT 1 FROM stock_lots WHERE location_id = v_fba)
-     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 3
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 1
-     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 10 THEN
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') IS DISTINCT FROM 3
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') IS DISTINCT FROM 1
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') IS DISTINCT FROM 10 THEN
     RAISE EXCEPTION 'FAIL transfers: delete did not restore the source';
   END IF;
 
@@ -409,8 +414,34 @@ BEGIN
   -- sales 13 + 2 (dropship); s1 restocked. Legacy current_stock = 14 = lots at stock-holding
   -- locations (the dropship purchase and dropship sale cancel out in the legacy counter).
   SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots WHERE product_id = v_prod;
-  IF v_int <> 14 OR (SELECT current_stock FROM products WHERE id = v_prod) <> 14 THEN
+  IF v_int IS DISTINCT FROM 14 OR (SELECT current_stock FROM products WHERE id = v_prod) IS DISTINCT FROM 14 THEN
     RAISE EXCEPTION 'FAIL consistency: lots % vs current_stock %', v_int, (SELECT current_stock FROM products WHERE id = v_prod);
+  END IF;
+
+  -- Deleting a product keeps its sales' booked COGS and lets its lots/movements/
+  -- transfers cascade cleanly (F1: FK cascade nulls sales.product_id, which used
+  -- to wipe cogs_amount; and a pending transfer used to raise INV_CONSUMED).
+  INSERT INTO products (name, created_by) VALUES ('Doomed2', v_uid) RETURNING id INTO v_ptmp;
+  -- default_location_id is now v_fba (set_default_location above), but ebay's
+  -- platform default is still Main, so pass location_id explicitly here.
+  INSERT INTO purchases (product_name, product_id, quantity, unit_price, total_amount, date, created_by, location_id)
+    VALUES ('Doomed2', v_ptmp, 3, 4, 12, current_date, v_uid, v_main);
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('ebay', 'Doomed2', v_ptmp, 2, 30, 60, current_date, v_uid) RETURNING id INTO v_sa;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_sa;
+  IF v_num IS DISTINCT FROM 8.00 THEN
+    RAISE EXCEPTION 'FAIL delete: Doomed2 sale COGS expected 8.00, got %', v_num;
+  END IF;
+  INSERT INTO stock_transfers (product_id, from_location_id, to_location_id, quantity, date, created_by)
+    VALUES (v_ptmp, v_main, v_fba, 1, current_date, v_uid) RETURNING id INTO v_t1;
+  DELETE FROM products WHERE id = v_ptmp;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) IS DISTINCT FROM 8.00 THEN
+    RAISE EXCEPTION 'FAIL delete: product delete wiped booked COGS';
+  END IF;
+  IF EXISTS (SELECT 1 FROM stock_lots WHERE product_id = v_ptmp)
+     OR EXISTS (SELECT 1 FROM stock_movements WHERE product_id = v_ptmp)
+     OR EXISTS (SELECT 1 FROM stock_transfers WHERE product_id = v_ptmp) THEN
+    RAISE EXCEPTION 'FAIL delete: ledger rows survived product delete';
   END IF;
 
   RAISE EXCEPTION 'INV_TESTS_PASSED';
