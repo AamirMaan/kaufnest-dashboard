@@ -98,6 +98,12 @@ New shared code from the migration:
 - `src/app/api/listings/ai/` — describe, aspects and usage routes.
 - `src/lib/utils/sanitizeListingHtml.ts` — eBay-safe HTML allowlist, applied
   in `publishPayloads.ts` before either description field reaches eBay.
+- `src/lib/support/` — Trello adapter, webhook signature verification and
+  reporter notifications for the support/bug-tracker feature (server-only,
+  never imported client-side). `/api/support/trello-webhook` is a second
+  unauthenticated-but-signed webhook alongside Stripe's — it verifies an
+  HMAC-SHA1 of `body + callbackURL`, so the callback URL is part of the
+  signed material and must match the registered webhook exactly.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
@@ -380,6 +386,7 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/dropshipping/` | `/dashboard/dropshipping` | dropshipping supplier listings + sync |
 | `src/app/dashboard/listings/` | `/dashboard/listings` | eBay listing creation (draft → publish) + `listingsSlice` (Pro/Business plans only; `manage_listings` permission) |
 | `src/app/dashboard/messages/` | `/dashboard/messages` | eBay buyer message sync/reply + `messagesSlice` (Pro/Business plans only; `manage_messages` permission) |
+| `src/app/dashboard/support/` | `/dashboard/support` | bug reports + tenant-scoped tracker board + `supportSlice` (all roles, all plans) |
 
 Each feature folder follows the same shape (where it has private code):
 

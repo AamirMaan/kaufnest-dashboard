@@ -106,6 +106,35 @@ not tenant roles.
   (font-mono, truncated) since the admin panel has no access to tenant
   `profiles` names and a cross-project lookup isn't worth it for an internal
   tool.
+- `support/page.tsx` — "Support Inbox" (2026-09-14): a cross-tenant view of
+  `control.bug_reports`, at `/admin/support`. **Server Component** — unlike
+  `page.tsx` above, it does not fetch via a client-side `GET` to an
+  `api/admin/*` route; it queries `createControlClient()` directly (both
+  `bug_reports` and a slim `tenants` `id, slug` select, in parallel via
+  `Promise.all`, to build a `tenantId → slug` map) because no cross-tenant
+  listing API route exists — `api/support/reports/route.ts` is scoped to the
+  caller's own tenant only, by design. Relies on `layout.tsx`'s
+  redirect-based guard rather than adding its own `verifyPlatformAdmin()`
+  check, same as `tenants/[id]/page.tsx`. Renders a `PageHeader` with
+  `support/_components/ResyncButton.tsx` (client component; busy-label +
+  `disabled` + toast, copied from `TenantDetailActions.tsx`'s "Resend
+  Invite" button, POSTs `api/support/resync` and calls `router.refresh()` on
+  success so the server-fetched rows pick up any status changes) as its
+  action, and `support/_components/SupportInboxTable.tsx` (client component;
+  a `FilterBar` — date preset/range copied structurally from
+  `dashboard/audit-logs/page.tsx`, with a Status dropdown in the
+  entity-specific slot — feeding a `DataTable` with columns Tenant slug,
+  Title, Type, Severity, Status, Reporter, Created, and a Trello column that
+  either links `trello_card_url` (`target="_blank" rel="noreferrer"`) or
+  shows a "Not in Trello" badge when `trello_card_id` is null). Filtering is
+  client-side over the full server-fetched set — not server-side pagination
+  like Sales/Expenses/Audit Logs — since this table has no existing
+  paginated-fetch infrastructure and the brief scoped this to a manual admin
+  sweep view, not a high-volume list. `STATUS_LABELS`/severity-variant maps
+  are duplicated from `dashboard/support/_lib/groupReports.ts` and
+  `dashboard/support/_components/ReportCard.tsx` respectively (feature-private
+  `_lib`/`_components`, not shared — see AGENTS.md's shared-vs-feature-private
+  rule) rather than imported across feature folders.
 - `_components/DeleteTenantModal.tsx` — destructive-confirmation modal for
   tenant deletion. Accepts `{ open, tenant, onClose, onDeleted }`. The user must
   **type the tenant's `schema_name` exactly** before the "Delete tenant" button
@@ -233,6 +262,20 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   8h) read by `DashboardShell`'s impersonation banner.
 - **`exit-impersonation/route.ts`** (`POST`) — clears the
   `kaufnest_impersonating` cookie.
+- **`src/app/api/support/resync/route.ts`** (not in `api/admin/`, but
+  platform-admin-only and cross-referenced here) — `POST`, guarded by
+  `verifyPlatformAdmin()`. The "Sync with Trello" sweep behind
+  `support/page.tsx`'s `ResyncButton`: loads up to 200 `control.bug_reports`
+  rows with a non-null `trello_card_id` and `status !== "wont_fix"`, calls
+  Trello's `fetchCard` for each, and updates `status`/`last_synced_at` when
+  the card's list has moved to a different mapped status
+  (`statusForList`/`trelloEnv` from `@/lib/support/config`). A card lookup
+  failure (e.g. a deleted card) is caught per-report and logged — it does
+  not abort the sweep. Returns `{ checked, updated }`, which `ResyncButton`
+  surfaces via toast. **Deliberately does not fire notifications** — a sweep
+  correcting many stale rows shouldn't send a bell per row for changes that
+  may be days old (tenant-facing notifications on status change happen
+  elsewhere, via the Trello webhook route — see `src/lib/support/notify.ts`).
 
 ## Shared dependencies
 
@@ -244,6 +287,20 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `src/lib/utils/planGating.ts` (`getAiGenerationLimit`) — used by
   `ai-usage/route.ts` to compute the AI Usage column's `used`/`limit`/
   `byUser` per tenant.
+- `src/lib/support/{config,trello}.ts` (`trelloEnv`, `statusForList`,
+  `fetchCard`) — used by `api/support/resync/route.ts`. See
+  `src/lib/support/` (types in `src/types/index.ts`: `BugReport`,
+  `BugReportStatus`, `BugSeverity`) for the tenant-facing bug tracker this
+  admin view reads.
+- `components/ui/{DataTable,FilterBar}` — used by `support/page.tsx`'s
+  `SupportInboxTable`; `DataTable`/`FilterBar` composition pattern copied
+  from `dashboard/audit-logs/page.tsx`.
+- `lib/utils/filters.ts` (`resolveDateRange`, `DatePreset`) — used by
+  `SupportInboxTable` for its date-range filter, same helper
+  `dashboard/audit-logs/page.tsx` uses (no dedicated `SupportFilters` type
+  added there — this table filters client-side over an already-fetched set,
+  not via a server refetch, so it just holds a local `preset`/`dateFrom`/
+  `dateTo`/`status` shape rather than extending the shared filters module).
 - `src/components/layout/BrandMark.tsx` — the theme-switching Boughtopia icon
   next to the header wordmark; `layout.tsx` (a server component) renders it
   as a child even though it's a client component, same as any other

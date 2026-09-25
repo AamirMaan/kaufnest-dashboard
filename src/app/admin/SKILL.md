@@ -40,6 +40,16 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   the gotcha below before reaching for `DeleteConfirmModal` instead. The
   `kaufnest_impersonating` cookie is read by `DashboardShell` — check that
   component if you rename the cookie.
+- **Change the support inbox** (new column, new filter):
+  `support/page.tsx` (data fetch — add a select column, or a second control
+  query) + `support/_components/SupportInboxTable.tsx` (columns/filters).
+  Adding a column pulled from `control.bug_reports` needs no new query — it's
+  already `select("*")` — just a new `Column<BugReport>` entry. A column
+  needing tenant data beyond `slug` needs the parent `page.tsx`'s `tenants`
+  select widened and the derived map's value type changed to match.
+- **Change the resync sweep** (different staleness window, different status
+  source): `api/support/resync/route.ts` alone — it's a single self-contained
+  route, not colocated under `admin/` (see `CLAUDE.md`'s cross-reference).
 
 ## Gotchas
 
@@ -109,3 +119,16 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   tenant schema is destructive enough to warrant more friction than a typed
   reason would add. Don't reach for `DeleteConfirmModal` for a new
   non-destructive admin-panel confirmation — use `ConfirmActionModal`.
+- **`support/page.tsx` breaks this folder's client-fetch convention on
+  purpose**: every other page here (`page.tsx`, `tenants/[id]/page.tsx`) is
+  `"use client"` and fetches its data from an `api/admin/*` route. There is
+  no cross-tenant `GET` route for `bug_reports` — `api/support/reports/route.ts`
+  is intentionally scoped to the caller's own tenant (RLS-equivalent
+  filtering at the query level, not just display-level), so making it serve
+  "all tenants" for an admin caller would be a second, harder-to-audit code
+  path for the same endpoint. Instead `support/page.tsx` is a **Server
+  Component** that calls `createControlClient()` directly, the same way
+  `layout.tsx` and `dashboard/layout.tsx` do. If you add another cross-tenant
+  admin view, prefer this pattern (server-fetch, pass props to a client
+  component for interactivity) over inventing a new "list everything" API
+  route unless something else also needs that route.

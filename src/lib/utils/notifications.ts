@@ -72,6 +72,8 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   "purchase.created": "Purchases",
   "product.low_stock": "Inventory",
   "message.received": "Messages",
+  "support.status_changed": "Support",
+  "support.replied": "Support",
 };
 
 /** Prefix marking a synthesized (non-database) notification id. */
