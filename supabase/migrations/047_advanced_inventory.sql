@@ -223,3 +223,7 @@ $inst$;
 
 COMMENT ON FUNCTION public.install_advanced_inventory(text) IS
   'Idempotently installs advanced inventory (batches/locations/FIFO) into one tenant schema. See 047_advanced_inventory.sql.';
+
+-- Only migrations (run as the owner) and provision_tenant_schema()
+-- (SECURITY DEFINER, owner) call this. Never expose it as an RPC.
+REVOKE ALL ON FUNCTION public.install_advanced_inventory(text) FROM PUBLIC, anon, authenticated;
