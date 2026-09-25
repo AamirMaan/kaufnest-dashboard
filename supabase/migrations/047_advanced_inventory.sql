@@ -914,19 +914,20 @@ BEGIN
       v_sources uuid[] := '{}';
       v_lot     uuid;
     BEGIN
-      IF EXISTS (
-        SELECT 1 FROM stock_movements mv JOIN stock_lots l ON l.id = mv.lot_id
-        WHERE mv.transfer_id = OLD.id AND mv.kind = 'transfer_in' AND l.qty_remaining <> l.qty_received
-      ) THEN
-        PERFORM inv_raise('INV_CONSUMED',
-          'Some of the transferred units have already been sold or moved on, so this transfer cannot be deleted');
-      END IF;
       IF OLD.from_location_id::text < OLD.to_location_id::text THEN
         PERFORM inv_lock(OLD.product_id, OLD.from_location_id);
         PERFORM inv_lock(OLD.product_id, OLD.to_location_id);
       ELSE
         PERFORM inv_lock(OLD.product_id, OLD.to_location_id);
         PERFORM inv_lock(OLD.product_id, OLD.from_location_id);
+      END IF;
+      IF EXISTS (
+        SELECT 1 FROM stock_movements mv JOIN stock_lots l ON l.id = mv.lot_id
+        WHERE mv.transfer_id = OLD.id AND mv.kind = 'transfer_in' AND l.qty_remaining <> l.qty_received
+        FOR UPDATE OF l
+      ) THEN
+        PERFORM inv_raise('INV_CONSUMED',
+          'Some of the transferred units have already been sold or moved on, so this transfer cannot be deleted');
       END IF;
       FOR m IN SELECT * FROM stock_movements WHERE transfer_id = OLD.id AND kind = 'transfer_out' LOOP
         UPDATE stock_lots SET qty_remaining = qty_remaining - m.qty WHERE id = m.lot_id;
