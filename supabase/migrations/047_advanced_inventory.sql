@@ -601,7 +601,213 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION %1$I.inv_purchase_before_delete();
   $sql$, schema_name);
 
-  -- @@ SECTION 4 @@
+  -- ── 4. Sales → FIFO consumption ───────────────────────────
+  EXECUTE format($sql$
+    -- Same consumption rule as the legacy apply_sale_stock_change, plus:
+    -- dropship locations never hold stock.
+    CREATE OR REPLACE FUNCTION %1$I.inv_sale_consumes(
+      p_product uuid, p_location uuid, p_qty integer, p_status text, p_restock boolean)
+    RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      RETURN p_product IS NOT NULL
+        AND p_location IS NOT NULL
+        AND p_qty > 0
+        AND inv_location_holds_stock(p_location)
+        AND NOT (p_status = 'returned' AND coalesce(p_restock, false));
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_consume(p_product uuid, p_location uuid, p_qty integer, p_sale uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      l           record;
+      v_remaining integer := p_qty;
+      v_take      integer;
+      v_sf        stock_lots;
+    BEGIN
+      IF p_qty <= 0 THEN
+        RETURN;
+      END IF;
+      PERFORM inv_lock(p_product, p_location);
+      FOR l IN
+        SELECT * FROM stock_lots
+        WHERE product_id = p_product AND location_id = p_location
+          AND kind <> 'shortfall' AND qty_remaining > 0
+        ORDER BY received_at, created_at, id
+        FOR UPDATE
+      LOOP
+        v_take := least(l.qty_remaining, v_remaining);
+        UPDATE stock_lots SET qty_remaining = qty_remaining - v_take WHERE id = l.id;
+        INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, sale_id)
+          VALUES (p_product, p_location, l.id, 'sale', -v_take, l.unit_cost, p_sale);
+        v_remaining := v_remaining - v_take;
+        EXIT WHEN v_remaining = 0;
+      END LOOP;
+
+      IF v_remaining > 0 THEN
+        -- Not enough stock: never block the order. The gap goes to this
+        -- location's shortfall lot at the last known cost and is re-costed
+        -- when stock next arrives (inv_settle_shortfall).
+        INSERT INTO stock_lots (product_id, location_id, kind, received_at, unit_cost, qty_received, qty_remaining)
+          VALUES (p_product, p_location, 'shortfall', now(), inv_last_unit_cost(p_product), 0, 0)
+          ON CONFLICT (product_id, location_id) WHERE kind = 'shortfall' DO NOTHING;
+        SELECT * INTO v_sf FROM stock_lots
+          WHERE product_id = p_product AND location_id = p_location AND kind = 'shortfall'
+          FOR UPDATE;
+        UPDATE stock_lots SET qty_remaining = qty_remaining - v_remaining WHERE id = v_sf.id;
+        INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, sale_id)
+          VALUES (p_product, p_location, v_sf.id, 'sale', -v_remaining, v_sf.unit_cost, p_sale);
+      END IF;
+    END;
+    $func$;
+
+    -- Undo every movement of one sale, returning units to the exact lots
+    -- they came from. Restored units then settle any shortfall at the same
+    -- location, so a location never shows positive and negative at once.
+    CREATE OR REPLACE FUNCTION %1$I.inv_revert_sale(p_sale uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      m      record;
+      v_lots uuid[] := '{}';
+      v_lot  uuid;
+    BEGIN
+      FOR m IN SELECT * FROM stock_movements WHERE sale_id = p_sale ORDER BY created_at, id LOOP
+        PERFORM inv_lock(m.product_id, m.location_id);
+        UPDATE stock_lots SET qty_remaining = qty_remaining - m.qty WHERE id = m.lot_id;
+        v_lots := array_append(v_lots, m.lot_id);
+      END LOOP;
+      DELETE FROM stock_movements WHERE sale_id = p_sale;
+      DELETE FROM stock_lots WHERE id = ANY (v_lots) AND kind = 'shortfall' AND qty_remaining = 0;
+      FOR v_lot IN
+        SELECT id FROM stock_lots
+        WHERE id = ANY (v_lots) AND kind <> 'shortfall' AND qty_remaining > 0
+        ORDER BY received_at, created_at
+      LOOP
+        PERFORM inv_settle_shortfall(v_lot);
+      END LOOP;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_sale_before_write()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s inventory_settings;
+    BEGIN
+      -- cogs_amount is trigger-owned: discard any value not written by
+      -- inv_set_cogs / inv_recompute_cogs.
+      IF coalesce(current_setting('inv.writing_cogs', true), 'off') <> 'on' THEN
+        IF TG_OP = 'INSERT' THEN
+          NEW.cogs_amount := NULL;
+        ELSE
+          NEW.cogs_amount := OLD.cogs_amount;
+        END IF;
+      END IF;
+
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF NOT coalesce(v_s.advanced_enabled, false) THEN
+        RETURN NEW;
+      END IF;
+      IF TG_OP = 'UPDATE' AND OLD.created_at < v_s.enabled_at THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.product_id IS NOT NULL AND NEW.fulfillment_location_id IS NULL THEN
+        NEW.fulfillment_location_id := coalesce(
+          (SELECT location_id FROM platform_location_defaults WHERE platform = NEW.platform),
+          v_s.default_location_id);
+      END IF;
+      RETURN NEW;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_sale_after_write()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s            inventory_settings;
+      v_new_consumes boolean;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF NOT coalesce(v_s.advanced_enabled, false) THEN
+        RETURN NULL;
+      END IF;
+      v_new_consumes := inv_sale_consumes(
+        NEW.product_id, NEW.fulfillment_location_id, NEW.quantity, NEW.status, NEW.restock);
+
+      IF TG_OP = 'UPDATE' THEN
+        IF OLD.created_at < v_s.enabled_at THEN
+          RETURN NULL; -- pre-enable rows are not part of the ledger
+        END IF;
+        -- Only stock-relevant edits re-run FIFO; a note/fee edit (or our own
+        -- cogs_amount write) must never move an order onto different lots.
+        IF NEW.product_id IS NOT DISTINCT FROM OLD.product_id
+           AND NEW.fulfillment_location_id IS NOT DISTINCT FROM OLD.fulfillment_location_id
+           AND NEW.quantity = OLD.quantity
+           AND v_new_consumes = inv_sale_consumes(
+                 OLD.product_id, OLD.fulfillment_location_id, OLD.quantity, OLD.status, OLD.restock) THEN
+          RETURN NULL;
+        END IF;
+        PERFORM inv_revert_sale(NEW.id);
+      END IF;
+
+      IF v_new_consumes THEN
+        PERFORM inv_consume(NEW.product_id, NEW.fulfillment_location_id, NEW.quantity, NEW.id);
+        PERFORM inv_recompute_cogs(ARRAY[NEW.id]);
+      ELSIF NEW.product_id IS NOT NULL
+            AND NEW.fulfillment_location_id IS NOT NULL
+            AND inv_location_holds_stock(NEW.fulfillment_location_id) THEN
+        PERFORM inv_set_cogs(NEW.id, 0);    -- e.g. returned + restocked
+      ELSE
+        PERFORM inv_set_cogs(NEW.id, NULL); -- dropship / no product: linked purchase applies
+      END IF;
+      RETURN NULL;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_sale_before_delete()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s inventory_settings;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF coalesce(v_s.advanced_enabled, false) THEN
+        PERFORM inv_revert_sale(OLD.id);
+      END IF;
+      RETURN OLD;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    DROP TRIGGER IF EXISTS inv_sale_before_write ON %1$I.sales;
+    CREATE TRIGGER inv_sale_before_write BEFORE INSERT OR UPDATE ON %1$I.sales
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_sale_before_write();
+    DROP TRIGGER IF EXISTS inv_sale_after_write ON %1$I.sales;
+    CREATE TRIGGER inv_sale_after_write AFTER INSERT OR UPDATE ON %1$I.sales
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_sale_after_write();
+    DROP TRIGGER IF EXISTS inv_sale_before_delete ON %1$I.sales;
+    CREATE TRIGGER inv_sale_before_delete BEFORE DELETE ON %1$I.sales
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_sale_before_delete();
+  $sql$, schema_name);
 
   -- @@ SECTION 5 @@
 

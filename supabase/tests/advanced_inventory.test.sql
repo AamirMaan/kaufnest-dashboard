@@ -158,6 +158,138 @@ BEGIN
     RAISE EXCEPTION 'FAIL privileges: service_role cannot enable';
   END IF;
 
+  -- ── Section: sales (Task 6) ───────────────────────────────
+  -- FIFO split: 7 = 5 opening @0 + 2 from P2 @12.5 → COGS 25.00
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('ebay', 'Widget', v_prod, 7, 30, 210, current_date, v_uid) RETURNING id INTO v_s1;
+  IF (SELECT fulfillment_location_id FROM sales WHERE id = v_s1) IS DISTINCT FROM v_main THEN
+    RAISE EXCEPTION 'FAIL sales: fulfillment location not defaulted';
+  END IF;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s1;
+  IF v_num IS DISTINCT FROM 25.00 THEN RAISE EXCEPTION 'FAIL sales: FIFO COGS expected 25.00, got %', v_num; END IF;
+  IF (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 10 THEN
+    RAISE EXCEPTION 'FAIL sales: FIFO did not drain the oldest lot first';
+  END IF;
+
+  -- Clients cannot write cogs_amount
+  UPDATE sales SET cogs_amount = 999 WHERE id = v_s1;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 25.00 THEN
+    RAISE EXCEPTION 'FAIL sales: client write to cogs_amount stuck';
+  END IF;
+
+  -- Unrelated edit leaves the ledger untouched
+  SELECT string_agg(id::text, ',' ORDER BY id) INTO v_txt FROM stock_movements WHERE sale_id = v_s1;
+  UPDATE sales SET description = 'gift wrap' WHERE id = v_s1;
+  IF (SELECT string_agg(id::text, ',' ORDER BY id) FROM stock_movements WHERE sale_id = v_s1) IS DISTINCT FROM v_txt THEN
+    RAISE EXCEPTION 'FAIL sales: unrelated edit re-ran FIFO';
+  END IF;
+
+  -- Quantity edit re-runs FIFO: 3 units, all from opening @0
+  UPDATE sales SET quantity = 3, total_amount = 90 WHERE id = v_s1;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 2
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 12 THEN
+    RAISE EXCEPTION 'FAIL sales: quantity edit did not revert and re-apply';
+  END IF;
+
+  -- 13 more: 2 opening + 11 from P2 @12.5 → 137.50; P2 left with 1
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('ebay', 'Widget', v_prod, 13, 30, 390, current_date, v_uid) RETURNING id INTO v_s2;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s2;
+  IF v_num IS DISTINCT FROM 137.50 THEN RAISE EXCEPTION 'FAIL sales: s2 COGS expected 137.50, got %', v_num; END IF;
+
+  -- Consumed batch: cannot shrink below consumed, cannot delete
+  BEGIN
+    UPDATE purchases SET quantity = 5, total_amount = 60.50, vat_amount = 10.50 WHERE id = v_p2;
+    RAISE EXCEPTION 'FAIL sales: shrinking a consumed batch was allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_CONSUMED:%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    DELETE FROM purchases WHERE id = v_p2;
+    RAISE EXCEPTION 'FAIL sales: deleting a consumed batch was allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_CONSUMED:%' THEN RAISE; END IF;
+  END;
+
+  -- Batch cost edit flows into COGS already booked: (120 + 20 + 5 + 17) / 12 = 13.5 → s2 = 11 × 13.5
+  UPDATE purchases SET other_cost = 17 WHERE id = v_p2;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s2;
+  IF v_num IS DISTINCT FROM 148.50 THEN RAISE EXCEPTION 'FAIL sales: re-cost expected 148.50, got %', v_num; END IF;
+
+  -- Shortfall: 4 wanted, 1 left → 1 @13.5 + 3 short @ last cost 13.5 = 54.00
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('ebay', 'Widget', v_prod, 4, 30, 120, current_date, v_uid) RETURNING id INTO v_s3;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s3;
+  IF v_num IS DISTINCT FROM 54.00 THEN RAISE EXCEPTION 'FAIL sales: shortfall COGS expected 54.00, got %', v_num; END IF;
+  SELECT qty_remaining INTO v_int FROM stock_lots WHERE product_id = v_prod AND location_id = v_main AND kind = 'shortfall';
+  IF v_int IS DISTINCT FROM -3 THEN RAISE EXCEPTION 'FAIL sales: shortfall lot expected -3, got %', v_int; END IF;
+
+  -- A receipt settles the shortfall and re-costs the order at the real price: 13.5 + 3 × 10 = 43.50
+  INSERT INTO purchases (product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('Widget', v_prod, 10, 10, 100, current_date, v_uid) RETURNING id INTO v_p4;
+  IF EXISTS (SELECT 1 FROM stock_lots WHERE product_id = v_prod AND kind = 'shortfall') THEN
+    RAISE EXCEPTION 'FAIL sales: shortfall not settled by receipt';
+  END IF;
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 7 THEN
+    RAISE EXCEPTION 'FAIL sales: settlement did not draw 3 from the new lot';
+  END IF;
+  SELECT cogs_amount INTO v_num FROM sales WHERE id = v_s3;
+  IF v_num IS DISTINCT FROM 43.50 THEN RAISE EXCEPTION 'FAIL sales: settled COGS expected 43.50, got %', v_num; END IF;
+
+  -- Deleting a sale puts its units back where they came from
+  DELETE FROM sales WHERE id = v_s3;
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 1
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 10 THEN
+    RAISE EXCEPTION 'FAIL sales: delete did not restore lots';
+  END IF;
+
+  -- Returned + restock consumes nothing; COGS 0; its 3 opening units come back
+  UPDATE sales SET status = 'returned', restock = true WHERE id = v_s1;
+  IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = v_s1)
+     OR (SELECT cogs_amount FROM sales WHERE id = v_s1) <> 0
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 3 THEN
+    RAISE EXCEPTION 'FAIL sales: returned+restock not handled';
+  END IF;
+
+  -- Dropship fulfilment: no movements, COGS stays NULL (linked purchase applies)
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by, fulfillment_location_id)
+    VALUES ('ebay', 'Widget', v_prod, 2, 30, 60, current_date, v_uid, v_drop) RETURNING id INTO v_sd;
+  IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = v_sd) OR (SELECT cogs_amount FROM sales WHERE id = v_sd) IS NOT NULL THEN
+    RAISE EXCEPTION 'FAIL sales: dropship sale touched the ledger';
+  END IF;
+
+  -- Platform default: Amazon → FBA (empty) → shortfall at FBA @ last cost 10
+  INSERT INTO stock_locations (name, type) VALUES ('Amazon FBA', 'fba') RETURNING id INTO v_fba;
+  UPDATE platform_location_defaults SET location_id = v_fba WHERE platform = 'amazon';
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('amazon', 'Widget', v_prod, 1, 30, 30, current_date, v_uid) RETURNING id INTO v_sa;
+  IF (SELECT fulfillment_location_id FROM sales WHERE id = v_sa) IS DISTINCT FROM v_fba
+     OR (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 10 THEN
+    RAISE EXCEPTION 'FAIL sales: platform default / FBA shortfall wrong';
+  END IF;
+  DELETE FROM sales WHERE id = v_sa;
+  IF EXISTS (SELECT 1 FROM stock_lots WHERE location_id = v_fba) THEN
+    RAISE EXCEPTION 'FAIL sales: empty shortfall lot left behind at FBA';
+  END IF;
+
+  -- Pre-enable sale edits are ignored by the ledger
+  UPDATE sales SET quantity = 2, total_amount = 18 WHERE id = v_sg;
+  IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = v_sg) THEN
+    RAISE EXCEPTION 'FAIL sales: pre-enable sale edit touched the ledger';
+  END IF;
+
+  -- Triggers still fire for a real client role (EXECUTE was revoked on them)
+  SET LOCAL ROLE authenticated;
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('ebay', 'Widget', v_prod, 1, 30, 30, current_date, v_uid) RETURNING id INTO v_sa;
+  RESET ROLE;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) IS NULL THEN
+    RAISE EXCEPTION 'FAIL sales: trigger did not run for the authenticated role';
+  END IF;
+  DELETE FROM sales WHERE id = v_sa;
+
   -- @@ NEXT SECTION @@
 
   RAISE EXCEPTION 'INV_TESTS_PASSED';
