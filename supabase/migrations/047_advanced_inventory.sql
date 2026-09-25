@@ -195,7 +195,403 @@ BEGIN
     REVOKE UPDATE, TRUNCATE ON %1$I.stock_transfers FROM anon, authenticated;
   $sql$, schema_name);
 
-  -- @@ SECTION 3 @@
+  -- ── 3a. Ledger helpers ────────────────────────────────────
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.inv_raise(p_code text, p_detail text)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = p_code || ': ' || p_detail;
+    END;
+    $func$;
+
+    -- Serialises every ledger write for one (product, location): two synced
+    -- orders for the same SKU cannot consume the same units.
+    CREATE OR REPLACE FUNCTION %1$I.inv_lock(p_product uuid, p_location uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      PERFORM pg_advisory_xact_lock(hashtextextended(p_product::text || ':' || p_location::text, 0));
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_location_holds_stock(p_location uuid)
+    RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      RETURN coalesce((SELECT type <> 'dropship' FROM stock_locations WHERE id = p_location), false);
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_last_unit_cost(p_product uuid)
+    RETURNS numeric
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      RETURN coalesce((
+        SELECT unit_cost FROM stock_lots
+        WHERE product_id = p_product AND kind <> 'shortfall'
+        ORDER BY received_at DESC, created_at DESC
+        LIMIT 1), 0);
+    END;
+    $func$;
+
+    -- The only two writers of sales.cogs_amount. inv_sale_before_write
+    -- discards any cogs_amount change made while inv.writing_cogs is off.
+    CREATE OR REPLACE FUNCTION %1$I.inv_set_cogs(p_sale uuid, p_value numeric)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      PERFORM set_config('inv.writing_cogs', 'on', true);
+      UPDATE sales SET cogs_amount = p_value
+        WHERE id = p_sale AND cogs_amount IS DISTINCT FROM p_value;
+      PERFORM set_config('inv.writing_cogs', 'off', true);
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_recompute_cogs(p_sale_ids uuid[])
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      IF p_sale_ids IS NULL OR cardinality(p_sale_ids) = 0 THEN
+        RETURN;
+      END IF;
+      PERFORM set_config('inv.writing_cogs', 'on', true);
+      UPDATE sales s
+        SET cogs_amount = (
+          SELECT round(coalesce(sum(-m.qty * m.unit_cost), 0), 2)
+          FROM stock_movements m
+          WHERE m.sale_id = s.id)
+        WHERE s.id = ANY (p_sale_ids);
+      PERFORM set_config('inv.writing_cogs', 'off', true);
+    END;
+    $func$;
+
+    -- A new positive lot at a location first fills that location's
+    -- shortfall: the oldest short sale movements are re-pointed to the new
+    -- lot at its real cost and their orders' COGS recomputed. Invariant:
+    -- a (product, location) never has both a shortfall and positive stock.
+    CREATE OR REPLACE FUNCTION %1$I.inv_settle_shortfall(p_lot uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_lot  stock_lots;
+      v_sf   stock_lots;
+      m      record;
+      v_take integer;
+      v_q    integer;
+      v_sale_ids uuid[] := '{}';
+    BEGIN
+      SELECT * INTO v_lot FROM stock_lots WHERE id = p_lot;
+      IF NOT FOUND OR v_lot.kind = 'shortfall' OR v_lot.qty_remaining <= 0 THEN
+        RETURN;
+      END IF;
+      PERFORM inv_lock(v_lot.product_id, v_lot.location_id);
+      SELECT * INTO v_sf FROM stock_lots
+        WHERE product_id = v_lot.product_id AND location_id = v_lot.location_id AND kind = 'shortfall'
+        FOR UPDATE;
+      IF NOT FOUND THEN
+        RETURN;
+      END IF;
+      v_take := least(-v_sf.qty_remaining, v_lot.qty_remaining);
+      IF v_take <= 0 THEN
+        RETURN;
+      END IF;
+      UPDATE stock_lots SET qty_remaining = qty_remaining - v_take WHERE id = v_lot.id;
+      UPDATE stock_lots SET qty_remaining = qty_remaining + v_take WHERE id = v_sf.id;
+      FOR m IN SELECT * FROM stock_movements WHERE lot_id = v_sf.id ORDER BY created_at, id LOOP
+        EXIT WHEN v_take = 0;
+        v_q := least(-m.qty, v_take);
+        IF v_q = -m.qty THEN
+          UPDATE stock_movements SET lot_id = v_lot.id, unit_cost = v_lot.unit_cost WHERE id = m.id;
+        ELSE
+          UPDATE stock_movements SET qty = qty + v_q WHERE id = m.id;
+          INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, sale_id)
+            VALUES (m.product_id, m.location_id, v_lot.id, 'sale', -v_q, v_lot.unit_cost, m.sale_id);
+        END IF;
+        v_take := v_take - v_q;
+        v_sale_ids := array_append(v_sale_ids, m.sale_id);
+      END LOOP;
+      DELETE FROM stock_lots WHERE id = v_sf.id AND qty_remaining = 0;
+      PERFORM inv_recompute_cogs(v_sale_ids);
+    END;
+    $func$;
+
+    -- Set a lot's unit cost and cascade it: its movements, every lot
+    -- transferred out of it (keeping each one's transfer-cost share in
+    -- cost_addon), and the COGS of every sale that drew from any of them.
+    CREATE OR REPLACE FUNCTION %1$I.inv_recost_lot(p_lot uuid, p_cost numeric)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_cost numeric := round(p_cost, 4);
+      v_sale_ids uuid[];
+      c record;
+    BEGIN
+      UPDATE stock_lots SET unit_cost = v_cost WHERE id = p_lot;
+      UPDATE stock_movements SET unit_cost = v_cost WHERE lot_id = p_lot;
+      SELECT array_agg(DISTINCT sale_id) INTO v_sale_ids
+        FROM stock_movements WHERE lot_id = p_lot AND sale_id IS NOT NULL;
+      PERFORM inv_recompute_cogs(v_sale_ids);
+      FOR c IN SELECT id, cost_addon FROM stock_lots WHERE source_lot_id = p_lot LOOP
+        PERFORM inv_recost_lot(c.id, v_cost + c.cost_addon);
+      END LOOP;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  -- ── 3b. Purchases → lots ──────────────────────────────────
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.inv_landed_unit_cost(p %1$I.purchases)
+    RETURNS numeric
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      -- Mirrored by src/app/dashboard/inventory/_lib/landedCost.ts.
+      RETURN round(
+        ((p.total_amount - coalesce(p.vat_amount, 0))
+          + coalesce(p.freight_cost, 0) + coalesce(p.customs_cost, 0) + coalesce(p.other_cost, 0))
+        / p.quantity, 4);
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_purchase_should_have_lot(p %1$I.purchases)
+    RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      RETURN p.product_id IS NOT NULL
+        AND p.quantity > 0
+        AND p.location_id IS NOT NULL
+        AND inv_location_holds_stock(p.location_id);
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_create_purchase_lot(p %1$I.purchases)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_lot  uuid;
+      v_cost numeric := inv_landed_unit_cost(p);
+    BEGIN
+      PERFORM inv_lock(p.product_id, p.location_id);
+      INSERT INTO stock_lots (product_id, location_id, purchase_id, kind, received_at, unit_cost, qty_received, qty_remaining)
+        VALUES (p.product_id, p.location_id, p.id, 'purchase', p.date::timestamptz, v_cost, p.quantity, p.quantity)
+        RETURNING id INTO v_lot;
+      INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, purchase_id)
+        VALUES (p.product_id, p.location_id, v_lot, 'receipt', p.quantity, v_cost, p.id);
+      PERFORM inv_settle_shortfall(v_lot);
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_drop_purchase_lot(p_purchase uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_lot stock_lots;
+    BEGIN
+      SELECT * INTO v_lot FROM stock_lots WHERE purchase_id = p_purchase AND kind = 'purchase' FOR UPDATE;
+      IF NOT FOUND THEN
+        RETURN;
+      END IF;
+      IF v_lot.qty_remaining <> v_lot.qty_received THEN
+        PERFORM inv_raise('INV_CONSUMED',
+          (v_lot.qty_received - v_lot.qty_remaining) || ' of ' || v_lot.qty_received
+          || ' units from this batch are already sold or transferred, so it cannot be removed or moved');
+      END IF;
+      DELETE FROM stock_lots WHERE id = v_lot.id; -- its receipt movement cascades
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_purchase_before_write()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s inventory_settings;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF NOT coalesce(v_s.advanced_enabled, false) THEN
+        RETURN NEW;
+      END IF;
+      IF TG_OP = 'UPDATE' AND OLD.created_at < v_s.enabled_at THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.product_id IS NOT NULL AND NEW.location_id IS NULL THEN
+        NEW.location_id := v_s.default_location_id;
+      END IF;
+      RETURN NEW;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_purchase_after_write()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s        inventory_settings;
+      v_lot      stock_lots;
+      v_want     boolean;
+      v_consumed integer;
+      v_cost     numeric;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF NOT coalesce(v_s.advanced_enabled, false) THEN
+        RETURN NULL;
+      END IF;
+      v_want := inv_purchase_should_have_lot(NEW);
+
+      IF TG_OP = 'INSERT' THEN
+        IF v_want THEN
+          PERFORM inv_create_purchase_lot(NEW);
+        END IF;
+        RETURN NULL;
+      END IF;
+
+      IF OLD.created_at < v_s.enabled_at THEN
+        RETURN NULL; -- pre-enable rows are not part of the ledger
+      END IF;
+
+      SELECT * INTO v_lot FROM stock_lots WHERE purchase_id = NEW.id AND kind = 'purchase' FOR UPDATE;
+      IF NOT FOUND THEN
+        IF v_want THEN
+          PERFORM inv_create_purchase_lot(NEW);
+        END IF;
+        RETURN NULL;
+      END IF;
+
+      IF NOT v_want
+         OR NEW.product_id IS DISTINCT FROM OLD.product_id
+         OR NEW.location_id IS DISTINCT FROM OLD.location_id THEN
+        PERFORM inv_drop_purchase_lot(NEW.id); -- raises INV_CONSUMED if any unit is gone
+        IF v_want THEN
+          PERFORM inv_create_purchase_lot(NEW);
+        END IF;
+        RETURN NULL;
+      END IF;
+
+      IF NEW.quantity <> v_lot.qty_received THEN
+        v_consumed := v_lot.qty_received - v_lot.qty_remaining;
+        IF NEW.quantity < v_consumed THEN
+          PERFORM inv_raise('INV_CONSUMED',
+            v_consumed || ' units from this batch are already sold or transferred, so its quantity cannot go below '
+            || v_consumed);
+        END IF;
+        UPDATE stock_lots SET qty_received = NEW.quantity, qty_remaining = NEW.quantity - v_consumed
+          WHERE id = v_lot.id;
+        UPDATE stock_movements SET qty = NEW.quantity WHERE lot_id = v_lot.id AND kind = 'receipt';
+        IF NEW.quantity > v_lot.qty_received THEN
+          PERFORM inv_settle_shortfall(v_lot.id);
+        END IF;
+      END IF;
+
+      IF NEW.date IS DISTINCT FROM OLD.date THEN
+        UPDATE stock_lots SET received_at = NEW.date::timestamptz WHERE purchase_id = NEW.id;
+      END IF;
+
+      v_cost := inv_landed_unit_cost(NEW);
+      IF v_cost <> v_lot.unit_cost THEN
+        PERFORM inv_recost_lot(v_lot.id, v_cost);
+      END IF;
+      RETURN NULL;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_purchase_before_delete()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s inventory_settings;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF coalesce(v_s.advanced_enabled, false) AND OLD.created_at >= v_s.enabled_at THEN
+        PERFORM inv_drop_purchase_lot(OLD.id);
+      END IF;
+      RETURN OLD;
+    END;
+    $func$;
+
+    -- One-way switch. Called only by POST /api/inventory/enable-advanced
+    -- (service_role), which checks plan + admin role first.
+    CREATE OR REPLACE FUNCTION %1$I.enable_advanced_inventory()
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s    inventory_settings;
+      v_main uuid;
+      v_lot  uuid;
+      r      record;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id FOR UPDATE;
+      IF v_s.advanced_enabled THEN
+        RETURN;
+      END IF;
+      SELECT id INTO v_main FROM stock_locations WHERE lower(name) = 'main';
+      IF v_main IS NULL THEN
+        INSERT INTO stock_locations (name, type) VALUES ('Main', 'own') RETURNING id INTO v_main;
+      END IF;
+      INSERT INTO platform_location_defaults (platform, location_id)
+        SELECT unnest(ARRAY['amazon', 'ebay', 'etsy', 'shopify', 'other']), v_main
+        ON CONFLICT (platform) DO NOTHING;
+      -- "Start clean": today's stock becomes one opening lot per product at
+      -- cost 0, oldest in FIFO order. Cost is editable later via
+      -- set_opening_lot_cost().
+      FOR r IN SELECT id, current_stock FROM products WHERE current_stock > 0 LOOP
+        INSERT INTO stock_lots (product_id, location_id, kind, received_at, unit_cost, qty_received, qty_remaining)
+          VALUES (r.id, v_main, 'opening', timestamptz '1970-01-01 00:00:00+00', 0, r.current_stock, r.current_stock)
+          RETURNING id INTO v_lot;
+        INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost)
+          VALUES (r.id, v_main, v_lot, 'opening', r.current_stock, 0);
+      END LOOP;
+      UPDATE inventory_settings
+        SET advanced_enabled = true, enabled_at = now(), default_location_id = v_main
+        WHERE id;
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    DROP TRIGGER IF EXISTS inv_purchase_before_write ON %1$I.purchases;
+    CREATE TRIGGER inv_purchase_before_write BEFORE INSERT OR UPDATE ON %1$I.purchases
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_purchase_before_write();
+    DROP TRIGGER IF EXISTS inv_purchase_after_write ON %1$I.purchases;
+    CREATE TRIGGER inv_purchase_after_write AFTER INSERT OR UPDATE ON %1$I.purchases
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_purchase_after_write();
+    DROP TRIGGER IF EXISTS inv_purchase_before_delete ON %1$I.purchases;
+    CREATE TRIGGER inv_purchase_before_delete BEFORE DELETE ON %1$I.purchases
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_purchase_before_delete();
+  $sql$, schema_name);
 
   -- @@ SECTION 4 @@
 
@@ -218,6 +614,7 @@ BEGIN
   END LOOP;
 
   -- @@ RPC GRANTS @@
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.enable_advanced_inventory() TO service_role', schema_name);
 END;
 $inst$;
 
