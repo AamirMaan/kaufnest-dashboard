@@ -35,6 +35,11 @@ since modal dropdowns use a different state key than the table.
   type + `fetchInventorySelectors` select clause), `layout.tsx` (selector
   query columns), `src/app/dashboard/sales/_components/productOptions.ts`
   (`SelectorProduct` interface).
+- **Change advanced-inventory stock/cost behaviour** (FIFO, landed cost,
+  shortfall, transfers): `supabase/migrations/047_advanced_inventory.sql`
+  (installer) + `supabase/tests/advanced_inventory.test.sql`; if the landed-cost
+  formula changes, also `_lib/landedCost.ts` + its test. Re-run the installer on
+  all tenants (see `supabase/SKILL.md`).
 
 ## Test command
 
@@ -95,3 +100,28 @@ since modal dropdowns use a different state key than the table.
   low-stock items to the top of the feed on every 60s poll. If you change
   how/when `current_stock` is written, this is still correct as-is — it
   re-derives from whatever the trigger-driven arithmetic leaves behind.
+- **`sales.cogs_amount` is trigger-owned.** `inv_sale_before_write` discards
+  any client-supplied value; only `inv_set_cogs`/`inv_recompute_cogs` (which set
+  the transaction-local GUC `inv.writing_cogs`) can write it. Never send it.
+- **Rows created before `enabled_at` are outside the ledger.** Editing or
+  deleting a pre-enable purchase/sale adjusts legacy `current_stock` only, so
+  lot totals can drift from `current_stock` by exactly those edits. By design
+  ("start clean").
+- **Only stock-relevant sale edits re-run FIFO** (product, location, quantity,
+  or the consumes/doesn't-consume result). A stock-relevant edit may land on
+  different lots than before if other sales consumed in between, changing that
+  order's COGS.
+- **Dropship purchases + dropship-fulfilled sales cancel out** in legacy
+  `current_stock` and never touch lots, so `current_stock` equals the lot total
+  for tenants that only ever used the ledger.
+- **`enable_advanced_inventory()` is service_role-only** because the plan lives
+  in the control plane; the route guard is the enforcement point.
+- **Deleting a product skips the purchase-lot drop.** `purchases.product_id` is
+  `ON DELETE SET NULL`, which fires `inv_purchase_after_write` before the
+  `stock_lots` product cascade; the trigger returns early when the product row
+  no longer exists, so the delete isn't blocked by `INV_CONSUMED` and lots/
+  movements cascade away with the product.
+- **Transfer deletes lock before they check.** `inv_transfer_before_delete`
+  takes both (product, location) advisory locks, then checks the destination
+  lots are untouched (`FOR UPDATE`), so a concurrent sale can't be cascaded
+  away.

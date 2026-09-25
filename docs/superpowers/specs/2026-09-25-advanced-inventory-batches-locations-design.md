@@ -53,8 +53,11 @@ only hides the UI; re-upgrading needs no rebuild.
 
 All DDL uses `public.run_on_all_tenant_schemas($$ … {{schema}} … $$)` and is
 mirrored into `provision_tenant_schema()` (`005_tenant_provisioning.sql`), per
-the 2-places rule in `supabase/SKILL.md`. New migration:
-`supabase/migrations/047_advanced_inventory.sql`.
+the 2-places rule in `supabase/SKILL.md`. New migrations:
+`supabase/migrations/047_advanced_inventory.sql` (defines the shared
+installer `public.install_advanced_inventory`) and
+`048_advanced_inventory_apply.sql` (runs it on every tenant);
+`provision_tenant_schema()` calls the same installer.
 
 ## Data model
 
@@ -292,8 +295,8 @@ platform-default changes, transfers, enabling and opening-cost edits all call
 
 ## Code layout
 
-- `supabase/migrations/047_advanced_inventory.sql` (+ `005_tenant_provisioning.sql` mirror)
-- `supabase/tests/advanced_inventory.sql`
+- `supabase/migrations/047_advanced_inventory.sql` (installer), `048_advanced_inventory_apply.sql` (rollout), `005_tenant_provisioning.sql` (calls the installer)
+- `supabase/tests/advanced_inventory.test.sql`
 - `src/lib/inventory/{authGuard.ts,inventoryErrors.ts}` (server guard; error map is pure/shared)
 - `src/app/api/inventory/enable-advanced/route.ts`
 - `src/app/dashboard/inventory/_lib/{landedCost.ts,fifoPreview.ts}` + tests
@@ -308,7 +311,7 @@ platform-default changes, transfers, enabling and opening-cost edits all call
   `fifoPreview` (single/multi-lot, shortfall, transfer cost share),
   `inventoryErrors` (code → copy, unknown fallback), slice reducers,
   `planGating` flag.
-- **SQL:** `supabase/tests/advanced_inventory.sql` runs in a transaction that
+- **SQL:** `supabase/tests/advanced_inventory.test.sql` runs in a transaction that
   is rolled back, against a throwaway schema created by
   `provision_tenant_schema()`, asserting: FIFO split across two lots;
   shortfall then receipt re-costs the sale; sale edit/delete restores lots;
