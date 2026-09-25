@@ -1041,5 +1041,11 @@ BEGIN
   EXECUTE format('DROP TRIGGER IF EXISTS notify_message_received ON %1$I.ebay_messages', schema_name);
   EXECUTE format('CREATE TRIGGER notify_message_received AFTER INSERT ON %1$I.ebay_messages FOR EACH ROW EXECUTE FUNCTION %1$I.notify_message_received()', schema_name);
 
+  -- ── 9. Advanced inventory (batches, locations, FIFO) ──────
+  -- One shared installer instead of duplicating its SQL here — see
+  -- 047_advanced_inventory.sql. Must stay last: it REVOKEs privileges that
+  -- the blanket GRANT above would otherwise re-open.
+  PERFORM public.install_advanced_inventory(schema_name);
+
 END;
 $$;
