@@ -809,7 +809,237 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION %1$I.inv_sale_before_delete();
   $sql$, schema_name);
 
-  -- @@ SECTION 5 @@
+  -- ── 5. Transfers, location guards, settings RPCs ──────────
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.inv_transfer_before_insert()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      v_s inventory_settings;
+    BEGIN
+      SELECT * INTO v_s FROM inventory_settings WHERE id;
+      IF NOT coalesce(v_s.advanced_enabled, false) THEN
+        PERFORM inv_raise('INV_NOT_ENABLED', 'Batches and locations are not enabled for this account');
+      END IF;
+      IF NOT inv_location_holds_stock(NEW.from_location_id) OR NOT inv_location_holds_stock(NEW.to_location_id) THEN
+        PERFORM inv_raise('INV_DROPSHIP_LOCATION',
+          'Dropship locations do not hold stock, so stock cannot be transferred to or from them');
+      END IF;
+      RETURN NEW;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_transfer_after_insert()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      l           record;
+      v_remaining integer := NEW.quantity;
+      v_take      integer;
+      v_avail     integer;
+      v_addon     numeric := round(coalesce(NEW.transfer_cost, 0) / NEW.quantity, 4);
+      v_new       uuid;
+    BEGIN
+      -- Lock both ends in a fixed order so opposite transfers cannot deadlock.
+      IF NEW.from_location_id::text < NEW.to_location_id::text THEN
+        PERFORM inv_lock(NEW.product_id, NEW.from_location_id);
+        PERFORM inv_lock(NEW.product_id, NEW.to_location_id);
+      ELSE
+        PERFORM inv_lock(NEW.product_id, NEW.to_location_id);
+        PERFORM inv_lock(NEW.product_id, NEW.from_location_id);
+      END IF;
+
+      SELECT coalesce(sum(qty_remaining), 0) INTO v_avail FROM stock_lots
+        WHERE product_id = NEW.product_id AND location_id = NEW.from_location_id
+          AND kind <> 'shortfall' AND qty_remaining > 0;
+      IF v_avail < NEW.quantity THEN
+        PERFORM inv_raise('INV_INSUFFICIENT',
+          'Only ' || v_avail || ' units are available at the source location');
+      END IF;
+
+      FOR l IN
+        SELECT * FROM stock_lots
+        WHERE product_id = NEW.product_id AND location_id = NEW.from_location_id
+          AND kind <> 'shortfall' AND qty_remaining > 0
+        ORDER BY received_at, created_at, id
+        FOR UPDATE
+      LOOP
+        v_take := least(l.qty_remaining, v_remaining);
+        UPDATE stock_lots SET qty_remaining = qty_remaining - v_take WHERE id = l.id;
+        INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, transfer_id)
+          VALUES (NEW.product_id, NEW.from_location_id, l.id, 'transfer_out', -v_take, l.unit_cost, NEW.id);
+        -- The moved units keep their batch (purchase_id) and FIFO age
+        -- (received_at); only the transfer cost share is added.
+        INSERT INTO stock_lots (product_id, location_id, purchase_id, source_lot_id, kind, received_at,
+                                cost_addon, unit_cost, qty_received, qty_remaining)
+          VALUES (NEW.product_id, NEW.to_location_id, l.purchase_id, l.id, 'transfer', l.received_at,
+                  v_addon, l.unit_cost + v_addon, v_take, v_take)
+          RETURNING id INTO v_new;
+        INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost, transfer_id)
+          VALUES (NEW.product_id, NEW.to_location_id, v_new, 'transfer_in', v_take, l.unit_cost + v_addon, NEW.id);
+        PERFORM inv_settle_shortfall(v_new);
+        v_remaining := v_remaining - v_take;
+        EXIT WHEN v_remaining = 0;
+      END LOOP;
+      RETURN NULL;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_transfer_before_update()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      PERFORM inv_raise('INV_TRANSFER_IMMUTABLE',
+        'Transfers cannot be edited. Delete it and record a new one instead');
+      RETURN NULL;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_transfer_before_delete()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    DECLARE
+      m         record;
+      v_sources uuid[] := '{}';
+      v_lot     uuid;
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM stock_movements mv JOIN stock_lots l ON l.id = mv.lot_id
+        WHERE mv.transfer_id = OLD.id AND mv.kind = 'transfer_in' AND l.qty_remaining <> l.qty_received
+      ) THEN
+        PERFORM inv_raise('INV_CONSUMED',
+          'Some of the transferred units have already been sold or moved on, so this transfer cannot be deleted');
+      END IF;
+      IF OLD.from_location_id::text < OLD.to_location_id::text THEN
+        PERFORM inv_lock(OLD.product_id, OLD.from_location_id);
+        PERFORM inv_lock(OLD.product_id, OLD.to_location_id);
+      ELSE
+        PERFORM inv_lock(OLD.product_id, OLD.to_location_id);
+        PERFORM inv_lock(OLD.product_id, OLD.from_location_id);
+      END IF;
+      FOR m IN SELECT * FROM stock_movements WHERE transfer_id = OLD.id AND kind = 'transfer_out' LOOP
+        UPDATE stock_lots SET qty_remaining = qty_remaining - m.qty WHERE id = m.lot_id;
+        v_sources := array_append(v_sources, m.lot_id);
+      END LOOP;
+      DELETE FROM stock_lots
+        WHERE id IN (SELECT lot_id FROM stock_movements WHERE transfer_id = OLD.id AND kind = 'transfer_in');
+      DELETE FROM stock_movements WHERE transfer_id = OLD.id;
+      FOR v_lot IN SELECT id FROM stock_lots WHERE id = ANY (v_sources) ORDER BY received_at, created_at LOOP
+        PERFORM inv_settle_shortfall(v_lot);
+      END LOOP;
+      RETURN OLD;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_location_before_update()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      IF NEW.type <> OLD.type AND (NEW.type = 'dropship' OR OLD.type = 'dropship')
+         AND EXISTS (SELECT 1 FROM stock_lots WHERE location_id = OLD.id) THEN
+        PERFORM inv_raise('INV_LOCATION_IN_USE',
+          'This location has stock history, so it cannot be switched to or from dropship');
+      END IF;
+      IF (SELECT default_location_id FROM inventory_settings WHERE id) = OLD.id
+         AND (NOT NEW.is_active OR NEW.type = 'dropship') THEN
+        PERFORM inv_raise('INV_DEFAULT_LOCATION',
+          'This is the default location. Choose another default location first');
+      END IF;
+      RETURN NEW;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inv_location_before_delete()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      IF EXISTS (SELECT 1 FROM stock_lots WHERE location_id = OLD.id)
+         OR EXISTS (SELECT 1 FROM sales WHERE fulfillment_location_id = OLD.id)
+         OR EXISTS (SELECT 1 FROM purchases WHERE location_id = OLD.id)
+         OR EXISTS (SELECT 1 FROM stock_transfers WHERE from_location_id = OLD.id OR to_location_id = OLD.id)
+         OR EXISTS (SELECT 1 FROM platform_location_defaults WHERE location_id = OLD.id)
+         OR EXISTS (SELECT 1 FROM inventory_settings WHERE default_location_id = OLD.id) THEN
+        PERFORM inv_raise('INV_LOCATION_IN_USE', 'This location is in use. Deactivate it instead of deleting it');
+      END IF;
+      RETURN OLD;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.set_default_location(p_location_id uuid)
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      IF coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+        PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM stock_locations WHERE id = p_location_id AND is_active AND type <> 'dropship') THEN
+        PERFORM inv_raise('INV_DEFAULT_LOCATION', 'The default location must be an active location that holds stock');
+      END IF;
+      UPDATE inventory_settings SET default_location_id = p_location_id WHERE id;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.set_opening_lot_cost(p_lot_id uuid, p_unit_cost numeric)
+    RETURNS void
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+    BEGIN
+      IF coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+        PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
+      END IF;
+      IF p_unit_cost IS NULL OR p_unit_cost < 0 THEN
+        PERFORM inv_raise('INV_INVALID_COST', 'Unit cost must be zero or more');
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM stock_lots WHERE id = p_lot_id AND kind = 'opening') THEN
+        PERFORM inv_raise('INV_NOT_OPENING', 'Only opening-balance batches can have their cost edited here');
+      END IF;
+      PERFORM inv_recost_lot(p_lot_id, p_unit_cost);
+    END;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format($sql$
+    DROP TRIGGER IF EXISTS inv_transfer_before_insert ON %1$I.stock_transfers;
+    CREATE TRIGGER inv_transfer_before_insert BEFORE INSERT ON %1$I.stock_transfers
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_transfer_before_insert();
+    DROP TRIGGER IF EXISTS inv_transfer_after_insert ON %1$I.stock_transfers;
+    CREATE TRIGGER inv_transfer_after_insert AFTER INSERT ON %1$I.stock_transfers
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_transfer_after_insert();
+    DROP TRIGGER IF EXISTS inv_transfer_before_update ON %1$I.stock_transfers;
+    CREATE TRIGGER inv_transfer_before_update BEFORE UPDATE ON %1$I.stock_transfers
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_transfer_before_update();
+    DROP TRIGGER IF EXISTS inv_transfer_before_delete ON %1$I.stock_transfers;
+    CREATE TRIGGER inv_transfer_before_delete BEFORE DELETE ON %1$I.stock_transfers
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_transfer_before_delete();
+    DROP TRIGGER IF EXISTS inv_location_before_update ON %1$I.stock_locations;
+    CREATE TRIGGER inv_location_before_update BEFORE UPDATE ON %1$I.stock_locations
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_location_before_update();
+    DROP TRIGGER IF EXISTS inv_location_before_delete ON %1$I.stock_locations;
+    CREATE TRIGGER inv_location_before_delete BEFORE DELETE ON %1$I.stock_locations
+      FOR EACH ROW EXECUTE FUNCTION %1$I.inv_location_before_delete();
+  $sql$, schema_name);
 
   -- ── Lock down EXECUTE on every function this installer owns ──
   -- Tenant schemas are exposed through PostgREST, so any function in them
@@ -827,8 +1057,10 @@ BEGIN
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', fn.sig);
   END LOOP;
 
-  -- @@ RPC GRANTS @@
+  -- ── RPC grants (after the revoke loop) ──
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.enable_advanced_inventory() TO service_role', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.set_default_location(uuid) TO authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.set_opening_lot_cost(uuid, numeric) TO authenticated', schema_name);
 END;
 $inst$;
 

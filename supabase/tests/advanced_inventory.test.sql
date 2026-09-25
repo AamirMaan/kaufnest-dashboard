@@ -290,7 +290,128 @@ BEGIN
   END IF;
   DELETE FROM sales WHERE id = v_sa;
 
-  -- @@ NEXT SECTION @@
+  -- ── Section: transfers, locations, RPCs (Task 7) ──────────
+  -- 5 Main → FBA with €10 transfer cost (+2/unit): FIFO takes opening 3 @0, P2 1 @13.5, P4 1 @10
+  INSERT INTO stock_transfers (product_id, from_location_id, to_location_id, quantity, transfer_cost, date, created_by)
+    VALUES (v_prod, v_main, v_fba, 5, 10, current_date, v_uid) RETURNING id INTO v_t1;
+  SELECT count(*), sum(qty_remaining) INTO v_int, v_num FROM stock_lots WHERE location_id = v_fba;
+  IF v_int <> 3 OR v_num <> 5 THEN RAISE EXCEPTION 'FAIL transfers: expected 3 lots / 5 units at FBA, got % / %', v_int, v_num; END IF;
+  SELECT string_agg(unit_cost::text, ',' ORDER BY received_at, created_at) INTO v_txt FROM stock_lots WHERE location_id = v_fba;
+  IF v_txt <> '2.0000,15.5000,12.0000' THEN RAISE EXCEPTION 'FAIL transfers: destination costs wrong: %', v_txt; END IF;
+  IF (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 9 THEN
+    RAISE EXCEPTION 'FAIL transfers: source not drained FIFO';
+  END IF;
+
+  -- A sale at FBA consumes the transferred opening units first: 2 × 2 = 4.00
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('amazon', 'Widget', v_prod, 2, 30, 60, current_date, v_uid) RETURNING id INTO v_sa;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 4 THEN
+    RAISE EXCEPTION 'FAIL transfers: FBA sale COGS expected 4.00';
+  END IF;
+
+  -- Opening cost edit flows through the transfer lot: (1 + 2) × 2 = 6.00
+  SELECT id INTO v_lot FROM stock_lots WHERE product_id = v_prod AND kind = 'opening';
+  PERFORM set_opening_lot_cost(v_lot, 1);
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) <> 6 THEN
+    RAISE EXCEPTION 'FAIL transfers: opening re-cost did not reach the FBA sale';
+  END IF;
+  BEGIN
+    PERFORM set_opening_lot_cost((SELECT id FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase'), 1);
+    RAISE EXCEPTION 'FAIL rpc: set_opening_lot_cost accepted a purchase lot';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_NOT_OPENING:%' THEN RAISE; END IF;
+  END;
+
+  -- Transfers are immutable, and cannot be deleted once their units are sold
+  BEGIN
+    UPDATE stock_transfers SET note = 'x' WHERE id = v_t1;
+    RAISE EXCEPTION 'FAIL transfers: edit allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_TRANSFER_IMMUTABLE:%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    DELETE FROM stock_transfers WHERE id = v_t1;
+    RAISE EXCEPTION 'FAIL transfers: delete of a consumed transfer allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_CONSUMED:%' THEN RAISE; END IF;
+  END;
+
+  -- Once the sale is gone the transfer can be deleted, restoring Main exactly
+  DELETE FROM sales WHERE id = v_sa;
+  DELETE FROM stock_transfers WHERE id = v_t1;
+  IF EXISTS (SELECT 1 FROM stock_lots WHERE location_id = v_fba)
+     OR (SELECT qty_remaining FROM stock_lots WHERE product_id = v_prod AND kind = 'opening') <> 3
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p2 AND kind = 'purchase') <> 1
+     OR (SELECT qty_remaining FROM stock_lots WHERE purchase_id = v_p4 AND kind = 'purchase') <> 10 THEN
+    RAISE EXCEPTION 'FAIL transfers: delete did not restore the source';
+  END IF;
+
+  -- Insufficient source stock and dropship endpoints are rejected
+  BEGIN
+    INSERT INTO stock_transfers (product_id, from_location_id, to_location_id, quantity, date, created_by)
+      VALUES (v_prod, v_main, v_fba, 100, current_date, v_uid);
+    RAISE EXCEPTION 'FAIL transfers: oversized transfer allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_INSUFFICIENT:%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    INSERT INTO stock_transfers (product_id, from_location_id, to_location_id, quantity, date, created_by)
+      VALUES (v_prod, v_main, v_drop, 1, current_date, v_uid);
+    RAISE EXCEPTION 'FAIL transfers: transfer to dropship allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_DROPSHIP_LOCATION:%' THEN RAISE; END IF;
+  END;
+
+  -- Location guards
+  BEGIN
+    DELETE FROM stock_locations WHERE id = v_main;
+    RAISE EXCEPTION 'FAIL locations: deleting an in-use location allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_LOCATION_IN_USE:%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE stock_locations SET is_active = false WHERE id = v_main;
+    RAISE EXCEPTION 'FAIL locations: deactivating the default allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_DEFAULT_LOCATION:%' THEN RAISE; END IF;
+  END;
+  BEGIN
+    UPDATE stock_locations SET type = 'dropship' WHERE id = v_main;
+    RAISE EXCEPTION 'FAIL locations: switching a stocked location to dropship allowed';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_LOCATION_IN_USE:%' THEN RAISE; END IF;
+  END;
+
+  -- set_default_location: dropship rejected, FBA accepted, non-admin forbidden
+  BEGIN
+    PERFORM set_default_location(v_drop);
+    RAISE EXCEPTION 'FAIL rpc: dropship accepted as default location';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_DEFAULT_LOCATION:%' THEN RAISE; END IF;
+  END;
+  PERFORM set_default_location(v_fba);
+  IF (SELECT default_location_id FROM inventory_settings) IS DISTINCT FROM v_fba THEN
+    RAISE EXCEPTION 'FAIL rpc: default location not updated';
+  END IF;
+  UPDATE profiles SET role = 'accountant' WHERE id = v_uid;
+  BEGIN
+    PERFORM set_default_location(v_main);
+    RAISE EXCEPTION 'FAIL rpc: accountant changed the default location';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'INV_FORBIDDEN:%' THEN RAISE; END IF;
+  END;
+  UPDATE profiles SET role = 'admin' WHERE id = v_uid;
+  IF NOT has_function_privilege('authenticated', 'tenant_zz_invtest.set_default_location(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL privileges: authenticated cannot call set_default_location';
+  END IF;
+
+  -- Consistency with the legacy counter. Widget history: purchases 5 + 12 + 2 (dropship) + 10,
+  -- sales 13 + 2 (dropship); s1 restocked. Legacy current_stock = 14 = lots at stock-holding
+  -- locations (the dropship purchase and dropship sale cancel out in the legacy counter).
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots WHERE product_id = v_prod;
+  IF v_int <> 14 OR (SELECT current_stock FROM products WHERE id = v_prod) <> 14 THEN
+    RAISE EXCEPTION 'FAIL consistency: lots % vs current_stock %', v_int, (SELECT current_stock FROM products WHERE id = v_prod);
+  END IF;
 
   RAISE EXCEPTION 'INV_TESTS_PASSED';
 END
