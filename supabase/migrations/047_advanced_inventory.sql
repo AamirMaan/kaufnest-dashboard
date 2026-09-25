@@ -477,6 +477,14 @@ BEGIN
         RETURN NULL; -- pre-enable rows are not part of the ledger
       END IF;
 
+      -- Product deleted: its FK cascade is nulling purchases.product_id.
+      -- stock_lots / stock_movements cascade from products on their own,
+      -- so leave the ledger alone instead of raising INV_CONSUMED.
+      IF NEW.product_id IS NULL AND OLD.product_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM products WHERE id = OLD.product_id) THEN
+        RETURN NULL;
+      END IF;
+
       SELECT * INTO v_lot FROM stock_lots WHERE purchase_id = NEW.id AND kind = 'purchase' FOR UPDATE;
       IF NOT FOUND THEN
         IF v_want THEN

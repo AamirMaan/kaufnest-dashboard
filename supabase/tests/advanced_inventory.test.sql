@@ -140,6 +140,15 @@ BEGIN
     RAISE EXCEPTION 'FAIL purchases: pre-enable purchase edit created a lot';
   END IF;
 
+  -- Deleting a product removes its lots with it (FK cascade), never INV_CONSUMED
+  INSERT INTO products (name, created_by) VALUES ('Doomed', v_uid) RETURNING id INTO v_lot;
+  INSERT INTO purchases (product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('Doomed', v_lot, 2, 1, 2, current_date, v_uid);
+  DELETE FROM products WHERE id = v_lot;
+  IF EXISTS (SELECT 1 FROM stock_lots WHERE product_id = v_lot) THEN
+    RAISE EXCEPTION 'FAIL purchases: product delete left lots behind';
+  END IF;
+
   -- Internal functions are not callable by clients; enable is service_role only
   IF has_function_privilege('authenticated', 'tenant_zz_invtest.inv_raise(text, text)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'tenant_zz_invtest.enable_advanced_inventory()', 'EXECUTE') THEN
