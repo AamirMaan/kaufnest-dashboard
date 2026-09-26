@@ -13,6 +13,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
   or gross-profit formula changes also touch `_components/orderMath.ts` + its test.
+- **Change the Cost of Goods / Gross Profit / "Fulfilled from" block**
+  (Phase 3 Task 6, 2026-09-26): the FIFO-vs-linked-purchase precedence rule is
+  `resolveOrderCogs`/`grossProfitFromCogs` in `_components/orderMath.ts` (+
+  its colocated test) — change the precedence there, TDD (test first). The
+  rendering itself (which label, whether the "View purchase record →" link
+  shows, the "Fulfilled from" row) lives in `[id]/page.tsx` only. See
+  "Gotchas — FIFO cost of goods" below before touching either.
 - **Wire the Download Invoice button** (Phase 5 — DONE): `[id]/page.tsx` — the
   button now calls `handleDownloadInvoice()` which calls `generateOrderInvoice(sale,
   companyProfile)` from `@/lib/utils/generateInvoice`. `companyProfile` is read from
@@ -640,6 +647,43 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **`cogs_amount` is never sent** — it's written only by the FIFO
   consumption trigger; neither modal's payload includes it (same rule as
   `Purchase`'s trigger-owned columns).
+
+## Gotchas — FIFO cost of goods (order page, Phase 3 Task 6)
+
+- **`resolveOrderCogs`'s FIFO check is `sale.cogs_amount != null`, not
+  truthiness.** A FIFO-costed lot that cost nothing (e.g. a restocked return
+  re-entering stock at its original, already-fully-depreciated cost) books a
+  real `cogs_amount` of `0` — treating that as falsy would silently fall
+  through to a linked-purchase fallback (or hide the block entirely) for an
+  order that genuinely has a FIFO cost of `0`. There's a dedicated test for
+  this ("treats a FIFO cost of 0 as real") — don't "simplify" the guard to
+  `if (sale.cogs_amount)`.
+- **FIFO wins over the linked purchase unconditionally, even across
+  currencies.** Unlike the linked-purchase fallback (currency-gated —
+  a mismatch hides the block, see `CLAUDE.md`), a non-null `cogs_amount` is
+  always shown as-is in `sale.currency` — the FIFO ledger only ever operates
+  in one tenant's schema, so `sale.currency` and the lots it consumed are
+  assumed to agree. **Known limit**: if a tenant's purchases/lots were
+  bought in more than one currency, the FIFO consumption trigger blends them
+  without converting — this row does not correct for that; it just shows
+  what the ledger booked.
+- **The "Fulfilled from" row needs `advanced.active`, not just
+  `advanced.entitled`.** A Business tenant that's entitled but hasn't run
+  the one-way "Enable" flow yet (`view === "enable"`, see
+  `inventory/CLAUDE.md`) has no real locations and `sale.fulfillment_location_id`
+  will be null on every order — but checking `entitled` alone would still be
+  wrong once they *do* enable it for orders placed before that point, since
+  `active` is the state that actually governs whether `fulfillment_location_id`
+  gets populated going forward. Follow `useAdvancedInventory()`'s own `active`
+  field, not a hand-rolled plan check.
+- **Non-advanced tenants must see byte-for-byte the pre-Task-6 behaviour.**
+  For a Starter/Pro tenant (or a Business tenant with advanced inventory not
+  enabled), `sale.cogs_amount` is always `null` (the FIFO trigger never
+  runs), so `resolveOrderCogs` falls straight through to the linked-purchase
+  branch — identical output to the old `computeGrossProfit`/`hasCurrencyMatch`
+  logic it replaced. If you change `resolveOrderCogs`'s precedence, re-run
+  the "falls back to a linked purchase" and "returns null" test cases to
+  confirm this hasn't drifted.
 - **`EditSaleModal`'s `fulfillment` state is seeded from `sale` once, in
   `useState`'s initializer** — like `form`/`showFees`/etc. in this same
   component, it does NOT reset when the modal is closed and reopened for

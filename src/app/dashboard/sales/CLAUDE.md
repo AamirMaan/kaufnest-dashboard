@@ -21,13 +21,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
   Financials card (qty/price/totals/fees/net proceeds + Cost of Goods and Gross
-  Profit rows when a linked purchase exists) and Details card (description/linked
-  product/restock flag/audit fields). Linked purchase is resolved from
-  `state.purchases.items` (fast path) or a second Supabase effect that queries
-  `purchases` with `.maybeSingle()` and dispatches `addPurchase` on hit. Gross
-  profit computed via `computeGrossProfit(netProceeds, linkedPurchase)` from
-  `_components/orderMath.ts`; Gross Profit row renders red/green by sign, Cost of
-  Goods row always red; both hidden when no purchase is linked. Actions: Edit Order
+  Profit rows when a cost of goods can be resolved — see "Linked Purchase (cost
+  of goods)" below for the FIFO-vs-linked-purchase precedence, Phase 3 Task 6)
+  and Details card (description/linked product/**Fulfilled from** location
+  (Phase 3 Task 6, advanced-inventory tenants only)/restock flag/audit fields).
+  Linked purchase is resolved from `state.purchases.items` (fast path) or a
+  second Supabase effect that queries `purchases` with `.maybeSingle()` and
+  dispatches `addPurchase` on hit. Cost of goods resolved via
+  `resolveOrderCogs(sale, linkedPurchase)`, gross profit via
+  `grossProfitFromCogs(netProceeds, cogs)` — both from `_components/orderMath.ts`;
+  Gross Profit row renders red/green by sign, Cost of Goods row always red; both
+  hidden when `cogs` is null. Calls `useAdvancedInventory()`
+  (`inventory/_store/useAdvancedInventory.ts`) for `active`/`locations` — the
+  "Fulfilled from" row (in the Details card, next to Linked Product) renders
+  only when `advanced.active && sale.fulfillment_location_id`, looking up the
+  location's name from `advanced.locations`. Actions: Edit Order
   (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
   companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
   `state.companyProfile.profile`; button transiently disabled until profile
@@ -57,7 +65,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `addSale`/`removeSale` total arithmetic). Run with `npx jest dashboard/sales`.
 - `_components/orderMath.ts` (+ colocated `.test.ts`) — pure `computeNetProceeds(sale)`
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
-  treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
+  treated as zero). Also `resolveOrderCogs(sale, linkedPurchase) → OrderCogs |
+  null` and `grossProfitFromCogs(netProceeds, cogs)` (Phase 3 Task 6,
+  2026-09-26) — see "Linked Purchase (cost of goods)" below for the
+  precedence rule. `computeGrossProfit(netProceeds, linkedPurchase)` is kept
+  for existing callers/tests but is no longer called by `[id]/page.tsx`. Used
+  by `[id]/page.tsx`.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
 - `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
   plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
@@ -567,9 +580,45 @@ A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The
 - **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
 - **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
 
-**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux). When found, the Financials card renders Cost of Goods and Gross Profit rows; both are hidden when no purchase is linked.
+**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux).
 
-**Math:** `computeGrossProfit(netProceeds, linkedPurchase)` in `_components/orderMath.ts` returns `null` when `linkedPurchase` is `null`; the Gross Profit row is only rendered when the return value is non-null.
+**Cost of goods precedence (Phase 3 Task 6, 2026-09-26):** `resolveOrderCogs(sale,
+linkedPurchase)` (`_components/orderMath.ts`) decides what the Cost of Goods row
+shows, in this order:
+1. **`sale.cogs_amount`** (advanced inventory, Business plan) — the FIFO amount
+   the ledger's consumption trigger booked when the order was fulfilled. `0` is a
+   real, valid value (e.g. a restocked return whose lot cost nothing to
+   re-acquire) and is NOT treated as "no cost" — the check is `!= null`, not
+   truthiness. Label reads "Cost of Goods (FIFO)"; no "View purchase record →"
+   link (there may be no single purchase behind a FIFO-consumed lot).
+2. **The linked purchase**, only when its `currency` matches the sale's — a
+   mismatched currency would produce a meaningless subtraction, so it's treated
+   as no cost of goods at all (same guard as before this task, just moved into
+   `resolveOrderCogs`). Label reads plain "Cost of Goods"; the "View purchase
+   record →" link is shown.
+3. **Neither** — the whole Cost of Goods / Gross Profit block is hidden
+   (`resolveOrderCogs` returns `null`).
+
+**Known limit:** FIFO cost of goods is booked in the purchases' own currency —
+a mixed-currency ledger (lots bought in different currencies feeding one FIFO
+consumption) is not converted to the sale's currency before being shown. This
+matches the same limit the linked-purchase fallback already had.
+
+**Math:** `grossProfitFromCogs(netProceeds, cogs)` in `_components/orderMath.ts`
+returns `null` when `cogs` is `null`; the Gross Profit row is only rendered when
+the return value is non-null. `computeGrossProfit(netProceeds, linkedPurchase)`
+is the pre-Task-6 version, kept for existing callers/tests but no longer used
+by `[id]/page.tsx`.
+
+**"Fulfilled from" row** (Details card, next to Linked Product): shown only
+when `advanced.active && sale.fulfillment_location_id` — Starter/Pro tenants
+and Business tenants that haven't enabled advanced inventory never see it, nor
+does an order with no `fulfillment_location_id` (Starter/Pro sales never set
+one). Location name resolved via `advanced.locations.find((l) => l.id ===
+sale.fulfillment_location_id)?.name ?? "Unknown location"` — the fallback
+covers a location deleted/deactivated after the sale was made (locations are
+never hard-deleted while in use per `_lib/advancedInventory.ts`'s
+`locationDeactivationBlocker`, but this guards the display regardless).
 
 ## CSV import/export
 

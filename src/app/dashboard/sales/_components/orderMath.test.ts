@@ -1,4 +1,4 @@
-import { computeNetProceeds, computeGrossProfit } from "./orderMath";
+import { computeNetProceeds, computeGrossProfit, resolveOrderCogs, grossProfitFromCogs } from "./orderMath";
 import type { Sale, Purchase } from "@/types";
 
 /** Minimal Sale factory — only fields needed for orderMath */
@@ -110,5 +110,34 @@ describe("computeGrossProfit", () => {
 
   it("returns negative when purchase exceeds net proceeds (loss scenario)", () => {
     expect(computeGrossProfit(30, { total_amount: 80 })).toBe(-50);
+  });
+});
+
+describe("resolveOrderCogs", () => {
+  const sale = { cogs_amount: null, currency: "EUR" as const };
+
+  it("prefers FIFO cost of goods from the ledger", () => {
+    expect(resolveOrderCogs({ ...sale, cogs_amount: 43.5 }, { total_amount: 99, currency: "EUR" })).toEqual({
+      amount: 43.5, currency: "EUR", source: "fifo",
+    });
+  });
+
+  it("treats a FIFO cost of 0 as real (e.g. restocked return)", () => {
+    expect(resolveOrderCogs({ ...sale, cogs_amount: 0 }, null)?.amount).toBe(0);
+  });
+
+  it("falls back to a linked purchase in the same currency", () => {
+    expect(resolveOrderCogs(sale, { total_amount: 12, currency: "EUR" })).toEqual({
+      amount: 12, currency: "EUR", source: "linked_purchase",
+    });
+    expect(resolveOrderCogs(sale, { total_amount: 12, currency: "USD" })).toBeNull();
+    expect(resolveOrderCogs(sale, null)).toBeNull();
+  });
+});
+
+describe("grossProfitFromCogs", () => {
+  it("subtracts the cost of goods, or is null without one", () => {
+    expect(grossProfitFromCogs(100, { amount: 43.5, currency: "EUR", source: "fifo" })).toBe(56.5);
+    expect(grossProfitFromCogs(100, null)).toBeNull();
   });
 });

@@ -17,8 +17,9 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate, formatDateTime } from "@/lib/utils/date";
-import { computeNetProceeds, computeGrossProfit } from "../_components/orderMath";
+import { computeNetProceeds, resolveOrderCogs, grossProfitFromCogs } from "../_components/orderMath";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { generateOrderInvoice } from "@/lib/utils/generateInvoice";
 import { generatePlainShippingLabel } from "@/lib/shipping/generatePlainLabel";
 import { ArrowLeft, Pencil, Download, Trash2 } from "lucide-react";
@@ -62,6 +63,9 @@ export default function SaleDetailPage({ params }: PageProps) {
   // true, or the free plain PDF label when false. Same hooks-ordering
   // constraint as every other selector in this block — see SKILL.md.
   const shippingLabelsEnabled = useAppSelector((s) => s.currentUser.shippingLabelsEnabled);
+  // Advanced inventory (Business plan, Phase 3 Task 6) — entitlement/active
+  // state + locations for the "Fulfilled from" row and FIFO cost of goods.
+  const advanced = useAdvancedInventory();
 
   // Try Redux store first (fast path — already hydrated on navigation from list)
   const storeItems = useAppSelector((s) => s.sales.items);
@@ -330,12 +334,15 @@ export default function SaleDetailPage({ params }: PageProps) {
   // ── Derived values ────────────────────────────────────────────────────────
 
   const netProceeds = computeNetProceeds(sale);
-  const grossProfit = computeGrossProfit(netProceeds, linkedPurchase);
+  // Cost of goods: the FIFO amount the ledger booked (sales.cogs_amount,
+  // advanced inventory) wins over a linked purchase; null hides the block
+  // entirely — see orderMath.ts's resolveOrderCogs doc comment.
+  const cogs = resolveOrderCogs(sale, linkedPurchase);
+  const grossProfit = grossProfitFromCogs(netProceeds, cogs);
 
-  // Guard: only show Cost of Goods / Gross Profit when the purchase currency
-  // matches the sale currency — mismatched currencies produce a meaningless number.
-  const hasCurrencyMatch =
-    !linkedPurchase || linkedPurchase.currency === sale.currency;
+  const fulfillmentLocationName = sale.fulfillment_location_id
+    ? (advanced.locations.find((l) => l.id === sale.fulfillment_location_id)?.name ?? "Unknown location")
+    : null;
 
   // Retry only makes sense for the two statuses this feature pushes to eBay.
   // The error row itself still renders for any other status (otherwise the
@@ -506,12 +513,14 @@ export default function SaleDetailPage({ params }: PageProps) {
               }
             />
 
-            {linkedPurchase && hasCurrencyMatch && (
+            {cogs && (
               <>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-(--color-text-muted)">Cost of Goods</span>
+                  <span className="text-(--color-text-muted)">
+                    {cogs.source === "fifo" ? "Cost of Goods (FIFO)" : "Cost of Goods"}
+                  </span>
                   <span className="text-(--color-danger-text)">
-                    −{formatCurrency(linkedPurchase.total_amount, linkedPurchase.currency)}
+                    −{formatCurrency(cogs.amount, cogs.currency)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm font-semibold border-t border-(--color-border) pt-2 mt-1">
@@ -526,14 +535,16 @@ export default function SaleDetailPage({ params }: PageProps) {
                     {formatCurrency(grossProfit ?? 0, sale.currency)}
                   </span>
                 </div>
-                <div className="text-right mt-1">
-                  <Link
-                    href="/dashboard/purchases"
-                    className="text-xs text-(--color-primary) hover:underline"
-                  >
-                    View purchase record →
-                  </Link>
-                </div>
+                {cogs.source === "linked_purchase" && (
+                  <div className="text-right mt-1">
+                    <Link
+                      href="/dashboard/purchases"
+                      className="text-xs text-(--color-primary) hover:underline"
+                    >
+                      View purchase record →
+                    </Link>
+                  </div>
+                )}
               </>
             )}
           </dl>
@@ -565,6 +576,10 @@ export default function SaleDetailPage({ params }: PageProps) {
                 )
               }
             />
+
+            {advanced.active && sale.fulfillment_location_id && (
+              <FinRow label="Fulfilled from" value={fulfillmentLocationName} />
+            )}
 
             {sale.restock && (
               <div className="rounded-(--radius-btn) bg-(--color-success-bg) border border-green-200 px-3 py-2 text-xs text-(--color-success-text)">
