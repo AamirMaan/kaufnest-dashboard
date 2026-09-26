@@ -78,12 +78,22 @@ export default function InventoryPage() {
         />
       )}
 
-      {showLocations ? (
-        <LocationsTab isAdmin={isAdmin} addOpen={addLocationOpen} onAddClose={() => setAddLocationOpen(false)} />
-      ) : (
-        <div id="inventory-panel-products" role={view === "active" ? "tabpanel" : undefined} aria-labelledby={view === "active" ? "inventory-tab-products" : undefined}>
-          <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
-        </div>
+      <div
+        id="inventory-panel-products"
+        role={view === "active" ? "tabpanel" : undefined}
+        aria-labelledby={view === "active" ? "inventory-tab-products" : undefined}
+        hidden={view === "active" && tab !== "products"}
+      >
+        <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
+      </div>
+
+      {view === "active" && (
+        <LocationsTab
+          isAdmin={isAdmin}
+          addOpen={addLocationOpen}
+          onAddClose={() => setAddLocationOpen(false)}
+          hidden={tab !== "locations"}
+        />
       )}
     </div>
   );

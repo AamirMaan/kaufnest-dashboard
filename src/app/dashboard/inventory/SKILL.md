@@ -80,6 +80,18 @@ since modal dropdowns use a different state key than the table.
   Location" vs "+ Add Product" `PageHeader` action switch
   (`showLocations = view === "active" && tab === "locations"`); the tab's
   own component (`LocationsTab`) only owns its modals, not the header.
+- **Both tab panels stay mounted; only `hidden` toggles (fix round 1,
+  2026-09-26).** `page.tsx` renders `<ProductsTab>` and `<LocationsTab>`
+  unconditionally once `view === "active"` and flips the native `hidden`
+  attribute on each one's wrapper instead of conditionally rendering one or
+  the other. Do not go back to `showLocations ? <LocationsTab/> :
+  <ProductsTab/>` — that was tried and reverted because it unmounted
+  whichever tab wasn't active, resetting `ProductsTab`'s local search state
+  and discarding any in-progress `LocationsTab`/`LocationModal` state
+  (an open Add/Edit form, a typed name) on every tab switch. If you add a
+  third tab or new per-tab local state, keep this "always mounted, hidden
+  toggles visibility" pattern rather than reintroducing conditional
+  mounting.
 - **Two separate Redux keys**: `state.inventory.items` = paginated table data;
   `state.inventory.selectorItems` = full list for modal dropdowns. Never use
   `items` in Sales/Purchases modals — it is page-limited and will show only

@@ -16,17 +16,32 @@ pagination is active.
   `state.currentUser.profile?.role` (`admin`/`super_admin`) and renders
   `<EnableAdvancedCard isAdmin={isAdmin} />` when `view === "enable"` (Task
   4). **When `view === "active"` (Task 6, 2026-09-26)** it renders
-  `<InventoryTabs>` (Products/Locations) above the active panel; `tab` state
-  (`InventoryTabId`) plus `showLocations = view === "active" && tab ===
-  "locations"` decide whether `<LocationsTab>` or `<ProductsTab>` renders,
-  and which "+ Add …" button `PageHeader`'s `action` shows (Locations' Add
-  button is hidden entirely for non-admins, matching `LocationsTab`'s own
-  read-only row-actions gate). Any other view (`upsell`/`loading`/`error`/
-  `enable`) still renders the plain `<ProductsTab>` below the banner, with no
-  tab strip — `InventoryTabs` only ever appears once advanced inventory is
-  actually active. No table/search code lives in `page.tsx` — see
-  `_components/ProductsTab.tsx` for products, `_components/LocationsTab.tsx`
-  for locations.
+  `<InventoryTabs>` (Products/Locations) above the active panels; `tab`
+  state (`InventoryTabId`) plus `showLocations = view === "active" && tab
+  === "locations"` decide which "+ Add …" button `PageHeader`'s `action`
+  shows (Locations' Add button is hidden entirely for non-admins, matching
+  `LocationsTab`'s own read-only row-actions gate). **Both `<ProductsTab>`
+  and `<LocationsTab>` stay mounted at all times once `view === "active"`**
+  (fix round 1, 2026-09-26) — only their visibility toggles via the native
+  `hidden` attribute (`ProductsTab`'s wrapper div gets `hidden={view ===
+  "active" && tab !== "products"}`; `LocationsTab` takes its own `hidden`
+  prop, applied to its root `tabpanel` div, `hidden={tab !== "locations"}`).
+  Unmounting the inactive tab on every switch was tried first and reverted:
+  it reset `ProductsTab`'s local search state and threw away any in-progress
+  `LocationsTab`/`LocationModal` state every time the user switched tabs.
+  Any other view (`upsell`/`loading`/`error`/`enable`) renders `ProductsTab`
+  visible with no `role`/`aria-labelledby` (not a real tabpanel yet) and
+  `LocationsTab` isn't rendered at all — `InventoryTabs` and `LocationsTab`
+  only ever appear once advanced inventory is actually active. No
+  table/search code lives in `page.tsx` — see `_components/ProductsTab.tsx`
+  for products, `_components/LocationsTab.tsx` for locations. Modals in both
+  tabs are portals (`Modal.tsx`), but this is safe with both tabs mounted:
+  a modal can only be opened via its own tab's header button or an in-panel
+  row action, both of which are covered by the other tab's `hidden` panel
+  (unreachable, not just visually hidden), and any already-open modal's
+  backdrop blocks clicks on the tab strip underneath it — so a hidden tab's
+  modal can never be open while the tab itself is hidden. No extra
+  open-state reset was added for this.
 - `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
   locations" card shown when `advancedInventoryView` returns `"enable"`
   (entitled tenant, `inventory_settings.advanced_enabled` still false).
@@ -52,7 +67,10 @@ pagination is active.
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
   when `view === "active"`.
 - `_components/LocationsTab.tsx` (Phase 2 Task 6, 2026-09-26) —
-  `LocationsTab({ isAdmin, addOpen, onAddClose })`: the Locations list.
+  `LocationsTab({ isAdmin, addOpen, onAddClose, hidden })`: the Locations
+  list. `hidden` (fix round 1, 2026-09-26) is applied to the component's own
+  root `tabpanel` div so `page.tsx` can keep this component mounted while
+  the Products tab is showing — see `page.tsx`'s entry above for why.
   `DataTable` columns are Location (name + a "Default" `Badge` when
   `settings.default_location_id === l.id`, sortable), Type
   (`LOCATION_TYPE_LABELS`, sortable), Status (Active/Inactive `Badge`), and

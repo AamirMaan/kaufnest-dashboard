@@ -22,11 +22,17 @@ interface Props {
   /** The page header owns the "+ Add Location" button; this tab owns the modal. */
   addOpen: boolean;
   onAddClose: () => void;
+  /**
+   * Kept mounted while the Products tab is showing (so search/form state
+   * survives switching tabs) — this just hides the panel visually/from
+   * assistive tech, matching the native `hidden` attribute's semantics.
+   */
+  hidden?: boolean;
 }
 
 const CONNECTION_ERROR = "Please check your connection and try again.";
 
-export function LocationsTab({ isAdmin, addOpen, onAddClose }: Props) {
+export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const locations = useAppSelector((s) => s.advancedInventory.locations);
@@ -165,7 +171,7 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose }: Props) {
   ];
 
   return (
-    <div id="inventory-panel-locations" role="tabpanel" aria-labelledby="inventory-tab-locations" className="space-y-6">
+    <div id="inventory-panel-locations" role="tabpanel" aria-labelledby="inventory-tab-locations" hidden={hidden} className="space-y-6">
       {!isAdmin && (
         <p className="text-sm text-(--color-text-muted)">Only admins can add or change locations.</p>
       )}
