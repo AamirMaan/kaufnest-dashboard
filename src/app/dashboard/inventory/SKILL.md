@@ -97,6 +97,10 @@ since modal dropdowns use a different state key than the table.
   `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
   computation live in `_components/ProductsTab.tsx` only — don't duplicate
   the admin-role check anywhere else in this feature.
+- **Change transfer history listing or paging** (Phase 4 Task 2, 2026-09-26):
+  `_store/transfersSlice.ts` (+ test) handles the paginated `stock_transfers`
+  history. Registered in `src/store/store.ts` as `state.stockTransfers`. Any
+  new transfer history component (tab, viewer, etc.) wires `fetchTransfersPage`.
 - **Change transfer stock modal logic, validation, or preview** (Phase 4
   Task 1, 2026-09-26): `_lib/transfers.ts` (+ test — pure preview/validation/
   payload helpers), `_store/productLots.ts` (the `fetchAvailableLots` source-lot

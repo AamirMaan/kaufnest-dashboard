@@ -178,6 +178,12 @@ pagination is active.
   `parseTransferQuantity`, `parseTransferCost`, `transferDraftError(draft, locations, available)`,
   `transferInsertPayload(draft, userId)`, `pageAfterRemoval(page, pageSize, totalBefore)`.
   Mirrors `inv_transfer_after_insert` (047) FIFO order, shortfall exclusion, and cost add-on formula.
+- `_store/transfersSlice.ts` (+ test, Phase 4 Task 2, 2026-09-26) — Redux slice for
+  `state.stockTransfers` (paginated `stock_transfers` history). State:
+  `{ items: StockTransferRow[], page, pageSize, total, loaded, isFetching, error }`.
+  `StockTransferRow` extends `StockTransfer` with `product_name: string | null` (embedded via
+  `products(name)` FK). `fetchTransfersPage({ page, pageSize })` pages newest-first via
+  `.order("date", { ascending: false }).order("created_at", { ascending: false })`.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
