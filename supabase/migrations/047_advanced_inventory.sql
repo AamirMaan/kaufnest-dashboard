@@ -1157,7 +1157,13 @@ BEGIN
   -- Tenant schemas are exposed through PostgREST, so any function in them
   -- is callable as an RPC unless EXECUTE is revoked. Trigger functions do
   -- not need EXECUTE to fire; helpers are only called from SECURITY DEFINER
-  -- code. The three public RPCs are re-granted below.
+  -- code. Five functions are re-granted below: the three writable RPCs
+  -- (enable_advanced_inventory/set_default_location/set_opening_lot_cost,
+  -- all in this loop's name list) plus the two read-only stock RPCs
+  -- (inventory_stock_by_location/inventory_stock_by_location_totals),
+  -- which are deliberately NOT in the loop's name list above (their names
+  -- don't match `inv\_%` and aren't in that IN (...) list) so they get
+  -- their own explicit revoke/grant pair immediately below instead.
   FOR fn IN
     SELECT p.oid::regprocedure AS sig
     FROM pg_proc p

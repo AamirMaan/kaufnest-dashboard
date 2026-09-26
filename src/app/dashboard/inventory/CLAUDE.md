@@ -310,8 +310,12 @@ Tables: `stock_locations`, `inventory_settings`, `platform_location_defaults`,
 platform defaults (admin), transfers. Everything else is trigger/RPC-owned.
 Trigger errors are `INV_*: detail` — show them with
 `inventoryErrorMessage()` (`src/lib/inventory/inventoryErrors.ts`).
-Phase 2 (this UI) shows the enable flow and the Locations tab; batches on
-purchases/sales (Phase 3) and transfers (Phase 4) come next.
+Phase 2 shipped the enable flow and the Locations tab. Phase 3 shipped
+purchase location + landed costs, sale "Fulfilled from" with a shortage
+warning, FIFO cost of goods on the order page, per-location stock columns on
+the Products tab, on-hand units on the Locations tab, and the product
+batches drawer — see the Purchases/Sales `CLAUDE.md`s and the gotchas below
+for the details. Only transfers (Phase 4) remain.
 
 ## Pagination data flow
 

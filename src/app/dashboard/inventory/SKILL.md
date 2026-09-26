@@ -110,8 +110,10 @@ since modal dropdowns use a different state key than the table.
   "+ Add Product" button and its `useState` stay in `page.tsx`'s
   `<PageHeader>` since the tab doesn't own the header). `page.tsx` itself
   only decides which of `upsell`/`loading`/`error` banners to show above
-  `<ProductsTab>`, via `advancedInventoryView(plan, advanced)`. Don't add
-  table/search logic back into `page.tsx` — it belongs in `ProductsTab`.
+  `<ProductsTab>`, by reading `advanced.view`/`advanced.error`/
+  `advanced.reload` from `useAdvancedInventory()` (see that gotcha below —
+  `page.tsx` no longer computes `view` itself). Don't add table/search logic
+  back into `page.tsx` — it belongs in `ProductsTab`.
 - **`InventoryTabs` is wired into `page.tsx` (Task 6, 2026-09-26)**, but only
   when `view === "active"` — the tab strip only ever appears once advanced
   inventory is actually on, never above the upsell/loading/error/enable
@@ -331,8 +333,16 @@ since modal dropdowns use a different state key than the table.
 - **Deactivating a location is blocked while it is the tenant default OR
   any platform's default (`locationDeactivationBlocker`)** — the sale
   trigger would otherwise keep routing that platform's orders to an
-  inactive location; there is no DB guard for the platform case yet (Phase
-  3 follow-up).
+  inactive location. **The DB-side guard for the platform case is now
+  written** (migration `049_advanced_inventory_phase3.sql` — `UI` blocker
+  above stays regardless, this just closes the gap if a row somehow bypassed
+  it): `inv_sale_before_write`'s platform-default fill (and the pre-enable
+  restock branch's `v_loc` lookup in `inv_sale_after_write`) skips a
+  platform default whose `stock_locations.is_active` is false and falls
+  back to `inventory_settings.default_location_id` instead. **Not yet live
+  on any tenant** — `049` is still ⏳ pending (see `supabase/SKILL.md`'s file
+  map for the apply order), so until it's applied this guard doesn't
+  actually run yet, even though the UI-side blocker above already does.
 - **Location delete uses `.select('id')` so an RLS no-op (0 rows, no error)
   is reported as a failure, not a success.**
 - **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
