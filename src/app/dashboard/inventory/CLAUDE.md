@@ -42,9 +42,10 @@ pagination is active.
   backdrop blocks mouse clicks on the tab strip underneath it, so a mouse
   user can't reach a hidden tab's modal that way. `Modal.tsx` has no focus
   trap, though, so keyboard Tab from the header's action button can still
-  reach the tab strip and switch tabs while a modal is open — the modal
-  itself stays open, just behind the now-hidden panel. Known minor/cosmetic
-  gap, not a functional bug; no extra open-state reset was added for this.
+  reach the tab strip and switch tabs while a modal is open — since modals
+  render through a portal, the modal itself stays open and visible, on top
+  of the now-hidden panel underneath it. Known minor/cosmetic gap, not a
+  functional bug; no extra open-state reset was added for this.
 - `_lib/advancedInventory.ts` (+ test) — pure logic behind the batches &
   locations UI: `advancedInventoryView` (upsell/loading/error/enable/active),
   `sortLocations`/`defaultLocationOptions`/`platformLocationOptions`,
@@ -164,9 +165,11 @@ pagination is active.
 - `_components/AddProductModal.tsx` / `EditProductModal.tsx` — create/edit forms.
 - `_components/LocationModal.tsx` (Phase 2 Task 5, 2026-09-26) — add/edit
   `stock_locations` modal. `LocationModal({ open, location, locations,
-  onClose })` — `location: StockLocation | null` (null = add); render with
-  `key={location?.id ?? "new-location"}` so its `name`/`type` state resets
-  per target instead of reusing stale state across different rows. Validates
+  onClose })` — `location: StockLocation | null` (null = add); the call site
+  (`LocationsTab.tsx`) renders it with
+  `key={editTarget?.id ?? (addOpen ? "new-location" : "closed")}` so its
+  `name`/`type` state resets per target instead of reusing stale state
+  across different rows. Validates
   name non-empty + not already taken (`isLocationNameTaken`, mirrors the DB's
   unique index on `lower(name)` — a `23505` write-time race still shows the
   same message). On success dispatches `locationSaved` and writes an audit

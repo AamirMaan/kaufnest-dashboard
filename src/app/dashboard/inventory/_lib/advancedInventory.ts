@@ -103,13 +103,28 @@ export function isLocationNameTaken(
 /**
  * Why a location can't be deactivated right now, or null if it can. Mirrors
  * the DB guard (INV_DEFAULT_LOCATION) so the UI can explain before asking.
+ * The tenant-default check mirrors the DB trigger; the platform-default
+ * check below it has no DB guard yet (Phase 3 follow-up) — the sale trigger
+ * would otherwise keep routing that platform's orders to an inactive
+ * location. Reactivation (`!location.is_active`) is never blocked.
  */
 export function locationDeactivationBlocker(
   location: StockLocation,
   settings: InventorySettings | null,
+  platformDefaults: PlatformLocationDefault[],
 ): string | null {
   if (location.is_active && settings?.default_location_id === location.id) {
     return "This is the default location. Choose another default location first.";
+  }
+  if (location.is_active) {
+    const platforms = INVENTORY_PLATFORMS.filter((p) =>
+      platformDefaults.some((d) => d.platform === p && d.location_id === location.id),
+    );
+    if (platforms.length > 0) {
+      const labels = platforms.map((p) => PLATFORM_LABELS[p]).join(", ");
+      const subject = platforms.length === 1 ? "that platform" : "those platforms";
+      return `This location is the default for ${labels}. Choose another location for ${subject} first.`;
+    }
   }
   return null;
 }

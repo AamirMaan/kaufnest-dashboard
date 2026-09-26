@@ -68,7 +68,7 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
   }
 
   async function handleToggleActive(location: StockLocation) {
-    const blocker = locationDeactivationBlocker(location, settings);
+    const blocker = locationDeactivationBlocker(location, settings, platformDefaults);
     if (blocker) {
       warning("Can't deactivate", blocker);
       return;
@@ -105,9 +105,13 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
     const target = deleteTarget;
     try {
       const supabase = await createTenantClient();
-      const { error } = await supabase.from("stock_locations").delete().eq("id", target.id);
+      const { data, error } = await supabase.from("stock_locations").delete().eq("id", target.id).select("id");
       if (error) {
         toastError("Delete failed", inventoryErrorMessage(error, "Could not delete the location."));
+        return;
+      }
+      if (!data || data.length === 0) {
+        toastError("Delete failed", "You don't have permission to delete this location, or it no longer exists.");
         return;
       }
       dispatch(locationRemoved(target.id));

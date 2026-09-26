@@ -44,7 +44,7 @@ export const fetchAdvancedInventory = createAsyncThunk(
         .select("advanced_enabled, enabled_at, default_location_id")
         .maybeSingle<InventorySettings>(),
       // Structurally bounded: platform is the primary key, one row per Platform (5 max).
-      supabase.from("platform_location_defaults").select("platform, location_id"),
+      supabase.from("platform_location_defaults").select("platform, location_id").returns<PlatformLocationDefault[]>(),
       fetchAllRows<StockLocation>(
         async (from, to) =>
           await supabase

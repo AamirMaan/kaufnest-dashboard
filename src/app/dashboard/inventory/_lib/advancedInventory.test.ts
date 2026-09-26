@@ -115,14 +115,40 @@ describe("isLocationNameTaken", () => {
 
 describe("locationDeactivationBlocker", () => {
   it("blocks deactivating the default location", () => {
-    expect(locationDeactivationBlocker(loc("main"), settings())).toBe(
+    expect(locationDeactivationBlocker(loc("main"), settings(), [])).toBe(
       "This is the default location. Choose another default location first.",
     );
   });
 
-  it("allows any other location, and allows reactivation", () => {
-    expect(locationDeactivationBlocker(loc("fba"), settings())).toBeNull();
-    expect(locationDeactivationBlocker(loc("main", { is_active: false }), settings())).toBeNull();
+  it("blocks deactivating a platform's default location (singular copy)", () => {
+    expect(
+      locationDeactivationBlocker(loc("fba"), settings(), [{ platform: "amazon", location_id: "fba" }]),
+    ).toBe("This location is the default for Amazon. Choose another location for that platform first.");
+  });
+
+  it("blocks deactivating a platform's default location (plural copy, INVENTORY_PLATFORMS order)", () => {
+    expect(
+      locationDeactivationBlocker(loc("fba"), settings(), [
+        { platform: "ebay", location_id: "fba" },
+        { platform: "amazon", location_id: "fba" },
+      ]),
+    ).toBe("This location is the default for Amazon, eBay. Choose another location for those platforms first.");
+  });
+
+  it("the tenant-default message wins when a location is both the tenant default and a platform default", () => {
+    expect(
+      locationDeactivationBlocker(loc("main"), settings(), [{ platform: "amazon", location_id: "main" }]),
+    ).toBe("This is the default location. Choose another default location first.");
+  });
+
+  it("allows any other location, and allows reactivation even if it is still a platform default", () => {
+    expect(locationDeactivationBlocker(loc("fba"), settings(), [])).toBeNull();
+    expect(locationDeactivationBlocker(loc("main", { is_active: false }), settings(), [])).toBeNull();
+    expect(
+      locationDeactivationBlocker(loc("fba", { is_active: false }), settings(), [
+        { platform: "amazon", location_id: "fba" },
+      ]),
+    ).toBeNull();
   });
 });
 

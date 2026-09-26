@@ -281,10 +281,18 @@ since modal dropdowns use a different state key than the table.
   has stock history (any `stock_lots` row) is blocked by the DB trigger
   (`inv_location_before_update`, `INV_LOCATION_IN_USE` — "This location has
   stock history, so it cannot be switched to or from dropship"), same as
-  clearing the tenant default's active flag (`INV_DEFAULT_LOCATION`). Both
-  surface through `LocationModal`'s existing `inventoryErrorMessage(dbError,
-  …)` fallback branch — no special-casing needed, but don't assume a save
-  failure here is always the `23505` name-collision case.
+  clearing the tenant default's active flag or switching its type to
+  dropship (`INV_DEFAULT_LOCATION`, fires on either). Both surface through
+  `LocationModal`'s existing `inventoryErrorMessage(dbError, …)` fallback
+  branch — no special-casing needed, but don't assume a save failure here is
+  always the `23505` name-collision case.
+- **Deactivating a location is blocked while it is the tenant default OR
+  any platform's default (`locationDeactivationBlocker`)** — the sale
+  trigger would otherwise keep routing that platform's orders to an
+  inactive location; there is no DB guard for the platform case yet (Phase
+  3 follow-up).
+- **Location delete uses `.select('id')` so an RLS no-op (0 rows, no error)
+  is reported as a failure, not a success.**
 - **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
   Redux** — it's plain `useState`, seeded from the store once via
   `fulfillmentDraftFrom` and reset by remounting the whole component

@@ -15,6 +15,7 @@ import { EditProductModal } from "./EditProductModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import type { Product } from "@/types";
 
 function isLowStock(p: Product): boolean {
@@ -67,7 +68,7 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
     if (!deleteTarget) return;
     const supabase = await createTenantClient();
     const { error: dbError } = await supabase.from("products").delete().eq("id", deleteTarget.id);
-    if (dbError) { toastError("Delete failed", dbError.message); return; }
+    if (dbError) { toastError("Delete failed", inventoryErrorMessage(dbError, "Could not delete the product.")); return; }
     dispatch(removeProduct(deleteTarget.id));
     const { data: { user } } = await supabase.auth.getUser();
     const log = await writeAuditLog(supabase, {
