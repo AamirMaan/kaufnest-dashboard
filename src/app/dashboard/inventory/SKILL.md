@@ -97,6 +97,10 @@ since modal dropdowns use a different state key than the table.
   `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
   computation live in `_components/ProductsTab.tsx` only — don't duplicate
   the admin-role check anywhere else in this feature.
+- **Change transfer stock modal logic, validation, or preview** (Phase 4
+  Task 1, 2026-09-26): `_lib/transfers.ts` (+ test — pure preview/validation/
+  payload helpers), `_store/productLots.ts` (the `fetchAvailableLots` source-lot
+  fetcher). Any new transfer components (modal, tab, etc.) wire these two.
 
 ## Test command
 
@@ -501,3 +505,13 @@ since modal dropdowns use a different state key than the table.
   helper, and the `handleClose` reset — rather than reintroducing a
   synchronous effect-body reset or delegating the effect's fetch to a
   `useCallback`.
+- **The transfer preview in `_lib/transfers.ts` mirrors 047's
+  `inv_transfer_after_insert` (Phase 4 Task 1, 2026-09-26).** Both FIFO
+  over non-shortfall lots (received_at → created_at → id), both exclude
+  empty lots, both round the per-unit cost add-on to 4 decimals as
+  `round(transfer_cost / quantity, 4)`, and both compute destination
+  unit cost as `sourceUnitCost + addon`, rounded to 4 decimals. Any
+  change to the FIFO order, shortfall handling, rounding behavior, or
+  cost allocation formula must stay in sync between `fifoPreview` and the
+  DB trigger — changes to one without the other will silently diverge
+  the preview from the actual transfer behavior.

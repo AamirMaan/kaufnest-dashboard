@@ -167,10 +167,17 @@ pagination is active.
   `canEditLotCost(lot, isAdmin)` (mirrors the `set_opening_lot_cost` RPC's
   own admin + opening-only guard), `parseUnitCostInput` (trims, rejects
   blank/negative/non-numeric, rounds to 4 decimals).
-- `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26) — `PRODUCT_LOTS_CAP`
+- `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26; Phase 4 Task 1 fetcher, 2026-09-26) — `PRODUCT_LOTS_CAP`
   (1000) + `fetchOpenLots(productId)`: pages `stock_lots` for one product
   (`qty_remaining <> 0` OR `kind = 'opening'`) via `fetchAllRowsOrThrow`, mapping any thrown/DB
-  error through `inventoryErrorMessage`.
+  error through `inventoryErrorMessage`. Phase 4 adds `fetchAvailableLots(productId, locationId)`:
+  pages non-shortfall lots with units left at a location in FIFO order, feeds `fifoPreview`.
+- `_lib/transfers.ts` (+ test, Phase 4 Task 1, 2026-09-26) — pure transfer preview,
+  validation and payload logic: `transferCostAddon(cost, qty)`, `fifoPreview(lots, qty, cost)`,
+  `transferLocationOptions(locations)`, `emptyTransferDraft(defaultLocationId, today)`,
+  `parseTransferQuantity`, `parseTransferCost`, `transferDraftError(draft, locations, available)`,
+  `transferInsertPayload(draft, userId)`, `pageAfterRemoval(page, pageSize, totalBefore)`.
+  Mirrors `inv_transfer_after_insert` (047) FIFO order, shortfall exclusion, and cost add-on formula.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only

@@ -33,3 +33,31 @@ export async function fetchOpenLots(productId: string): Promise<StockLot[]> {
     throw new Error(inventoryErrorMessage(e, "Could not load this product's batches."));
   }
 }
+
+/**
+ * The batches a transfer can draw from: one product at one location with
+ * units left, never the shortfall lot — the same set, in the same FIFO
+ * order, that inv_transfer_after_insert (047) consumes. Feeds fifoPreview.
+ */
+export async function fetchAvailableLots(productId: string, locationId: string): Promise<StockLot[]> {
+  const supabase = await createTenantClient();
+  try {
+    return await fetchAllRowsOrThrow<StockLot>(
+      async (from, to) =>
+        await supabase
+          .from("stock_lots")
+          .select("*", { count: "exact" })
+          .eq("product_id", productId)
+          .eq("location_id", locationId)
+          .neq("kind", "shortfall")
+          .gt("qty_remaining", 0)
+          .order("received_at", { ascending: true })
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      PRODUCT_LOTS_CAP,
+    );
+  } catch (e) {
+    throw new Error(inventoryErrorMessage(e, "Could not load the stock at this location."));
+  }
+}
