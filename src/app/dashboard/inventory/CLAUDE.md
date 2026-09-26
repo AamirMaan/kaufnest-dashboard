@@ -98,7 +98,28 @@ pagination is active.
   stays open for retry/cancel — `DeleteConfirmModal` clears its own internal
   `deleting` busy state (and the typed reason) once the awaited `onConfirm`
   promise settles either way, so `handleDelete` must never let that promise
-  reject or `deleting` gets stuck `true` forever.
+  reject or `deleting` gets stuck `true` forever. **(Task 7, 2026-09-26)**
+  Also renders `<FulfillmentDefaultsCard key={defaultsKey} isAdmin={isAdmin}
+  />` after the `<DataTable>` — `defaultsKey` is built from
+  `settings.default_location_id`, `locations` (id + active flag), and
+  `platformDefaults` (sorted by platform) so the card remounts, and its
+  internal draft resets to the saved values, whenever any of those change
+  elsewhere (a location edited/deactivated, a reload).
+- `_components/FulfillmentDefaultsCard.tsx` (Phase 2 Task 7, 2026-09-26) —
+  `FulfillmentDefaultsCard({ isAdmin })`: the tenant's default location plus
+  a default fulfillment location per sales platform (`INVENTORY_PLATFORMS` —
+  amazon/ebay/etsy/shopify/other). Local draft state seeded via
+  `fulfillmentDraftFrom(settings, platformDefaults)`; validity via
+  `isFulfillmentDraftValid`, dirty-check via `isFulfillmentDraftDirty` (both
+  `_lib/advancedInventory.ts`). Submitting calls the `set_default_location`
+  RPC (only if the default location changed) then upserts
+  `platform_location_defaults` for whichever platforms changed
+  (`platformDefaultChanges`), dispatching `settingsSet`/
+  `platformDefaultsMerged` after each succeeds and writing one
+  `inventory_settings` audit log entry (`metadata.event:
+  "fulfillment_defaults_changed"`) on overall success. Non-admins see the
+  same form with every `Select` disabled and no Save button. See
+  `SKILL.md`'s gotcha for the two-write partial-success handling.
 - `_components/AdvancedInventoryUpsellCard.tsx` — Business-plan upsell card
   shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; pure
   presentational, links to `/dashboard/settings`.

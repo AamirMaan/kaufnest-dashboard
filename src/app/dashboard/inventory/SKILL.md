@@ -58,6 +58,16 @@ since modal dropdowns use a different state key than the table.
   `_store/advancedInventorySlice.ts` (`locationSaved`/`locationRemoved`).
   `page.tsx` only owns which tab is active and the "+ Add Location" button's
   open state — see the `InventoryTabs` gotcha below.
+- **Change fulfillment defaults** (the tenant's default location + per-platform
+  default fulfillment location, Task 7, 2026-09-26):
+  `_components/FulfillmentDefaultsCard.tsx` (the form itself),
+  `_lib/advancedInventory.ts` (`fulfillmentDraftFrom`, `platformDefaultChanges`,
+  `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`, `defaultLocationOptions`,
+  `platformLocationOptions`, `INVENTORY_PLATFORMS`, `PLATFORM_LABELS`), and
+  `_store/advancedInventorySlice.ts` (`settingsSet`, `platformDefaultsMerged`).
+  Mounted by `_components/LocationsTab.tsx` after its `DataTable`, remounted
+  via a `defaultsKey` built from `settings`/`locations`/`platformDefaults` so
+  its internal draft always starts from the current saved values.
 
 ## Test command
 
@@ -246,3 +256,29 @@ since modal dropdowns use a different state key than the table.
   retry — `DeleteConfirmModal` still clears the typed reason text on every
   settle, success or failure, which is existing shared behavior, not
   something this feature works around.
+- **`FulfillmentDefaultsCard` (Task 7, 2026-09-26) writes through two
+  different paths in one submit** — `set_default_location` RPC for the
+  tenant default, a plain `.upsert(..., { onConflict: "platform" })` on
+  `platform_location_defaults` for the per-platform rows — and only when
+  each actually changed (`platformDefaultChanges` diffs against the store,
+  not against the initial draft, so a value changed then changed back is
+  correctly seen as "no change"). The whole submit body is one
+  try/catch/finally: a *thrown* error (network/auth) shows the generic
+  "Please check your connection and try again." and `finally` always resets
+  `saving`; a *returned* Supabase/RPC `error` shows
+  `inventoryErrorMessage(error, …)` instead. **Partial-success honesty**: if
+  the RPC succeeds (dispatches `settingsSet` immediately) but the platform
+  upsert then fails, the toast title/copy switches to "Platform defaults not
+  saved" / "The default location was saved, but the platform defaults could
+  not be saved." — the store is never rolled back to match a misleading
+  all-or-nothing failure toast, because the RPC's effect was already
+  dispatched and is genuinely saved. The post-success audit write
+  (`entityType: "inventory_settings"`, `metadata.event:
+  "fulfillment_defaults_changed"`) is in its own inner try/catch that
+  swallows errors, same pattern as every other mutation in this folder — see
+  `EnableAdvancedCard`'s entry above for why.
+- **`Row` (`components/ui/FormFields.tsx`) is just a 2-column CSS grid, not a
+  2-child-only layout primitive** — `grid grid-cols-1 sm:grid-cols-2 gap-4`
+  wraps any number of children, so `FulfillmentDefaultsCard` uses it directly
+  for all 5 platform `Field`s (the last one sits alone on its own row) rather
+  than hand-rolling a separate grid div.

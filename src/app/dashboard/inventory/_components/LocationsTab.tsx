@@ -15,6 +15,7 @@ import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import { locationRemoved, locationSaved } from "../_store/advancedInventorySlice";
 import { LOCATION_TYPE_LABELS, locationDeactivationBlocker, sortLocations } from "../_lib/advancedInventory";
 import { LocationModal } from "./LocationModal";
+import { FulfillmentDefaultsCard } from "./FulfillmentDefaultsCard";
 import type { StockLocation } from "@/types";
 
 interface Props {
@@ -37,9 +38,19 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
   const { success, error: toastError, warning } = useToast();
   const locations = useAppSelector((s) => s.advancedInventory.locations);
   const settings = useAppSelector((s) => s.advancedInventory.settings);
+  const platformDefaults = useAppSelector((s) => s.advancedInventory.platformDefaults);
   const [editTarget, setEditTarget] = useState<StockLocation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StockLocation | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Remounts FulfillmentDefaultsCard whenever the stored defaults/locations
+  // change (save elsewhere, reload) so its local draft always starts from
+  // the current saved values instead of a stale first-render snapshot.
+  const defaultsKey = [
+    settings?.default_location_id ?? "",
+    locations.map((l) => `${l.id}:${l.is_active ? 1 : 0}`).join(","),
+    [...platformDefaults].sort((a, b) => a.platform.localeCompare(b.platform)).map((d) => `${d.platform}=${d.location_id}`).join(","),
+  ].join("|");
 
   async function audit(action: "update" | "delete", location: StockLocation, metadata: Record<string, unknown>) {
     const supabase = await createTenantClient();
@@ -181,6 +192,8 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
         keyField="id"
         emptyMessage="No locations yet — add your own warehouse, Amazon FBA or a 3PL."
       />
+
+      <FulfillmentDefaultsCard key={defaultsKey} isAdmin={isAdmin} />
 
       <LocationModal
         key={editTarget?.id ?? (addOpen ? "new-location" : "closed")}
