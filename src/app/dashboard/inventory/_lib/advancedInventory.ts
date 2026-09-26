@@ -48,14 +48,18 @@ export interface AdvancedInventoryLoadState {
  * Which Inventory page to show. Fails closed: an unknown plan is treated as
  * not entitled, and nothing advanced renders until settings have loaded.
  * A downgraded tenant with the flag still on sees the upsell — the ledger
- * keeps running in the database, only the UI is hidden.
+ * keeps running in the database, only the UI is hidden. A failed background
+ * refresh (`load.error` set but `load.loaded` already true — e.g. a `force`
+ * reload after the first successful load) keeps showing the last loaded
+ * view instead of bouncing to the error card; only a failure on the very
+ * first load (never `loaded`) shows the error card.
  */
 export function advancedInventoryView(
   plan: TenantPlan | null,
   load: AdvancedInventoryLoadState,
 ): AdvancedInventoryView {
   if (!plan || !hasAdvancedInventory(plan)) return "upsell";
-  if (load.error) return "error";
+  if (load.error && !load.loaded) return "error";
   if (!load.loaded) return "loading";
   return load.settings?.advanced_enabled ? "active" : "enable";
 }

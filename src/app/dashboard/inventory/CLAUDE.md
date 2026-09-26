@@ -6,13 +6,15 @@ pagination is active.
 
 ## Files in this folder
 
-- `page.tsx` (Phase 2 shell, 2026-09-26) — thin shell only: `<PageHeader>` +
-  "+ Add Product"/"+ Add Location" button state (whichever the active tab
-  owns), the advanced-inventory `upsell`/`loading`/`error` banners driven by
-  `advancedInventoryView(plan, advanced)` (`_lib/advancedInventory.ts`) and
-  `fetchAdvancedInventory()` (`_store/advancedInventorySlice.ts`, dispatched
-  on mount only when `hasAdvancedInventory(plan)` and not yet
-  loaded/loading/errored). Also computes `isAdmin` from
+- `page.tsx` (Phase 2 shell, 2026-09-26; loading moved to
+  `useAdvancedInventory()` Task 2, 2026-09-26) — thin shell only:
+  `<PageHeader>` + "+ Add Product"/"+ Add Location" button state (whichever
+  the active tab owns), the advanced-inventory `upsell`/`loading`/`error`
+  banners driven entirely by `const advanced = useAdvancedInventory()`
+  (`_store/useAdvancedInventory.ts`) — `page.tsx` no longer selects
+  `plan`/`state.advancedInventory` or computes `view`/dispatches the fetch
+  itself; it just reads `advanced.view`/`advanced.error` and wires the error
+  banner's Retry button to `advanced.reload`. Also computes `isAdmin` from
   `state.currentUser.profile?.role` (`admin`/`super_admin`) and renders
   `<EnableAdvancedCard isAdmin={isAdmin} />` when `view === "enable"` (Task
   4). **When `view === "active"` (Task 6, 2026-09-26)** it renders
@@ -54,13 +56,37 @@ pagination is active.
   `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`), plus the
   `LOCATION_TYPE_LABELS`/`INVENTORY_PLATFORMS`/`PLATFORM_LABELS` label maps.
 - `_store/advancedInventorySlice.ts` (+ test) — `state.advancedInventory`
-  (`settings`, `locations`, `platformDefaults`, `loaded`/`loading`/`error`).
-  `fetchAdvancedInventory` is the only thunk (loads all three via
-  `Promise.all`; locations are paged through `fetchAllRows` since they're
-  user-created and unbounded). `locationSaved`/`locationRemoved`/
-  `settingsSet`/`platformDefaultsMerged` are plain reducers, dispatched by
-  the components below once their own write succeeds. Dispatched only by
-  `page.tsx` — see `SKILL.md`'s gotcha on why it isn't layout-hydrated.
+  (`settings`, `locations`, `platformDefaults`, `loaded`/`loading`/`error`,
+  `loadedAt: number | null`). `fetchAdvancedInventory(arg?: { force?:
+  boolean })` is the only thunk (loads all three via `Promise.all`;
+  locations are paged through `fetchAllRowsOrThrow` — since they're
+  user-created and unbounded, an error-reporting page fetch that throws
+  instead of returning an empty/partial list, unlike the plain
+  `fetchAllRows` other features use). An RTK `condition` skips the thunk
+  while a load is already in flight, or while the existing `loadedAt` is
+  still fresh (`isAdvancedInventoryFresh`, within `ADVANCED_INVENTORY_STALE_MS`
+  = 60s) — pass `{ force: true }` to bypass freshness after a write that
+  changes settings/locations outside this slice's own reducers (e.g. the
+  enable route). A rejected reload leaves `loaded`/`settings`/`locations`/
+  `platformDefaults` untouched, only `loading`/`error` change — so a stale
+  view keeps rendering through a failed background refresh.
+  `locationSaved`/`locationRemoved`/`settingsSet`/`platformDefaultsMerged`
+  are plain reducers, dispatched by the components below once their own
+  write succeeds. Loaded via `_store/useAdvancedInventory.ts` (see below) —
+  not by `dashboard/layout.tsx` — see `SKILL.md`'s gotcha on why it isn't
+  layout-hydrated.
+- `_store/useAdvancedInventory.ts` (Task 2, 2026-09-26) — the one entry
+  point for advanced-inventory state outside the slice itself:
+  `useAdvancedInventory(): { entitled, active, view, settings, locations,
+  platformDefaults, loading, error, reload }`. Reads `tenantPlan` +
+  `state.advancedInventory`, computes `entitled` (`hasAdvancedInventory`)
+  and `view` (`advancedInventoryView`) itself, dispatches
+  `fetchAdvancedInventory()` on mount when entitled (a no-op while fresh —
+  the thunk's own `condition` decides that, not this hook), and exposes
+  `reload` as `fetchAdvancedInventory({ force: true })`. `page.tsx` calls
+  this instead of computing `plan`/`view`/the fetch effect itself;
+  Purchases/Sales (Phase 3) will call the same hook rather than duplicating
+  the load.
 - `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
   locations" card shown when `advancedInventoryView` returns `"enable"`
   (entitled tenant, `inventory_settings.advanced_enabled` still false).
@@ -69,8 +95,11 @@ pagination is active.
   (explicitly states "This can't be turned off again."); confirming calls
   `POST /api/inventory/enable-advanced`, writes an `inventory_settings`
   audit log entry (`writeAuditLog` + `addAuditLog`) on success, then
-  dispatches `fetchAdvancedInventory()` to reload settings/locations so
-  `page.tsx`'s `view` flips to `"active"` and the card unmounts itself —
+  dispatches `fetchAdvancedInventory({ force: true })` (Task 2, 2026-09-26 —
+  `force` is required here since the page's own load may still be inside
+  `ADVANCED_INVENTORY_STALE_MS` and would otherwise no-op) to reload
+  settings/locations so `page.tsx`'s `view` flips to `"active"` and the card
+  unmounts itself —
   there is no local "enabled" state here, the view transition is entirely
   driven by the reloaded Redux state. Toasts on both outcomes
   (`useToast()`), busy-verb button while `enabling`, disabled Cancel/Enable

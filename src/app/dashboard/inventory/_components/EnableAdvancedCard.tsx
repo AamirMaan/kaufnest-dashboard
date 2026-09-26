@@ -58,7 +58,7 @@ export function EnableAdvancedCard({ isAdmin }: Props) {
         // Never let an audit-logging blip report a failed enable.
       }
 
-      await dispatch(fetchAdvancedInventory());
+      await dispatch(fetchAdvancedInventory({ force: true }));
       setConfirmOpen(false);
       success("Batches & locations enabled", "Your current stock is now an opening batch at “Main”.");
     } finally {

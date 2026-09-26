@@ -50,6 +50,14 @@ since modal dropdowns use a different state key than the table.
   `_lib/advancedInventory.ts` (+ test) for any decision or validation,
   `_store/advancedInventorySlice.ts` (+ test) for state, then the component
   in `_components/`. `page.tsx` only composes views and tabs.
+- **Change how advanced-inventory state is loaded/refreshed** (freshness
+  window, `force` behavior, what a consumer gets back): edit
+  `_store/useAdvancedInventory.ts` and/or `_store/advancedInventorySlice.ts`
+  (`ADVANCED_INVENTORY_STALE_MS`, `isAdvancedInventoryFresh`, the thunk's
+  `condition`) — never add a second `useEffect`/dispatch call site outside
+  the hook. Any new consumer (Purchases/Sales modals, Phase 3) should call
+  `useAdvancedInventory()`, not `dispatch(fetchAdvancedInventory())`
+  directly, so the freshness/loading-guard logic stays in one place.
 - **Change the enable flow** (the one-way "Batches & locations" confirm
   card): `_components/EnableAdvancedCard.tsx` only — `page.tsx` just decides
   when to render it (`view === "enable"`) and passes `isAdmin`. The route it
@@ -107,14 +115,32 @@ since modal dropdowns use a different state key than the table.
   third tab or new per-tab local state, keep this "always mounted, hidden
   toggles visibility" pattern rather than reintroducing conditional
   mounting.
-- **Advanced inventory state is page-loaded, not layout-hydrated.**
-  `page.tsx` dispatches `fetchAdvancedInventory()` itself, only when
-  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored — unlike
-  `state.inventory`, `state.advancedInventory` is never touched by
+- **Advanced inventory state is loaded via `useAdvancedInventory()`, not
+  layout-hydrated (Task 2, 2026-09-26 — previously `page.tsx` dispatched the
+  thunk itself, see the file's history for the old shape).** Any component
+  that needs `settings`/`locations`/`platformDefaults` calls the hook —
+  unlike `state.inventory`, `state.advancedInventory` is never touched by
   `dashboard/layout.tsx`/`StoreProvider`, so no other page and no
-  Starter/Pro tenant pays for these queries. Phase 3's Purchases/Sales
-  modals will need this state too (fulfillment location, lot data) —
-  dispatch the same thunk from them rather than moving it into `layout.tsx`.
+  Starter/Pro tenant pays for these queries. `fetchAdvancedInventory()` is a
+  **no-op while fresh** — the thunk's RTK `condition` skips it while
+  `state.advancedInventory.loading` is true, or while `loadedAt` is younger
+  than `ADVANCED_INVENTORY_STALE_MS` (60s) — so calling the hook from a
+  second place a moment after the first (e.g. opening a Purchases modal
+  right after the Inventory page loaded) reuses the existing state instead
+  of firing a duplicate request. Pass `{ force: true }` (via the hook's
+  `reload()`, or `dispatch(fetchAdvancedInventory({ force: true }))`
+  directly) after a write that changes settings/locations *outside* the
+  slice's own reducers (e.g. `EnableAdvancedCard`'s enable-route call) —
+  those reducers (`locationSaved`/`settingsSet`/etc.) already update state
+  synchronously and don't need a forced reload. A **rejected** reload
+  (`fetchAdvancedInventory.rejected`) leaves `loaded`/`settings`/
+  `locations`/`platformDefaults` untouched — only `loading`/`error` change —
+  and `advancedInventoryView` treats `error && !loaded` as the only "show
+  the error card" case, so a background refresh failure after a successful
+  first load keeps rendering the last-loaded view instead of bouncing to the
+  error card; only a failure on the very first load shows it. Phase 3's
+  Purchases/Sales modals should call `useAdvancedInventory()` too, not
+  reimplement the load.
 - **An existing tenant shows the load-error card until `048` is applied.**
   Before `048_advanced_inventory_apply.sql` runs (it installs `047`'s
   tables/triggers into every existing tenant schema via

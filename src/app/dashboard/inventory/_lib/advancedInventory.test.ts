@@ -61,6 +61,11 @@ describe("advancedInventoryView", () => {
     expect(advancedInventoryView("business", { ...idle, loaded: true, settings: settings() })).toBe("active");
     expect(advancedInventoryView("trial", { ...idle, loaded: true, settings: settings() })).toBe("active");
   });
+
+  it("keeps showing loaded data when a background refresh fails", () => {
+    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings() })).toBe("active");
+    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings({ advanced_enabled: false }) })).toBe("enable");
+  });
 });
 
 describe("sortLocations", () => {
