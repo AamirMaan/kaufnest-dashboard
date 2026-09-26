@@ -41,44 +41,55 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
     setSaving(true);
     setError(null);
 
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const values = { name: name.trim(), type };
+    try {
+      const supabase = await createTenantClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      const values = { name: name.trim(), type };
 
-    const { data, error: dbError } = location
-      ? await supabase.from("stock_locations").update(values).eq("id", location.id).select().single<StockLocation>()
-      : await supabase
-          .from("stock_locations")
-          .insert({ ...values, created_by: user?.id ?? null })
-          .select()
-          .single<StockLocation>();
+      const { data, error: dbError } = location
+        ? await supabase.from("stock_locations").update(values).eq("id", location.id).select().single<StockLocation>()
+        : await supabase
+            .from("stock_locations")
+            .insert({ ...values, created_by: user?.id ?? null })
+            .select()
+            .single<StockLocation>();
 
-    if (dbError || !data) {
-      const message =
-        dbError?.code === "23505"
-          ? "A location with this name already exists."
-          : inventoryErrorMessage(dbError, "Could not save the location.");
+      if (dbError || !data) {
+        const message =
+          dbError?.code === "23505"
+            ? "A location with this name already exists."
+            : inventoryErrorMessage(dbError, "Could not save the location.");
+        setError(message);
+        toastError("Location not saved", message);
+        return;
+      }
+
+      dispatch(locationSaved(data));
+      if (user) {
+        // Best-effort: a failed audit write must not turn a saved location into an error.
+        try {
+          const log = await writeAuditLog(supabase, {
+            userId: user.id,
+            userEmail: user.email ?? "",
+            action: location ? "update" : "create",
+            entityType: "stock_location",
+            entityId: data.id,
+            metadata: location ? { before: location, after: data } : { name: data.name, type: data.type },
+          });
+          if (log) dispatch(addAuditLog(log));
+        } catch {
+          // swallow — see comment above
+        }
+      }
+      success(location ? "Location updated" : "Location added", `“${data.name}” was saved.`);
+      onClose();
+    } catch {
+      const message = "Please check your connection and try again.";
       setError(message);
       toastError("Location not saved", message);
+    } finally {
       setSaving(false);
-      return;
     }
-
-    dispatch(locationSaved(data));
-    if (user) {
-      const log = await writeAuditLog(supabase, {
-        userId: user.id,
-        userEmail: user.email ?? "",
-        action: location ? "update" : "create",
-        entityType: "stock_location",
-        entityId: data.id,
-        metadata: location ? { before: location, after: data } : { name: data.name, type: data.type },
-      });
-      if (log) dispatch(addAuditLog(log));
-    }
-    success(location ? "Location updated" : "Location added", `“${data.name}” was saved.`);
-    setSaving(false);
-    onClose();
   }
 
   return (

@@ -198,3 +198,14 @@ since modal dropdowns use a different state key than the table.
   successful enable must not make the user think the enable failed, leave
   the modal open, or skip the state refresh that flips `page.tsx`'s view to
   `"active"`.
+- **`LocationModal.handleSubmit` wraps the whole body in try/catch/finally
+  (fix round 1, 2026-09-26)**, not just the DB-error branch. A *thrown* error
+  (network failure, `createTenantClient`/`auth.getUser` rejecting) is
+  different from a *returned* `dbError` — without the wrapper it left
+  `saving` stuck `true`, which disables Cancel and gates `onClose` (Escape/
+  backdrop check `!saving`), stranding the user in the modal with no way out.
+  `finally { setSaving(false) }` is the only place `saving` is reset now — do
+  not add back a `setSaving(false)` before an early `return`. The audit write
+  after a successful save is in its own inner try/catch that swallows errors
+  (mirrors `EnableAdvancedCard`, commit a826115) — a failure there must not
+  turn an already-saved location into an error toast.
