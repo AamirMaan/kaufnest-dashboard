@@ -205,7 +205,20 @@ pagination is active.
   `settings.default_location_id`, `locations` (id + active flag), and
   `platformDefaults` (sorted by platform) so the card remounts, and its
   internal draft resets to the saved values, whenever any of those change
-  elsewhere (a location edited/deactivated, a reload).
+  elsewhere (a location edited/deactivated, a reload). **(Task 9,
+  2026-09-26)** An "On hand" column sits between Type and Status:
+  `fetchLocationStockTotals()` (`_store/stockByLocation.ts`) is called from
+  an effect keyed by `locationsKey = locations.map((l) => l.id).join(",")`;
+  the result is stored as `{ key, data }` and only read at render when
+  `key === locationsKey` (the same derived-not-reset pattern as
+  `ProductsTab.tsx`'s stock effect and `FulfillmentLocationField.tsx`, to
+  satisfy `react-hooks/set-state-in-effect`). A dropship location always
+  renders "—" (it never holds stock); any other location renders "—" while
+  `data` is still `null` — both the initial load and a failed RPC call (the
+  totals RPC isn't rolled out to every tenant yet, migration 049 pending) —
+  and the numeric total, styled with the danger-text color when negative,
+  once loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
+  render's fallback).
 - `_components/FulfillmentDefaultsCard.tsx` (Phase 2 Task 7, 2026-09-26) —
   `FulfillmentDefaultsCard({ isAdmin })`: the tenant's default location plus
   a default fulfillment location per sales platform (`INVENTORY_PLATFORMS` —
