@@ -205,6 +205,8 @@ pagination is active.
   log (`entityType: "stock_location"`, before/after diff on edit). Wired into
   `_components/LocationsTab.tsx` (Task 6, 2026-09-26) for both add and edit.
 - `_lib/landedCost.ts` (+ test) — TS mirror of the SQL landed-unit-cost formula, for the purchase form read-out (Phase 3).
+- `_lib/stockByLocation.ts` (+ test, Task 3 Phase 3 2026-09-26) — pure pivot logic: `stockColumns(locations)` shows the first `MAX_STOCK_COLUMNS` active stock-holding locations (alphabetical) plus "Other" when more exist; `summarizeStock(rows, columns)` groups `inventory_stock_by_location` RPC output by product and projects each location to its table column (shown + "Other" for the rest), summing qty/value per cell; `locationTotals(rows)` maps location id to qty for `inventory_stock_by_location_totals` RPC results. Exports types `StockByLocationRow`, `StockColumn`, `ProductStockSummary`, and constants `MAX_STOCK_COLUMNS`, `OTHER_COLUMN_ID`.
+- `_store/stockByLocation.ts` (Task 3 Phase 3 2026-09-26) — `fetchStockByLocation(productIds)` pages product ids through the `inventory_stock_by_location` RPC in batches of `STOCK_RPC_MAX_IDS` (200), chunking to avoid the RPC's id-count limit; `fetchLocationStockTotals()` calls the `inventory_stock_by_location_totals` RPC and pivots to a map via `locationTotals()`.
 
 ## How stock levels actually update — read this before changing anything here
 
