@@ -15,8 +15,9 @@ since modal dropdowns use a different state key than the table.
   `_components/AddProductModal.tsx` (create form),
   `_components/EditProductModal.tsx` (edit form + before/after audit diff),
   `_store/inventorySlice.ts` only if the shape stored in Redux changes, and
-  `src/types/index.ts` for the `Product` type. Also check `page.tsx` if the
-  field needs to render in the table. If the new field is needed in Sales/
+  `src/types/index.ts` for the `Product` type. Also check
+  `_components/ProductsTab.tsx` if the field needs to render in the table.
+  If the new field is needed in Sales/
   Purchases dropdowns, also add it to `ProductSelector` in `inventorySlice.ts`
   and update the selector query in `layout.tsx`.
 - **Change how stock is calculated**: don't touch this folder — edit the
@@ -32,8 +33,9 @@ since modal dropdowns use a different state key than the table.
   upsell/loading/error banners).
 - **Change reducer logic**: `_store/inventorySlice.ts` + its test.
 - **Change pagination**: `_store/inventorySlice.ts` (`fetchInventoryPage` thunk),
-  `page.tsx` (`<Pagination>` wiring), `src/app/dashboard/layout.tsx` (initial
-  paginated fetch), `src/store/StoreProvider.tsx` (`hydrateProducts` call).
+  `_components/ProductsTab.tsx` (`<Pagination>` wiring),
+  `src/app/dashboard/layout.tsx` (initial paginated fetch),
+  `src/store/StoreProvider.tsx` (`hydrateProducts` call).
 - **Change selector list fields**: `_store/inventorySlice.ts` (`ProductSelector`
   type + `fetchInventorySelectors` select clause), `layout.tsx` (selector
   query columns), `src/app/dashboard/sales/_components/productOptions.ts`

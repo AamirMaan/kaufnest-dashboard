@@ -91,7 +91,7 @@ UI arrives in Phases 2–4 (see the spec's "Phasing").
 Server-side pagination is active. The flow for a search change or page navigation is:
 
 1. User types in the search box or clicks Prev/Next in `<Pagination>`.
-2. `page.tsx` dispatches `fetchInventoryPage({ page, pageSize, search })`.
+2. `_components/ProductsTab.tsx` dispatches `fetchInventoryPage({ page, pageSize, search })`.
 3. The thunk builds a Supabase query with optional `.ilike("name", ...)` +
    `.select("*", { count: "exact" })` + `.range(from, to)`, then dispatches
    `hydratePage` on success.
