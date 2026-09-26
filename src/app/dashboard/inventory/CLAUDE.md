@@ -110,6 +110,24 @@ pagination is active.
   `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
   Takes `{ addOpen, onAddClose }` — the "+ Add Product" button and its open
   state live in `page.tsx` (the header), this component only owns the modal.
+  **(Phase 3 Task 7, 2026-09-26)** When `useAdvancedInventory().active` is
+  true, the "Current Stock" column is replaced with one column per
+  `stockColumns(advanced.locations)` entry (first 4 active, stock-holding
+  locations by name, plus "Other" when more exist), then "Total", then
+  "Avg. cost" — Starter/Pro tenants and Business tenants that haven't
+  enabled advanced inventory see byte-for-byte the old single "Current
+  Stock" column. **Per-page RPC call, not per-product**: an effect keyed by
+  `${advanced.active}:${pageIds}` (`pageIds` = the current page's product
+  ids joined with `,`) calls `fetchStockByLocation(pageIds.split(","))`
+  (`_store/stockByLocation.ts`) once per table page/search/pagination
+  change, then pivots the result via `summarizeStock(rows, columnsForStock)`
+  (`_lib/stockByLocation.ts`) into `Record<productId, ProductStockSummary>`.
+  A load failure renders the mapped `inventoryErrorMessage` text as a small
+  red line under the count row (`stockError`) — this is the designed
+  fallback for tenants whose schema doesn't have the RPC yet (migration 049
+  pending), not an error state to "fix". The Status badge is unaffected —
+  it still reads legacy `current_stock`/`reorder_threshold`, so it can
+  disagree with the new Total column (see SKILL.md gotcha).
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only

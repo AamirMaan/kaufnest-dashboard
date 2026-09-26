@@ -81,6 +81,14 @@ since modal dropdowns use a different state key than the table.
   Mounted by `_components/LocationsTab.tsx` after its `DataTable`, remounted
   via a `defaultsKey` built from `settings`/`locations`/`platformDefaults` so
   its internal draft always starts from the current saved values.
+- **Change the Products tab's stock-per-location columns** (Phase 3 Task 7,
+  2026-09-26): `_components/ProductsTab.tsx` only (the column-building block
+  + the `StockRequestResult`-keyed effect + the `StockCell` component).
+  `_lib/stockByLocation.ts` (`stockColumns`, `summarizeStock`,
+  `MAX_STOCK_COLUMNS`, `OTHER_COLUMN_ID`) owns the pivot/column-selection
+  logic; `_store/stockByLocation.ts` (`fetchStockByLocation`) owns the RPC
+  call and id-chunking. Change the column count/labels in `_lib/`, not by
+  hand-editing the map in `ProductsTab.tsx`.
 
 ## Test command
 
@@ -367,3 +375,35 @@ since modal dropdowns use a different state key than the table.
   wraps any number of children, so `FulfillmentDefaultsCard` uses it directly
   for all 5 platform `Field`s (the last one sits alone on its own row) rather
   than hand-rolling a separate grid div.
+- **`ProductsTab`'s stock-per-location "Total" column can legitimately
+  disagree with legacy `current_stock` (Phase 3 Task 7, 2026-09-26).** Total
+  is summed from ledger lots (`inventory_stock_by_location` RPC); the
+  Status badge (Low stock/In stock) still reads `current_stock`/
+  `reorder_threshold` directly and was deliberately left alone — the two
+  can differ for a product with edits from before advanced inventory was
+  enabled (see the "Rows created before `enabled_at`" gotcha above). Don't
+  "fix" the Status badge to read the new Total column — that would tie a
+  Starter/Pro-safe piece of UI to a Business-only data source.
+- **The stock-by-location fetch is keyed, not reset with a synchronous
+  `setState` in the effect body.** The brief's original effect called
+  `setStock({})`/`setStockError(null)` synchronously whenever `pageIds`
+  changed, which trips this repo's `react-hooks/set-state-in-effect` lint
+  rule (an error, not a warning). `ProductsTab.tsx` instead stores one
+  `StockRequestResult | null` (`{ key, data, error }`) and derives the
+  rendered `stock`/`stockError` by comparing `stockResult.key` against the
+  current `${advanced.active}:${pageIds}` request key — a stale result from
+  a superseded page/search change is simply ignored by the comparison
+  instead of being cleared by a setState call, and both `setStockResult`
+  calls that do exist are inside the fetch's `.then`/`.catch`, not the
+  effect body itself. Same pattern as
+  `sales/_components/FulfillmentLocationField.tsx`'s `stock` state — copy
+  that shape for any future per-page-request state in this feature rather
+  than resetting state synchronously in an effect.
+- **The RPC isn't live on any tenant schema yet (migration 049 pending).**
+  An active Business tenant today gets `fetchStockByLocation`'s mapped
+  `inventoryErrorMessage` text in the red `stockError` line under the count
+  row — this is the intended fallback, not a bug, until 049 is applied.
+  Manual check once it is live: an active tenant shows per-location columns
+  + Other/Total/Avg. cost, a shortfall renders a red negative number in its
+  cell, and a Starter/Pro tenant (or a Business tenant that hasn't enabled
+  advanced inventory) still sees the plain "Current Stock" column.
