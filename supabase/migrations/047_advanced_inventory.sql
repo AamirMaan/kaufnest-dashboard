@@ -725,7 +725,10 @@ BEGIN
       END IF;
       IF NEW.product_id IS NOT NULL AND NEW.fulfillment_location_id IS NULL THEN
         NEW.fulfillment_location_id := coalesce(
-          (SELECT location_id FROM platform_location_defaults WHERE platform = NEW.platform),
+          (SELECT d.location_id
+             FROM platform_location_defaults d
+             JOIN stock_locations sl ON sl.id = d.location_id
+            WHERE d.platform = NEW.platform AND sl.is_active),
           v_s.default_location_id);
       END IF;
       RETURN NEW;
@@ -777,7 +780,10 @@ BEGIN
           END IF;
           v_loc := coalesce(
             NEW.fulfillment_location_id,
-            (SELECT location_id FROM platform_location_defaults WHERE platform = NEW.platform),
+            (SELECT d.location_id
+               FROM platform_location_defaults d
+               JOIN stock_locations sl ON sl.id = d.location_id
+              WHERE d.platform = NEW.platform AND sl.is_active),
             v_s.default_location_id);
           IF NOT inv_location_holds_stock(v_loc) THEN
             RETURN NULL;
@@ -1106,6 +1112,47 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION %1$I.inv_location_before_delete();
   $sql$, schema_name);
 
+  -- ── 6. Read RPCs for the Inventory/Purchases/Sales UI (Phase 3) ──
+  -- SECURITY INVOKER on purpose: they read stock_lots through the caller's
+  -- RLS (stock_lots_select = tenant member), so they can never widen access.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.inventory_stock_by_location(p_product_ids uuid[])
+    RETURNS TABLE (product_id uuid, location_id uuid, qty integer, positive_qty integer, stock_value numeric)
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    #variable_conflict use_column
+    BEGIN
+      IF coalesce(cardinality(p_product_ids), 0) > 200 THEN
+        RAISE EXCEPTION 'Too many products requested (max 200)';
+      END IF;
+      RETURN QUERY
+        SELECT l.product_id,
+               l.location_id,
+               sum(l.qty_remaining)::integer,
+               sum(greatest(l.qty_remaining, 0))::integer,
+               round(sum(greatest(l.qty_remaining, 0) * l.unit_cost), 2)
+        FROM stock_lots l
+        WHERE l.product_id = ANY (p_product_ids)
+        GROUP BY l.product_id, l.location_id;
+    END;
+    $func$;
+
+    CREATE OR REPLACE FUNCTION %1$I.inventory_stock_by_location_totals()
+    RETURNS TABLE (location_id uuid, qty integer)
+    LANGUAGE plpgsql STABLE
+    SET search_path = %1$I
+    AS $func$
+    #variable_conflict use_column
+    BEGIN
+      RETURN QUERY
+        SELECT l.location_id, sum(l.qty_remaining)::integer
+        FROM stock_lots l
+        GROUP BY l.location_id;
+    END;
+    $func$;
+  $sql$, schema_name);
+
   -- ── Lock down EXECUTE on every function this installer owns ──
   -- Tenant schemas are exposed through PostgREST, so any function in them
   -- is callable as an RPC unless EXECUTE is revoked. Trigger functions do
@@ -1126,6 +1173,10 @@ BEGIN
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.enable_advanced_inventory() TO service_role', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.set_default_location(uuid) TO authenticated', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.set_opening_lot_cost(uuid, numeric) TO authenticated', schema_name);
+  EXECUTE format('REVOKE ALL ON FUNCTION %I.inventory_stock_by_location(uuid[]) FROM PUBLIC, anon', schema_name);
+  EXECUTE format('REVOKE ALL ON FUNCTION %I.inventory_stock_by_location_totals() FROM PUBLIC, anon', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location(uuid[]) TO authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location_totals() TO authenticated', schema_name);
 END;
 $inst$;
 
