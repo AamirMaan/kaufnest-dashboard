@@ -15,8 +15,9 @@ since modal dropdowns use a different state key than the table.
   `_components/AddProductModal.tsx` (create form),
   `_components/EditProductModal.tsx` (edit form + before/after audit diff),
   `_store/inventorySlice.ts` only if the shape stored in Redux changes, and
-  `src/types/index.ts` for the `Product` type. Also check `page.tsx` if the
-  field needs to render in the table. If the new field is needed in Sales/
+  `src/types/index.ts` for the `Product` type. Also check
+  `_components/ProductsTab.tsx` if the field needs to render in the table.
+  If the new field is needed in Sales/
   Purchases dropdowns, also add it to `ProductSelector` in `inventorySlice.ts`
   and update the selector query in `layout.tsx`.
 - **Change how stock is calculated**: don't touch this folder — edit the
@@ -26,11 +27,15 @@ since modal dropdowns use a different state key than the table.
 - **Change which records can link to a product**: that UI lives in the
   Purchases/Sales `Add`/`Edit` modals (`product_id` `Select`), not here.
   Those modals now read from `s.inventory.selectorItems` (not `.items`).
-- **Change list/table behavior or search**: `page.tsx` only.
+- **Change list/table behavior or search**: `_components/ProductsTab.tsx`
+  only (moved out of `page.tsx` in Phase 2 Task 3 — `page.tsx` is now just
+  the shell: header, "+ Add Product" open state, and the advanced-inventory
+  upsell/loading/error banners).
 - **Change reducer logic**: `_store/inventorySlice.ts` + its test.
 - **Change pagination**: `_store/inventorySlice.ts` (`fetchInventoryPage` thunk),
-  `page.tsx` (`<Pagination>` wiring), `src/app/dashboard/layout.tsx` (initial
-  paginated fetch), `src/store/StoreProvider.tsx` (`hydrateProducts` call).
+  `_components/ProductsTab.tsx` (`<Pagination>` wiring),
+  `src/app/dashboard/layout.tsx` (initial paginated fetch),
+  `src/store/StoreProvider.tsx` (`hydrateProducts` call).
 - **Change selector list fields**: `_store/inventorySlice.ts` (`ProductSelector`
   type + `fetchInventorySelectors` select clause), `layout.tsx` (selector
   query columns), `src/app/dashboard/sales/_components/productOptions.ts`
@@ -40,6 +45,34 @@ since modal dropdowns use a different state key than the table.
   (installer) + `supabase/tests/advanced_inventory.test.sql`; if the landed-cost
   formula changes, also `_lib/landedCost.ts` + its test. Re-run the installer on
   all tenants (see `supabase/SKILL.md`).
+- **Change the batches & locations UI** (views, locations, fulfillment
+  defaults — the general pattern the three bullets below follow):
+  `_lib/advancedInventory.ts` (+ test) for any decision or validation,
+  `_store/advancedInventorySlice.ts` (+ test) for state, then the component
+  in `_components/`. `page.tsx` only composes views and tabs.
+- **Change the enable flow** (the one-way "Batches & locations" confirm
+  card): `_components/EnableAdvancedCard.tsx` only — `page.tsx` just decides
+  when to render it (`view === "enable"`) and passes `isAdmin`. The route it
+  calls (`POST /api/inventory/enable-advanced`) is Phase 1 (Task 1) and out
+  of scope here unless the request/response contract itself changes.
+- **Change the Locations tab** (list, add/edit, deactivate/reactivate,
+  delete): `_components/LocationsTab.tsx` (list + row actions + the shared
+  `DeleteConfirmModal`), `_components/LocationModal.tsx` (add/edit form),
+  `_lib/advancedInventory.ts` (`sortLocations`, `LOCATION_TYPE_LABELS`,
+  `locationDeactivationBlocker`, `isLocationNameTaken`), and
+  `_store/advancedInventorySlice.ts` (`locationSaved`/`locationRemoved`).
+  `page.tsx` only owns which tab is active and the "+ Add Location" button's
+  open state — see the `InventoryTabs` gotcha below.
+- **Change fulfillment defaults** (the tenant's default location + per-platform
+  default fulfillment location, Task 7, 2026-09-26):
+  `_components/FulfillmentDefaultsCard.tsx` (the form itself),
+  `_lib/advancedInventory.ts` (`fulfillmentDraftFrom`, `platformDefaultChanges`,
+  `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`, `defaultLocationOptions`,
+  `platformLocationOptions`, `INVENTORY_PLATFORMS`, `PLATFORM_LABELS`), and
+  `_store/advancedInventorySlice.ts` (`settingsSet`, `platformDefaultsMerged`).
+  Mounted by `_components/LocationsTab.tsx` after its `DataTable`, remounted
+  via a `defaultsKey` built from `settings`/`locations`/`platformDefaults` so
+  its internal draft always starts from the current saved values.
 
 ## Test command
 
@@ -47,6 +80,48 @@ since modal dropdowns use a different state key than the table.
 
 ## Gotchas
 
+- **`page.tsx` is a shell, not the list view (Phase 2 Task 3, 2026-09-26)** —
+  the products table/search/pagination/modals live in
+  `_components/ProductsTab.tsx`, which takes `{ addOpen, onAddClose }` (the
+  "+ Add Product" button and its `useState` stay in `page.tsx`'s
+  `<PageHeader>` since the tab doesn't own the header). `page.tsx` itself
+  only decides which of `upsell`/`loading`/`error` banners to show above
+  `<ProductsTab>`, via `advancedInventoryView(plan, advanced)`. Don't add
+  table/search logic back into `page.tsx` — it belongs in `ProductsTab`.
+- **`InventoryTabs` is wired into `page.tsx` (Task 6, 2026-09-26)**, but only
+  when `view === "active"` — the tab strip only ever appears once advanced
+  inventory is actually on, never above the upsell/loading/error/enable
+  states. `page.tsx` owns `tab`/`addLocationOpen` state and the "+ Add
+  Location" vs "+ Add Product" `PageHeader` action switch
+  (`showLocations = view === "active" && tab === "locations"`); the tab's
+  own component (`LocationsTab`) only owns its modals, not the header.
+- **Both tab panels stay mounted; only `hidden` toggles (fix round 1,
+  2026-09-26).** `page.tsx` renders `<ProductsTab>` and `<LocationsTab>`
+  unconditionally once `view === "active"` and flips the native `hidden`
+  attribute on each one's wrapper instead of conditionally rendering one or
+  the other. Do not go back to `showLocations ? <LocationsTab/> :
+  <ProductsTab/>` — that was tried and reverted because it unmounted
+  whichever tab wasn't active, resetting `ProductsTab`'s local search state
+  and discarding any in-progress `LocationsTab`/`LocationModal` state
+  (an open Add/Edit form, a typed name) on every tab switch. If you add a
+  third tab or new per-tab local state, keep this "always mounted, hidden
+  toggles visibility" pattern rather than reintroducing conditional
+  mounting.
+- **Advanced inventory state is page-loaded, not layout-hydrated.**
+  `page.tsx` dispatches `fetchAdvancedInventory()` itself, only when
+  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored — unlike
+  `state.inventory`, `state.advancedInventory` is never touched by
+  `dashboard/layout.tsx`/`StoreProvider`, so no other page and no
+  Starter/Pro tenant pays for these queries. Phase 3's Purchases/Sales
+  modals will need this state too (fulfillment location, lot data) —
+  dispatch the same thunk from them rather than moving it into `layout.tsx`.
+- **An existing tenant shows the load-error card until `048` is applied.**
+  Before `048_advanced_inventory_apply.sql` runs (it installs `047`'s
+  tables/triggers into every existing tenant schema via
+  `install_advanced_inventory`), a Business/trial tenant provisioned before
+  Phase 1 has no `inventory_settings` table at all, so
+  `fetchAdvancedInventory` fails and `page.tsx` shows the Retry card — by
+  design, not a bug to chase.
 - **Two separate Redux keys**: `state.inventory.items` = paginated table data;
   `state.inventory.selectorItems` = full list for modal dropdowns. Never use
   `items` in Sales/Purchases modals — it is page-limited and will show only
@@ -153,3 +228,116 @@ since modal dropdowns use a different state key than the table.
   revert can recompute a sibling sale's COGS; if that sibling is in the same
   multi-row DELETE, Postgres raises "tuple to be deleted was already
   modified". The app deletes one sale at a time.
+- **`EnableAdvancedCard` has no local "success" state.** After a successful
+  `POST /api/inventory/enable-advanced`, it dispatches
+  `fetchAdvancedInventory()` and relies entirely on the reloaded
+  `inventory_settings.advanced_enabled` flipping `advancedInventoryView`'s
+  result from `"enable"` to `"active"` in `page.tsx` — that's what makes the
+  card disappear (its own `open`/`enabling` state only controls the confirm
+  modal, not whether the card itself renders). If you ever change
+  `fetchAdvancedInventory` to skip refetching `inventory_settings`, this
+  card will keep showing "Enable" after a successful enable.
+- **`EnableAdvancedCard.handleEnable` deliberately has two separate
+  try/catches, not one wrapping everything (fix round 1, 2026-09-26).** The
+  outer one only covers the `fetch` + JSON parse + `!res.ok` check, and is
+  the only place that shows the "Could not enable batches & locations"
+  toast. Once the route returns 200, the switch is already flipped
+  server-side, so nothing after that point may report a failure: the audit
+  write runs in its own try/catch that silently swallows errors (it's
+  best-effort — `writeAuditLog` already returns `null` on its own DB
+  errors), and `fetchAdvancedInventory()`/`setConfirmOpen(false)`/the
+  success toast always run unconditionally after it. Don't merge these back
+  into one try/catch — a network blip on `auth.getUser()` after a
+  successful enable must not make the user think the enable failed, leave
+  the modal open, or skip the state refresh that flips `page.tsx`'s view to
+  `"active"`.
+- **`LocationModal.handleSubmit` wraps the whole body in try/catch/finally
+  (fix round 1, 2026-09-26)**, not just the DB-error branch. A *thrown* error
+  (network failure, `createTenantClient`/`auth.getUser` rejecting) is
+  different from a *returned* `dbError` — without the wrapper it left
+  `saving` stuck `true`, which disables Cancel and gates `onClose` (Escape/
+  backdrop check `!saving`), stranding the user in the modal with no way out.
+  `finally { setSaving(false) }` is the only place `saving` is reset now — do
+  not add back a `setSaving(false)` before an early `return`. The audit write
+  after a successful save is in its own inner try/catch that swallows errors
+  (mirrors `EnableAdvancedCard`, commit a826115) — a failure there must not
+  turn an already-saved location into an error toast.
+- **`DeleteConfirmModal.handleConfirm` only resets its own `deleting`/`reason`
+  state on the line *after* `await onConfirm(reason)` returns** (Task 6,
+  2026-09-26) — it does not wrap that await in try/catch itself. So if the
+  `onConfirm` handler you pass in ever lets a rejection escape,
+  `DeleteConfirmModal` gets stuck showing "Deleting…" forever with Cancel
+  disabled, and there is no way out short of a page refresh. Any
+  `onConfirm` passed to this shared modal (see `LocationsTab.handleDelete`)
+  must therefore catch everything itself and resolve normally — never
+  `throw`/reject — even on failure, so the shared modal's own cleanup runs.
+  On failure, leave the caller-owned target state (e.g. `deleteTarget`) set
+  so the modal (whose `open` prop is driven by that state) stays open for
+  retry — `DeleteConfirmModal` still clears the typed reason text on every
+  settle, success or failure, which is existing shared behavior, not
+  something this feature works around.
+- **`LocationModal` can also be refused on an edit, not just a name
+  collision.** Switching a location's `type` to or from `dropship` while it
+  has stock history (any `stock_lots` row) is blocked by the DB trigger
+  (`inv_location_before_update`, `INV_LOCATION_IN_USE` — "This location has
+  stock history, so it cannot be switched to or from dropship"), same as
+  clearing the tenant default's active flag or switching its type to
+  dropship (`INV_DEFAULT_LOCATION`, fires on either). Both surface through
+  `LocationModal`'s existing `inventoryErrorMessage(dbError, …)` fallback
+  branch — no special-casing needed, but don't assume a save failure here is
+  always the `23505` name-collision case.
+- **Deactivating a location is blocked while it is the tenant default OR
+  any platform's default (`locationDeactivationBlocker`)** — the sale
+  trigger would otherwise keep routing that platform's orders to an
+  inactive location; there is no DB guard for the platform case yet (Phase
+  3 follow-up).
+- **Location delete uses `.select('id')` so an RLS no-op (0 rows, no error)
+  is reported as a failure, not a success.**
+- **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
+  Redux** — it's plain `useState`, seeded from the store once via
+  `fulfillmentDraftFrom` and reset by remounting the whole component
+  (`defaultsKey`, below) rather than by a reducer action. This keeps a
+  half-typed, unsaved draft out of global state.
+- **`FulfillmentDefaultsCard` (Task 7, 2026-09-26) writes through two
+  different paths in one submit** — `set_default_location` RPC for the
+  tenant default, a plain `.upsert(..., { onConflict: "platform" })` on
+  `platform_location_defaults` for the per-platform rows — and only when
+  each actually changed (`platformDefaultChanges` diffs against the store,
+  not against the initial draft, so a value changed then changed back is
+  correctly seen as "no change"). The whole submit body is one
+  try/catch/finally: a *thrown* error (network/auth) shows the generic
+  "Please check your connection and try again." and `finally` always resets
+  `saving`; a *returned* Supabase/RPC `error` shows
+  `inventoryErrorMessage(error, …)` instead.
+  **Store dispatches are deliberately deferred to the end of the submit
+  (fix round 1, 2026-09-26), not fired right after each write succeeds.**
+  `LocationsTab`'s `defaultsKey` (the remount key passed to this card) is
+  built from `settings.default_location_id` + `platformDefaults`, so
+  dispatching `settingsSet`/`platformDefaultsMerged` mid-submit changes that
+  key and remounts the card *while the second write is still in flight* —
+  the freshly-mounted instance's `saving` starts back at `false` (Save
+  becomes clickable again, enabling a double submit) and its draft resets
+  to the just-partially-saved store state, silently dropping whatever the
+  user had typed for the write that hadn't happened yet. Instead,
+  `handleSubmit` records what succeeded in locals (`savedDefaultId`,
+  `savedChanges`) and only dispatches them once every write (and the
+  best-effort audit log) has finished, right before the success toast — the
+  remount then happens exactly once, after the save is actually done, which
+  is the intended "draft resets to saved values" behavior. **Partial-success
+  honesty** still applies on the one early-return path that needs it: if the
+  RPC succeeds but the platform upsert then fails, that one `return` branch
+  dispatches `settingsSet` itself (the RPC's effect is genuinely saved and
+  the store must reflect it) and the toast title/copy switches to "Platform
+  defaults not saved" / "The default location was saved, but the platform
+  defaults could not be saved — please re-select and save again." — telling
+  the user their platform selections need re-entering, since that remount
+  will drop them. The post-success audit write (`entityType:
+  "inventory_settings"`, `metadata.event: "fulfillment_defaults_changed"`)
+  is in its own inner try/catch that swallows errors, same pattern as every
+  other mutation in this folder — see `EnableAdvancedCard`'s entry above for
+  why.
+- **`Row` (`components/ui/FormFields.tsx`) is just a 2-column CSS grid, not a
+  2-child-only layout primitive** — `grid grid-cols-1 sm:grid-cols-2 gap-4`
+  wraps any number of children, so `FulfillmentDefaultsCard` uses it directly
+  for all 5 platform `Field`s (the last one sits alone on its own row) rather
+  than hand-rolling a separate grid div.

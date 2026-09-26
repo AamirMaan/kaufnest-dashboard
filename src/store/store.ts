@@ -3,6 +3,7 @@ import { salesSlice } from "@/app/dashboard/sales/_store/salesSlice";
 import { expensesSlice } from "@/app/dashboard/expenses/_store/expensesSlice";
 import { purchasesSlice } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { inventorySlice } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { advancedInventorySlice } from "@/app/dashboard/inventory/_store/advancedInventorySlice";
 import { auditLogsSlice } from "./slices/auditLogsSlice";
 import { usersSlice } from "@/app/dashboard/users/_store/usersSlice";
 import { currentUserSlice } from "./slices/currentUserSlice";
@@ -22,6 +23,7 @@ export const makeStore = () =>
       expenses: expensesSlice.reducer,
       purchases: purchasesSlice.reducer,
       inventory: inventorySlice.reducer,
+      advancedInventory: advancedInventorySlice.reducer,
       auditLogs: auditLogsSlice.reducer,
       users: usersSlice.reducer,
       currentUser: currentUserSlice.reducer,

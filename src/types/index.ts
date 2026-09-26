@@ -263,6 +263,11 @@ export interface StockTransfer {
   created_at: string;
 }
 
+export interface PlatformLocationDefault {
+  platform: Platform;
+  location_id: string;
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 export type AuditAction =
@@ -275,7 +280,7 @@ export type AuditAction =
   | "permission_change"
   | "status_change";
 
-export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment" | "stock_location" | "stock_transfer";
+export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment" | "stock_location" | "stock_transfer" | "inventory_settings";
 
 export interface AuditLog {
   id: string;

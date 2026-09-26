@@ -343,6 +343,11 @@ platform-default changes, transfers, enabling and opening-cost edits all call
    RPC + route, types. No UI; invisible to users.
 2. **Locations + enable flow** — gating flag, Inventory tabs shell, Locations
    tab, platform defaults, enable card.
+
+   Phase 2 status: implemented per
+   `docs/superpowers/plans/2026-09-26-advanced-inventory-phase-2-locations-ui.md`.
+   The Locations table's per-location on-hand units column moves to Phase 3,
+   together with the per-location stock RPC.
 3. **Purchases & Sales** — purchase location + landed costs, sale "Fulfilled
    from", FIFO COGS on order page, product lots drawer.
 4. **Transfers** — tab, modal, preview.
