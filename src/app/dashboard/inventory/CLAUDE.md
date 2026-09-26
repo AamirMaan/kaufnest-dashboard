@@ -39,9 +39,27 @@ pagination is active.
   a modal can only be opened via its own tab's header button or an in-panel
   row action, both of which are covered by the other tab's `hidden` panel
   (unreachable, not just visually hidden), and any already-open modal's
-  backdrop blocks clicks on the tab strip underneath it — so a hidden tab's
-  modal can never be open while the tab itself is hidden. No extra
-  open-state reset was added for this.
+  backdrop blocks mouse clicks on the tab strip underneath it, so a mouse
+  user can't reach a hidden tab's modal that way. `Modal.tsx` has no focus
+  trap, though, so keyboard Tab from the header's action button can still
+  reach the tab strip and switch tabs while a modal is open — the modal
+  itself stays open, just behind the now-hidden panel. Known minor/cosmetic
+  gap, not a functional bug; no extra open-state reset was added for this.
+- `_lib/advancedInventory.ts` (+ test) — pure logic behind the batches &
+  locations UI: `advancedInventoryView` (upsell/loading/error/enable/active),
+  `sortLocations`/`defaultLocationOptions`/`platformLocationOptions`,
+  `isLocationNameTaken`, `locationDeactivationBlocker`, and the fulfillment-
+  defaults draft helpers (`fulfillmentDraftFrom`, `platformDefaultChanges`,
+  `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`), plus the
+  `LOCATION_TYPE_LABELS`/`INVENTORY_PLATFORMS`/`PLATFORM_LABELS` label maps.
+- `_store/advancedInventorySlice.ts` (+ test) — `state.advancedInventory`
+  (`settings`, `locations`, `platformDefaults`, `loaded`/`loading`/`error`).
+  `fetchAdvancedInventory` is the only thunk (loads all three via
+  `Promise.all`; locations are paged through `fetchAllRows` since they're
+  user-created and unbounded). `locationSaved`/`locationRemoved`/
+  `settingsSet`/`platformDefaultsMerged` are plain reducers, dispatched by
+  the components below once their own write succeeds. Dispatched only by
+  `page.tsx` — see `SKILL.md`'s gotcha on why it isn't layout-hydrated.
 - `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
   locations" card shown when `advancedInventoryView` returns `"enable"`
   (entitled tenant, `inventory_settings.advanced_enabled` still false).
@@ -114,12 +132,17 @@ pagination is active.
   `_lib/advancedInventory.ts`). Submitting calls the `set_default_location`
   RPC (only if the default location changed) then upserts
   `platform_location_defaults` for whichever platforms changed
-  (`platformDefaultChanges`), dispatching `settingsSet`/
-  `platformDefaultsMerged` after each succeeds and writing one
-  `inventory_settings` audit log entry (`metadata.event:
-  "fulfillment_defaults_changed"`) on overall success. Non-admins see the
-  same form with every `Select` disabled and no Save button. See
-  `SKILL.md`'s gotcha for the two-write partial-success handling.
+  (`platformDefaultChanges`). The two writes' `settingsSet`/
+  `platformDefaultsMerged` dispatches are deferred until both writes (and
+  the audit log) have settled — the card records what actually saved and
+  fires them once, right before the success toast, so the `defaultsKey`
+  remount happens after the save is done, not mid-submit. On an
+  RPC-ok/upsert-fail partial success it dispatches only `settingsSet`, since
+  that write already committed. Writes one `inventory_settings` audit log
+  entry (`metadata.event: "fulfillment_defaults_changed"`) on overall
+  success. Non-admins see the same form with every `Select` disabled and no
+  Save button. See `SKILL.md`'s gotcha for the full two-write
+  partial-success handling.
 - `_components/AdvancedInventoryUpsellCard.tsx` — Business-plan upsell card
   shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; pure
   presentational, links to `/dashboard/settings`.
@@ -187,7 +210,8 @@ Tables: `stock_locations`, `inventory_settings`, `platform_location_defaults`,
 platform defaults (admin), transfers. Everything else is trigger/RPC-owned.
 Trigger errors are `INV_*: detail` — show them with
 `inventoryErrorMessage()` (`src/lib/inventory/inventoryErrors.ts`).
-UI arrives in Phases 2–4 (see the spec's "Phasing").
+Phase 2 (this UI) shows the enable flow and the Locations tab; batches on
+purchases/sales (Phase 3) and transfers (Phase 4) come next.
 
 ## Pagination data flow
 

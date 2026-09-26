@@ -45,6 +45,11 @@ since modal dropdowns use a different state key than the table.
   (installer) + `supabase/tests/advanced_inventory.test.sql`; if the landed-cost
   formula changes, also `_lib/landedCost.ts` + its test. Re-run the installer on
   all tenants (see `supabase/SKILL.md`).
+- **Change the batches & locations UI** (views, locations, fulfillment
+  defaults — the general pattern the three bullets below follow):
+  `_lib/advancedInventory.ts` (+ test) for any decision or validation,
+  `_store/advancedInventorySlice.ts` (+ test) for state, then the component
+  in `_components/`. `page.tsx` only composes views and tabs.
 - **Change the enable flow** (the one-way "Batches & locations" confirm
   card): `_components/EnableAdvancedCard.tsx` only — `page.tsx` just decides
   when to render it (`view === "enable"`) and passes `isAdmin`. The route it
@@ -102,6 +107,21 @@ since modal dropdowns use a different state key than the table.
   third tab or new per-tab local state, keep this "always mounted, hidden
   toggles visibility" pattern rather than reintroducing conditional
   mounting.
+- **Advanced inventory state is page-loaded, not layout-hydrated.**
+  `page.tsx` dispatches `fetchAdvancedInventory()` itself, only when
+  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored — unlike
+  `state.inventory`, `state.advancedInventory` is never touched by
+  `dashboard/layout.tsx`/`StoreProvider`, so no other page and no
+  Starter/Pro tenant pays for these queries. Phase 3's Purchases/Sales
+  modals will need this state too (fulfillment location, lot data) —
+  dispatch the same thunk from them rather than moving it into `layout.tsx`.
+- **An existing tenant shows the load-error card until `048` is applied.**
+  Before `048_advanced_inventory_apply.sql` runs (it installs `047`'s
+  tables/triggers into every existing tenant schema via
+  `install_advanced_inventory`), a Business/trial tenant provisioned before
+  Phase 1 has no `inventory_settings` table at all, so
+  `fetchAdvancedInventory` fails and `page.tsx` shows the Retry card — by
+  design, not a bug to chase.
 - **Two separate Redux keys**: `state.inventory.items` = paginated table data;
   `state.inventory.selectorItems` = full list for modal dropdowns. Never use
   `items` in Sales/Purchases modals — it is page-limited and will show only
@@ -256,6 +276,20 @@ since modal dropdowns use a different state key than the table.
   retry — `DeleteConfirmModal` still clears the typed reason text on every
   settle, success or failure, which is existing shared behavior, not
   something this feature works around.
+- **`LocationModal` can also be refused on an edit, not just a name
+  collision.** Switching a location's `type` to or from `dropship` while it
+  has stock history (any `stock_lots` row) is blocked by the DB trigger
+  (`inv_location_before_update`, `INV_LOCATION_IN_USE` — "This location has
+  stock history, so it cannot be switched to or from dropship"), same as
+  clearing the tenant default's active flag (`INV_DEFAULT_LOCATION`). Both
+  surface through `LocationModal`'s existing `inventoryErrorMessage(dbError,
+  …)` fallback branch — no special-casing needed, but don't assume a save
+  failure here is always the `23505` name-collision case.
+- **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
+  Redux** — it's plain `useState`, seeded from the store once via
+  `fulfillmentDraftFrom` and reset by remounting the whole component
+  (`defaultsKey`, below) rather than by a reducer action. This keeps a
+  half-typed, unsaved draft out of global state.
 - **`FulfillmentDefaultsCard` (Task 7, 2026-09-26) writes through two
   different paths in one submit** — `set_default_location` RPC for the
   tenant default, a plain `.upsert(..., { onConflict: "platform" })` on
