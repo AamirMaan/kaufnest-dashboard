@@ -758,6 +758,20 @@ BEGIN
           -- consumption rule (e.g. marked returned + restocked, or that
           -- undone). The BEFORE trigger leaves their location empty, so
           -- resolve it here: own, else platform default, else default.
+          --
+          -- Movements exist only while the sale consumes via an earlier
+          -- un-restock (below). Marking it returned + restocked again undoes
+          -- exactly those movements, wherever its location now resolves to:
+          -- checked BEFORE the product/location guards so a repointed
+          -- platform default can never strand them (and a later DELETE
+          -- would otherwise put the units back a second time).
+          IF NEW.status = 'returned' AND coalesce(NEW.restock, false)
+             AND NOT (OLD.status = 'returned' AND coalesce(OLD.restock, false))
+             AND EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = NEW.id) THEN
+            PERFORM inv_revert_sale(NEW.id);
+            PERFORM inv_set_cogs(NEW.id, 0);
+            RETURN NULL;
+          END IF;
           IF NEW.product_id IS NULL THEN
             RETURN NULL;
           END IF;
@@ -771,12 +785,7 @@ BEGIN
           v_old_consumes := inv_sale_consumes(OLD.product_id, v_loc, OLD.quantity, OLD.status, OLD.restock);
           v_new_consumes := inv_sale_consumes(NEW.product_id, v_loc, NEW.quantity, NEW.status, NEW.restock);
           IF v_old_consumes AND NOT v_new_consumes THEN
-            IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = NEW.id) THEN
-              -- It consumed via an earlier un-restock below: undo exactly
-              -- that, never add units twice.
-              PERFORM inv_revert_sale(NEW.id);
-              PERFORM inv_set_cogs(NEW.id, 0);
-            ELSE
+            IF NOT EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = NEW.id) THEN
               -- Units sold before enable come back as a zero-cost opening lot.
               PERFORM inv_lock(NEW.product_id, v_loc);
               INSERT INTO stock_lots (product_id, location_id, kind, received_at, unit_cost, qty_received, qty_remaining)

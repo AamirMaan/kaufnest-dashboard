@@ -188,7 +188,9 @@ A lot "holds stock" only when its location's `type <> 'dropship'`.
   the sale has a product, and its location (own, else platform default, else
   `default_location_id`, resolved in the AFTER trigger) holds stock. Into
   returned + restocked: if the sale has movements (from an earlier un-restock)
-  they are reverted and `cogs_amount` set to 0; otherwise the `OLD.quantity`
+  they are reverted and `cogs_amount` set to 0, checked before the
+  product/location conditions so it happens wherever the location now
+  resolves; otherwise the `OLD.quantity`
   units come back as a new zero-cost `opening` lot (`received_at` 1970) with an
   `opening` movement, settling any shortfall at that location, and
   `cogs_amount` is left alone. Out of it (restock undone): FIFO consumes

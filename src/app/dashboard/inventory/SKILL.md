@@ -115,7 +115,9 @@ since modal dropdowns use a different state key than the table.
     `opening` lot (`received_at` 1970) at that location, settling any
     shortfall there; `cogs_amount` untouched. If the sale already has
     movements (from an earlier un-restock) those are reverted instead and COGS
-    set to 0 — never both, or the units would be counted twice.
+    set to 0 — never both, or the units would be counted twice. That revert
+    runs before the product/location checks, so it happens even if the
+    platform default now points somewhere else (e.g. a dropship location).
   - out of it (restock undone) → FIFO consumes the units back (usually the
     zero-cost opening lot) and COGS is recomputed from those movements.
   A later DELETE reverts any such movements (the BEFORE DELETE revert has no
