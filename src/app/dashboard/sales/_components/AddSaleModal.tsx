@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -16,7 +16,10 @@ import { vatAmountFromGross } from "@/lib/utils/currency";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
+import { FulfillmentLocationField } from "./FulfillmentLocationField";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
+import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import type { Platform, Currency, Sale, Purchase, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -106,6 +109,12 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const [purchaseDate, setPurchaseDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const advanced = useAdvancedInventory();
+  const [fulfillment, setFulfillment] = useState({ id: "", touched: false });
+  const onFulfillmentChange = useCallback(
+    (id: string, touched: boolean) => setFulfillment({ id, touched }),
+    []
+  );
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -128,6 +137,8 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
+  const tracksStock = advanced.active && !!form.product_id;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) return setError("Product name is required.");
@@ -136,135 +147,149 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const status = form.status === "other" ? form.customStatus.trim() : form.status;
-    const restock = status === "returned" ? form.restock : false;
+    try {
+      const status = form.status === "other" ? form.customStatus.trim() : form.status;
+      const restock = status === "returned" ? form.restock : false;
 
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
+      const supabase = await createTenantClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
-    const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
-    const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
-    const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
-    const buyerName = form.buyer_name.trim() || null;
-    const shippingAddressLine1 = form.shipping_address_line1.trim() || null;
-    const shippingAddressLine2 = form.shipping_address_line2.trim() || null;
-    const shippingCity = form.shipping_city.trim() || null;
-    const shippingState = form.shipping_state.trim() || null;
-    const shippingPostalCode = form.shipping_postal_code.trim() || null;
-    const shippingCountry = form.shipping_country.trim() || null;
-    const buyerPhone = form.buyer_phone.trim() || null;
-    const buyerEmail = form.buyer_email.trim() || null;
+      const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
+      const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
+      const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+      const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
+      const buyerName = form.buyer_name.trim() || null;
+      const shippingAddressLine1 = form.shipping_address_line1.trim() || null;
+      const shippingAddressLine2 = form.shipping_address_line2.trim() || null;
+      const shippingCity = form.shipping_city.trim() || null;
+      const shippingState = form.shipping_state.trim() || null;
+      const shippingPostalCode = form.shipping_postal_code.trim() || null;
+      const shippingCountry = form.shipping_country.trim() || null;
+      const buyerPhone = form.buyer_phone.trim() || null;
+      const buyerEmail = form.buyer_email.trim() || null;
 
-    const { data, error: dbError } = await supabase
-      .from("sales")
-      .insert({
-        platform: form.platform,
-        product_name: form.product_name.trim(),
-        product_id: form.product_id || null,
-        quantity: qty,
-        unit_price: price,
-        total_amount: total,
-        currency: form.currency,
-        date: form.date,
-        description: form.description.trim() || null,
-        created_by: user!.id,
-        vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
-        shipping_cost: shippingCost,
-        shipping_charged: shippingCharged,
-        advertising_fee: advertisingFee,
-        platform_fee: platformFee,
-        status,
-        restock,
-        buyer_name: buyerName,
-        shipping_address_line1: shippingAddressLine1,
-        shipping_address_line2: shippingAddressLine2,
-        shipping_city: shippingCity,
-        shipping_state: shippingState,
-        shipping_postal_code: shippingPostalCode,
-        shipping_country: shippingCountry,
-        buyer_phone: buyerPhone,
-        buyer_email: buyerEmail,
-      })
-      .select()
-      .single<Sale>();
-
-    if (dbError) {
-      setError(dbError.message);
-      setSaving(false);
-      return;
-    }
-
-    dispatch(addSale(data));
-
-    // Create linked purchase if price was provided
-    const rawPrice = parseFloat(purchasePrice);
-    if (showLinkedPurchase && !isNaN(rawPrice) && rawPrice > 0) {
-      const purchaseQty = parseInt(form.quantity, 10) || 1;
-      const { data: newPurchase, error: purchaseError } = await supabase
-        .from("purchases")
+      const { data, error: dbError } = await supabase
+        .from("sales")
         .insert({
-          product_name: form.product_name,
+          platform: form.platform,
+          product_name: form.product_name.trim(),
           product_id: form.product_id || null,
-          quantity: purchaseQty,
-          unit_price: rawPrice / purchaseQty,
-          total_amount: rawPrice,
+          quantity: qty,
+          unit_price: price,
+          total_amount: total,
           currency: form.currency,
-          vendor: purchaseVendor.trim() || null,
-          date: purchaseDate,
-          description: null,
-          vat_rate: null,
-          vat_amount: null,
-          sale_id: data.id,
+          date: form.date,
+          description: form.description.trim() || null,
           created_by: user!.id,
+          vat_rate: form.vat_included ? vatRate : null,
+          vat_amount: form.vat_included ? vatAmount : null,
+          shipping_cost: shippingCost,
+          shipping_charged: shippingCharged,
+          advertising_fee: advertisingFee,
+          platform_fee: platformFee,
+          status,
+          restock,
+          buyer_name: buyerName,
+          shipping_address_line1: shippingAddressLine1,
+          shipping_address_line2: shippingAddressLine2,
+          shipping_city: shippingCity,
+          shipping_state: shippingState,
+          shipping_postal_code: shippingPostalCode,
+          shipping_country: shippingCountry,
+          buyer_phone: buyerPhone,
+          buyer_email: buyerEmail,
+          ...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {}),
         })
         .select()
-        .single();
+        .single<Sale>();
 
-      if (!purchaseError && newPurchase) {
-        dispatch(addPurchase(newPurchase as Purchase));
-        const purchaseLog = await writeAuditLog(supabase, {
+      if (dbError) {
+        setError(inventoryErrorMessage(dbError, "Could not save the order."));
+        return;
+      }
+
+      dispatch(addSale(data));
+
+      // Create linked purchase if price was provided
+      const rawPrice = parseFloat(purchasePrice);
+      if (showLinkedPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+        const purchaseQty = parseInt(form.quantity, 10) || 1;
+        const { data: newPurchase, error: purchaseError } = await supabase
+          .from("purchases")
+          .insert({
+            product_name: form.product_name,
+            product_id: form.product_id || null,
+            quantity: purchaseQty,
+            unit_price: rawPrice / purchaseQty,
+            total_amount: rawPrice,
+            currency: form.currency,
+            vendor: purchaseVendor.trim() || null,
+            date: purchaseDate,
+            description: null,
+            vat_rate: null,
+            vat_amount: null,
+            sale_id: data.id,
+            created_by: user!.id,
+          })
+          .select()
+          .single();
+
+        if (!purchaseError && newPurchase) {
+          dispatch(addPurchase(newPurchase as Purchase));
+          try {
+            const purchaseLog = await writeAuditLog(supabase, {
+              userId: user!.id,
+              userEmail: user!.email ?? "",
+              action: "create",
+              entityType: "purchase",
+              entityId: newPurchase.id,
+              metadata: { linked_to_sale: data.id },
+            });
+            if (purchaseLog) dispatch(addAuditLog(purchaseLog));
+          } catch {
+            // swallow — the linked purchase itself already saved successfully
+          }
+        } else if (purchaseError) {
+          toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+        }
+      }
+
+      // Re-fetch only the linked product to reflect the stock-sync trigger result.
+      if (data.product_id) {
+        const { data: freshProduct } = await supabase
+          .from("products").select("*").eq("id", data.product_id).single<Product>();
+        if (freshProduct) dispatch(updateProduct(freshProduct));
+      }
+
+      try {
+        const log = await writeAuditLog(supabase, {
           userId: user!.id,
           userEmail: user!.email ?? "",
           action: "create",
-          entityType: "purchase",
-          entityId: newPurchase.id,
-          metadata: { linked_to_sale: data.id },
+          entityType: "sale",
+          entityId: data.id,
+          metadata: { product_name: data.product_name, platform: data.platform, total_amount: data.total_amount },
         });
-        if (purchaseLog) dispatch(addAuditLog(purchaseLog));
-      } else if (purchaseError) {
-        toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+        if (log) dispatch(addAuditLog(log));
+      } catch {
+        // swallow — the sale itself already saved successfully
       }
+
+      setForm(makeDefaults(defaultVatRate));
+      setShowFees(false);
+      setShowShipping(false);
+      setShowLinkedPurchase(false);
+      setPurchasePrice("");
+      setPurchaseVendor("");
+      setPurchaseDate(new Date().toISOString().split("T")[0]);
+      setFulfillment({ id: "", touched: false });
+      onSuccess?.(data.product_name);
+      onClose();
+    } catch (err) {
+      setError(inventoryErrorMessage(err, "Could not save the order. Please check your connection and try again."));
+    } finally {
+      setSaving(false);
     }
-
-    // Re-fetch only the linked product to reflect the stock-sync trigger result.
-    if (data.product_id) {
-      const { data: freshProduct } = await supabase
-        .from("products").select("*").eq("id", data.product_id).single<Product>();
-      if (freshProduct) dispatch(updateProduct(freshProduct));
-    }
-
-    const log = await writeAuditLog(supabase, {
-      userId: user!.id,
-      userEmail: user!.email ?? "",
-      action: "create",
-      entityType: "sale",
-      entityId: data.id,
-      metadata: { product_name: data.product_name, platform: data.platform, total_amount: data.total_amount },
-    });
-    if (log) dispatch(addAuditLog(log));
-
-    setForm(makeDefaults(defaultVatRate));
-    setShowFees(false);
-    setShowShipping(false);
-    setShowLinkedPurchase(false);
-    setPurchasePrice("");
-    setPurchaseVendor("");
-    setPurchaseDate(new Date().toISOString().split("T")[0]);
-    setSaving(false);
-    onSuccess?.(data.product_name);
-    onClose();
   }
 
   function handleClose() {
@@ -276,6 +301,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
     setPurchasePrice("");
     setPurchaseVendor("");
     setPurchaseDate(new Date().toISOString().split("T")[0]);
+    setFulfillment({ id: "", touched: false });
     onClose();
   }
 
@@ -356,6 +382,18 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             />
           </Field>
         </Row>
+
+        {tracksStock && (
+          <FulfillmentLocationField
+            productId={form.product_id}
+            platform={form.platform}
+            quantity={qty}
+            value={fulfillment.id}
+            touched={fulfillment.touched}
+            onChange={onFulfillmentChange}
+            disabled={saving}
+          />
+        )}
 
         <Row>
           <Field label="Quantity" required>

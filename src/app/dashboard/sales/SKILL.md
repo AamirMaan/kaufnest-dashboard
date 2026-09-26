@@ -87,11 +87,21 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `isEbayIntegrationSyncedSale` (the eligibility predicate both ends share).
   Full contract in `src/lib/integrations/SKILL.md`'s "eBay order status
   push-back" section; see the gotchas below before changing any of it.
+- **Change the "Fulfilled from" location field or its shortage/dropship
+  warning** (advanced inventory, Business plan, Phase 3 Task 5): pure logic
+  in `_components/fulfillmentLocation.ts` + its colocated test
+  (`suggestedFulfillmentLocationId`, `fulfillmentStockWarning`,
+  `fulfillmentWarningText`); the field itself in
+  `_components/FulfillmentLocationField.tsx`; wiring in
+  `_components/AddSaleModal.tsx`/`EditSaleModal.tsx` (`tracksStock` +
+  `fulfillment` state). See "Gotchas — advanced inventory fulfillment
+  location" below before touching any of it.
 
 ## Test command
 
 `npx jest dashboard/sales` — runs `_store/salesSlice.test.ts` and
-`_components/orderMath.test.ts` (and any other `*.test.ts` colocated here).
+`_components/orderMath.test.ts` (and any other `*.test.ts` colocated here,
+including `_components/fulfillmentLocation.test.ts`).
 The push-back eligibility predicate is tested with the shared filters:
 `npx jest lib/utils/filters`.
 
@@ -597,6 +607,59 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   values" since they only need `sale` and `companyProfile`, not a new hook.
   If you add another role gate or another on-demand fetch to this page,
   follow the same placement, not the Derived Values section.
+
+## Gotchas — advanced inventory fulfillment location
+
+- **`suggestedFulfillmentLocationId` must mirror the DB trigger exactly**
+  (`inv_sale_before_write`, migration 047): platform default if that
+  location is active, else the tenant's `inventory_settings.default_location_id`,
+  else `""`. If the trigger's fallback logic ever changes, update this pure
+  function (`_components/fulfillmentLocation.ts`) in the same commit — the
+  suggestion shown in the UI and the location the DB actually assigns must
+  never diverge, or a user could believe an order shipped from a location
+  it didn't.
+- **`FulfillmentLocationField`'s suggestion effect requires a stable
+  `onChange`.** The effect's dependency array includes `onChange`; a
+  caller that passes an inline arrow function re-runs the "follow the
+  platform default" effect every render, which is harmless but wasteful —
+  both modals memoize it with `useCallback(() => setFulfillment(...), [])`.
+  Don't inline `onChange={(id, touched) => ...}` at the call site.
+- **The shortage warning is advisory only — it never blocks the save.**
+  `fetchStockByLocation`'s `.catch()` sets `available` back to `null`
+  (silently) rather than surfacing an error, and `fulfillmentStockWarning`
+  treats `available === null` as "don't warn." An order can always be saved
+  with fewer units on hand than ordered — the missing units are costed at
+  the last known price by the FIFO trigger once stock arrives (that's what
+  the warning text says). Don't add a blocking validation here.
+- **`tracksStock` gates the payload spread, not just the field's
+  visibility** — `...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {})`
+  in both modals' insert/update. A Starter/Pro tenant, or a Business tenant
+  with advanced inventory not yet enabled, or a sale with no linked
+  product, sends byte-for-byte the same payload as before this feature —
+  same pattern Purchases' Task 4 established (`purchaseInventoryPayload`).
+- **`cogs_amount` is never sent** — it's written only by the FIFO
+  consumption trigger; neither modal's payload includes it (same rule as
+  `Purchase`'s trigger-owned columns).
+- **`EditSaleModal`'s `fulfillment` state is seeded from `sale` once, in
+  `useState`'s initializer** — like `form`/`showFees`/etc. in this same
+  component, it does NOT reset when the modal is closed and reopened for
+  the same sale (`key={sale.id}` in `[id]/page.tsx`, `key={editTarget?.id
+  ?? "edit-sale"}` in `page.tsx` — the key only changes across different
+  sales). This matches every other piece of local state in this modal; it
+  is not a new gap introduced by this feature.
+- Both modals wrap the whole `handleSubmit` body in
+  `try { … } catch (err) { setError(inventoryErrorMessage(err, …)) } finally
+  { setSaving(false) }` (added by this feature — `AddSaleModal`'s submit had
+  no such wrapper before) so a thrown error (network/auth failure, not just
+  a returned `{ error }`) can't leave the button stuck on "Saving…" forever.
+  DB errors from the `sales` insert/update are mapped with
+  `inventoryErrorMessage(dbError, "Could not save the order.")` instead of
+  the raw Postgres message — this is what surfaces `INV_INSUFFICIENT`/
+  `INV_DROPSHIP_LOCATION`-style trigger errors as user-safe copy. The
+  post-success `writeAuditLog` calls (sale + linked purchase) each have
+  their own inner swallowing try/catch, matching Purchases' pattern — an
+  audit-write failure must never turn an already-saved order into a failure
+  toast.
 
 ## Gotchas
 

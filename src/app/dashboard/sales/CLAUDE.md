@@ -139,6 +139,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+- `_components/fulfillmentLocation.ts` (+ colocated `.test.ts`, Phase 3 Task
+  5, 2026-09-26) — pure helpers behind the "Fulfilled from" field:
+  `suggestedFulfillmentLocationId(platform, platformDefaults, locations,
+  settings)` (mirrors the `inv_sale_before_write` DB trigger — platform
+  default if active, else the tenant default, else `""`),
+  `fulfillmentStockWarning(location, available, quantity)` → `StockWarning`
+  (`{ kind: "short", available } | { kind: "dropship" } | null`), and
+  `fulfillmentWarningText(warning, locationName)`. See "Advanced inventory:
+  fulfillment location" below.
+- `_components/FulfillmentLocationField.tsx` (Phase 3 Task 5, 2026-09-26) —
+  the location `Select` + shortage/dropship warning, rendered by both
+  modals. Reads `useAdvancedInventory()` for `locations`/`platformDefaults`/
+  `settings`, calls `fetchStockByLocation([productId])`
+  (`inventory/_store/stockByLocation.ts`) to look up units on hand at the
+  chosen location. See "Advanced inventory: fulfillment location" below.
 
 ## Delete gating (super_admin + permission overrides)
 
@@ -406,6 +421,58 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
   deferred to the future label-purchase feature that actually needs a valid
   country code.
 
+## Advanced inventory: fulfillment location (Business plan, Phase 3 Task 5)
+
+Both `AddSaleModal.tsx` and `EditSaleModal.tsx` call `useAdvancedInventory()`
+(`inventory/_store/useAdvancedInventory.ts`) and compute a local
+`tracksStock = advanced.active && !!form.product_id` — true only once the
+order both belongs to a Business tenant with advanced inventory enabled and
+links an inventory product.
+
+`<FulfillmentLocationField>` renders **only when `tracksStock` is true** —
+for Starter/Pro tenants, a Business tenant that hasn't enabled advanced
+inventory yet, or an order with no inventory link, the form is
+byte-for-byte what it was before this feature: no new field renders and the
+insert/update payload gets `{}` spread in via
+`...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {})`.
+`cogs_amount` is never sent — it's trigger-owned (FIFO consumption), same
+rule as `Purchase`'s trigger-owned landed-cost columns.
+
+- **`fulfillment` local state is `{ id: string; touched: boolean }`.**
+  `touched` starts `false` in `AddSaleModal` and flips `true` the moment the
+  user picks a location themselves (or immediately if the sale being edited
+  already had one — `EditSaleModal` seeds `touched:
+  !!sale?.fulfillment_location_id`). While `!touched`,
+  `FulfillmentLocationField`'s own effect keeps re-suggesting the location
+  as `platform`/`platformDefaults`/`locations`/`settings` change (e.g. the
+  user switches Platform before picking a location) — see its
+  `suggestedFulfillmentLocationId` call in `_components/fulfillmentLocation.ts`.
+- **`""` (empty) `fulfillment.id` means "let the DB trigger decide"** — same
+  convention as Purchases' `locationId`. `inv_sale_before_write` fills
+  `fulfillment_location_id` from the platform default (if active) else the
+  tenant default when the client sends `null`; `suggestedFulfillmentLocationId`
+  is the client-side mirror of that same fallback, purely so the UI can show
+  a sensible pre-selection and the shortage warning before the row is
+  written.
+- **The shortage/dropship warning is display-only and never blocks
+  submission** — `FulfillmentLocationField` fetches on-hand qty via
+  `fetchStockByLocation([productId])` and renders a `Badge` + explanatory
+  text (`fulfillmentWarningText`) when the location is a dropship supplier
+  or has fewer units than `qty`. A dropship location's message nudges the
+  user to link a purchase for cost of goods (dropship locations never carry
+  stock); a shortage message explains the order still saves and the missing
+  units are costed at the last known price until stock arrives (FIFO
+  shortfall-lot behavior from Phase 1). Neither one disables the submit
+  button.
+- **Both modals now wrap `handleSubmit` in `try { … } catch { … } finally
+  { setSaving(false) }`** (added by this task) and map DB errors from the
+  `sales` insert/update through `inventoryErrorMessage(dbError, "Could not
+  save the order.")` instead of the raw Postgres message — this is what
+  surfaces `INV_*` trigger errors (e.g. a location deactivated mid-edit) as
+  user-safe copy, matching Purchases' Task 4 pattern.
+- `EditSaleModal`'s before/after audit diff now includes
+  `fulfillment_location_id` alongside every other editable field.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
@@ -419,6 +486,16 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
+- `app/dashboard/inventory/_store/useAdvancedInventory` (Phase 3 Task 5) —
+  entitlement/active state + `locations`/`platformDefaults`/`settings` for
+  the "Fulfilled from" field
+- `app/dashboard/inventory/_store/stockByLocation` (`fetchStockByLocation`)
+  and `app/dashboard/inventory/_lib/advancedInventory`
+  (`LOCATION_TYPE_LABELS`, `platformLocationOptions`) — consumed by
+  `_components/FulfillmentLocationField.tsx`
+- `lib/inventory/inventoryErrors` (`inventoryErrorMessage`) — maps `INV_*`
+  trigger errors (and any other DB/thrown error) to user-safe copy in both
+  modals
 - `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
   by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
   direct-URL load; `state.purchases.items` is also read for the fast path
