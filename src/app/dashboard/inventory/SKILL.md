@@ -266,17 +266,34 @@ since modal dropdowns use a different state key than the table.
   try/catch/finally: a *thrown* error (network/auth) shows the generic
   "Please check your connection and try again." and `finally` always resets
   `saving`; a *returned* Supabase/RPC `error` shows
-  `inventoryErrorMessage(error, …)` instead. **Partial-success honesty**: if
-  the RPC succeeds (dispatches `settingsSet` immediately) but the platform
-  upsert then fails, the toast title/copy switches to "Platform defaults not
-  saved" / "The default location was saved, but the platform defaults could
-  not be saved." — the store is never rolled back to match a misleading
-  all-or-nothing failure toast, because the RPC's effect was already
-  dispatched and is genuinely saved. The post-success audit write
-  (`entityType: "inventory_settings"`, `metadata.event:
-  "fulfillment_defaults_changed"`) is in its own inner try/catch that
-  swallows errors, same pattern as every other mutation in this folder — see
-  `EnableAdvancedCard`'s entry above for why.
+  `inventoryErrorMessage(error, …)` instead.
+  **Store dispatches are deliberately deferred to the end of the submit
+  (fix round 1, 2026-09-26), not fired right after each write succeeds.**
+  `LocationsTab`'s `defaultsKey` (the remount key passed to this card) is
+  built from `settings.default_location_id` + `platformDefaults`, so
+  dispatching `settingsSet`/`platformDefaultsMerged` mid-submit changes that
+  key and remounts the card *while the second write is still in flight* —
+  the freshly-mounted instance's `saving` starts back at `false` (Save
+  becomes clickable again, enabling a double submit) and its draft resets
+  to the just-partially-saved store state, silently dropping whatever the
+  user had typed for the write that hadn't happened yet. Instead,
+  `handleSubmit` records what succeeded in locals (`savedDefaultId`,
+  `savedChanges`) and only dispatches them once every write (and the
+  best-effort audit log) has finished, right before the success toast — the
+  remount then happens exactly once, after the save is actually done, which
+  is the intended "draft resets to saved values" behavior. **Partial-success
+  honesty** still applies on the one early-return path that needs it: if the
+  RPC succeeds but the platform upsert then fails, that one `return` branch
+  dispatches `settingsSet` itself (the RPC's effect is genuinely saved and
+  the store must reflect it) and the toast title/copy switches to "Platform
+  defaults not saved" / "The default location was saved, but the platform
+  defaults could not be saved — please re-select and save again." — telling
+  the user their platform selections need re-entering, since that remount
+  will drop them. The post-success audit write (`entityType:
+  "inventory_settings"`, `metadata.event: "fulfillment_defaults_changed"`)
+  is in its own inner try/catch that swallows errors, same pattern as every
+  other mutation in this folder — see `EnableAdvancedCard`'s entry above for
+  why.
 - **`Row` (`components/ui/FormFields.tsx`) is just a 2-column CSS grid, not a
   2-child-only layout primitive** — `grid grid-cols-1 sm:grid-cols-2 gap-4`
   wraps any number of children, so `FulfillmentDefaultsCard` uses it directly

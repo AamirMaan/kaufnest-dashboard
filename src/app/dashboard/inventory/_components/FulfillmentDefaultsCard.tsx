@@ -22,7 +22,7 @@ import {
   platformLocationOptions,
   type FulfillmentDraft,
 } from "../_lib/advancedInventory";
-import type { Platform } from "@/types";
+import type { Platform, PlatformLocationDefault } from "@/types";
 
 const FORM_ID = "fulfillment-defaults-form";
 const CONNECTION_ERROR = "Please check your connection and try again.";
@@ -55,35 +55,44 @@ export function FulfillmentDefaultsCard({ isAdmin }: Props) {
     try {
       const supabase = await createTenantClient();
       const before = { defaultLocationId: settings.default_location_id, platformDefaults };
-      let defaultLocationSaved = false;
 
+      // Both writes' store dispatches are deferred until the whole submit
+      // settles (see the block at the bottom) — dispatching right after each
+      // write changes `defaultsKey` in LocationsTab mid-submit, remounting
+      // this card while a later write is still in flight (`saving` drops
+      // back to `false`, unsaved platform edits vanish, a second Save
+      // becomes clickable).
+      let savedDefaultId: string | null = null;
       if (draft.defaultLocationId !== settings.default_location_id) {
         const { error } = await supabase.rpc("set_default_location", { p_location_id: draft.defaultLocationId });
         if (error) {
           toastError("Defaults not saved", inventoryErrorMessage(error, "Could not change the default location."));
           return;
         }
-        dispatch(settingsSet({ ...settings, default_location_id: draft.defaultLocationId }));
-        defaultLocationSaved = true;
+        savedDefaultId = draft.defaultLocationId;
       }
 
       const changes = platformDefaultChanges(platformDefaults, draft);
+      let savedChanges: PlatformLocationDefault[] | null = null;
       if (changes.length > 0) {
         const { error } = await supabase.from("platform_location_defaults").upsert(changes, { onConflict: "platform" });
         if (error) {
-          // Partial-success honesty: if the default location RPC above already
-          // succeeded, that change is real and stays in the store (settingsSet
-          // already dispatched) — the toast must say only the platform defaults
-          // failed, not imply the whole save was rolled back.
+          // Partial-success honesty: the RPC above may already have
+          // committed in the database even though its dispatch was held
+          // back — dispatch it now so the store matches what was actually
+          // saved, then tell the user only the platform defaults failed.
+          if (savedDefaultId !== null) {
+            dispatch(settingsSet({ ...settings, default_location_id: savedDefaultId }));
+          }
           toastError(
-            defaultLocationSaved ? "Platform defaults not saved" : "Defaults not saved",
-            defaultLocationSaved
-              ? inventoryErrorMessage(error, "The default location was saved, but the platform defaults could not be saved.")
+            savedDefaultId !== null ? "Platform defaults not saved" : "Defaults not saved",
+            savedDefaultId !== null
+              ? inventoryErrorMessage(error, "The default location was saved, but the platform defaults could not be saved — please re-select and save again.")
               : inventoryErrorMessage(error, "Could not save the platform defaults.")
           );
           return;
         }
-        dispatch(platformDefaultsMerged(changes));
+        savedChanges = changes;
       }
 
       try {
@@ -101,6 +110,13 @@ export function FulfillmentDefaultsCard({ isAdmin }: Props) {
       } catch {
         // Best-effort: an audit failure must not turn a successful save into an error toast.
       }
+
+      // Full success: dispatch both writes now, after everything (including
+      // the audit log) has finished. LocationsTab's `defaultsKey` changes
+      // here, remounting this card with the saved values — the intended
+      // reset, now happening only once the save is actually done.
+      if (savedDefaultId !== null) dispatch(settingsSet({ ...settings, default_location_id: savedDefaultId }));
+      if (savedChanges) dispatch(platformDefaultsMerged(savedChanges));
       success("Fulfillment defaults saved", "New orders will use these locations.");
     } catch {
       toastError("Defaults not saved", CONNECTION_ERROR);
