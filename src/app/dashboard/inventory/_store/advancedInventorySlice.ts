@@ -1,19 +1,26 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import type { InventorySettings, PlatformLocationDefault, StockLocation } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
-import { fetchAllRows } from "@/lib/utils/fetchAllRows";
+import { fetchAllRowsOrThrow } from "@/lib/utils/fetchAllRows";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 
 /**
  * Batches & locations settings for the Inventory page (Business/trial only).
- * Loaded on demand by the Inventory page — not by dashboard/layout.tsx — so
- * no other page and no Starter/Pro tenant pays for these queries.
+ * Loaded on demand by `useAdvancedInventory()` — not by dashboard/layout.tsx —
+ * so no other page and no Starter/Pro tenant pays for these queries.
  */
 
-/** stock_locations grows with the tenant (user-created), so it is read with fetchAllRows. */
+/** stock_locations grows with the tenant (user-created), so it is read with fetchAllRowsOrThrow. */
 export const STOCK_LOCATIONS_CAP = 1000;
 
 const LOAD_ERROR = "Could not load batches & locations.";
+
+/** A load younger than this is reused instead of refetched (e.g. opening a modal right after the page loaded). */
+export const ADVANCED_INVENTORY_STALE_MS = 60_000;
+
+export function isAdvancedInventoryFresh(loadedAt: number | null, now: number): boolean {
+  return loadedAt !== null && now - loadedAt < ADVANCED_INVENTORY_STALE_MS;
+}
 
 interface AdvancedInventoryState {
   settings: InventorySettings | null;
@@ -22,6 +29,7 @@ interface AdvancedInventoryState {
   loaded: boolean;
   loading: boolean;
   error: string | null;
+  loadedAt: number | null;
 }
 
 const initialState: AdvancedInventoryState = {
@@ -31,11 +39,12 @@ const initialState: AdvancedInventoryState = {
   loaded: false,
   loading: false,
   error: null,
+  loadedAt: null,
 };
 
 export const fetchAdvancedInventory = createAsyncThunk(
   "advancedInventory/fetch",
-  async () => {
+  async (_arg: { force?: boolean } | undefined) => {
     const supabase = await createTenantClient();
     const [settingsRes, defaultsRes, locations] = await Promise.all([
       // Singleton row (primary key id = true).
@@ -45,7 +54,7 @@ export const fetchAdvancedInventory = createAsyncThunk(
         .maybeSingle<InventorySettings>(),
       // Structurally bounded: platform is the primary key, one row per Platform (5 max).
       supabase.from("platform_location_defaults").select("platform, location_id").returns<PlatformLocationDefault[]>(),
-      fetchAllRows<StockLocation>(
+      fetchAllRowsOrThrow<StockLocation>(
         async (from, to) =>
           await supabase
             .from("stock_locations")
@@ -53,7 +62,9 @@ export const fetchAdvancedInventory = createAsyncThunk(
             .order("name", { ascending: true })
             .range(from, to),
         STOCK_LOCATIONS_CAP
-      ),
+      ).catch((e) => {
+        throw new Error(inventoryErrorMessage(e, LOAD_ERROR));
+      }),
     ]);
     if (settingsRes.error) throw new Error(inventoryErrorMessage(settingsRes.error, LOAD_ERROR));
     if (defaultsRes.error) throw new Error(inventoryErrorMessage(defaultsRes.error, LOAD_ERROR));
@@ -61,7 +72,15 @@ export const fetchAdvancedInventory = createAsyncThunk(
       settings: settingsRes.data,
       locations,
       platformDefaults: defaultsRes.data || [],
+      loadedAt: Date.now(),
     };
+  },
+  {
+    condition: (arg, { getState }) => {
+      const s = (getState() as { advancedInventory: AdvancedInventoryState }).advancedInventory;
+      if (s.loading) return false;
+      return !!arg?.force || !isAdvancedInventoryFresh(s.loadedAt, Date.now());
+    },
   }
 );
 
@@ -101,6 +120,7 @@ export const advancedInventorySlice = createSlice({
         state.loaded = true;
         state.loading = false;
         state.error = null;
+        state.loadedAt = action.payload.loadedAt;
       })
       .addCase(fetchAdvancedInventory.rejected, (state, action) => {
         state.loading = false;

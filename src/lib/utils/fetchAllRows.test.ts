@@ -1,4 +1,4 @@
-import { fetchAllRows } from "./fetchAllRows";
+import { fetchAllRows, fetchAllRowsOrThrow } from "./fetchAllRows";
 
 function serverCappedFetcher<T>(allRows: T[], serverMaxRows: number) {
   return async (from: number, to: number) => {
@@ -100,5 +100,48 @@ describe("fetchAllRows", () => {
 
       expect(warnSpy).not.toHaveBeenCalled();
     });
+  });
+});
+
+const pageOf = (from: number, to: number, total: number) =>
+  Array.from({ length: Math.max(0, Math.min(to, total - 1) - from + 1) }, (_, i) => ({ n: from + i }));
+
+describe("fetchAllRowsOrThrow", () => {
+  it("collects every page like fetchAllRows", async () => {
+    const rows = await fetchAllRowsOrThrow(
+      async (from, to) => ({ data: pageOf(from, to, 1500), error: null, count: 1500 }),
+      5000,
+    );
+    expect(rows).toHaveLength(1500);
+  });
+
+  it("throws the page error instead of returning a partial list", async () => {
+    const boom = { message: "permission denied" };
+    await expect(
+      fetchAllRowsOrThrow(async () => ({ data: null, error: boom, count: null }), 100),
+    ).rejects.toBe(boom);
+  });
+
+  it("rejects with the page error even after earlier pages succeeded (throw, not partial list)", async () => {
+    const boom = new Error("boom on page 2");
+    let call = 0;
+    const fetchPage = async (from: number, to: number) => {
+      call += 1;
+      if (call === 2) {
+        return { data: null, error: boom, count: null };
+      }
+      const width = to - from + 1;
+      const data = Array.from({ length: width }, (_, i) => ({ id: from + i }));
+      return { data, error: null, count: 1510 };
+    };
+
+    await expect(fetchAllRowsOrThrow(fetchPage, 5000)).rejects.toBe(boom);
+  });
+});
+
+describe("fetchAllRows (unchanged behaviour)", () => {
+  it("still stops quietly on a page error", async () => {
+    const rows = await fetchAllRows(async () => ({ data: null, error: { message: "x" }, count: null }), 100);
+    expect(rows).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -18,10 +18,14 @@ import { isEbayIntegrationSyncedSale } from "@/lib/utils/filters";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
+import { FulfillmentLocationField } from "./FulfillmentLocationField";
 // Plain data constant (carrier codes), no OAuth/server secrets; needed for
 // verifier:allow server-module-in-client — the Carrier <Select> below.
 import { EBAY_CARRIER_CODES } from "@/lib/integrations/ebay/carriers";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
+import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { isTrackedByLedger } from "@/app/dashboard/inventory/_lib/advancedInventory";
 import type { Platform, Currency, Sale, Product, Purchase } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -150,6 +154,15 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const [purchaseDate, setPurchaseDate] = useState(
     sale?.date ?? new Date().toISOString().split("T")[0]
   );
+  const advanced = useAdvancedInventory();
+  const [fulfillment, setFulfillment] = useState({
+    id: sale?.fulfillment_location_id ?? "",
+    touched: !!sale?.fulfillment_location_id,
+  });
+  const onFulfillmentChange = useCallback(
+    (id: string, touched: boolean) => setFulfillment({ id, touched }),
+    []
+  );
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -177,6 +190,26 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
+  // The ledger triggers ignore UPDATEs of rows created before advanced
+  // inventory was enabled, so a legacy order gets a note, not the field —
+  // and nothing is added to its payload (no suggested location written).
+  const linkedWhileActive = advanced.active && !!form.product_id;
+  const tracksStock = linkedWhileActive && !!sale && isTrackedByLedger(sale.created_at, advanced.settings);
+
+  // Shortage warning inputs. A returned + restocked order takes no stock, so
+  // it gets no warning. When the location/product are unchanged and the saved
+  // order consumed stock there, its own units are already missing from the
+  // on-hand figure — hand them back so an unchanged order doesn't read short.
+  const currentStatus = form.status === "other" ? form.customStatus.trim() : form.status;
+  const consumes = !(currentStatus === "returned" && form.restock);
+  const originallyConsumed =
+    !!sale &&
+    !!sale.fulfillment_location_id &&
+    fulfillment.id === sale.fulfillment_location_id &&
+    form.product_id === (sale.product_id ?? "") &&
+    !(sale.status === "returned" && sale.restock);
+  const ownConsumption = originallyConsumed ? sale!.quantity : 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!sale) return;
@@ -187,197 +220,209 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
     setError(null);
     setSaving(true);
 
-    const status = form.status === "other" ? form.customStatus.trim() : form.status;
-    const restock = status === "returned" ? form.restock : false;
+    try {
+      const status = form.status === "other" ? form.customStatus.trim() : form.status;
+      const restock = status === "returned" ? form.restock : false;
 
-    // Tracking/carrier are only *written* when this save sets an eBay order to
-    // "shipped" (the one case the form collects them). For every other status
-    // the sale's existing values are passed through unchanged — nulling them on
-    // the normal shipped → delivered step would erase the record of what was
-    // pushed to eBay while `ebay_fulfillment_id` survived, and would leave a
-    // pending Retry resending nulls.
-    const isEbayShipment = isEbayOrder && status === "shipped";
-    const trackingNumber = isEbayShipment
-      ? form.trackingNumber.trim() || null
-      : sale.tracking_number;
-    const shippingCarrier = isEbayShipment ? form.carrier || null : sale.shipping_carrier;
+      // Tracking/carrier are only *written* when this save sets an eBay order to
+      // "shipped" (the one case the form collects them). For every other status
+      // the sale's existing values are passed through unchanged — nulling them on
+      // the normal shipped → delivered step would erase the record of what was
+      // pushed to eBay while `ebay_fulfillment_id` survived, and would leave a
+      // pending Retry resending nulls.
+      const isEbayShipment = isEbayOrder && status === "shipped";
+      const trackingNumber = isEbayShipment
+        ? form.trackingNumber.trim() || null
+        : sale.tracking_number;
+      const shippingCarrier = isEbayShipment ? form.carrier || null : sale.shipping_carrier;
 
-    const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
-    const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
-    const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
-    const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
-    const buyerName = form.buyer_name.trim() || null;
-    const shippingAddressLine1 = form.shipping_address_line1.trim() || null;
-    const shippingAddressLine2 = form.shipping_address_line2.trim() || null;
-    const shippingCity = form.shipping_city.trim() || null;
-    const shippingState = form.shipping_state.trim() || null;
-    const shippingPostalCode = form.shipping_postal_code.trim() || null;
-    const shippingCountry = form.shipping_country.trim() || null;
-    const buyerPhone = form.buyer_phone.trim() || null;
-    const buyerEmail = form.buyer_email.trim() || null;
+      const shippingCost = form.shipping_cost !== "" ? parseFloat(form.shipping_cost) : null;
+      const shippingCharged = form.shipping_charged !== "" ? parseFloat(form.shipping_charged) : null;
+      const advertisingFee = form.advertising_fee !== "" ? parseFloat(form.advertising_fee) : null;
+      const platformFee = form.platform_fee !== "" ? parseFloat(form.platform_fee) : null;
+      const buyerName = form.buyer_name.trim() || null;
+      const shippingAddressLine1 = form.shipping_address_line1.trim() || null;
+      const shippingAddressLine2 = form.shipping_address_line2.trim() || null;
+      const shippingCity = form.shipping_city.trim() || null;
+      const shippingState = form.shipping_state.trim() || null;
+      const shippingPostalCode = form.shipping_postal_code.trim() || null;
+      const shippingCountry = form.shipping_country.trim() || null;
+      const buyerPhone = form.buyer_phone.trim() || null;
+      const buyerEmail = form.buyer_email.trim() || null;
 
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
+      const supabase = await createTenantClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const { data, error: dbError } = await supabase
-      .from("sales")
-      .update({
-        platform: form.platform,
-        product_name: form.product_name.trim(),
-        product_id: form.product_id || null,
-        quantity: qty,
-        unit_price: price,
-        total_amount: total,
-        currency: form.currency,
-        date: form.date,
-        description: form.description.trim() || null,
-        vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
-        shipping_cost: shippingCost,
-        shipping_charged: shippingCharged,
-        advertising_fee: advertisingFee,
-        platform_fee: platformFee,
-        status,
-        restock,
-        tracking_number: trackingNumber,
-        shipping_carrier: shippingCarrier,
-        buyer_name: buyerName,
-        shipping_address_line1: shippingAddressLine1,
-        shipping_address_line2: shippingAddressLine2,
-        shipping_city: shippingCity,
-        shipping_state: shippingState,
-        shipping_postal_code: shippingPostalCode,
-        shipping_country: shippingCountry,
-        buyer_phone: buyerPhone,
-        buyer_email: buyerEmail,
-      })
-      .eq("id", sale.id)
-      .select()
-      .single<Sale>();
-
-    if (dbError) {
-      setError(dbError.message);
-      setSaving(false);
-      return;
-    }
-
-    dispatch(updateSale(data));
-
-    // Re-fetch product(s) whose stock the trigger may have changed.
-    const productIdsToRefresh = new Set(
-      [sale.product_id, data.product_id].filter((id): id is string => !!id)
-    );
-    for (const pid of productIdsToRefresh) {
-      const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
-      if (fresh) dispatch(updateProduct(fresh));
-    }
-
-    const log = await writeAuditLog(supabase, {
-      userId: user!.id,
-      userEmail: user!.email ?? "",
-      action: "update",
-      entityType: "sale",
-      entityId: sale.id,
-      metadata: {
-        before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock, tracking_number: sale.tracking_number, shipping_carrier: sale.shipping_carrier, buyer_name: sale.buyer_name, shipping_address_line1: sale.shipping_address_line1, shipping_address_line2: sale.shipping_address_line2, shipping_city: sale.shipping_city, shipping_state: sale.shipping_state, shipping_postal_code: sale.shipping_postal_code, shipping_country: sale.shipping_country, buyer_phone: sale.buyer_phone, buyer_email: sale.buyer_email },
-        after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock, tracking_number: data.tracking_number, shipping_carrier: data.shipping_carrier, buyer_name: data.buyer_name, shipping_address_line1: data.shipping_address_line1, shipping_address_line2: data.shipping_address_line2, shipping_city: data.shipping_city, shipping_state: data.shipping_state, shipping_postal_code: data.shipping_postal_code, shipping_country: data.shipping_country, buyer_phone: data.buyer_phone, buyer_email: data.buyer_email },
-        reason: form.reason.trim(),
-      },
-    });
-    if (log) dispatch(addAuditLog(log));
-
-    // Push the status change to eBay — best-effort, never blocks the save.
-    // The local sales row is already committed above; a sync failure here
-    // must never look like the edit itself failed.
-    if (isEbayOrder && sale.status !== status && (status === "shipped" || status === "cancelled")) {
-      let syncError: string | null = null;
-      try {
-        const syncRes = await fetch(`/api/integrations/ebay/orders/${sale.id}/sync-status`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status, trackingNumber, carrier: shippingCarrier }),
-        });
-        if (!syncRes.ok) {
-          const body = await syncRes.json().catch(() => ({}));
-          syncError =
-            typeof body.error === "string" && body.error
-              ? body.error
-              : `eBay sync failed (HTTP ${syncRes.status})`;
-          warning("Saved locally, eBay sync failed", body.error ?? "You can retry from the order detail page.");
-        }
-      } catch {
-        syncError = "Could not reach the eBay sync service.";
-        warning("Saved locally, eBay sync failed", "You can retry from the order detail page.");
-      }
-
-      // Persist the failure on the row ourselves. The route writes
-      // `ebay_sync_error` for failures it reaches, but it is gated by
-      // `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin
-      // only) while this modal is reachable by anyone with `update_sale`
-      // (accountant included). An accountant's save is rejected with a 403
-      // *before* the route touches the row, so without this write the order
-      // would silently never reach eBay and no admin would ever see a Retry
-      // row. Writing it here is safe: the same user just successfully updated
-      // this exact row a few lines above.
-      if (syncError) {
-        await supabase.from("sales").update({ ebay_sync_error: syncError }).eq("id", sale.id);
-      }
-
-      // Reconcile Redux with the post-sync row. `data` above is the *pre*-sync
-      // state; the ebay_* columns were written afterwards (by the route, or by
-      // the client-side write above). The order detail page renders from Redux
-      // whenever a store version exists and never re-fetches, so skipping this
-      // means the Retry row never appears — and a stale error from an earlier
-      // attempt never clears — until a hard reload.
-      const fresh = await fetchSaleById(sale.id);
-      if (fresh) dispatch(updateSale(fresh));
-    }
-
-    // Create linked purchase if user filled one in and no purchase is linked yet
-    const rawPrice = parseFloat(purchasePrice);
-    if (!linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
-      const qtyNum = parseInt(form.quantity, 10) || 1;
-      const { data: newPurchase, error: purchaseError } = await supabase
-        .from("purchases")
-        .insert({
+      const { data, error: dbError } = await supabase
+        .from("sales")
+        .update({
+          platform: form.platform,
           product_name: form.product_name.trim(),
           product_id: form.product_id || null,
-          quantity: qtyNum,
-          unit_price: rawPrice / qtyNum,
-          total_amount: rawPrice,
+          quantity: qty,
+          unit_price: price,
+          total_amount: total,
           currency: form.currency,
-          vendor: purchaseVendor.trim() || null,
-          date: purchaseDate,
-          description: null,
-          vat_rate: null,
-          vat_amount: null,
-          sale_id: sale.id,
-          created_by: user!.id,
+          date: form.date,
+          description: form.description.trim() || null,
+          vat_rate: form.vat_included ? vatRate : null,
+          vat_amount: form.vat_included ? vatAmount : null,
+          shipping_cost: shippingCost,
+          shipping_charged: shippingCharged,
+          advertising_fee: advertisingFee,
+          platform_fee: platformFee,
+          status,
+          restock,
+          tracking_number: trackingNumber,
+          shipping_carrier: shippingCarrier,
+          buyer_name: buyerName,
+          shipping_address_line1: shippingAddressLine1,
+          shipping_address_line2: shippingAddressLine2,
+          shipping_city: shippingCity,
+          shipping_state: shippingState,
+          shipping_postal_code: shippingPostalCode,
+          shipping_country: shippingCountry,
+          buyer_phone: buyerPhone,
+          buyer_email: buyerEmail,
+          ...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {}),
         })
+        .eq("id", sale.id)
         .select()
-        .single();
+        .single<Sale>();
 
-      if (!purchaseError && newPurchase) {
-        dispatch(addPurchase(newPurchase as Purchase));
-        const purchaseLog = await writeAuditLog(supabase, {
-          userId: user!.id,
-          userEmail: user!.email ?? "",
-          action: "create",
-          entityType: "purchase",
-          entityId: newPurchase.id,
-          metadata: { linked_to_sale: sale.id },
-        });
-        if (purchaseLog) dispatch(addAuditLog(purchaseLog));
-      } else if (purchaseError) {
-        toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
-        setSaving(false);
+      if (dbError) {
+        setError(inventoryErrorMessage(dbError, "Could not save the order."));
         return;
       }
-    }
 
-    setSaving(false);
-    onSuccess?.();
-    onClose();
+      dispatch(updateSale(data));
+
+      // Re-fetch product(s) whose stock the trigger may have changed.
+      const productIdsToRefresh = new Set(
+        [sale.product_id, data.product_id].filter((id): id is string => !!id)
+      );
+      for (const pid of productIdsToRefresh) {
+        const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
+        if (fresh) dispatch(updateProduct(fresh));
+      }
+
+      try {
+        const log = await writeAuditLog(supabase, {
+          userId: user!.id,
+          userEmail: user!.email ?? "",
+          action: "update",
+          entityType: "sale",
+          entityId: sale.id,
+          metadata: {
+            before: { platform: sale.platform, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock, tracking_number: sale.tracking_number, shipping_carrier: sale.shipping_carrier, buyer_name: sale.buyer_name, shipping_address_line1: sale.shipping_address_line1, shipping_address_line2: sale.shipping_address_line2, shipping_city: sale.shipping_city, shipping_state: sale.shipping_state, shipping_postal_code: sale.shipping_postal_code, shipping_country: sale.shipping_country, buyer_phone: sale.buyer_phone, buyer_email: sale.buyer_email, fulfillment_location_id: sale.fulfillment_location_id ?? null },
+            after:  { platform: data.platform, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock, tracking_number: data.tracking_number, shipping_carrier: data.shipping_carrier, buyer_name: data.buyer_name, shipping_address_line1: data.shipping_address_line1, shipping_address_line2: data.shipping_address_line2, shipping_city: data.shipping_city, shipping_state: data.shipping_state, shipping_postal_code: data.shipping_postal_code, shipping_country: data.shipping_country, buyer_phone: data.buyer_phone, buyer_email: data.buyer_email, fulfillment_location_id: data.fulfillment_location_id ?? null },
+            reason: form.reason.trim(),
+          },
+        });
+        if (log) dispatch(addAuditLog(log));
+      } catch {
+        // swallow — the sale itself already saved successfully
+      }
+
+      // Push the status change to eBay — best-effort, never blocks the save.
+      // The local sales row is already committed above; a sync failure here
+      // must never look like the edit itself failed.
+      if (isEbayOrder && sale.status !== status && (status === "shipped" || status === "cancelled")) {
+        let syncError: string | null = null;
+        try {
+          const syncRes = await fetch(`/api/integrations/ebay/orders/${sale.id}/sync-status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status, trackingNumber, carrier: shippingCarrier }),
+          });
+          if (!syncRes.ok) {
+            const body = await syncRes.json().catch(() => ({}));
+            syncError =
+              typeof body.error === "string" && body.error
+                ? body.error
+                : `eBay sync failed (HTTP ${syncRes.status})`;
+            warning("Saved locally, eBay sync failed", body.error ?? "You can retry from the order detail page.");
+          }
+        } catch {
+          syncError = "Could not reach the eBay sync service.";
+          warning("Saved locally, eBay sync failed", "You can retry from the order detail page.");
+        }
+
+        // Persist the failure on the row ourselves. The route writes
+        // `ebay_sync_error` for failures it reaches, but it is gated by
+        // `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin
+        // only) while this modal is reachable by anyone with `update_sale`
+        // (accountant included). An accountant's save is rejected with a 403
+        // *before* the route touches the row, so without this write the order
+        // would silently never reach eBay and no admin would ever see a Retry
+        // row. Writing it here is safe: the same user just successfully updated
+        // this exact row a few lines above.
+        if (syncError) {
+          await supabase.from("sales").update({ ebay_sync_error: syncError }).eq("id", sale.id);
+        }
+
+        // Reconcile Redux with the post-sync row. `data` above is the *pre*-sync
+        // state; the ebay_* columns were written afterwards (by the route, or by
+        // the client-side write above). The order detail page renders from Redux
+        // whenever a store version exists and never re-fetches, so skipping this
+        // means the Retry row never appears — and a stale error from an earlier
+        // attempt never clears — until a hard reload.
+        const fresh = await fetchSaleById(sale.id);
+        if (fresh) dispatch(updateSale(fresh));
+      }
+
+      // Create linked purchase if user filled one in and no purchase is linked yet
+      const rawPrice = parseFloat(purchasePrice);
+      if (!linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+        const qtyNum = parseInt(form.quantity, 10) || 1;
+        const { data: newPurchase, error: purchaseError } = await supabase
+          .from("purchases")
+          .insert({
+            product_name: form.product_name.trim(),
+            product_id: form.product_id || null,
+            quantity: qtyNum,
+            unit_price: rawPrice / qtyNum,
+            total_amount: rawPrice,
+            currency: form.currency,
+            vendor: purchaseVendor.trim() || null,
+            date: purchaseDate,
+            description: null,
+            vat_rate: null,
+            vat_amount: null,
+            sale_id: sale.id,
+            created_by: user!.id,
+          })
+          .select()
+          .single();
+
+        if (!purchaseError && newPurchase) {
+          dispatch(addPurchase(newPurchase as Purchase));
+          try {
+            const purchaseLog = await writeAuditLog(supabase, {
+              userId: user!.id,
+              userEmail: user!.email ?? "",
+              action: "create",
+              entityType: "purchase",
+              entityId: newPurchase.id,
+              metadata: { linked_to_sale: sale.id },
+            });
+            if (purchaseLog) dispatch(addAuditLog(purchaseLog));
+          } catch {
+            // swallow — the linked purchase itself already saved successfully
+          }
+        } else if (purchaseError) {
+          toastError("Linked purchase not saved", "Your order was saved but the linked purchase could not be created — add it manually from the Purchases page.");
+          return;
+        }
+      }
+
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setError(inventoryErrorMessage(err, "Could not save the order. Please check your connection and try again."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -430,6 +475,25 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} required />
           </Field>
         </Row>
+
+        {tracksStock && (
+          <FulfillmentLocationField
+            productId={form.product_id}
+            platform={form.platform}
+            quantity={qty}
+            value={fulfillment.id}
+            touched={fulfillment.touched}
+            onChange={onFulfillmentChange}
+            disabled={saving}
+            ownConsumption={ownConsumption}
+            consumes={consumes}
+          />
+        )}
+        {linkedWhileActive && !tracksStock && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            This order predates batch tracking, so its fulfillment location isn&apos;t tracked.
+          </p>
+        )}
 
         <Row>
           <Field label="Quantity" required>

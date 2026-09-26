@@ -1,4 +1,4 @@
-import type { Sale, Purchase } from "@/types";
+import type { Sale, Purchase, Currency } from "@/types";
 
 /**
  * Compute the net proceeds of a sale:
@@ -27,4 +27,30 @@ export function computeGrossProfit(
 ): number | null {
   if (!linkedPurchase) return null;
   return netProceeds - linkedPurchase.total_amount;
+}
+
+export interface OrderCogs {
+  amount: number;
+  currency: Currency;
+  source: "fifo" | "linked_purchase";
+}
+
+/**
+ * Cost of goods for the order page: the FIFO amount the ledger booked
+ * (sales.cogs_amount, advanced inventory) wins; otherwise a linked purchase
+ * in the order's currency (mixed currencies would be meaningless); else none.
+ */
+export function resolveOrderCogs(
+  sale: Pick<Sale, "cogs_amount" | "currency">,
+  linkedPurchase: Pick<Purchase, "total_amount" | "currency"> | null,
+): OrderCogs | null {
+  if (sale.cogs_amount != null) return { amount: sale.cogs_amount, currency: sale.currency, source: "fifo" };
+  if (linkedPurchase && linkedPurchase.currency === sale.currency) {
+    return { amount: linkedPurchase.total_amount, currency: sale.currency, source: "linked_purchase" };
+  }
+  return null;
+}
+
+export function grossProfitFromCogs(netProceeds: number, cogs: OrderCogs | null): number | null {
+  return cogs ? netProceeds - cogs.amount : null;
 }

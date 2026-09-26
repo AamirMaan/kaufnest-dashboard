@@ -11,6 +11,14 @@ import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
+import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { PurchaseInventoryFields } from "./PurchaseInventoryFields";
+import {
+  emptyPurchaseInventoryFields,
+  isPurchaseInventoryFieldsValid,
+  purchaseInventoryPayload,
+} from "../_lib/purchaseInventoryFields";
 import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -62,6 +70,8 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const advanced = useAdvancedInventory();
+  const [inv, setInv] = useState(emptyPurchaseInventoryFields);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -92,81 +102,106 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
+  const tracksStock = advanced.active && (!!form.product_id || (form.add_to_inventory && isNewProductName));
+  const defaultLocationName = advanced.locations.find((l) => l.id === advanced.settings?.default_location_id)?.name ?? null;
+
+  // Mirrors exactly what handleSubmit rejects, so Add is never clickable when it can't succeed.
+  const isFormValid =
+    !!form.product_name.trim() &&
+    price > 0 &&
+    (!tracksStock || isPurchaseInventoryFieldsValid(inv));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (price <= 0) return setError("Unit price must be greater than 0.");
+    if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
     setSaving(true);
 
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const supabase = await createTenantClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    // If the user wants to register this product in inventory, create it first.
-    let resolvedProductId = form.product_id || null;
-    if (form.add_to_inventory && isNewProductName) {
-      const { data: newProduct, error: productError } = await supabase
-        .from("products")
-        .insert({ name: form.product_name.trim(), sku: form.new_sku.trim() || null, created_by: user!.id })
+      // If the user wants to register this product in inventory, create it first.
+      let resolvedProductId = form.product_id || null;
+      if (form.add_to_inventory && isNewProductName) {
+        const { data: newProduct, error: productError } = await supabase
+          .from("products")
+          .insert({ name: form.product_name.trim(), sku: form.new_sku.trim() || null, created_by: user!.id })
+          .select()
+          .single<Product>();
+        if (productError) {
+          setError(inventoryErrorMessage(productError, "Could not save the purchase."));
+          return;
+        }
+        dispatch(addProduct(newProduct));
+        resolvedProductId = newProduct.id;
+      }
+
+      const { data, error: dbError } = await supabase
+        .from("purchases")
+        .insert({
+          product_name: form.product_name.trim(),
+          product_id: resolvedProductId,
+          quantity: qty,
+          unit_price: price,
+          total_amount: total,
+          currency: form.currency,
+          vendor: form.vendor.trim() || null,
+          date: form.date,
+          description: form.description.trim() || null,
+          created_by: user!.id,
+          vat_rate: form.vat_included ? vatRate : null,
+          vat_amount: form.vat_included ? vatAmount : null,
+          ...(tracksStock ? purchaseInventoryPayload(inv) : {}),
+        })
         .select()
-        .single<Product>();
-      if (productError) { setError(productError.message); setSaving(false); return; }
-      dispatch(addProduct(newProduct));
-      resolvedProductId = newProduct.id;
-    }
+        .single<Purchase>();
 
-    const { data, error: dbError } = await supabase
-      .from("purchases")
-      .insert({
-        product_name: form.product_name.trim(),
-        product_id: resolvedProductId,
-        quantity: qty,
-        unit_price: price,
-        total_amount: total,
-        currency: form.currency,
-        vendor: form.vendor.trim() || null,
-        date: form.date,
-        description: form.description.trim() || null,
-        created_by: user!.id,
-        vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
-      })
-      .select()
-      .single<Purchase>();
+      if (dbError) {
+        setError(inventoryErrorMessage(dbError, "Could not save the purchase."));
+        return;
+      }
 
-    if (dbError) {
-      setError(dbError.message);
+      dispatch(addPurchase(data));
+
+      // Re-fetch only the affected product to reflect the stock-sync trigger result.
+      if (data.product_id) {
+        const { data: freshProduct } = await supabase
+          .from("products").select("*").eq("id", data.product_id).single<Product>();
+        if (freshProduct) dispatch(updateProduct(freshProduct));
+      }
+
+      // An audit-write failure must never turn an already-saved purchase into a failure toast.
+      try {
+        const log = await writeAuditLog(supabase, {
+          userId: user!.id,
+          userEmail: user!.email ?? "",
+          action: "create",
+          entityType: "purchase",
+          entityId: data.id,
+          metadata: { product_name: data.product_name, vendor: data.vendor, total_amount: data.total_amount },
+        });
+        if (log) dispatch(addAuditLog(log));
+      } catch {
+        // swallow — the purchase itself already saved successfully
+      }
+
+      setForm(makeDefaults(defaultVatRate));
+      setInv(emptyPurchaseInventoryFields());
+      onSuccess?.(data.product_name);
+      onClose();
+    } catch (err) {
+      setError(inventoryErrorMessage(err, "Could not save the purchase. Please check your connection and try again."));
+    } finally {
       setSaving(false);
-      return;
     }
-
-    dispatch(addPurchase(data));
-
-    // Re-fetch only the affected product to reflect the stock-sync trigger result.
-    if (data.product_id) {
-      const { data: freshProduct } = await supabase
-        .from("products").select("*").eq("id", data.product_id).single<Product>();
-      if (freshProduct) dispatch(updateProduct(freshProduct));
-    }
-
-    const log = await writeAuditLog(supabase, {
-      userId: user!.id,
-      userEmail: user!.email ?? "",
-      action: "create",
-      entityType: "purchase",
-      entityId: data.id,
-      metadata: { product_name: data.product_name, vendor: data.vendor, total_amount: data.total_amount },
-    });
-    if (log) dispatch(addAuditLog(log));
-
-    setForm(makeDefaults(defaultVatRate));
-    setSaving(false);
-    onSuccess?.(data.product_name);
-    onClose();
   }
 
   function handleClose() {
     setForm(makeDefaults(defaultVatRate));
+    setInv(emptyPurchaseInventoryFields());
     setError(null);
     onClose();
   }
@@ -181,7 +216,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
           <Button variant="secondary" type="button" onClick={handleClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form="add-purchase-form" disabled={saving}>
+          <Button type="submit" form="add-purchase-form" disabled={saving || !isFormValid}>
             {saving ? "Saving…" : "Add Purchase"}
           </Button>
         </>
@@ -322,6 +357,20 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+
+        {tracksStock && (
+          <PurchaseInventoryFields
+            value={inv}
+            onChange={setInv}
+            locations={advanced.locations}
+            defaultLocationName={defaultLocationName}
+            quantity={qty}
+            totalAmount={total}
+            vatAmount={vatAmount}
+            currency={form.currency}
+            disabled={saving}
+          />
+        )}
 
         <Field label="Description">
           <Textarea

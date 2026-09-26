@@ -21,13 +21,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
   Financials card (qty/price/totals/fees/net proceeds + Cost of Goods and Gross
-  Profit rows when a linked purchase exists) and Details card (description/linked
-  product/restock flag/audit fields). Linked purchase is resolved from
-  `state.purchases.items` (fast path) or a second Supabase effect that queries
-  `purchases` with `.maybeSingle()` and dispatches `addPurchase` on hit. Gross
-  profit computed via `computeGrossProfit(netProceeds, linkedPurchase)` from
-  `_components/orderMath.ts`; Gross Profit row renders red/green by sign, Cost of
-  Goods row always red; both hidden when no purchase is linked. Actions: Edit Order
+  Profit rows when a cost of goods can be resolved — see "Linked Purchase (cost
+  of goods)" below for the FIFO-vs-linked-purchase precedence, Phase 3 Task 6)
+  and Details card (description/linked product/**Fulfilled from** location
+  (Phase 3 Task 6, advanced-inventory tenants only)/restock flag/audit fields).
+  Linked purchase is resolved from `state.purchases.items` (fast path) or a
+  second Supabase effect that queries `purchases` with `.maybeSingle()` and
+  dispatches `addPurchase` on hit. Cost of goods resolved via
+  `resolveOrderCogs(sale, linkedPurchase)`, gross profit via
+  `grossProfitFromCogs(netProceeds, cogs)` — both from `_components/orderMath.ts`;
+  Gross Profit row renders red/green by sign, Cost of Goods row always red; both
+  hidden when `cogs` is null. Calls `useAdvancedInventory()`
+  (`inventory/_store/useAdvancedInventory.ts`) for `active`/`locations` — the
+  "Fulfilled from" row (in the Details card, next to Linked Product) renders
+  only when `advanced.active && sale.fulfillment_location_id`, looking up the
+  location's name from `advanced.locations`. Actions: Edit Order
   (opens `EditSaleModal`), Download Invoice (calls `generateOrderInvoice(sale,
   companyProfile)` from `lib/utils/generateInvoice` — `companyProfile` from
   `state.companyProfile.profile`; button transiently disabled until profile
@@ -57,7 +65,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `addSale`/`removeSale` total arithmetic). Run with `npx jest dashboard/sales`.
 - `_components/orderMath.ts` (+ colocated `.test.ts`) — pure `computeNetProceeds(sale)`
   helper: `total_amount + shipping_charged − shipping_cost − advertising_fee` (nulls
-  treated as zero). Used by `[id]/page.tsx`. 4 unit tests.
+  treated as zero). Also `resolveOrderCogs(sale, linkedPurchase) → OrderCogs |
+  null` and `grossProfitFromCogs(netProceeds, cogs)` (Phase 3 Task 6,
+  2026-09-26) — see "Linked Purchase (cost of goods)" below for the
+  precedence rule. `computeGrossProfit(netProceeds, linkedPurchase)` is kept
+  for existing callers/tests but is no longer called by `[id]/page.tsx`. Used
+  by `[id]/page.tsx`.
 - `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
 - `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
   plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
@@ -139,6 +152,21 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+- `_components/fulfillmentLocation.ts` (+ colocated `.test.ts`, Phase 3 Task
+  5, 2026-09-26) — pure helpers behind the "Fulfilled from" field:
+  `suggestedFulfillmentLocationId(platform, platformDefaults, locations,
+  settings)` (mirrors the `inv_sale_before_write` DB trigger — platform
+  default if active, else the tenant default, else `""`),
+  `fulfillmentStockWarning(location, available, quantity, ownConsumption = 0)` → `StockWarning`
+  (`{ kind: "short", available } | { kind: "dropship" } | null`), and
+  `fulfillmentWarningText(warning, locationName)`. See "Advanced inventory:
+  fulfillment location" below.
+- `_components/FulfillmentLocationField.tsx` (Phase 3 Task 5, 2026-09-26) —
+  the location `Select` + shortage/dropship warning, rendered by both
+  modals. Reads `useAdvancedInventory()` for `locations`/`platformDefaults`/
+  `settings`, calls `fetchStockByLocation([productId])`
+  (`inventory/_store/stockByLocation.ts`) to look up units on hand at the
+  chosen location. See "Advanced inventory: fulfillment location" below.
 
 ## Delete gating (super_admin + permission overrides)
 
@@ -406,6 +434,58 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
   deferred to the future label-purchase feature that actually needs a valid
   country code.
 
+## Advanced inventory: fulfillment location (Business plan, Phase 3 Task 5)
+
+Both `AddSaleModal.tsx` and `EditSaleModal.tsx` call `useAdvancedInventory()`
+(`inventory/_store/useAdvancedInventory.ts`) and compute a local
+`tracksStock = advanced.active && !!form.product_id` — true only once the
+order both belongs to a Business tenant with advanced inventory enabled and
+links an inventory product.
+
+`<FulfillmentLocationField>` renders **only when `tracksStock` is true** —
+for Starter/Pro tenants, a Business tenant that hasn't enabled advanced
+inventory yet, or an order with no inventory link, the form is
+byte-for-byte what it was before this feature: no new field renders and the
+insert/update payload gets `{}` spread in via
+`...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {})`.
+`cogs_amount` is never sent — it's trigger-owned (FIFO consumption), same
+rule as `Purchase`'s trigger-owned landed-cost columns.
+
+- **`fulfillment` local state is `{ id: string; touched: boolean }`.**
+  `touched` starts `false` in `AddSaleModal` and flips `true` the moment the
+  user picks a location themselves (or immediately if the sale being edited
+  already had one — `EditSaleModal` seeds `touched:
+  !!sale?.fulfillment_location_id`). While `!touched`,
+  `FulfillmentLocationField`'s own effect keeps re-suggesting the location
+  as `platform`/`platformDefaults`/`locations`/`settings` change (e.g. the
+  user switches Platform before picking a location) — see its
+  `suggestedFulfillmentLocationId` call in `_components/fulfillmentLocation.ts`.
+- **`""` (empty) `fulfillment.id` means "let the DB trigger decide"** — same
+  convention as Purchases' `locationId`. `inv_sale_before_write` fills
+  `fulfillment_location_id` from the platform default (if active) else the
+  tenant default when the client sends `null`; `suggestedFulfillmentLocationId`
+  is the client-side mirror of that same fallback, purely so the UI can show
+  a sensible pre-selection and the shortage warning before the row is
+  written.
+- **The shortage/dropship warning is display-only and never blocks
+  submission** — `FulfillmentLocationField` fetches on-hand qty via
+  `fetchStockByLocation([productId])` and renders a `Badge` + explanatory
+  text (`fulfillmentWarningText`) when the location is a dropship supplier
+  or has fewer units than `qty`. A dropship location's message nudges the
+  user to link a purchase for cost of goods (dropship locations never carry
+  stock); a shortage message explains the order still saves and the missing
+  units are costed at the last known price until stock arrives (FIFO
+  shortfall-lot behavior from Phase 1). Neither one disables the submit
+  button.
+- **Both modals now wrap `handleSubmit` in `try { … } catch { … } finally
+  { setSaving(false) }`** (added by this task) and map DB errors from the
+  `sales` insert/update through `inventoryErrorMessage(dbError, "Could not
+  save the order.")` instead of the raw Postgres message — this is what
+  surfaces `INV_*` trigger errors (e.g. a location deactivated mid-edit) as
+  user-safe copy, matching Purchases' Task 4 pattern.
+- `EditSaleModal`'s before/after audit diff now includes
+  `fulfillment_location_id` alongside every other editable field.
+
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
@@ -419,6 +499,16 @@ Nine nullable columns (migration `041_sales_shipping_address.sql`, see
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
+- `app/dashboard/inventory/_store/useAdvancedInventory` (Phase 3 Task 5) —
+  entitlement/active state + `locations`/`platformDefaults`/`settings` for
+  the "Fulfilled from" field
+- `app/dashboard/inventory/_store/stockByLocation` (`fetchStockByLocation`)
+  and `app/dashboard/inventory/_lib/advancedInventory`
+  (`LOCATION_TYPE_LABELS`, `platformLocationOptions`) — consumed by
+  `_components/FulfillmentLocationField.tsx`
+- `lib/inventory/inventoryErrors` (`inventoryErrorMessage`) — maps `INV_*`
+  trigger errors (and any other DB/thrown error) to user-safe copy in both
+  modals
 - `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
   by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
   direct-URL load; `state.purchases.items` is also read for the fast path
@@ -490,9 +580,45 @@ A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The
 - **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
 - **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
 
-**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux). When found, the Financials card renders Cost of Goods and Gross Profit rows; both are hidden when no purchase is linked.
+**Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux).
 
-**Math:** `computeGrossProfit(netProceeds, linkedPurchase)` in `_components/orderMath.ts` returns `null` when `linkedPurchase` is `null`; the Gross Profit row is only rendered when the return value is non-null.
+**Cost of goods precedence (Phase 3 Task 6, 2026-09-26):** `resolveOrderCogs(sale,
+linkedPurchase)` (`_components/orderMath.ts`) decides what the Cost of Goods row
+shows, in this order:
+1. **`sale.cogs_amount`** (advanced inventory, Business plan) — the FIFO amount
+   the ledger's consumption trigger booked when the order was fulfilled. `0` is a
+   real, valid value (e.g. a restocked return whose lot cost nothing to
+   re-acquire) and is NOT treated as "no cost" — the check is `!= null`, not
+   truthiness. Label reads "Cost of Goods (FIFO)"; no "View purchase record →"
+   link (there may be no single purchase behind a FIFO-consumed lot).
+2. **The linked purchase**, only when its `currency` matches the sale's — a
+   mismatched currency would produce a meaningless subtraction, so it's treated
+   as no cost of goods at all (same guard as before this task, just moved into
+   `resolveOrderCogs`). Label reads plain "Cost of Goods"; the "View purchase
+   record →" link is shown.
+3. **Neither** — the whole Cost of Goods / Gross Profit block is hidden
+   (`resolveOrderCogs` returns `null`).
+
+**Known limit:** FIFO cost of goods is booked in the purchases' own currency —
+a mixed-currency ledger (lots bought in different currencies feeding one FIFO
+consumption) is not converted to the sale's currency before being shown. This
+matches the same limit the linked-purchase fallback already had.
+
+**Math:** `grossProfitFromCogs(netProceeds, cogs)` in `_components/orderMath.ts`
+returns `null` when `cogs` is `null`; the Gross Profit row is only rendered when
+the return value is non-null. `computeGrossProfit(netProceeds, linkedPurchase)`
+is the pre-Task-6 version, kept for existing callers/tests but no longer used
+by `[id]/page.tsx`.
+
+**"Fulfilled from" row** (Details card, next to Linked Product): shown only
+when `advanced.active && sale.fulfillment_location_id` — Starter/Pro tenants
+and Business tenants that haven't enabled advanced inventory never see it, nor
+does an order with no `fulfillment_location_id` (Starter/Pro sales never set
+one). Location name resolved via `advanced.locations.find((l) => l.id ===
+sale.fulfillment_location_id)?.name ?? "Unknown location"` — the fallback
+covers a location deleted/deactivated after the sale was made (locations are
+never hard-deleted while in use per `_lib/advancedInventory.ts`'s
+`locationDeactivationBlocker`, but this guards the display regardless).
 
 ## CSV import/export
 

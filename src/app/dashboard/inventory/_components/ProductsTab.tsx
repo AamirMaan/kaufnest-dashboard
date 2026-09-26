@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { removeProduct, fetchInventoryPage } from "../_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -16,10 +16,37 @@ import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { useAdvancedInventory } from "../_store/useAdvancedInventory";
+import { fetchStockByLocation } from "../_store/stockByLocation";
+import { stockColumns, summarizeStock, type ProductStockSummary } from "../_lib/stockByLocation";
+import { ProductLotsModal } from "./ProductLotsModal";
 import type { Product } from "@/types";
 
 function isLowStock(p: Product): boolean {
   return p.reorder_threshold != null && p.current_stock <= p.reorder_threshold;
+}
+
+/** Shown instead of a number while stock is loading or failed to load — never a made-up 0. */
+function NoStockData() {
+  return <span className="text-sm text-(--color-text-muted)">—</span>;
+}
+
+function StockCell({ qty, strong }: { qty: number; strong?: boolean }) {
+  const tone = qty < 0 ? "text-(--color-danger-text)" : "text-(--color-text-base)";
+  return <span className={`text-sm tabular-nums ${strong ? "font-semibold" : ""} ${tone}`}>{qty}</span>;
+}
+
+/**
+ * Fetch + result kept together and keyed by the request that produced it
+ * (advanced.active + the page's product ids), so a page/tab change never
+ * needs a synchronous setState reset in the effect body — the render below
+ * simply falls back to "no result yet" whenever the key doesn't match the
+ * current request. Same pattern as sales/_components/FulfillmentLocationField.tsx.
+ */
+interface StockRequestResult {
+  key: string;
+  data: Record<string, ProductStockSummary> | null;
+  error: string | null;
 }
 
 interface Props {
@@ -37,10 +64,44 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
   const total = useAppSelector((s) => s.inventory.total);
   const isFetching = useAppSelector((s) => s.inventory.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+  const isAdmin = useAppSelector((s) => {
+    const role = s.currentUser.profile?.role;
+    return role === "admin" || role === "super_admin";
+  });
 
   const [search, setSearch] = useState("");
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [lotsProduct, setLotsProduct] = useState<Product | null>(null);
+
+  // ── Stock by location (advanced inventory) ──────────────────────────────
+
+  const advanced = useAdvancedInventory();
+  const columnsForStock = useMemo(() => stockColumns(advanced.locations), [advanced.locations]);
+  const pageIds = useMemo(() => products.map((p) => p.id).join(","), [products]);
+  // Bumped after a batch's opening cost is edited, so Avg. cost re-fetches.
+  const [stockRefresh, setStockRefresh] = useState(0);
+  const stockRequestKey = `${advanced.active}:${pageIds}:${stockRefresh}`;
+  const [stockResult, setStockResult] = useState<StockRequestResult | null>(null);
+
+  useEffect(() => {
+    if (!advanced.active || pageIds === "") return;
+    let cancelled = false;
+    fetchStockByLocation(pageIds.split(","))
+      .then((rows) => {
+        if (!cancelled) setStockResult({ key: stockRequestKey, data: summarizeStock(rows, columnsForStock), error: null });
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setStockResult({ key: stockRequestKey, data: null, error: e.message });
+      });
+    return () => { cancelled = true; };
+  }, [advanced.active, pageIds, columnsForStock, stockRequestKey]);
+
+  const stockMatchesRequest = stockResult?.key === stockRequestKey;
+  // null = no data (still loading, or the load failed) — rendered as "—",
+  // distinct from loaded data, where a product with no row really has 0.
+  const stock = stockMatchesRequest ? stockResult!.data : null;
+  const stockError = stockMatchesRequest ? stockResult!.error : null;
 
   // ── Search ────────────────────────────────────────────────────────────────
 
@@ -88,9 +149,19 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
     {
       header: "Product",
       sortValue: (p: Product) => p.name.toLowerCase(),
-      render: (p: Product) => (
-        <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.name}</span>
-      ),
+      render: (p: Product) =>
+        advanced.active ? (
+          <button
+            type="button"
+            onClick={() => setLotsProduct(p)}
+            className="text-left text-sm font-medium text-(--color-primary) hover:underline"
+            aria-label={`Show batches for ${p.name}`}
+          >
+            {p.name}
+          </button>
+        ) : (
+          <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.name}</span>
+        ),
     },
     {
       header: "SKU",
@@ -99,13 +170,40 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
         <span className="text-sm text-[var(--color-text-muted)]">{p.sku ?? "—"}</span>
       ),
     },
-    {
-      header: "Current Stock",
-      sortValue: (p: Product) => p.current_stock,
-      render: (p: Product) => (
-        <span className="text-sm font-semibold text-[var(--color-text-base)] tabular-nums">{p.current_stock}</span>
-      ),
-    },
+    ...(advanced.active
+      ? [
+          ...columnsForStock.map((c) => ({
+            header: c.label,
+            sortValue: (p: Product) => (stock ? stock[p.id]?.cells[c.id] ?? 0 : -Infinity),
+            render: (p: Product) => (stock ? <StockCell qty={stock[p.id]?.cells[c.id] ?? 0} /> : <NoStockData />),
+          })),
+          {
+            header: "Total",
+            sortValue: (p: Product) => (stock ? stock[p.id]?.total ?? 0 : -Infinity),
+            render: (p: Product) => (stock ? <StockCell qty={stock[p.id]?.total ?? 0} strong /> : <NoStockData />),
+          },
+          {
+            header: "Avg. cost",
+            sortValue: (p: Product) => (stock ? stock[p.id]?.avgUnitCost ?? -1 : -Infinity),
+            render: (p: Product) => {
+              const avg = stock?.[p.id]?.avgUnitCost;
+              return (
+                <span className="text-sm text-(--color-text-muted) tabular-nums">
+                  {avg != null ? avg.toFixed(2) : "—"}
+                </span>
+              );
+            },
+          },
+        ]
+      : [
+          {
+            header: "Current Stock",
+            sortValue: (p: Product) => p.current_stock,
+            render: (p: Product) => (
+              <span className="text-sm font-semibold text-[var(--color-text-base)] tabular-nums">{p.current_stock}</span>
+            ),
+          },
+        ]),
     {
       header: "Reorder Threshold",
       sortValue: (p: Product) => p.reorder_threshold ?? -1,
@@ -174,6 +272,7 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
 
       {/* Loading overlay */}
       <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
+        {stockError && <p className="mb-2 text-xs text-(--color-danger-text)">{stockError}</p>}
         <DataTable
           columns={columns}
           rows={products}
@@ -207,6 +306,12 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
         description={`This will permanently delete "${deleteTarget?.name}". Linked purchases/sales keep their history but lose the inventory link. This action cannot be undone.`}
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
+      />
+      <ProductLotsModal
+        product={lotsProduct}
+        isAdmin={isAdmin}
+        onClose={() => setLotsProduct(null)}
+        onChanged={() => setStockRefresh((n) => n + 1)}
       />
     </div>
   );

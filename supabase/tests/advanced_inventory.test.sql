@@ -511,6 +511,38 @@ BEGIN
     RAISE EXCEPTION 'FAIL productless: edit wiped booked COGS';
   END IF;
 
+  -- ── Section: stock RPCs + inactive platform default (Phase 3) ──
+  SELECT qty, positive_qty, stock_value INTO v_int, v_gq, v_num
+    FROM inventory_stock_by_location(ARRAY[v_prod]) WHERE location_id = v_main;
+  IF v_int IS DISTINCT FROM 14 OR v_gq IS DISTINCT FROM 14 OR v_num IS DISTINCT FROM 116.50 THEN
+    RAISE EXCEPTION 'FAIL stock rpc: Widget at Main expected 14/14/116.50, got %/%/%', v_int, v_gq, v_num;
+  END IF;
+  IF (SELECT qty FROM inventory_stock_by_location_totals() WHERE location_id = v_main)
+     IS DISTINCT FROM (SELECT sum(qty_remaining)::integer FROM stock_lots WHERE location_id = v_main) THEN
+    RAISE EXCEPTION 'FAIL stock rpc: location totals disagree with stock_lots';
+  END IF;
+  BEGIN
+    PERFORM * FROM inventory_stock_by_location(ARRAY(SELECT gen_random_uuid() FROM generate_series(1, 201)));
+    RAISE EXCEPTION 'FAIL stock rpc: 201 product ids accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM NOT LIKE 'Too many products%' THEN RAISE; END IF;
+  END;
+  IF has_function_privilege('anon', 'tenant_zz_invtest.inventory_stock_by_location(uuid[])', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'tenant_zz_invtest.inventory_stock_by_location_totals()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FAIL stock rpc: wrong EXECUTE grants';
+  END IF;
+
+  -- An inactive platform default is skipped: the order falls back to the tenant default (FBA)
+  INSERT INTO stock_locations (name, type) VALUES ('Temp WH', 'own') RETURNING id INTO v_lot;
+  UPDATE platform_location_defaults SET location_id = v_lot WHERE platform = 'etsy';
+  UPDATE stock_locations SET is_active = false WHERE id = v_lot;
+  INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, date, created_by)
+    VALUES ('etsy', 'Widget', v_prod, 1, 30, 30, current_date, v_uid) RETURNING id INTO v_sd;
+  IF (SELECT fulfillment_location_id FROM sales WHERE id = v_sd) IS DISTINCT FROM v_fba THEN
+    RAISE EXCEPTION 'FAIL guard: inactive platform default was used';
+  END IF;
+  DELETE FROM sales WHERE id = v_sd;
+
   RAISE EXCEPTION 'INV_TESTS_PASSED';
 END
 $test$;

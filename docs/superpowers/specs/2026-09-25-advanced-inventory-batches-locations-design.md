@@ -350,6 +350,12 @@ platform-default changes, transfers, enabling and opening-cost edits all call
    together with the per-location stock RPC.
 3. **Purchases & Sales** — purchase location + landed costs, sale "Fulfilled
    from", FIFO COGS on order page, product lots drawer.
+
+   Phase 3 status: implemented per
+   `docs/superpowers/plans/2026-09-26-advanced-inventory-phase-3-purchases-sales.md`,
+   including the per-location stock columns and on-hand units moved from
+   Phase 2, error-reporting loads with a 60s freshness window, and a trigger
+   guard that skips inactive platform defaults.
 4. **Transfers** — tab, modal, preview.
 
 Each PR updates `CLAUDE.md`/`SKILL.md` for inventory (and purchases/sales where

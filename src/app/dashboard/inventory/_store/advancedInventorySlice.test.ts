@@ -5,6 +5,8 @@ import {
   locationRemoved,
   settingsSet,
   platformDefaultsMerged,
+  isAdvancedInventoryFresh,
+  ADVANCED_INVENTORY_STALE_MS,
 } from "./advancedInventorySlice";
 import type { InventorySettings, StockLocation } from "@/types";
 
@@ -35,6 +37,7 @@ describe("advancedInventorySlice", () => {
       loaded: false,
       loading: false,
       error: null,
+      loadedAt: null,
     });
   });
 
@@ -47,9 +50,21 @@ describe("advancedInventorySlice", () => {
       settings,
       locations: [loc("main")],
       platformDefaults: [{ platform: "ebay", location_id: "main" }],
+      loadedAt: 1_700_000_000_000,
     };
     const done = reducer(pending, { type: fetchAdvancedInventory.fulfilled.type, payload });
     expect(done).toEqual({ ...payload, loaded: true, loading: false, error: null });
+  });
+
+  it("keeps loaded data when a refresh is rejected", () => {
+    const loaded = reducer(undefined, {
+      type: fetchAdvancedInventory.fulfilled.type,
+      payload: { settings, locations: [loc("main")], platformDefaults: [], loadedAt: 1 },
+    });
+    const failed = reducer(loaded, { type: fetchAdvancedInventory.rejected.type, error: { message: "offline" } });
+    expect(failed.loaded).toBe(true);
+    expect(failed.locations).toHaveLength(1);
+    expect(failed.error).toBe("offline");
   });
 
   it("stores the rejection message and clears loading", () => {
@@ -98,5 +113,13 @@ describe("advancedInventorySlice", () => {
       { platform: "ebay", location_id: "main" },
       { platform: "amazon", location_id: "fba" },
     ]);
+  });
+});
+
+describe("isAdvancedInventoryFresh", () => {
+  it("is fresh only within the stale window after a load", () => {
+    expect(isAdvancedInventoryFresh(null, 1_000)).toBe(false);
+    expect(isAdvancedInventoryFresh(1_000, 1_000 + ADVANCED_INVENTORY_STALE_MS - 1)).toBe(true);
+    expect(isAdvancedInventoryFresh(1_000, 1_000 + ADVANCED_INVENTORY_STALE_MS)).toBe(false);
   });
 });

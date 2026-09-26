@@ -27,6 +27,13 @@ every mutation follows.
 - **Change export columns**: `handleExport()` in `page.tsx`.
 - **Change import validation / accepted columns**: `validateRow()` in
   `_components/ImportPurchasesModal.tsx` only.
+- **Change the advanced-inventory location/landed-cost fields** (Business
+  plan): `_lib/purchaseInventoryFields.ts` (+ test) for the pure
+  state/validation/payload shape, `_components/PurchaseInventoryFields.tsx`
+  for the UI, and both `AddPurchaseModal.tsx`/`EditPurchaseModal.tsx` for the
+  `tracksStock` gating + payload spread + audit diff. Don't touch
+  `inventory/_lib/landedCost.ts` here — it must stay byte-identical to the
+  SQL formula; see its own file comment.
 
 ## Test command
 
@@ -76,3 +83,34 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `.or()`/`ilike` (see `fetchPurchasesPage`), sanitized with
   `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`). `handleExport` mirrors
   the same predicate — keep both in sync if the column set ever changes.
+- `<PurchaseInventoryFields>` (location + landed costs) only renders when a
+  local `tracksStock` boolean is true — it's computed differently in each
+  modal (Add also covers the "create a new inventory product and link it"
+  path; Edit checks the current `form.product_id` AND
+  `isTrackedByLedger(purchase.created_at, advanced.settings)` — pre-enable
+  purchases get a "predates batch tracking" note instead), so don't assume
+  the two modals' `tracksStock` expressions are copy-pasteable. When
+  `tracksStock` is false the insert/update payload spreads in `{}` — the
+  four new columns (`location_id`/`freight_cost`/`customs_cost`/
+  `other_cost`) are never sent, so a Starter/Pro tenant's payload is
+  byte-for-byte what it was before this feature existed.
+- An empty `locationId` (`""`) means "use the tenant's default location" —
+  never treat `""` as invalid or coerce it to a specific id client-side;
+  `purchaseInventoryPayload` turns it into `location_id: null` and the DB
+  fills in `inventory_settings.default_location_id`.
+- The landed-cost figure shown while typing is **display-only** —
+  `landedUnitCost()` (`inventory/_lib/landedCost.ts`) mirrors the SQL
+  formula but the database is what actually costs the stock lot. Don't wire
+  this preview value into the insert/update payload.
+- `EditPurchaseModal`'s `inv` state only re-initializes correctly because
+  `page.tsx` renders it with `key={editTarget?.id ?? "edit-purchase"}` —
+  if you ever lift this component to a call site without that key, add an
+  effect to re-sync `inv` when `purchase` changes, or editing purchase B
+  right after purchase A will show purchase A's stale landed-cost fields.
+- Both modals now wrap their entire `handleSubmit` body in
+  `try/catch/finally` (`finally` resets `saving`) so a *thrown* error
+  (network/auth failure, not just a returned `{ error }`) can't leave the
+  Save button stuck on "Saving…" forever — and the `writeAuditLog` call
+  specifically has its own **inner** try/catch, so an audit-log failure
+  after a successful purchase write can't retroactively turn that save into
+  a failure toast.

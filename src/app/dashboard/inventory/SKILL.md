@@ -50,6 +50,14 @@ since modal dropdowns use a different state key than the table.
   `_lib/advancedInventory.ts` (+ test) for any decision or validation,
   `_store/advancedInventorySlice.ts` (+ test) for state, then the component
   in `_components/`. `page.tsx` only composes views and tabs.
+- **Change how advanced-inventory state is loaded/refreshed** (freshness
+  window, `force` behavior, what a consumer gets back): edit
+  `_store/useAdvancedInventory.ts` and/or `_store/advancedInventorySlice.ts`
+  (`ADVANCED_INVENTORY_STALE_MS`, `isAdvancedInventoryFresh`, the thunk's
+  `condition`) — never add a second `useEffect`/dispatch call site outside
+  the hook. Any new consumer (Purchases/Sales modals, Phase 3) should call
+  `useAdvancedInventory()`, not `dispatch(fetchAdvancedInventory())`
+  directly, so the freshness/loading-guard logic stays in one place.
 - **Change the enable flow** (the one-way "Batches & locations" confirm
   card): `_components/EnableAdvancedCard.tsx` only — `page.tsx` just decides
   when to render it (`view === "enable"`) and passes `isAdmin`. The route it
@@ -73,6 +81,22 @@ since modal dropdowns use a different state key than the table.
   Mounted by `_components/LocationsTab.tsx` after its `DataTable`, remounted
   via a `defaultsKey` built from `settings`/`locations`/`platformDefaults` so
   its internal draft always starts from the current saved values.
+- **Change the Products tab's stock-per-location columns** (Phase 3 Task 7,
+  2026-09-26): `_components/ProductsTab.tsx` only (the column-building block
+  + the `StockRequestResult`-keyed effect + the `StockCell` component).
+  `_lib/stockByLocation.ts` (`stockColumns`, `summarizeStock`,
+  `MAX_STOCK_COLUMNS`, `OTHER_COLUMN_ID`) owns the pivot/column-selection
+  logic; `_store/stockByLocation.ts` (`fetchStockByLocation`) owns the RPC
+  call and id-chunking. Change the column count/labels in `_lib/`, not by
+  hand-editing the map in `ProductsTab.tsx`.
+- **Change the product batches modal or opening-cost editing** (Phase 3
+  Task 8, 2026-09-26): `_components/ProductLotsModal.tsx` (the modal itself
+  — table, edit form, save flow), `_lib/productLots.ts` (+ test —
+  `lotSourceLabel`/`lotReceivedLabel`/`sortLotsFifo`/`canEditLotCost`/
+  `parseUnitCostInput`), `_store/productLots.ts` (`fetchOpenLots`,
+  `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
+  computation live in `_components/ProductsTab.tsx` only — don't duplicate
+  the admin-role check anywhere else in this feature.
 
 ## Test command
 
@@ -86,8 +110,10 @@ since modal dropdowns use a different state key than the table.
   "+ Add Product" button and its `useState` stay in `page.tsx`'s
   `<PageHeader>` since the tab doesn't own the header). `page.tsx` itself
   only decides which of `upsell`/`loading`/`error` banners to show above
-  `<ProductsTab>`, via `advancedInventoryView(plan, advanced)`. Don't add
-  table/search logic back into `page.tsx` — it belongs in `ProductsTab`.
+  `<ProductsTab>`, by reading `advanced.view`/`advanced.error`/
+  `advanced.reload` from `useAdvancedInventory()` (see that gotcha below —
+  `page.tsx` no longer computes `view` itself). Don't add table/search logic
+  back into `page.tsx` — it belongs in `ProductsTab`.
 - **`InventoryTabs` is wired into `page.tsx` (Task 6, 2026-09-26)**, but only
   when `view === "active"` — the tab strip only ever appears once advanced
   inventory is actually on, never above the upsell/loading/error/enable
@@ -107,14 +133,32 @@ since modal dropdowns use a different state key than the table.
   third tab or new per-tab local state, keep this "always mounted, hidden
   toggles visibility" pattern rather than reintroducing conditional
   mounting.
-- **Advanced inventory state is page-loaded, not layout-hydrated.**
-  `page.tsx` dispatches `fetchAdvancedInventory()` itself, only when
-  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored — unlike
-  `state.inventory`, `state.advancedInventory` is never touched by
+- **Advanced inventory state is loaded via `useAdvancedInventory()`, not
+  layout-hydrated (Task 2, 2026-09-26 — previously `page.tsx` dispatched the
+  thunk itself, see the file's history for the old shape).** Any component
+  that needs `settings`/`locations`/`platformDefaults` calls the hook —
+  unlike `state.inventory`, `state.advancedInventory` is never touched by
   `dashboard/layout.tsx`/`StoreProvider`, so no other page and no
-  Starter/Pro tenant pays for these queries. Phase 3's Purchases/Sales
-  modals will need this state too (fulfillment location, lot data) —
-  dispatch the same thunk from them rather than moving it into `layout.tsx`.
+  Starter/Pro tenant pays for these queries. `fetchAdvancedInventory()` is a
+  **no-op while fresh** — the thunk's RTK `condition` skips it while
+  `state.advancedInventory.loading` is true, or while `loadedAt` is younger
+  than `ADVANCED_INVENTORY_STALE_MS` (60s) — so calling the hook from a
+  second place a moment after the first (e.g. opening a Purchases modal
+  right after the Inventory page loaded) reuses the existing state instead
+  of firing a duplicate request. Pass `{ force: true }` (via the hook's
+  `reload()`, or `dispatch(fetchAdvancedInventory({ force: true }))`
+  directly) after a write that changes settings/locations *outside* the
+  slice's own reducers (e.g. `EnableAdvancedCard`'s enable-route call) —
+  those reducers (`locationSaved`/`settingsSet`/etc.) already update state
+  synchronously and don't need a forced reload. A **rejected** reload
+  (`fetchAdvancedInventory.rejected`) leaves `loaded`/`settings`/
+  `locations`/`platformDefaults` untouched — only `loading`/`error` change —
+  and `advancedInventoryView` treats `error && !loaded` as the only "show
+  the error card" case, so a background refresh failure after a successful
+  first load keeps rendering the last-loaded view instead of bouncing to the
+  error card; only a failure on the very first load shows it. Phase 3's
+  Purchases/Sales modals should call `useAdvancedInventory()` too, not
+  reimplement the load.
 - **An existing tenant shows the load-error card until `048` is applied.**
   Before `048_advanced_inventory_apply.sql` runs (it installs `047`'s
   tables/triggers into every existing tenant schema via
@@ -289,8 +333,16 @@ since modal dropdowns use a different state key than the table.
 - **Deactivating a location is blocked while it is the tenant default OR
   any platform's default (`locationDeactivationBlocker`)** — the sale
   trigger would otherwise keep routing that platform's orders to an
-  inactive location; there is no DB guard for the platform case yet (Phase
-  3 follow-up).
+  inactive location. **The DB-side guard for the platform case is now
+  written** (migration `049_advanced_inventory_phase3.sql` — `UI` blocker
+  above stays regardless, this just closes the gap if a row somehow bypassed
+  it): `inv_sale_before_write`'s platform-default fill (and the pre-enable
+  restock branch's `v_loc` lookup in `inv_sale_after_write`) skips a
+  platform default whose `stock_locations.is_active` is false and falls
+  back to `inventory_settings.default_location_id` instead. **Not yet live
+  on any tenant** — `049` is still ⏳ pending (see `supabase/SKILL.md`'s file
+  map for the apply order), so until it's applied this guard doesn't
+  actually run yet, even though the UI-side blocker above already does.
 - **Location delete uses `.select('id')` so an RLS no-op (0 rows, no error)
   is reported as a failure, not a success.**
 - **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
@@ -341,3 +393,111 @@ since modal dropdowns use a different state key than the table.
   wraps any number of children, so `FulfillmentDefaultsCard` uses it directly
   for all 5 platform `Field`s (the last one sits alone on its own row) rather
   than hand-rolling a separate grid div.
+- **`ProductsTab`'s stock-per-location "Total" column can legitimately
+  disagree with legacy `current_stock` (Phase 3 Task 7, 2026-09-26).** Total
+  is summed from ledger lots (`inventory_stock_by_location` RPC); the
+  Status badge (Low stock/In stock) still reads `current_stock`/
+  `reorder_threshold` directly and was deliberately left alone — the two
+  can differ for a product with edits from before advanced inventory was
+  enabled (see the "Rows created before `enabled_at`" gotcha above). Don't
+  "fix" the Status badge to read the new Total column — that would tie a
+  Starter/Pro-safe piece of UI to a Business-only data source.
+- **The stock-by-location fetch is keyed, not reset with a synchronous
+  `setState` in the effect body.** The brief's original effect called
+  `setStock({})`/`setStockError(null)` synchronously whenever `pageIds`
+  changed, which trips this repo's `react-hooks/set-state-in-effect` lint
+  rule (an error, not a warning). `ProductsTab.tsx` instead stores one
+  `StockRequestResult | null` (`{ key, data, error }`) and derives the
+  rendered `stock`/`stockError` by comparing `stockResult.key` against the
+  current `${advanced.active}:${pageIds}` request key — a stale result from
+  a superseded page/search change is simply ignored by the comparison
+  instead of being cleared by a setState call, and both `setStockResult`
+  calls that do exist are inside the fetch's `.then`/`.catch`, not the
+  effect body itself. Same pattern as
+  `sales/_components/FulfillmentLocationField.tsx`'s `stock` state — copy
+  that shape for any future per-page-request state in this feature rather
+  than resetting state synchronously in an effect.
+- **Stock cells: "—" means no data, 0 means a real zero (final-review I1).**
+  While the stock request is pending, after it failed, or whenever the kept
+  result's key doesn't match the current request, `ProductsTab` renders a
+  muted "—" in every location cell, Total and Avg. cost, and their
+  `sortValue` returns `-Infinity`. Only once data has loaded does a product
+  with no row render `0` (then it really has none). Never fall back to `{}`
+  for "no result" — that renders a made-up 0 indistinguishable from real
+  empty stock.
+- **Pre-enable purchases/sales are read-only to the ledger —
+  `isTrackedByLedger(createdAt, settings)` (`_lib/advancedInventory.ts`,
+  final-review I3).** 047's triggers skip UPDATEs of rows with `created_at <
+  enabled_at`. Both Edit modals (Purchases, Sales) add
+  `isTrackedByLedger(row.created_at, advanced.settings)` to `tracksStock`,
+  show a muted "…predates batch tracking…" note instead of the location /
+  landed-cost / fulfillment fields, and add nothing to the payload. The
+  comparison is by instant (`Date.parse`) so Postgres' `+00:00`/microsecond
+  and JS' `Z`/millisecond forms of the same moment compare equal; it fails
+  closed (false) when settings are missing/disabled, `enabled_at` is null,
+  or either timestamp doesn't parse. Add modals are unaffected (a new row is
+  always created after `enabled_at`).
+- **The RPC isn't live on any tenant schema yet (migration 049 pending).**
+  An active Business tenant today gets `fetchStockByLocation`'s mapped
+  `inventoryErrorMessage` text in the red `stockError` line under the count
+  row — this is the intended fallback, not a bug, until 049 is applied.
+  Manual check once it is live: an active tenant shows per-location columns
+  + Other/Total/Avg. cost, a shortfall renders a red negative number in its
+  cell, and a Starter/Pro tenant (or a Business tenant that hasn't enabled
+  advanced inventory) still sees the plain "Current Stock" column.
+- **`ProductLotsModal` lists open batches PLUS every opening-balance batch**
+  (`.or("qty_remaining.neq.0,kind.eq.opening")` in `fetchOpenLots`,
+  final-review I4, 2026-09-26, user-approved) — a fully-consumed purchase or
+  transfer lot, or a settled shortfall, disappears once its remaining
+  quantity hits 0, but a used-up opening batch stays listed (Remaining 0)
+  because its opening cost must stay editable: that edit is exactly what
+  re-costs the orders that consumed it. Don't narrow the filter back to
+  `qty_remaining <> 0`.
+- **After an opening-cost save, the Products tab's stock re-fetches**
+  (final-review F7): `ProductLotsModal`'s optional `onChanged` fires after a
+  successful `set_opening_lot_cost`; `ProductsTab` bumps a `stockRefresh`
+  counter that is part of the stock request key, so Avg. cost is never stale.
+- **Editing an opening lot's cost re-costs dependent orders server-side —
+  the modal does no client-side COGS math.** `set_opening_lot_cost` (Phase
+  1, `047_advanced_inventory.sql`) is the only thing that may write an
+  opening lot's `unit_cost`, and it recomputes every sale that consumed
+  units from that lot (`sales.cogs_amount`) in the same transaction. The
+  modal's only job after a successful RPC call is to reload the lot list
+  (`load(product.id)`) — do not add any local COGS recalculation here.
+- **`canEditLotCost` mirrors the RPC's own guard, it doesn't replace it.**
+  `set_opening_lot_cost` independently enforces admin-only + opening-lot-only
+  server-side; the pencil icon's visibility is purely a UI convenience so a
+  non-admin (or a non-opening batch) never sees an edit control that would
+  fail anyway. Don't remove the RPC-side check if you ever "simplify" this
+  by trusting the client gate alone.
+- **`ProductLotsModal`'s load result and edit target are both derived, not
+  reset with a synchronous `setState` in an effect body** — same
+  `react-hooks/set-state-in-effect` constraint as `ProductsTab.tsx`'s
+  `StockRequestResult` and `FulfillmentLocationField.tsx`'s keyed `stock`
+  state. The brief's original sketch called `setLots(null); setEditing(null)`
+  directly in the effect whenever `product` changed; the shipped version
+  instead keys the fetch result by product id (`LotsResult { key, data,
+  error }`) and derives `lots`/`loadError` by comparing that key against the
+  current product — a stale result from a since-switched product is simply
+  ignored, not cleared. **The load effect inlines `fetchOpenLots(...).then(
+  ...).catch(...)` directly rather than calling a `useCallback` helper** —
+  a `useCallback`-wrapped `load(productId)` that itself calls `setResult`
+  (even only after an `await`) still gets flagged by the lint rule when
+  called from the effect, so the effect's `.then`/`.catch` are inlined
+  (mirroring `FulfillmentLocationField.tsx`'s own stock-lookup effect) and a
+  separate `reload(productId)` `useCallback` — functionally identical, just
+  not invoked from an effect — is used by `handleSaveCost` after a
+  successful edit, where calling a state-setting function directly is fine.
+  `editing` is likewise derived (`lots?.find(l => l.id === editingId)`),
+  which self-resets when switching to a different product (lot ids are
+  globally unique UUIDs, so a stale `editingId` never matches a new
+  product's lots). The one case that derivation alone can't cover —
+  reopening the *same* product right after closing without saving, which
+  would otherwise show the edit form still open — is handled by clearing
+  `editingId` in `handleClose` (a plain event handler passed to `Modal`'s
+  `onClose`, not an effect) before calling the parent's `onClose`. If you
+  touch this component's state shape, keep all three of these — the
+  keyed-result derivation, the inlined effect vs. the separate `reload`
+  helper, and the `handleClose` reset — rather than reintroducing a
+  synchronous effect-body reset or delegating the effect's fetch to a
+  `useCallback`.

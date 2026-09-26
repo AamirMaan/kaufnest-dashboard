@@ -6,13 +6,15 @@ pagination is active.
 
 ## Files in this folder
 
-- `page.tsx` (Phase 2 shell, 2026-09-26) — thin shell only: `<PageHeader>` +
-  "+ Add Product"/"+ Add Location" button state (whichever the active tab
-  owns), the advanced-inventory `upsell`/`loading`/`error` banners driven by
-  `advancedInventoryView(plan, advanced)` (`_lib/advancedInventory.ts`) and
-  `fetchAdvancedInventory()` (`_store/advancedInventorySlice.ts`, dispatched
-  on mount only when `hasAdvancedInventory(plan)` and not yet
-  loaded/loading/errored). Also computes `isAdmin` from
+- `page.tsx` (Phase 2 shell, 2026-09-26; loading moved to
+  `useAdvancedInventory()` Task 2, 2026-09-26) — thin shell only:
+  `<PageHeader>` + "+ Add Product"/"+ Add Location" button state (whichever
+  the active tab owns), the advanced-inventory `upsell`/`loading`/`error`
+  banners driven entirely by `const advanced = useAdvancedInventory()`
+  (`_store/useAdvancedInventory.ts`) — `page.tsx` no longer selects
+  `plan`/`state.advancedInventory` or computes `view`/dispatches the fetch
+  itself; it just reads `advanced.view`/`advanced.error` and wires the error
+  banner's Retry button to `advanced.reload`. Also computes `isAdmin` from
   `state.currentUser.profile?.role` (`admin`/`super_admin`) and renders
   `<EnableAdvancedCard isAdmin={isAdmin} />` when `view === "enable"` (Task
   4). **When `view === "active"` (Task 6, 2026-09-26)** it renders
@@ -49,18 +51,44 @@ pagination is active.
 - `_lib/advancedInventory.ts` (+ test) — pure logic behind the batches &
   locations UI: `advancedInventoryView` (upsell/loading/error/enable/active),
   `sortLocations`/`defaultLocationOptions`/`platformLocationOptions`,
-  `isLocationNameTaken`, `locationDeactivationBlocker`, and the fulfillment-
+  `isLocationNameTaken`, `locationDeactivationBlocker`,
+  `isTrackedByLedger(createdAt, settings)` (does the ledger act on UPDATEs of
+  a row created then? — used by both Edit modals), and the fulfillment-
   defaults draft helpers (`fulfillmentDraftFrom`, `platformDefaultChanges`,
   `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`), plus the
   `LOCATION_TYPE_LABELS`/`INVENTORY_PLATFORMS`/`PLATFORM_LABELS` label maps.
 - `_store/advancedInventorySlice.ts` (+ test) — `state.advancedInventory`
-  (`settings`, `locations`, `platformDefaults`, `loaded`/`loading`/`error`).
-  `fetchAdvancedInventory` is the only thunk (loads all three via
-  `Promise.all`; locations are paged through `fetchAllRows` since they're
-  user-created and unbounded). `locationSaved`/`locationRemoved`/
-  `settingsSet`/`platformDefaultsMerged` are plain reducers, dispatched by
-  the components below once their own write succeeds. Dispatched only by
-  `page.tsx` — see `SKILL.md`'s gotcha on why it isn't layout-hydrated.
+  (`settings`, `locations`, `platformDefaults`, `loaded`/`loading`/`error`,
+  `loadedAt: number | null`). `fetchAdvancedInventory(arg?: { force?:
+  boolean })` is the only thunk (loads all three via `Promise.all`;
+  locations are paged through `fetchAllRowsOrThrow` — since they're
+  user-created and unbounded, an error-reporting page fetch that throws
+  instead of returning an empty/partial list, unlike the plain
+  `fetchAllRows` other features use). An RTK `condition` skips the thunk
+  while a load is already in flight, or while the existing `loadedAt` is
+  still fresh (`isAdvancedInventoryFresh`, within `ADVANCED_INVENTORY_STALE_MS`
+  = 60s) — pass `{ force: true }` to bypass freshness after a write that
+  changes settings/locations outside this slice's own reducers (e.g. the
+  enable route). A rejected reload leaves `loaded`/`settings`/`locations`/
+  `platformDefaults` untouched, only `loading`/`error` change — so a stale
+  view keeps rendering through a failed background refresh.
+  `locationSaved`/`locationRemoved`/`settingsSet`/`platformDefaultsMerged`
+  are plain reducers, dispatched by the components below once their own
+  write succeeds. Loaded via `_store/useAdvancedInventory.ts` (see below) —
+  not by `dashboard/layout.tsx` — see `SKILL.md`'s gotcha on why it isn't
+  layout-hydrated.
+- `_store/useAdvancedInventory.ts` (Task 2, 2026-09-26) — the one entry
+  point for advanced-inventory state outside the slice itself:
+  `useAdvancedInventory(): { entitled, active, view, settings, locations,
+  platformDefaults, loading, error, reload }`. Reads `tenantPlan` +
+  `state.advancedInventory`, computes `entitled` (`hasAdvancedInventory`)
+  and `view` (`advancedInventoryView`) itself, dispatches
+  `fetchAdvancedInventory()` on mount when entitled (a no-op while fresh —
+  the thunk's own `condition` decides that, not this hook), and exposes
+  `reload` as `fetchAdvancedInventory({ force: true })`. `page.tsx` calls
+  this instead of computing `plan`/`view`/the fetch effect itself;
+  Purchases/Sales (Phase 3) will call the same hook rather than duplicating
+  the load.
 - `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
   locations" card shown when `advancedInventoryView` returns `"enable"`
   (entitled tenant, `inventory_settings.advanced_enabled` still false).
@@ -69,8 +97,11 @@ pagination is active.
   (explicitly states "This can't be turned off again."); confirming calls
   `POST /api/inventory/enable-advanced`, writes an `inventory_settings`
   audit log entry (`writeAuditLog` + `addAuditLog`) on success, then
-  dispatches `fetchAdvancedInventory()` to reload settings/locations so
-  `page.tsx`'s `view` flips to `"active"` and the card unmounts itself —
+  dispatches `fetchAdvancedInventory({ force: true })` (Task 2, 2026-09-26 —
+  `force` is required here since the page's own load may still be inside
+  `ADVANCED_INVENTORY_STALE_MS` and would otherwise no-op) to reload
+  settings/locations so `page.tsx`'s `view` flips to `"active"` and the card
+  unmounts itself —
   there is no local "enabled" state here, the view transition is entirely
   driven by the reloaded Redux state. Toasts on both outcomes
   (`useToast()`), busy-verb button while `enabling`, disabled Cancel/Enable
@@ -81,6 +112,65 @@ pagination is active.
   `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
   Takes `{ addOpen, onAddClose }` — the "+ Add Product" button and its open
   state live in `page.tsx` (the header), this component only owns the modal.
+  **(Phase 3 Task 7, 2026-09-26)** When `useAdvancedInventory().active` is
+  true, the "Current Stock" column is replaced with one column per
+  `stockColumns(advanced.locations)` entry (first 4 active, stock-holding
+  locations by name, plus "Other" when more exist), then "Total", then
+  "Avg. cost" — Starter/Pro tenants and Business tenants that haven't
+  enabled advanced inventory see byte-for-byte the old single "Current
+  Stock" column. **Per-page RPC call, not per-product**: an effect keyed by
+  `${advanced.active}:${pageIds}` (`pageIds` = the current page's product
+  ids joined with `,`) calls `fetchStockByLocation(pageIds.split(","))`
+  (`_store/stockByLocation.ts`) once per table page/search/pagination
+  change, then pivots the result via `summarizeStock(rows, columnsForStock)`
+  (`_lib/stockByLocation.ts`) into `Record<productId, ProductStockSummary>`.
+  While the request is pending or failed, every stock cell, Total and
+  Avg. cost render a muted "—" (sorting as `-Infinity`), never a made-up 0
+  (final-review I1); `stockRefresh` (bumped by `ProductLotsModal`'s
+  `onChanged` after an opening-cost save) is part of the request key, so
+  Avg. cost re-fetches (F7).
+  A load failure renders the mapped `inventoryErrorMessage` text as a small
+  red line under the count row (`stockError`) — this is the designed
+  fallback for tenants whose schema doesn't have the RPC yet (migration 049
+  pending), not an error state to "fix". The Status badge is unaffected —
+  it still reads legacy `current_stock`/`reorder_threshold`, so it can
+  disagree with the new Total column (see SKILL.md gotcha). **(Phase 3 Task
+  8, 2026-09-26)** When `advanced.active`, the Product name cell becomes a
+  button (`aria-label="Show batches for <name>"`) that opens
+  `<ProductLotsModal>` (`_components/ProductLotsModal.tsx`) via
+  `lotsProduct` state; non-active views keep the plain name span
+  unchanged. `isAdmin` (role `admin` or `super_admin`, from
+  `state.currentUser.profile?.role`) is computed alongside the existing
+  `isSuperAdmin` selector and passed straight through as a prop.
+- `_components/ProductLotsModal.tsx` (Phase 3 Task 8, 2026-09-26) —
+  `ProductLotsModal({ product, isAdmin, onClose, onChanged? })`: shows one
+  product's open batches (stock lots with `qty_remaining !== 0`) plus every
+  opening-balance batch even when used up (final-review I4), oldest-first, via
+  `fetchOpenLots` (`_store/productLots.ts`) + `sortLotsFifo` (`_lib/productLots.ts`).
+  Columns: Batch (`lotSourceLabel`), Location (name from
+  `useAdvancedInventory().locations`), Received (`lotReceivedLabel` — hides
+  the 1970 FIFO placeholder date on opening batches), Remaining (a red
+  `Badge` for a negative shortfall row, plain tabular text otherwise), Unit
+  cost (a pencil `Button` next to it only when `canEditLotCost(lot,
+  isAdmin)` — admin AND `kind === "opening"`). The pencil opens an inline
+  `<form id="opening-cost-form">` in the modal body; the footer's Save
+  button is `type="submit" form="opening-cost-form"`, disabled while
+  `saving` or the parsed cost is invalid, calling the `set_opening_lot_cost`
+  RPC (Phase 1) then a best-effort audit log
+  (`entityType: "product"`, `metadata.event: "opening_cost_changed"`) and a
+  reload of the lot list. Load result and edit target are both **derived**
+  rather than reset with a synchronous `setState` in an effect — see the
+  file's own doc comment and the SKILL.md gotcha below.
+- `_lib/productLots.ts` (+ test, Phase 3 Task 8, 2026-09-26) — pure helpers
+  behind the modal: `lotSourceLabel`, `lotReceivedLabel`, `sortLotsFifo`
+  (received_at → created_at → id, mirrors the ledger's own FIFO order),
+  `canEditLotCost(lot, isAdmin)` (mirrors the `set_opening_lot_cost` RPC's
+  own admin + opening-only guard), `parseUnitCostInput` (trims, rejects
+  blank/negative/non-numeric, rounds to 4 decimals).
+- `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26) — `PRODUCT_LOTS_CAP`
+  (1000) + `fetchOpenLots(productId)`: pages `stock_lots` for one product
+  (`qty_remaining <> 0` OR `kind = 'opening'`) via `fetchAllRowsOrThrow`, mapping any thrown/DB
+  error through `inventoryErrorMessage`.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
@@ -123,7 +213,20 @@ pagination is active.
   `settings.default_location_id`, `locations` (id + active flag), and
   `platformDefaults` (sorted by platform) so the card remounts, and its
   internal draft resets to the saved values, whenever any of those change
-  elsewhere (a location edited/deactivated, a reload).
+  elsewhere (a location edited/deactivated, a reload). **(Task 9,
+  2026-09-26)** An "On hand" column sits between Type and Status:
+  `fetchLocationStockTotals()` (`_store/stockByLocation.ts`) is called from
+  an effect keyed by `locationsKey = locations.map((l) => l.id).join(",")`;
+  the result is stored as `{ key, data }` and only read at render when
+  `key === locationsKey` (the same derived-not-reset pattern as
+  `ProductsTab.tsx`'s stock effect and `FulfillmentLocationField.tsx`, to
+  satisfy `react-hooks/set-state-in-effect`). A dropship location always
+  renders "—" (it never holds stock); any other location renders "—" while
+  `data` is still `null` — both the initial load and a failed RPC call (the
+  totals RPC isn't rolled out to every tenant yet, migration 049 pending) —
+  and the numeric total, styled with the danger-text color when negative,
+  once loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
+  render's fallback).
 - `_components/FulfillmentDefaultsCard.tsx` (Phase 2 Task 7, 2026-09-26) —
   `FulfillmentDefaultsCard({ isAdmin })`: the tenant's default location plus
   a default fulfillment location per sales platform (`INVENTORY_PLATFORMS` —
@@ -176,6 +279,8 @@ pagination is active.
   log (`entityType: "stock_location"`, before/after diff on edit). Wired into
   `_components/LocationsTab.tsx` (Task 6, 2026-09-26) for both add and edit.
 - `_lib/landedCost.ts` (+ test) — TS mirror of the SQL landed-unit-cost formula, for the purchase form read-out (Phase 3).
+- `_lib/stockByLocation.ts` (+ test, Task 3 Phase 3 2026-09-26) — pure pivot logic: `stockColumns(locations)` shows the first `MAX_STOCK_COLUMNS` active stock-holding locations (alphabetical) plus "Other" when more exist; `summarizeStock(rows, columns)` groups `inventory_stock_by_location` RPC output by product and projects each location to its table column (shown + "Other" for the rest), summing qty/value per cell; `locationTotals(rows)` maps location id to qty for `inventory_stock_by_location_totals` RPC results. Exports types `StockByLocationRow`, `StockColumn`, `ProductStockSummary`, and constants `MAX_STOCK_COLUMNS`, `OTHER_COLUMN_ID`.
+- `_store/stockByLocation.ts` (Task 3 Phase 3 2026-09-26) — `fetchStockByLocation(productIds)` pages product ids through the `inventory_stock_by_location` RPC in batches of `STOCK_RPC_MAX_IDS` (200), chunking to avoid the RPC's id-count limit; `fetchLocationStockTotals()` calls the `inventory_stock_by_location_totals` RPC and pivots to a map via `locationTotals()`.
 
 ## How stock levels actually update — read this before changing anything here
 
@@ -190,7 +295,7 @@ arithmetic lives entirely in the database so client and server can never drift.
 If you need to change how stock is calculated, edit the migration triggers, not
 this slice.
 
-## Advanced inventory ledger (Business plan) — Phase 1 of 4
+## Advanced inventory ledger (Business plan) — 3 of 4 phases shipped
 
 Batches, locations and FIFO cost of goods live entirely in Postgres
 (`supabase/migrations/047_advanced_inventory.sql`, installer
@@ -213,8 +318,12 @@ Tables: `stock_locations`, `inventory_settings`, `platform_location_defaults`,
 platform defaults (admin), transfers. Everything else is trigger/RPC-owned.
 Trigger errors are `INV_*: detail` — show them with
 `inventoryErrorMessage()` (`src/lib/inventory/inventoryErrors.ts`).
-Phase 2 (this UI) shows the enable flow and the Locations tab; batches on
-purchases/sales (Phase 3) and transfers (Phase 4) come next.
+Phase 2 shipped the enable flow and the Locations tab. Phase 3 shipped
+purchase location + landed costs, sale "Fulfilled from" with a shortage
+warning, FIFO cost of goods on the order page, per-location stock columns on
+the Products tab, on-hand units on the Locations tab, and the product
+batches drawer — see the Purchases/Sales `CLAUDE.md`s and the gotchas below
+for the details. Only transfers (Phase 4) remain.
 
 ## Pagination data flow
 

@@ -9,6 +9,7 @@ import {
   platformDefaultChanges,
   isFulfillmentDraftValid,
   isFulfillmentDraftDirty,
+  isTrackedByLedger,
   INVENTORY_PLATFORMS,
   LOCATION_TYPE_LABELS,
 } from "./advancedInventory";
@@ -60,6 +61,11 @@ describe("advancedInventoryView", () => {
   it("is active once enabled on business or trial", () => {
     expect(advancedInventoryView("business", { ...idle, loaded: true, settings: settings() })).toBe("active");
     expect(advancedInventoryView("trial", { ...idle, loaded: true, settings: settings() })).toBe("active");
+  });
+
+  it("keeps showing loaded data when a background refresh fails", () => {
+    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings() })).toBe("active");
+    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings({ advanced_enabled: false }) })).toBe("enable");
   });
 });
 
@@ -205,5 +211,32 @@ describe("labels", () => {
       "3pl": "3PL warehouse",
       dropship: "Dropship supplier",
     });
+  });
+});
+
+describe("isTrackedByLedger", () => {
+  const enabled = settings({ enabled_at: "2026-09-26T10:00:00.000Z" });
+
+  it("is false for a row created before advanced inventory was enabled", () => {
+    expect(isTrackedByLedger("2026-09-26T09:59:59.999Z", enabled)).toBe(false);
+    expect(isTrackedByLedger("2026-09-01T00:00:00+00:00", enabled)).toBe(false);
+  });
+
+  it("is true for a row created at or after the enable moment", () => {
+    expect(isTrackedByLedger("2026-09-26T10:00:00.000Z", enabled)).toBe(true);
+    // Same instant in Postgres' own format (microseconds, +00:00 offset).
+    expect(isTrackedByLedger("2026-09-26T10:00:00.000000+00:00", enabled)).toBe(true);
+    expect(isTrackedByLedger("2026-09-26T12:00:00.5+02:00", enabled)).toBe(true);
+    expect(isTrackedByLedger("2026-09-27T08:00:00.123456+00:00", enabled)).toBe(true);
+  });
+
+  it("is false when advanced inventory is off, never enabled, or settings are missing", () => {
+    expect(isTrackedByLedger("2026-09-27T00:00:00Z", settings({ advanced_enabled: false }))).toBe(false);
+    expect(isTrackedByLedger("2026-09-27T00:00:00Z", settings({ enabled_at: null }))).toBe(false);
+    expect(isTrackedByLedger("2026-09-27T00:00:00Z", null)).toBe(false);
+  });
+
+  it("is false for an unparseable timestamp", () => {
+    expect(isTrackedByLedger("not a date", enabled)).toBe(false);
   });
 });

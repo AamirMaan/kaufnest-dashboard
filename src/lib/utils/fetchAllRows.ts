@@ -27,6 +27,32 @@ export async function fetchAllRows<T>(
   ) => Promise<{ data: T[] | null; error: unknown; count: number | null }>,
   cap: number
 ): Promise<T[]> {
+  return collectRows(fetchPage, cap, false);
+}
+
+/**
+ * Same paging as fetchAllRows, but a page error is thrown instead of
+ * silently returning the rows collected so far — use it wherever an empty
+ * or partial list would be mistaken for real data (e.g. a location picker).
+ */
+export async function fetchAllRowsOrThrow<T>(
+  fetchPage: (
+    from: number,
+    to: number
+  ) => Promise<{ data: T[] | null; error: unknown; count: number | null }>,
+  cap: number
+): Promise<T[]> {
+  return collectRows(fetchPage, cap, true);
+}
+
+async function collectRows<T>(
+  fetchPage: (
+    from: number,
+    to: number
+  ) => Promise<{ data: T[] | null; error: unknown; count: number | null }>,
+  cap: number,
+  throwOnError: boolean
+): Promise<T[]> {
   const results: T[] = [];
   let offset = 0;
   let total = cap;
@@ -34,7 +60,11 @@ export async function fetchAllRows<T>(
   while (offset < Math.min(total, cap)) {
     const to = Math.min(offset + 999, cap - 1);
     const { data, error, count } = await fetchPage(offset, to);
-    if (error || !data || data.length === 0) break;
+    if (error) {
+      if (throwOnError) throw error;
+      break;
+    }
+    if (!data || data.length === 0) break;
     if (count != null) total = count;
     results.push(...data);
     offset += data.length;

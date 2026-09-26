@@ -13,6 +13,13 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
   or gross-profit formula changes also touch `_components/orderMath.ts` + its test.
+- **Change the Cost of Goods / Gross Profit / "Fulfilled from" block**
+  (Phase 3 Task 6, 2026-09-26): the FIFO-vs-linked-purchase precedence rule is
+  `resolveOrderCogs`/`grossProfitFromCogs` in `_components/orderMath.ts` (+
+  its colocated test) — change the precedence there, TDD (test first). The
+  rendering itself (which label, whether the "View purchase record →" link
+  shows, the "Fulfilled from" row) lives in `[id]/page.tsx` only. See
+  "Gotchas — FIFO cost of goods" below before touching either.
 - **Wire the Download Invoice button** (Phase 5 — DONE): `[id]/page.tsx` — the
   button now calls `handleDownloadInvoice()` which calls `generateOrderInvoice(sale,
   companyProfile)` from `@/lib/utils/generateInvoice`. `companyProfile` is read from
@@ -87,11 +94,21 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `isEbayIntegrationSyncedSale` (the eligibility predicate both ends share).
   Full contract in `src/lib/integrations/SKILL.md`'s "eBay order status
   push-back" section; see the gotchas below before changing any of it.
+- **Change the "Fulfilled from" location field or its shortage/dropship
+  warning** (advanced inventory, Business plan, Phase 3 Task 5): pure logic
+  in `_components/fulfillmentLocation.ts` + its colocated test
+  (`suggestedFulfillmentLocationId`, `fulfillmentStockWarning`,
+  `fulfillmentWarningText`); the field itself in
+  `_components/FulfillmentLocationField.tsx`; wiring in
+  `_components/AddSaleModal.tsx`/`EditSaleModal.tsx` (`tracksStock` +
+  `fulfillment` state). See "Gotchas — advanced inventory fulfillment
+  location" below before touching any of it.
 
 ## Test command
 
 `npx jest dashboard/sales` — runs `_store/salesSlice.test.ts` and
-`_components/orderMath.test.ts` (and any other `*.test.ts` colocated here).
+`_components/orderMath.test.ts` (and any other `*.test.ts` colocated here,
+including `_components/fulfillmentLocation.test.ts`).
 The push-back eligibility predicate is tested with the shared filters:
 `npx jest lib/utils/filters`.
 
@@ -597,6 +614,121 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   values" since they only need `sale` and `companyProfile`, not a new hook.
   If you add another role gate or another on-demand fetch to this page,
   follow the same placement, not the Derived Values section.
+
+## Gotchas — advanced inventory fulfillment location
+
+- **`suggestedFulfillmentLocationId` must mirror the DB trigger exactly**
+  (`inv_sale_before_write`, migration 047): platform default if that
+  location is active, else the tenant's `inventory_settings.default_location_id`,
+  else `""`. If the trigger's fallback logic ever changes, update this pure
+  function (`_components/fulfillmentLocation.ts`) in the same commit — the
+  suggestion shown in the UI and the location the DB actually assigns must
+  never diverge, or a user could believe an order shipped from a location
+  it didn't.
+- **`FulfillmentLocationField`'s suggestion effect requires a stable
+  `onChange`.** The effect's dependency array includes `onChange`; a
+  caller that passes an inline arrow function re-runs the "follow the
+  platform default" effect every render, which is harmless but wasteful —
+  both modals memoize it with `useCallback(() => setFulfillment(...), [])`.
+  Don't inline `onChange={(id, touched) => ...}` at the call site.
+- **The shortage warning is advisory only — it never blocks the save.**
+  `fetchStockByLocation`'s `.catch()` sets `available` back to `null`
+  (silently) rather than surfacing an error, and `fulfillmentStockWarning`
+  treats `available === null` as "don't warn." An order can always be saved
+  with fewer units on hand than ordered — the missing units are costed at
+  the last known price by the FIFO trigger once stock arrives (that's what
+  the warning text says). Don't add a blocking validation here.
+- **`tracksStock` gates the payload spread, not just the field's
+  visibility** — `...(tracksStock ? { fulfillment_location_id: fulfillment.id || null } : {})`
+  in both modals' insert/update. A Starter/Pro tenant, or a Business tenant
+  with advanced inventory not yet enabled, or a sale with no linked
+  product, sends byte-for-byte the same payload as before this feature —
+  same pattern Purchases' Task 4 established (`purchaseInventoryPayload`).
+- **`cogs_amount` is never sent** — it's written only by the FIFO
+  consumption trigger; neither modal's payload includes it (same rule as
+  `Purchase`'s trigger-owned columns).
+
+## Gotchas — FIFO cost of goods (order page, Phase 3 Task 6)
+
+- **`resolveOrderCogs`'s FIFO check is `sale.cogs_amount != null`, not
+  truthiness.** A FIFO-costed lot that cost nothing (e.g. a restocked return
+  re-entering stock at its original, already-fully-depreciated cost) books a
+  real `cogs_amount` of `0` — treating that as falsy would silently fall
+  through to a linked-purchase fallback (or hide the block entirely) for an
+  order that genuinely has a FIFO cost of `0`. There's a dedicated test for
+  this ("treats a FIFO cost of 0 as real") — don't "simplify" the guard to
+  `if (sale.cogs_amount)`.
+- **FIFO wins over the linked purchase unconditionally, even across
+  currencies.** Unlike the linked-purchase fallback (currency-gated —
+  a mismatch hides the block, see `CLAUDE.md`), a non-null `cogs_amount` is
+  always shown as-is, labelled with `sale.currency`. **Known limitation —
+  no FX in the ledger:** `cogs_amount` is summed from lot unit costs, which
+  carry the *purchases'* currency, but the order page labels it with the
+  *order's* currency. A USD order fulfilled from EUR-bought stock shows the
+  EUR amount under a USD label, and lots bought in several currencies are
+  blended without conversion. The row just shows what the ledger booked;
+  fixing it needs currency on lots + conversion in the trigger, not UI math.
+- **The "Fulfilled from" row needs `advanced.active`, not just
+  `advanced.entitled`.** A Business tenant that's entitled but hasn't run
+  the one-way "Enable" flow yet (`view === "enable"`, see
+  `inventory/CLAUDE.md`) has no real locations and `sale.fulfillment_location_id`
+  will be null on every order — but checking `entitled` alone would still be
+  wrong once they *do* enable it for orders placed before that point, since
+  `active` is the state that actually governs whether `fulfillment_location_id`
+  gets populated going forward. Follow `useAdvancedInventory()`'s own `active`
+  field, not a hand-rolled plan check.
+- **Non-advanced tenants must see byte-for-byte the pre-Task-6 behaviour.**
+  For a Starter/Pro tenant (or a Business tenant with advanced inventory not
+  enabled), `sale.cogs_amount` is always `null` (the FIFO trigger never
+  runs), so `resolveOrderCogs` falls straight through to the linked-purchase
+  branch — identical output to the old `computeGrossProfit`/`hasCurrencyMatch`
+  logic it replaced. If you change `resolveOrderCogs`'s precedence, re-run
+  the "falls back to a linked purchase" and "returns null" test cases to
+  confirm this hasn't drifted.
+- **`EditSaleModal`'s state (`form`, `fulfillment`, `showFees`, …) is seeded
+  only in `useState` initialisers, so every open must REMOUNT it with a
+  non-null `sale`.** `page.tsx` gets that for free (`key={editTarget?.id ??
+  "edit-sale"}` — the key changes on every open). `[id]/page.tsx` renders
+  the modal permanently with `sale={editOpen ? sale : null}`, so it first
+  mounts with `sale === null` (blank form); its key is therefore
+  `` `${sale.id}:${editOpen}` `` (final-review F6, 2026-09-26) — a plain
+  `key={sale.id}` never remounted, leaving the form (incl. the fulfillment
+  location) seeded from `null`. Keep `editOpen` in that key.
+- **The shortage warning adds the order's own consumption back
+  (final-review I2).** `available` comes from `fetchStockByLocation`, i.e.
+  AFTER this saved order already took its units, so comparing it with the
+  order's full quantity made an unchanged order read short ("3 in stock,
+  order of 3 → Only 0 in stock"). `fulfillmentStockWarning(location,
+  available, quantity, ownConsumption = 0)` compares `available +
+  ownConsumption`; `EditSaleModal` passes `ownConsumption = sale.quantity`
+  only when the location AND product are unchanged from the saved row, the
+  saved location is non-empty, and the saved order consumed (not `returned`
+  + `restock`). It also passes `consumes={false}` (no warning at all) when
+  the form's current status is `returned` with restock ticked. `AddSaleModal`
+  passes neither (defaults 0/true).
+- **Orders created before advanced inventory was enabled are read-only to
+  the ledger (final-review I3).** 047's sale trigger skips UPDATEs of rows
+  with `created_at < inventory_settings.enabled_at`, so `EditSaleModal`'s
+  `tracksStock` also requires `isTrackedByLedger(sale.created_at,
+  advanced.settings)` (`inventory/_lib/advancedInventory.ts`). A legacy
+  order with a linked product shows a muted "This order predates batch
+  tracking…" note instead of the field, and nothing is added to the
+  payload — before this, merely saving a legacy order wrote the suggested
+  platform default and the order page then claimed "Fulfilled from X"
+  although no stock was taken.
+- Both modals wrap the whole `handleSubmit` body in
+  `try { … } catch (err) { setError(inventoryErrorMessage(err, …)) } finally
+  { setSaving(false) }` (added by this feature — `AddSaleModal`'s submit had
+  no such wrapper before) so a thrown error (network/auth failure, not just
+  a returned `{ error }`) can't leave the button stuck on "Saving…" forever.
+  DB errors from the `sales` insert/update are mapped with
+  `inventoryErrorMessage(dbError, "Could not save the order.")` instead of
+  the raw Postgres message — this is what surfaces `INV_INSUFFICIENT`/
+  `INV_DROPSHIP_LOCATION`-style trigger errors as user-safe copy. The
+  post-success `writeAuditLog` calls (sale + linked purchase) each have
+  their own inner swallowing try/catch, matching Purchases' pattern — an
+  audit-write failure must never turn an already-saved order into a failure
+  toast.
 
 ## Gotchas
 

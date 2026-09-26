@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { Button } from "@/components/ui/Button";
@@ -12,6 +12,7 @@ import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { fetchLocationStockTotals } from "../_store/stockByLocation";
 import { locationRemoved, locationSaved } from "../_store/advancedInventorySlice";
 import { LOCATION_TYPE_LABELS, locationDeactivationBlocker, sortLocations } from "../_lib/advancedInventory";
 import { LocationModal } from "./LocationModal";
@@ -42,6 +43,31 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
   const [editTarget, setEditTarget] = useState<StockLocation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StockLocation | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const locationsKey = locations.map((l) => l.id).join(",");
+  // On-hand units per location, keyed by the locations-list snapshot it was
+  // fetched for — derived at render below instead of reset with a
+  // synchronous setState in the effect body (react-hooks/set-state-in-effect).
+  // The RPC isn't live on every tenant yet (migration 049 pending); a failed
+  // load keeps `data: null` so the column renders "—", never an error dump.
+  const [onHandResult, setOnHandResult] = useState<{ key: string; data: Record<string, number> | null }>({
+    key: "",
+    data: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLocationStockTotals()
+      .then((totals) => {
+        if (!cancelled) setOnHandResult({ key: locationsKey, data: totals });
+      })
+      .catch(() => {
+        if (!cancelled) setOnHandResult({ key: locationsKey, data: null });
+      });
+    return () => { cancelled = true; };
+  }, [locationsKey]);
+
+  const onHand = onHandResult.key === locationsKey ? onHandResult.data : null;
 
   // Remounts FulfillmentDefaultsCard whenever the stored defaults/locations
   // change (save elsewhere, reload) so its local draft always starts from
@@ -144,6 +170,18 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
       header: "Type",
       sortValue: (l: StockLocation) => LOCATION_TYPE_LABELS[l.type],
       render: (l: StockLocation) => <span className="text-sm text-(--color-text-base)">{LOCATION_TYPE_LABELS[l.type]}</span>,
+    },
+    {
+      header: "On hand",
+      sortValue: (l: StockLocation) => onHand?.[l.id] ?? 0,
+      render: (l: StockLocation) =>
+        l.type === "dropship" ? (
+          <span className="text-sm text-(--color-text-muted)">—</span>
+        ) : (
+          <span className={`text-sm tabular-nums ${(onHand?.[l.id] ?? 0) < 0 ? "text-(--color-danger-text)" : "text-(--color-text-base)"}`}>
+            {onHand ? onHand[l.id] ?? 0 : "—"}
+          </span>
+        ),
     },
     {
       header: "Status",
