@@ -6,9 +6,30 @@ pagination is active.
 
 ## Files in this folder
 
-- `page.tsx` — list view: name search (`ilike` filter), `<Pagination>`,
-  loading overlay, `(this page)` count label, row actions, wires up the modals
-  below and the shared `DeleteConfirmModal`.
+- `page.tsx` (Phase 2 shell, 2026-09-26) — thin shell only: `<PageHeader>` +
+  "+ Add Product" button state, the advanced-inventory `upsell`/`loading`/
+  `error` banners driven by `advancedInventoryView(plan, advanced)`
+  (`_lib/advancedInventory.ts`) and `fetchAdvancedInventory()`
+  (`_store/advancedInventorySlice.ts`, dispatched on mount only when
+  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored), and
+  renders `<ProductsTab>` unconditionally below them. No table/search code
+  lives here anymore — see `_components/ProductsTab.tsx`. The `enable` and
+  `active` views both currently render the same plain products page (no
+  half-built UI); the enable card (Task 4) and the `InventoryTabs` strip
+  (Task 6, only once there's a Locations tab) are not wired in yet.
+- `_components/ProductsTab.tsx` — the actual list view, moved out of
+  `page.tsx` unchanged: name search (`ilike` filter), `<Pagination>`,
+  loading overlay, `(this page)` count label, row actions, wires up
+  `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
+  Takes `{ addOpen, onAddClose }` — the "+ Add Product" button and its open
+  state live in `page.tsx` (the header), this component only owns the modal.
+- `_components/InventoryTabs.tsx` — accessible tab strip
+  (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
+  Built in Phase 2 Task 3 but **not yet rendered by `page.tsx`** — wired in
+  once the Locations tab exists (Task 6).
+- `_components/AdvancedInventoryUpsellCard.tsx` — Business-plan upsell card
+  shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; pure
+  presentational, links to `/dashboard/settings`.
 - `_store/inventorySlice.ts` — Redux slice for `state.inventory`.
   **Two data sets:**
   - Table data: `items`, `loaded`, `page`, `pageSize`, `total`, `isFetching` —

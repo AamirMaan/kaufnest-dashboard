@@ -26,7 +26,10 @@ since modal dropdowns use a different state key than the table.
 - **Change which records can link to a product**: that UI lives in the
   Purchases/Sales `Add`/`Edit` modals (`product_id` `Select`), not here.
   Those modals now read from `s.inventory.selectorItems` (not `.items`).
-- **Change list/table behavior or search**: `page.tsx` only.
+- **Change list/table behavior or search**: `_components/ProductsTab.tsx`
+  only (moved out of `page.tsx` in Phase 2 Task 3 — `page.tsx` is now just
+  the shell: header, "+ Add Product" open state, and the advanced-inventory
+  upsell/loading/error banners).
 - **Change reducer logic**: `_store/inventorySlice.ts` + its test.
 - **Change pagination**: `_store/inventorySlice.ts` (`fetchInventoryPage` thunk),
   `page.tsx` (`<Pagination>` wiring), `src/app/dashboard/layout.tsx` (initial
@@ -47,6 +50,18 @@ since modal dropdowns use a different state key than the table.
 
 ## Gotchas
 
+- **`page.tsx` is a shell, not the list view (Phase 2 Task 3, 2026-09-26)** —
+  the products table/search/pagination/modals live in
+  `_components/ProductsTab.tsx`, which takes `{ addOpen, onAddClose }` (the
+  "+ Add Product" button and its `useState` stay in `page.tsx`'s
+  `<PageHeader>` since the tab doesn't own the header). `page.tsx` itself
+  only decides which of `upsell`/`loading`/`error` banners to show above
+  `<ProductsTab>`, via `advancedInventoryView(plan, advanced)`. Don't add
+  table/search logic back into `page.tsx` — it belongs in `ProductsTab`.
+- **`InventoryTabs` exists but isn't rendered yet** — built in Task 3 for
+  Task 6 (once a Locations tab exists to switch to). Don't wire it into
+  `page.tsx` before the Locations tab is real, or the enable/active views
+  would show a tab strip with nothing behind the second tab.
 - **Two separate Redux keys**: `state.inventory.items` = paginated table data;
   `state.inventory.selectorItems` = full list for modal dropdowns. Never use
   `items` in Sales/Purchases modals — it is page-limited and will show only
