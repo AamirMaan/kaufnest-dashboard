@@ -56,7 +56,7 @@ Two Supabase projects:
 | `migrations/002_inventory_and_vat.sql` | `public` | ✅ applied — `products`, VAT columns, stock-sync triggers |
 | `migrations/003_add_order_status.sql` | `public.sales` | ✅ applied — `status`/`restock` columns + return-aware stock trigger |
 | `migrations/004_performance_indexes.sql` | `tenant_kaufnest.*` | ⏳ **apply now** — 6 new growth indexes on the live tenant schema |
-| `migrations/005_tenant_provisioning.sql` | `public` functions | ⏳ **re-apply now** — defines `provision_tenant_schema()` + `set_user_tenant()`, used by Phase 4; the function body was just MODIFIED in the repo to also provision the `notifications`/`notification_reads` tables, RLS, indexes, grants/revoke, and the three notification trigger functions (028/029) for new tenants, but the live Project B database still runs the OLD body — **until this file is re-applied, any newly provisioned tenant gets no notifications tables, policies, or triggers**. Its body now also calls `public.install_advanced_inventory(schema_name)` at the end (from `047`), guarded by `to_regprocedure('public.install_advanced_inventory(text)') IS NOT NULL` so `005` can safely be re-applied before `047` exists without breaking sign-up — but the feature itself is only installed once `047` has actually been applied, so re-apply `047` first (or alongside) to get it on new tenants. |
+| `migrations/005_tenant_provisioning.sql` | `public` functions | ⏳ **re-apply now** — defines `provision_tenant_schema()` + `set_user_tenant()`, used by Phase 4; the function body was just MODIFIED in the repo to also provision the `notifications`/`notification_reads` tables, RLS, indexes, grants/revoke, and the three notification trigger functions (028/029) for new tenants, but the live Project B database still runs the OLD body — **until this file is re-applied, any newly provisioned tenant gets no notifications tables, policies, or triggers**. Its body now also calls `public.install_advanced_inventory(schema_name)` at the end (from `047`), guarded by `to_regprocedure('public.install_advanced_inventory(text)') IS NOT NULL` so `005` can safely be re-applied before `047` exists without breaking sign-up — but the feature itself is only installed once `047` has actually been applied, so re-apply `047` first (or alongside) to get it on new tenants. **Live bug (found 2026-09-26): the deployed body breaks EVERY new-tenant provision** with `unrecognized format() type specifier "e"` — `get_expenses_overview` (from `045`, mirrored here) had bare `ILIKE '%ebay%'`/`'%amazon%'` inside a `format()` string. Fixed in the repo (doubled to `%%`); signups stay broken until this file is re-applied to Project B. `045` itself is unaffected (`run_on_all_tenant_schemas` uses `replace()`, not `format()`). |
 | `migrations/006_bootstrap_tenant_kaufnest.sql` | `tenant_kaufnest` | ✅ applied — **do not re-run**, historical record only |
 | `migrations/007_company_profile_invoice_fields.sql` | `tenant_kaufnest.company_profile` | ⏳ **apply now** — adds `tax_id`/`phone`/`email`/`vat_rate`/`bank_name`/`iban`/`bic`/`invoice_prefix`/`payment_terms`/`footer_notes` columns (folds the old localStorage invoice settings into `company_profile`) |
 | `migrations/008_platform_integrations.sql` | `tenant_kaufnest` | ⏳ **apply now** — adds `platform_connections` table (+ RLS, admin/super_admin-only including SELECT) and `sales.external_order_id` + unique `(platform, external_order_id)` index, for the Integrations feature (`src/lib/integrations/`) |
@@ -318,6 +318,13 @@ once `select("*")` over the full table stops being viable:
   — never copy its SQL into 005. Inside its `format($sql$ … $sql$)` strings a
   literal `%` breaks `format()`; build messages with `||`. It is not an RPC —
   EXECUTE is revoked from PUBLIC/anon/authenticated.
+- **A bare `%` anywhere inside a `format($sql$ … $sql$)` body breaks it —
+  including in `LIKE`/`ILIKE` patterns and in SQL comments.** `005`'s
+  `provision_tenant_schema()` builds almost everything with `format()`, so
+  mirrored code copied from a `run_on_all_tenant_schemas` migration (which
+  uses `replace()` and tolerates `%`) must have every `%` doubled to `%%`
+  (`'%%ebay%%'`). The failure only shows when a tenant is provisioned, not
+  when `005` is applied — this is how #105 silently broke every signup.
 - **Trigger/SQL tests run against live Project B safely**: execute 047 (only
   defines the installer), then `supabase/tests/advanced_inventory.test.sql`.
   It provisions `tenant_zz_invtest`, asserts, and raises `INV_TESTS_PASSED`

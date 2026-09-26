@@ -593,11 +593,13 @@ BEGIN
       platform_sub AS (
         SELECT 'ebay' AS platform, coalesce(sum(amount), 0) AS amount
         FROM filtered
-        WHERE vendor ILIKE '%ebay%' OR title ILIKE '%ebay%'
+        -- Doubled percent signs: this body is a format() string, which
+        -- reads a single one as a type specifier and fails at provisioning.
+        WHERE vendor ILIKE '%%ebay%%' OR title ILIKE '%%ebay%%'
         UNION ALL
         SELECT 'amazon' AS platform, coalesce(sum(amount), 0) AS amount
         FROM filtered
-        WHERE vendor ILIKE '%amazon%' OR title ILIKE '%amazon%'
+        WHERE vendor ILIKE '%%amazon%%' OR title ILIKE '%%amazon%%'
       )
       SELECT jsonb_build_object(
         'total', (SELECT coalesce(sum(amount), 0) FROM filtered),
