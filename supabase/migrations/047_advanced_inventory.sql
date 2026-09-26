@@ -741,6 +741,9 @@ BEGIN
     DECLARE
       v_s            inventory_settings;
       v_new_consumes boolean;
+      v_old_consumes boolean;
+      v_loc          uuid;
+      v_lot          uuid;
     BEGIN
       SELECT * INTO v_s FROM inventory_settings WHERE id;
       IF NOT coalesce(v_s.advanced_enabled, false) THEN
@@ -751,12 +754,54 @@ BEGIN
 
       IF TG_OP = 'UPDATE' THEN
         IF OLD.created_at < v_s.enabled_at THEN
-          RETURN NULL; -- pre-enable rows are not part of the ledger
+          -- Pre-enable rows are outside the ledger, EXCEPT a flip of the
+          -- consumption rule (e.g. marked returned + restocked, or that
+          -- undone). The BEFORE trigger leaves their location empty, so
+          -- resolve it here: own, else platform default, else default.
+          IF NEW.product_id IS NULL THEN
+            RETURN NULL;
+          END IF;
+          v_loc := coalesce(
+            NEW.fulfillment_location_id,
+            (SELECT location_id FROM platform_location_defaults WHERE platform = NEW.platform),
+            v_s.default_location_id);
+          IF NOT inv_location_holds_stock(v_loc) THEN
+            RETURN NULL;
+          END IF;
+          v_old_consumes := inv_sale_consumes(OLD.product_id, v_loc, OLD.quantity, OLD.status, OLD.restock);
+          v_new_consumes := inv_sale_consumes(NEW.product_id, v_loc, NEW.quantity, NEW.status, NEW.restock);
+          IF v_old_consumes AND NOT v_new_consumes THEN
+            IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = NEW.id) THEN
+              -- It consumed via an earlier un-restock below: undo exactly
+              -- that, never add units twice.
+              PERFORM inv_revert_sale(NEW.id);
+              PERFORM inv_set_cogs(NEW.id, 0);
+            ELSE
+              -- Units sold before enable come back as a zero-cost opening lot.
+              PERFORM inv_lock(NEW.product_id, v_loc);
+              INSERT INTO stock_lots (product_id, location_id, kind, received_at, unit_cost, qty_received, qty_remaining)
+                VALUES (NEW.product_id, v_loc, 'opening', timestamptz '1970-01-01 00:00:00+00', 0, OLD.quantity, OLD.quantity)
+                RETURNING id INTO v_lot;
+              INSERT INTO stock_movements (product_id, location_id, lot_id, kind, qty, unit_cost)
+                VALUES (NEW.product_id, v_loc, v_lot, 'opening', OLD.quantity, 0);
+              PERFORM inv_settle_shortfall(v_lot);
+            END IF;
+          ELSIF v_new_consumes AND NOT v_old_consumes THEN
+            PERFORM inv_lock(NEW.product_id, v_loc);
+            PERFORM inv_consume(NEW.product_id, v_loc, NEW.quantity, NEW.id);
+            PERFORM inv_recompute_cogs(ARRAY[NEW.id]);
+          END IF;
+          RETURN NULL; -- any other pre-enable edit is ignored
         END IF;
         -- Product deleted: its FK cascade is nulling sales.product_id. Keep
         -- the booked COGS; lots/movements cascade from products on their own.
         IF NEW.product_id IS NULL AND OLD.product_id IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM products WHERE id = OLD.product_id) THEN
+          RETURN NULL;
+        END IF;
+        -- A sale that never had (or no longer has) a product is outside the
+        -- ledger: keep whatever cogs_amount it has booked.
+        IF OLD.product_id IS NULL AND NEW.product_id IS NULL THEN
           RETURN NULL;
         END IF;
         -- Only stock-relevant edits re-run FIFO; a note/fee edit (or our own

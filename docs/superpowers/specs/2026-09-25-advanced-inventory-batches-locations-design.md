@@ -183,6 +183,20 @@ A lot "holds stock" only when its location's `type <> 'dropship'`.
 - **Update (stock-relevant) / Delete**: revert — restore each of the sale's movements' qty back
   to its lot, delete the movements — then reapply NEW (update only). Covers
   edits to quantity, location, status/restock and product.
+- **Pre-enable returns**: rows created before `enabled_at` are otherwise
+  ignored. An update to one acts only when the consumption rule's result flips,
+  the sale has a product, and its location (own, else platform default, else
+  `default_location_id`, resolved in the AFTER trigger) holds stock. Into
+  returned + restocked: if the sale has movements (from an earlier un-restock)
+  they are reverted and `cogs_amount` set to 0; otherwise the `OLD.quantity`
+  units come back as a new zero-cost `opening` lot (`received_at` 1970) with an
+  `opening` movement, settling any shortfall at that location, and
+  `cogs_amount` is left alone. Out of it (restock undone): FIFO consumes
+  `quantity` at that location and COGS is recomputed. Any other pre-enable edit
+  is ignored.
+- **Productless sales are ignored**: an update where both OLD and NEW
+  `product_id` are null (never had a product, or it was deleted) touches no
+  lots and keeps any booked `cogs_amount`.
 - `cogs_amount` is recomputed by the AFTER trigger via a direct `UPDATE`
   guarded against recursion (`pg_trigger_depth()` check), so it is correct
   after every write.

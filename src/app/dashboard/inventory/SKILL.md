@@ -103,10 +103,26 @@ since modal dropdowns use a different state key than the table.
 - **`sales.cogs_amount` is trigger-owned.** `inv_sale_before_write` discards
   any client-supplied value; only `inv_set_cogs`/`inv_recompute_cogs` (which set
   the transaction-local GUC `inv.writing_cogs`) can write it. Never send it.
-- **Rows created before `enabled_at` are outside the ledger.** Editing or
-  deleting a pre-enable purchase/sale adjusts legacy `current_stock` only, so
-  lot totals can drift from `current_stock` by exactly those edits. By design
-  ("start clean").
+- **Rows created before `enabled_at` are outside the ledger — except a
+  return flip.** Editing or deleting a pre-enable purchase/sale adjusts legacy
+  `current_stock` only, so lot totals can drift from `current_stock` by exactly
+  those edits. By design ("start clean"). The one exception is a pre-enable
+  sale whose consumption rule flips (`inv_sale_after_write`, only when it has
+  a product and its location — own, else platform default, else
+  `default_location_id` — holds stock; the BEFORE trigger still does NOT fill
+  the location on these rows):
+  - into returned + restocked → the units come back as a new zero-cost
+    `opening` lot (`received_at` 1970) at that location, settling any
+    shortfall there; `cogs_amount` untouched. If the sale already has
+    movements (from an earlier un-restock) those are reverted instead and COGS
+    set to 0 — never both, or the units would be counted twice.
+  - out of it (restock undone) → FIFO consumes the units back (usually the
+    zero-cost opening lot) and COGS is recomputed from those movements.
+  A later DELETE reverts any such movements (the BEFORE DELETE revert has no
+  `created_at` check).
+- **Sales with no product are ignored by the ledger.** Whether the sale
+  never had a product or its product was deleted (FK nulls `product_id`), a
+  later edit does nothing to lots and keeps any booked `cogs_amount`.
 - **Only stock-relevant sale edits re-run FIFO** (product, location, quantity,
   or the consumes/doesn't-consume result). A stock-relevant edit may land on
   different lots than before if other sales consumed in between, changing that

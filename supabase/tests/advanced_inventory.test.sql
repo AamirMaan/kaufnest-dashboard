@@ -27,6 +27,7 @@ DECLARE
   v_num numeric;
   v_int integer;
   v_txt text;
+  v_gq  integer;  -- Gadget units at Main before the Task 11 section
 BEGIN
   PERFORM public.provision_tenant_schema('tenant_zz_invtest');
   PERFORM public.install_advanced_inventory('tenant_zz_invtest');
@@ -442,6 +443,72 @@ BEGIN
      OR EXISTS (SELECT 1 FROM stock_movements WHERE product_id = v_ptmp)
      OR EXISTS (SELECT 1 FROM stock_transfers WHERE product_id = v_ptmp) THEN
     RAISE EXCEPTION 'FAIL delete: ledger rows survived product delete';
+  END IF;
+
+  -- ── Section: pre-enable returns + productless sales (Task 11) ──
+  -- v_sg is the pre-enable Gadget sale (ebay, no location, qty 2 after the
+  -- ignored Task 6 edit). ebay still maps to Main; default location is FBA.
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_gq FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_gq IS DISTINCT FROM 3 THEN RAISE EXCEPTION 'FAIL pre-enable: Gadget at Main expected 3, got %', v_gq; END IF;
+
+  -- Returned + restocked: the 2 units come back as a zero-cost opening lot at Main; COGS untouched
+  UPDATE sales SET status = 'returned', restock = true WHERE id = v_sg;
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_int IS DISTINCT FROM v_gq + 2 THEN RAISE EXCEPTION 'FAIL pre-enable: restock expected Gadget at Main %, got %', v_gq + 2, v_int; END IF;
+  SELECT count(*) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main AND kind = 'opening';
+  IF v_int IS DISTINCT FROM 2 THEN RAISE EXCEPTION 'FAIL pre-enable: expected 2 Gadget opening lots, got %', v_int; END IF;
+  IF NOT EXISTS (SELECT 1 FROM stock_lots
+                 WHERE product_id = v_prod2 AND location_id = v_main AND kind = 'opening'
+                   AND unit_cost = 0 AND qty_received = 2 AND qty_remaining = 2) THEN
+    RAISE EXCEPTION 'FAIL pre-enable: returned units not added as a zero-cost opening lot';
+  END IF;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sg) IS DISTINCT FROM NULL THEN
+    RAISE EXCEPTION 'FAIL pre-enable: restock changed cogs_amount';
+  END IF;
+
+  -- Restock undone: FIFO takes 2 zero-cost opening units back → COGS 0.00
+  UPDATE sales SET status = 'delivered', restock = false WHERE id = v_sg;
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_int IS DISTINCT FROM v_gq THEN RAISE EXCEPTION 'FAIL pre-enable: un-restock expected Gadget at Main %, got %', v_gq, v_int; END IF;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sg) IS DISTINCT FROM 0.00 THEN
+    RAISE EXCEPTION 'FAIL pre-enable: un-restock COGS expected 0.00';
+  END IF;
+
+  -- A non-flip pre-enable edit is still ignored
+  UPDATE sales SET quantity = 3, total_amount = 27 WHERE id = v_sg;
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_int IS DISTINCT FROM v_gq THEN RAISE EXCEPTION 'FAIL pre-enable: non-flip edit moved Gadget at Main to %', v_int; END IF;
+
+  -- Restocked again: reverts the un-restock's movements instead of adding a second opening lot
+  UPDATE sales SET status = 'returned', restock = true WHERE id = v_sg;
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_int IS DISTINCT FROM v_gq + 2 THEN RAISE EXCEPTION 'FAIL pre-enable: re-restock expected Gadget at Main %, got %', v_gq + 2, v_int; END IF;
+  SELECT count(*) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main AND kind = 'opening';
+  IF v_int IS DISTINCT FROM 2 THEN RAISE EXCEPTION 'FAIL pre-enable: re-restock added another opening lot (% lots)', v_int; END IF;
+  IF EXISTS (SELECT 1 FROM stock_movements WHERE sale_id = v_sg) THEN
+    RAISE EXCEPTION 'FAIL pre-enable: re-restock left sale movements behind';
+  END IF;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sg) IS DISTINCT FROM 0.00 THEN
+    RAISE EXCEPTION 'FAIL pre-enable: re-restock COGS expected 0.00';
+  END IF;
+
+  -- Deleting the restocked return leaves the lots alone (legacy current_stock doesn't move either)
+  DELETE FROM sales WHERE id = v_sg;
+  SELECT coalesce(sum(qty_remaining), 0) INTO v_int FROM stock_lots
+    WHERE product_id = v_prod2 AND location_id = v_main;
+  IF v_int IS DISTINCT FROM v_gq + 2 THEN RAISE EXCEPTION 'FAIL pre-enable: deleting the restocked return moved Gadget at Main to %', v_int; END IF;
+
+  -- Orphaned sale (Doomed2, product deleted above) keeps its booked COGS on a later edit
+  UPDATE sales SET quantity = 1, total_amount = 10 WHERE id = v_sa;
+  IF (SELECT cogs_amount FROM sales WHERE id = v_sa) IS DISTINCT FROM 8.00 THEN
+    RAISE EXCEPTION 'FAIL productless: edit wiped booked COGS';
   END IF;
 
   RAISE EXCEPTION 'INV_TESTS_PASSED';
