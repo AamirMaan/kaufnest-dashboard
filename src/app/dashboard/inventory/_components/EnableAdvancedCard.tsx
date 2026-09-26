@@ -24,29 +24,43 @@ export function EnableAdvancedCard({ isAdmin }: Props) {
   async function handleEnable() {
     setEnabling(true);
     try {
-      const res = await fetch("/api/inventory/enable-advanced", { method: "POST" });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      let res: Response;
+      let body: { error?: string };
+      try {
+        res = await fetch("/api/inventory/enable-advanced", { method: "POST" });
+        body = (await res.json().catch(() => ({}))) as { error?: string };
+      } catch {
+        toastError("Could not enable batches & locations", "Please check your connection and try again.");
+        return;
+      }
       if (!res.ok) {
         toastError("Could not enable batches & locations", body.error ?? "Please try again.");
         return;
       }
-      const supabase = await createTenantClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const log = await writeAuditLog(supabase, {
-          userId: user.id,
-          userEmail: user.email ?? "",
-          action: "update",
-          entityType: "inventory_settings",
-          metadata: { event: "advanced_inventory_enabled" },
-        });
-        if (log) dispatch(addAuditLog(log));
+
+      // The switch is already on server-side at this point — nothing below may
+      // surface as an "enable failed" toast. Audit logging is best-effort
+      // (writeAuditLog already swallows its own DB errors and returns null).
+      try {
+        const supabase = await createTenantClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const log = await writeAuditLog(supabase, {
+            userId: user.id,
+            userEmail: user.email ?? "",
+            action: "update",
+            entityType: "inventory_settings",
+            metadata: { event: "advanced_inventory_enabled" },
+          });
+          if (log) dispatch(addAuditLog(log));
+        }
+      } catch {
+        // Never let an audit-logging blip report a failed enable.
       }
+
       await dispatch(fetchAdvancedInventory());
       setConfirmOpen(false);
       success("Batches & locations enabled", "Your current stock is now an opening batch at “Main”.");
-    } catch {
-      toastError("Could not enable batches & locations", "Please check your connection and try again.");
     } finally {
       setEnabling(false);
     }

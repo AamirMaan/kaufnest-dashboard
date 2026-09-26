@@ -184,3 +184,17 @@ since modal dropdowns use a different state key than the table.
   modal, not whether the card itself renders). If you ever change
   `fetchAdvancedInventory` to skip refetching `inventory_settings`, this
   card will keep showing "Enable" after a successful enable.
+- **`EnableAdvancedCard.handleEnable` deliberately has two separate
+  try/catches, not one wrapping everything (fix round 1, 2026-09-26).** The
+  outer one only covers the `fetch` + JSON parse + `!res.ok` check, and is
+  the only place that shows the "Could not enable batches & locations"
+  toast. Once the route returns 200, the switch is already flipped
+  server-side, so nothing after that point may report a failure: the audit
+  write runs in its own try/catch that silently swallows errors (it's
+  best-effort — `writeAuditLog` already returns `null` on its own DB
+  errors), and `fetchAdvancedInventory()`/`setConfirmOpen(false)`/the
+  success toast always run unconditionally after it. Don't merge these back
+  into one try/catch — a network blip on `auth.getUser()` after a
+  successful enable must not make the user think the enable failed, leave
+  the modal open, or skip the state refresh that flips `page.tsx`'s view to
+  `"active"`.
