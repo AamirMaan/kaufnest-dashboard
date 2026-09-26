@@ -101,10 +101,12 @@ since modal dropdowns use a different state key than the table.
   `_store/transfersSlice.ts` (+ test) handles the paginated `stock_transfers`
   history. Registered in `src/store/store.ts` as `state.stockTransfers`. Any
   new transfer history component (tab, viewer, etc.) wires `fetchTransfersPage`.
-- **Change transfer stock modal logic, validation, or preview** (Phase 4
-  Task 1, 2026-09-26): `_lib/transfers.ts` (+ test — pure preview/validation/
-  payload helpers), `_store/productLots.ts` (the `fetchAvailableLots` source-lot
-  fetcher). Any new transfer components (modal, tab, etc.) wire these two.
+- **Change the transfer form or preview** (Phase 4 Task 1/3, 2026-09-26):
+  `_lib/transfers.ts` (+ test — pure preview/validation/payload helpers),
+  `_components/TransferStockModal.tsx` (the form itself — product/location
+  pickers, the live FIFO preview table, submit). `_store/productLots.ts`
+  (`fetchAvailableLots`) is the source-lot fetcher both depend on. Not yet
+  mounted anywhere (Task 4 wires it into a page).
 
 ## Test command
 

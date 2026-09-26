@@ -184,6 +184,19 @@ pagination is active.
   `StockTransferRow` extends `StockTransfer` with `product_name: string | null` (embedded via
   `products(name)` FK). `fetchTransfersPage({ page, pageSize })` pages newest-first via
   `.order("date", { ascending: false }).order("created_at", { ascending: false })`.
+- `_components/TransferStockModal.tsx` (Phase 4 Task 3, 2026-09-26) —
+  `TransferStockModal({ open, onClose, onSaved })`: product + source location
+  pickers drive `fetchAvailableLots` (`_store/productLots.ts`) keyed by
+  `"<productId>:<fromLocationId>"` (same keyed-result, derived-at-render
+  pattern as `ProductLotsModal.tsx` — never a synchronous effect-body reset);
+  the fetched lots feed `fifoPreview` (`_lib/transfers.ts`) to render the live
+  "Batches that will move" table (units taken per batch, source vs.
+  destination unit cost, available total) as the product/location/quantity/
+  cost fields change. Submitting inserts into `stock_transfers`
+  (`transferInsertPayload`), writes a best-effort audit log
+  (`entityType: "stock_transfer"`, `action: "create"`), toasts, then calls
+  `onSaved()` and closes. Not mounted anywhere yet — Task 4 wires it into a
+  page/tab with a remount-on-open `key`.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
