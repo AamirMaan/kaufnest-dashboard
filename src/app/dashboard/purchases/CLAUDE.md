@@ -134,7 +134,12 @@ compute a local `tracksStock` boolean:
 - Add: `advanced.active && (!!form.product_id || (form.add_to_inventory &&
   isNewProductName))` — true once the purchase either links an existing
   inventory product or will create+link a new one.
-- Edit: `advanced.active && !!form.product_id`.
+- Edit: `advanced.active && !!form.product_id &&
+  isTrackedByLedger(purchase.created_at, advanced.settings)` — a purchase
+  created before advanced inventory was enabled is ignored by the ledger
+  triggers on UPDATE, so it shows a muted "This purchase predates batch
+  tracking, so its location and landed costs aren't tracked." note instead
+  of the fields, and nothing is added to the payload (final-review I3).
 
 `<PurchaseInventoryFields>` renders **only when `tracksStock` is true** —
 for Starter/Pro tenants, or a Business tenant that hasn't enabled advanced
@@ -152,10 +157,13 @@ insert/update payload gets `{}` spread in (i.e. nothing added) via
   database actually uses to cost the stock lot — never derive the stored
   landed cost from this component; it exists purely so the user sees a
   preview while typing.
-- The submit button is disabled while `tracksStock && !isPurchaseInventoryFieldsValid(inv)` (negative or
-  non-numeric freight/customs/other), in addition to the existing
-  `saving` check — matches the "mutating button must never look clickable
-  when it can't succeed" convention (AGENTS.md → Form conventions).
+- The submit button is `disabled={saving || !isFormValid}` (final-review
+  F5), where `isFormValid` mirrors exactly what `handleSubmit` rejects —
+  Add: product name non-empty, unit price > 0, and
+  `isPurchaseInventoryFieldsValid(inv)` when `tracksStock`; Edit: the same
+  plus a non-empty reason for edit — matches the "mutating button must
+  never look clickable when it can't succeed" convention (AGENTS.md → Form
+  conventions).
 - `EditPurchaseModal` initialises `inv` via
   `purchaseInventoryFieldsFrom(purchase ?? {})` — safe because the modal is
   always rendered with `key={editTarget?.id ?? "edit-purchase"}` at its

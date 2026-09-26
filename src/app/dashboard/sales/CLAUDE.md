@@ -157,7 +157,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `suggestedFulfillmentLocationId(platform, platformDefaults, locations,
   settings)` (mirrors the `inv_sale_before_write` DB trigger — platform
   default if active, else the tenant default, else `""`),
-  `fulfillmentStockWarning(location, available, quantity)` → `StockWarning`
+  `fulfillmentStockWarning(location, available, quantity, ownConsumption = 0)` → `StockWarning`
   (`{ kind: "short", available } | { kind: "dropship" } | null`), and
   `fulfillmentWarningText(warning, locationName)`. See "Advanced inventory:
   fulfillment location" below.

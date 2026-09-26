@@ -734,8 +734,11 @@ export default function SaleDetailPage({ params }: PageProps) {
       </div>
 
       {/* Modals */}
+      {/* Keyed on editOpen too: the modal first mounts closed (sale=null), and
+          its useState initialisers only run on mount — remount on every open
+          so the form (incl. fulfillment location) seeds from this sale. */}
       <EditSaleModal
-        key={sale.id}
+        key={`${sale.id}:${editOpen}`}
         sale={editOpen ? sale : null}
         onClose={() => setEditOpen(false)}
         onSuccess={() => success("Order updated", "Changes have been saved.")}

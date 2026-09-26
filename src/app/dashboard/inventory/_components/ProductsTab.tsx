@@ -26,6 +26,11 @@ function isLowStock(p: Product): boolean {
   return p.reorder_threshold != null && p.current_stock <= p.reorder_threshold;
 }
 
+/** Shown instead of a number while stock is loading or failed to load — never a made-up 0. */
+function NoStockData() {
+  return <span className="text-sm text-(--color-text-muted)">—</span>;
+}
+
 function StockCell({ qty, strong }: { qty: number; strong?: boolean }) {
   const tone = qty < 0 ? "text-(--color-danger-text)" : "text-(--color-text-base)";
   return <span className={`text-sm tabular-nums ${strong ? "font-semibold" : ""} ${tone}`}>{qty}</span>;
@@ -74,7 +79,9 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
   const advanced = useAdvancedInventory();
   const columnsForStock = useMemo(() => stockColumns(advanced.locations), [advanced.locations]);
   const pageIds = useMemo(() => products.map((p) => p.id).join(","), [products]);
-  const stockRequestKey = `${advanced.active}:${pageIds}`;
+  // Bumped after a batch's opening cost is edited, so Avg. cost re-fetches.
+  const [stockRefresh, setStockRefresh] = useState(0);
+  const stockRequestKey = `${advanced.active}:${pageIds}:${stockRefresh}`;
   const [stockResult, setStockResult] = useState<StockRequestResult | null>(null);
 
   useEffect(() => {
@@ -91,7 +98,9 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
   }, [advanced.active, pageIds, columnsForStock, stockRequestKey]);
 
   const stockMatchesRequest = stockResult?.key === stockRequestKey;
-  const stock = stockMatchesRequest ? stockResult!.data ?? {} : {};
+  // null = no data (still loading, or the load failed) — rendered as "—",
+  // distinct from loaded data, where a product with no row really has 0.
+  const stock = stockMatchesRequest ? stockResult!.data : null;
   const stockError = stockMatchesRequest ? stockResult!.error : null;
 
   // ── Search ────────────────────────────────────────────────────────────────
@@ -165,22 +174,25 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
       ? [
           ...columnsForStock.map((c) => ({
             header: c.label,
-            sortValue: (p: Product) => stock[p.id]?.cells[c.id] ?? 0,
-            render: (p: Product) => <StockCell qty={stock[p.id]?.cells[c.id] ?? 0} />,
+            sortValue: (p: Product) => (stock ? stock[p.id]?.cells[c.id] ?? 0 : -Infinity),
+            render: (p: Product) => (stock ? <StockCell qty={stock[p.id]?.cells[c.id] ?? 0} /> : <NoStockData />),
           })),
           {
             header: "Total",
-            sortValue: (p: Product) => stock[p.id]?.total ?? 0,
-            render: (p: Product) => <StockCell qty={stock[p.id]?.total ?? 0} strong />,
+            sortValue: (p: Product) => (stock ? stock[p.id]?.total ?? 0 : -Infinity),
+            render: (p: Product) => (stock ? <StockCell qty={stock[p.id]?.total ?? 0} strong /> : <NoStockData />),
           },
           {
             header: "Avg. cost",
-            sortValue: (p: Product) => stock[p.id]?.avgUnitCost ?? -1,
-            render: (p: Product) => (
-              <span className="text-sm text-(--color-text-muted) tabular-nums">
-                {stock[p.id]?.avgUnitCost != null ? stock[p.id]!.avgUnitCost!.toFixed(2) : "—"}
-              </span>
-            ),
+            sortValue: (p: Product) => (stock ? stock[p.id]?.avgUnitCost ?? -1 : -Infinity),
+            render: (p: Product) => {
+              const avg = stock?.[p.id]?.avgUnitCost;
+              return (
+                <span className="text-sm text-(--color-text-muted) tabular-nums">
+                  {avg != null ? avg.toFixed(2) : "—"}
+                </span>
+              );
+            },
           },
         ]
       : [
@@ -295,7 +307,12 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
       />
-      <ProductLotsModal product={lotsProduct} isAdmin={isAdmin} onClose={() => setLotsProduct(null)} />
+      <ProductLotsModal
+        product={lotsProduct}
+        isAdmin={isAdmin}
+        onClose={() => setLotsProduct(null)}
+        onChanged={() => setStockRefresh((n) => n + 1)}
+      />
     </div>
   );
 }

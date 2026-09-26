@@ -19,9 +19,18 @@ interface Props {
   touched: boolean;
   onChange: (locationId: string, touched: boolean) => void;
   disabled?: boolean;
+  /**
+   * Units this order already took from `value` (Edit of a saved order that
+   * consumed stock there) — added back to the on-hand figure before comparing.
+   */
+  ownConsumption?: number;
+  /** false when the order won't take stock (returned + restock) — no warning at all. */
+  consumes?: boolean;
 }
 
-export function FulfillmentLocationField({ productId, platform, quantity, value, touched, onChange, disabled }: Props) {
+export function FulfillmentLocationField({
+  productId, platform, quantity, value, touched, onChange, disabled, ownConsumption = 0, consumes = true,
+}: Props) {
   const { locations, platformDefaults, settings } = useAdvancedInventory();
   // Keyed by the productId/value pair it was fetched for, so a stale result
   // from a since-superseded location/product can never be shown — derived
@@ -52,7 +61,7 @@ export function FulfillmentLocationField({ productId, platform, quantity, value,
 
   const available = stock && stock.key === `${productId}:${value}` ? stock.available : null;
   const location = locations.find((l) => l.id === value);
-  const warning = fulfillmentStockWarning(location, available, quantity);
+  const warning = consumes ? fulfillmentStockWarning(location, available, quantity, ownConsumption) : null;
 
   return (
     <Field label="Fulfilled from">

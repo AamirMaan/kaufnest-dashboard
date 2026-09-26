@@ -18,15 +18,24 @@ export function suggestedFulfillmentLocationId(
 
 export type StockWarning = { kind: "short"; available: number } | { kind: "dropship" } | null;
 
+/**
+ * `ownConsumption` is the number of units this very order already took from
+ * `location` (Edit: the saved order's quantity when it consumed stock there).
+ * `available` is read after that consumption, so those units are added back
+ * before comparing with the order's full quantity.
+ */
 export function fulfillmentStockWarning(
   location: StockLocation | undefined,
   available: number | null,
   quantity: number,
+  ownConsumption = 0,
 ): StockWarning {
   if (!location) return null;
   if (location.type === "dropship") return { kind: "dropship" };
-  if (available === null || available >= quantity) return null;
-  return { kind: "short", available: Math.max(available, 0) };
+  if (available === null) return null;
+  const usable = available + ownConsumption;
+  if (usable >= quantity) return null;
+  return { kind: "short", available: Math.max(usable, 0) };
 }
 
 export function fulfillmentWarningText(warning: Exclude<StockWarning, null>, locationName: string): string {

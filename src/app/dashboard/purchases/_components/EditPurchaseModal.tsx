@@ -13,6 +13,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { isTrackedByLedger } from "@/app/dashboard/inventory/_lib/advancedInventory";
 import { PurchaseInventoryFields } from "./PurchaseInventoryFields";
 import {
   isPurchaseInventoryFieldsValid,
@@ -93,8 +94,18 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
-  const tracksStock = advanced.active && !!form.product_id;
+  // The ledger triggers ignore UPDATEs of rows created before advanced
+  // inventory was enabled, so a legacy purchase gets a note, not the fields.
+  const linkedWhileActive = advanced.active && !!form.product_id;
+  const tracksStock = linkedWhileActive && !!purchase && isTrackedByLedger(purchase.created_at, advanced.settings);
   const defaultLocationName = advanced.locations.find((l) => l.id === advanced.settings?.default_location_id)?.name ?? null;
+
+  // Mirrors exactly what handleSubmit rejects, so Save is never clickable when it can't succeed.
+  const isFormValid =
+    !!form.product_name.trim() &&
+    price > 0 &&
+    !!form.reason.trim() &&
+    (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -195,7 +206,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
       footer={
         <>
           <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" form="edit-purchase-form" disabled={saving || (tracksStock && !isPurchaseInventoryFieldsValid(inv))}>
+          <Button type="submit" form="edit-purchase-form" disabled={saving || !isFormValid}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </>
@@ -292,6 +303,11 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
             currency={form.currency}
             disabled={saving}
           />
+        )}
+        {linkedWhileActive && !tracksStock && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            This purchase predates batch tracking, so its location and landed costs aren&apos;t tracked.
+          </p>
         )}
 
         <Field label="Description">

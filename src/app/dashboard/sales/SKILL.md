@@ -661,12 +661,13 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **FIFO wins over the linked purchase unconditionally, even across
   currencies.** Unlike the linked-purchase fallback (currency-gated —
   a mismatch hides the block, see `CLAUDE.md`), a non-null `cogs_amount` is
-  always shown as-is in `sale.currency` — the FIFO ledger only ever operates
-  in one tenant's schema, so `sale.currency` and the lots it consumed are
-  assumed to agree. **Known limit**: if a tenant's purchases/lots were
-  bought in more than one currency, the FIFO consumption trigger blends them
-  without converting — this row does not correct for that; it just shows
-  what the ledger booked.
+  always shown as-is, labelled with `sale.currency`. **Known limitation —
+  no FX in the ledger:** `cogs_amount` is summed from lot unit costs, which
+  carry the *purchases'* currency, but the order page labels it with the
+  *order's* currency. A USD order fulfilled from EUR-bought stock shows the
+  EUR amount under a USD label, and lots bought in several currencies are
+  blended without conversion. The row just shows what the ledger booked;
+  fixing it needs currency on lots + conversion in the trigger, not UI math.
 - **The "Fulfilled from" row needs `advanced.active`, not just
   `advanced.entitled`.** A Business tenant that's entitled but hasn't run
   the one-way "Enable" flow yet (`view === "enable"`, see
@@ -684,13 +685,37 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   logic it replaced. If you change `resolveOrderCogs`'s precedence, re-run
   the "falls back to a linked purchase" and "returns null" test cases to
   confirm this hasn't drifted.
-- **`EditSaleModal`'s `fulfillment` state is seeded from `sale` once, in
-  `useState`'s initializer** — like `form`/`showFees`/etc. in this same
-  component, it does NOT reset when the modal is closed and reopened for
-  the same sale (`key={sale.id}` in `[id]/page.tsx`, `key={editTarget?.id
-  ?? "edit-sale"}` in `page.tsx` — the key only changes across different
-  sales). This matches every other piece of local state in this modal; it
-  is not a new gap introduced by this feature.
+- **`EditSaleModal`'s state (`form`, `fulfillment`, `showFees`, …) is seeded
+  only in `useState` initialisers, so every open must REMOUNT it with a
+  non-null `sale`.** `page.tsx` gets that for free (`key={editTarget?.id ??
+  "edit-sale"}` — the key changes on every open). `[id]/page.tsx` renders
+  the modal permanently with `sale={editOpen ? sale : null}`, so it first
+  mounts with `sale === null` (blank form); its key is therefore
+  `` `${sale.id}:${editOpen}` `` (final-review F6, 2026-09-26) — a plain
+  `key={sale.id}` never remounted, leaving the form (incl. the fulfillment
+  location) seeded from `null`. Keep `editOpen` in that key.
+- **The shortage warning adds the order's own consumption back
+  (final-review I2).** `available` comes from `fetchStockByLocation`, i.e.
+  AFTER this saved order already took its units, so comparing it with the
+  order's full quantity made an unchanged order read short ("3 in stock,
+  order of 3 → Only 0 in stock"). `fulfillmentStockWarning(location,
+  available, quantity, ownConsumption = 0)` compares `available +
+  ownConsumption`; `EditSaleModal` passes `ownConsumption = sale.quantity`
+  only when the location AND product are unchanged from the saved row, the
+  saved location is non-empty, and the saved order consumed (not `returned`
+  + `restock`). It also passes `consumes={false}` (no warning at all) when
+  the form's current status is `returned` with restock ticked. `AddSaleModal`
+  passes neither (defaults 0/true).
+- **Orders created before advanced inventory was enabled are read-only to
+  the ledger (final-review I3).** 047's sale trigger skips UPDATEs of rows
+  with `created_at < inventory_settings.enabled_at`, so `EditSaleModal`'s
+  `tracksStock` also requires `isTrackedByLedger(sale.created_at,
+  advanced.settings)` (`inventory/_lib/advancedInventory.ts`). A legacy
+  order with a linked product shows a muted "This order predates batch
+  tracking…" note instead of the field, and nothing is added to the
+  payload — before this, merely saving a legacy order wrote the suggested
+  platform default and the order page then claimed "Fulfilled from X"
+  although no stock was taken.
 - Both modals wrap the whole `handleSubmit` body in
   `try { … } catch (err) { setError(inventoryErrorMessage(err, …)) } finally
   { setSaving(false) }` (added by this feature — `AddSaleModal`'s submit had

@@ -107,10 +107,12 @@ export function isLocationNameTaken(
 /**
  * Why a location can't be deactivated right now, or null if it can. Mirrors
  * the DB guard (INV_DEFAULT_LOCATION) so the UI can explain before asking.
- * The tenant-default check mirrors the DB trigger; the platform-default
- * check below it has no DB guard yet (Phase 3 follow-up) — the sale trigger
- * would otherwise keep routing that platform's orders to an inactive
- * location. Reactivation (`!location.is_active`) is never blocked.
+ * The tenant-default check mirrors the DB trigger. The platform-default
+ * check below it has no blocking DB guard: since 049 the sale trigger skips
+ * an inactive platform default and falls back to the tenant default, so
+ * deactivating one wouldn't break orders — but it would silently reroute
+ * that platform's orders, so the UI still asks the user to repoint the
+ * platform first. Reactivation (`!location.is_active`) is never blocked.
  */
 export function locationDeactivationBlocker(
   location: StockLocation,
@@ -131,6 +133,23 @@ export function locationDeactivationBlocker(
     }
   }
   return null;
+}
+
+/**
+ * Whether the ledger triggers act on an UPDATE of a purchase/sale row created
+ * at `createdAt`. Mirrors 047's `OLD.created_at < enabled_at` skip: rows that
+ * predate enabling advanced inventory are never re-costed or re-located, so
+ * their Edit modals must not offer location / landed-cost / fulfillment
+ * fields. Compared as instants (Date.parse), so Postgres' `+00:00`/microsecond
+ * form and JS' `Z`/millisecond form of the same moment compare equal. Fails
+ * closed on a missing or unparseable timestamp.
+ */
+export function isTrackedByLedger(createdAt: string, settings: InventorySettings | null): boolean {
+  if (!settings?.advanced_enabled || !settings.enabled_at) return false;
+  const created = Date.parse(createdAt);
+  const enabled = Date.parse(settings.enabled_at);
+  if (Number.isNaN(created) || Number.isNaN(enabled)) return false;
+  return created >= enabled;
 }
 
 export interface FulfillmentDraft {

@@ -86,7 +86,9 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - `<PurchaseInventoryFields>` (location + landed costs) only renders when a
   local `tracksStock` boolean is true — it's computed differently in each
   modal (Add also covers the "create a new inventory product and link it"
-  path; Edit only checks the current `form.product_id`), so don't assume
+  path; Edit checks the current `form.product_id` AND
+  `isTrackedByLedger(purchase.created_at, advanced.settings)` — pre-enable
+  purchases get a "predates batch tracking" note instead), so don't assume
   the two modals' `tracksStock` expressions are copy-pasteable. When
   `tracksStock` is false the insert/update payload spreads in `{}` — the
   four new columns (`location_id`/`freight_cost`/`customs_cost`/

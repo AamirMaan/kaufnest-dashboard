@@ -32,6 +32,13 @@ describe("fulfillmentStockWarning", () => {
     expect(fulfillmentStockWarning(undefined, 0, 3)).toBeNull();
   });
 
+  it("counts the order's own already-consumed units back in when editing", () => {
+    // 3 in stock, an order of 3 saved: 0 left, but the order itself holds 3.
+    expect(fulfillmentStockWarning(loc("main"), 0, 3, 3)).toBeNull();
+    // Raising that order to 5: only 3 can come from stock.
+    expect(fulfillmentStockWarning(loc("main"), 0, 5, 3)).toEqual({ kind: "short", available: 3 });
+  });
+
   it("explains dropship locations instead of counting stock", () => {
     expect(fulfillmentStockWarning(loc("ds", { type: "dropship" }), 0, 3)).toEqual({ kind: "dropship" });
   });

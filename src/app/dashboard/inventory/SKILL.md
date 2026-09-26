@@ -417,6 +417,26 @@ since modal dropdowns use a different state key than the table.
   `sales/_components/FulfillmentLocationField.tsx`'s `stock` state — copy
   that shape for any future per-page-request state in this feature rather
   than resetting state synchronously in an effect.
+- **Stock cells: "—" means no data, 0 means a real zero (final-review I1).**
+  While the stock request is pending, after it failed, or whenever the kept
+  result's key doesn't match the current request, `ProductsTab` renders a
+  muted "—" in every location cell, Total and Avg. cost, and their
+  `sortValue` returns `-Infinity`. Only once data has loaded does a product
+  with no row render `0` (then it really has none). Never fall back to `{}`
+  for "no result" — that renders a made-up 0 indistinguishable from real
+  empty stock.
+- **Pre-enable purchases/sales are read-only to the ledger —
+  `isTrackedByLedger(createdAt, settings)` (`_lib/advancedInventory.ts`,
+  final-review I3).** 047's triggers skip UPDATEs of rows with `created_at <
+  enabled_at`. Both Edit modals (Purchases, Sales) add
+  `isTrackedByLedger(row.created_at, advanced.settings)` to `tracksStock`,
+  show a muted "…predates batch tracking…" note instead of the location /
+  landed-cost / fulfillment fields, and add nothing to the payload. The
+  comparison is by instant (`Date.parse`) so Postgres' `+00:00`/microsecond
+  and JS' `Z`/millisecond forms of the same moment compare equal; it fails
+  closed (false) when settings are missing/disabled, `enabled_at` is null,
+  or either timestamp doesn't parse. Add modals are unaffected (a new row is
+  always created after `enabled_at`).
 - **The RPC isn't live on any tenant schema yet (migration 049 pending).**
   An active Business tenant today gets `fetchStockByLocation`'s mapped
   `inventoryErrorMessage` text in the red `stockError` line under the count
@@ -425,12 +445,18 @@ since modal dropdowns use a different state key than the table.
   + Other/Total/Avg. cost, a shortfall renders a red negative number in its
   cell, and a Starter/Pro tenant (or a Business tenant that hasn't enabled
   advanced inventory) still sees the plain "Current Stock" column.
-- **`ProductLotsModal` only ever lists OPEN batches** (`qty_remaining <> 0`,
-  Phase 3 Task 8, 2026-09-26) — a fully-consumed purchase lot or a settled
-  shortfall simply disappears from the list once its remaining quantity
-  hits 0. This is by design (the modal answers "what stock is left and at
-  what cost", not "show me every batch ever"), not a bug if a lot you
-  expect to see is missing.
+- **`ProductLotsModal` lists open batches PLUS every opening-balance batch**
+  (`.or("qty_remaining.neq.0,kind.eq.opening")` in `fetchOpenLots`,
+  final-review I4, 2026-09-26, user-approved) — a fully-consumed purchase or
+  transfer lot, or a settled shortfall, disappears once its remaining
+  quantity hits 0, but a used-up opening batch stays listed (Remaining 0)
+  because its opening cost must stay editable: that edit is exactly what
+  re-costs the orders that consumed it. Don't narrow the filter back to
+  `qty_remaining <> 0`.
+- **After an opening-cost save, the Products tab's stock re-fetches**
+  (final-review F7): `ProductLotsModal`'s optional `onChanged` fires after a
+  successful `set_opening_lot_cost`; `ProductsTab` bumps a `stockRefresh`
+  counter that is part of the stock request key, so Avg. cost is never stale.
 - **Editing an opening lot's cost re-costs dependent orders server-side —
   the modal does no client-side COGS math.** `set_opening_lot_cost` (Phase
   1, `047_advanced_inventory.sql`) is the only thing that may write an

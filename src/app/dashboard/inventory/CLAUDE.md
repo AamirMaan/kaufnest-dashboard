@@ -51,7 +51,9 @@ pagination is active.
 - `_lib/advancedInventory.ts` (+ test) — pure logic behind the batches &
   locations UI: `advancedInventoryView` (upsell/loading/error/enable/active),
   `sortLocations`/`defaultLocationOptions`/`platformLocationOptions`,
-  `isLocationNameTaken`, `locationDeactivationBlocker`, and the fulfillment-
+  `isLocationNameTaken`, `locationDeactivationBlocker`,
+  `isTrackedByLedger(createdAt, settings)` (does the ledger act on UPDATEs of
+  a row created then? — used by both Edit modals), and the fulfillment-
   defaults draft helpers (`fulfillmentDraftFrom`, `platformDefaultChanges`,
   `isFulfillmentDraftValid`, `isFulfillmentDraftDirty`), plus the
   `LOCATION_TYPE_LABELS`/`INVENTORY_PLATFORMS`/`PLATFORM_LABELS` label maps.
@@ -122,6 +124,11 @@ pagination is active.
   (`_store/stockByLocation.ts`) once per table page/search/pagination
   change, then pivots the result via `summarizeStock(rows, columnsForStock)`
   (`_lib/stockByLocation.ts`) into `Record<productId, ProductStockSummary>`.
+  While the request is pending or failed, every stock cell, Total and
+  Avg. cost render a muted "—" (sorting as `-Infinity`), never a made-up 0
+  (final-review I1); `stockRefresh` (bumped by `ProductLotsModal`'s
+  `onChanged` after an opening-cost save) is part of the request key, so
+  Avg. cost re-fetches (F7).
   A load failure renders the mapped `inventoryErrorMessage` text as a small
   red line under the count row (`stockError`) — this is the designed
   fallback for tenants whose schema doesn't have the RPC yet (migration 049
@@ -136,8 +143,9 @@ pagination is active.
   `state.currentUser.profile?.role`) is computed alongside the existing
   `isSuperAdmin` selector and passed straight through as a prop.
 - `_components/ProductLotsModal.tsx` (Phase 3 Task 8, 2026-09-26) —
-  `ProductLotsModal({ product, isAdmin, onClose })`: shows one product's
-  open batches (stock lots with `qty_remaining !== 0`), oldest-first, via
+  `ProductLotsModal({ product, isAdmin, onClose, onChanged? })`: shows one
+  product's open batches (stock lots with `qty_remaining !== 0`) plus every
+  opening-balance batch even when used up (final-review I4), oldest-first, via
   `fetchOpenLots` (`_store/productLots.ts`) + `sortLotsFifo` (`_lib/productLots.ts`).
   Columns: Batch (`lotSourceLabel`), Location (name from
   `useAdvancedInventory().locations`), Received (`lotReceivedLabel` — hides
@@ -161,7 +169,7 @@ pagination is active.
   blank/negative/non-numeric, rounds to 4 decimals).
 - `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26) — `PRODUCT_LOTS_CAP`
   (1000) + `fetchOpenLots(productId)`: pages `stock_lots` for one product
-  (`qty_remaining <> 0`) via `fetchAllRowsOrThrow`, mapping any thrown/DB
+  (`qty_remaining <> 0` OR `kind = 'opening'`) via `fetchAllRowsOrThrow`, mapping any thrown/DB
   error through `inventoryErrorMessage`.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
@@ -287,7 +295,7 @@ arithmetic lives entirely in the database so client and server can never drift.
 If you need to change how stock is calculated, edit the migration triggers, not
 this slice.
 
-## Advanced inventory ledger (Business plan) — Phase 1 of 4
+## Advanced inventory ledger (Business plan) — 3 of 4 phases shipped
 
 Batches, locations and FIFO cost of goods live entirely in Postgres
 (`supabase/migrations/047_advanced_inventory.sql`, installer

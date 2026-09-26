@@ -25,6 +25,7 @@ import { EBAY_CARRIER_CODES } from "@/lib/integrations/ebay/carriers";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { isTrackedByLedger } from "@/app/dashboard/inventory/_lib/advancedInventory";
 import type { Platform, Currency, Sale, Product, Purchase } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -189,7 +190,25 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
-  const tracksStock = advanced.active && !!form.product_id;
+  // The ledger triggers ignore UPDATEs of rows created before advanced
+  // inventory was enabled, so a legacy order gets a note, not the field —
+  // and nothing is added to its payload (no suggested location written).
+  const linkedWhileActive = advanced.active && !!form.product_id;
+  const tracksStock = linkedWhileActive && !!sale && isTrackedByLedger(sale.created_at, advanced.settings);
+
+  // Shortage warning inputs. A returned + restocked order takes no stock, so
+  // it gets no warning. When the location/product are unchanged and the saved
+  // order consumed stock there, its own units are already missing from the
+  // on-hand figure — hand them back so an unchanged order doesn't read short.
+  const currentStatus = form.status === "other" ? form.customStatus.trim() : form.status;
+  const consumes = !(currentStatus === "returned" && form.restock);
+  const originallyConsumed =
+    !!sale &&
+    !!sale.fulfillment_location_id &&
+    fulfillment.id === sale.fulfillment_location_id &&
+    form.product_id === (sale.product_id ?? "") &&
+    !(sale.status === "returned" && sale.restock);
+  const ownConsumption = originallyConsumed ? sale!.quantity : 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -466,7 +485,14 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             touched={fulfillment.touched}
             onChange={onFulfillmentChange}
             disabled={saving}
+            ownConsumption={ownConsumption}
+            consumes={consumes}
           />
+        )}
+        {linkedWhileActive && !tracksStock && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            This order predates batch tracking, so its fulfillment location isn&apos;t tracked.
+          </p>
         )}
 
         <Row>

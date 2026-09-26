@@ -24,6 +24,8 @@ interface Props {
   product: Product | null;
   isAdmin: boolean;
   onClose: () => void;
+  /** Called after an opening cost is saved, so the page can re-fetch stock (Avg. cost). */
+  onChanged?: () => void;
 }
 
 /**
@@ -43,7 +45,7 @@ interface LotsResult {
   error: string | null;
 }
 
-export function ProductLotsModal({ product, isAdmin, onClose }: Props) {
+export function ProductLotsModal({ product, isAdmin, onClose, onChanged }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const { locations } = useAdvancedInventory();
@@ -127,6 +129,7 @@ export function ProductLotsModal({ product, isAdmin, onClose }: Props) {
       }
       success("Opening cost saved", "Orders that used these units were re-costed.");
       setEditingId(null);
+      onChanged?.();
       await reload(product.id);
     } catch {
       toastError("Cost not saved", "Please check your connection and try again.");
@@ -199,7 +202,7 @@ export function ProductLotsModal({ product, isAdmin, onClose }: Props) {
           columns={columns}
           rows={lots ?? []}
           keyField="id"
-          emptyMessage="No batches with stock left — record a purchase to add one."
+          emptyMessage="No batches with stock left and no opening balance — record a purchase to add one."
         />
       )}
 

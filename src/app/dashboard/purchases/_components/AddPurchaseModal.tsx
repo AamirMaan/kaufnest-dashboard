@@ -105,6 +105,12 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const tracksStock = advanced.active && (!!form.product_id || (form.add_to_inventory && isNewProductName));
   const defaultLocationName = advanced.locations.find((l) => l.id === advanced.settings?.default_location_id)?.name ?? null;
 
+  // Mirrors exactly what handleSubmit rejects, so Add is never clickable when it can't succeed.
+  const isFormValid =
+    !!form.product_name.trim() &&
+    price > 0 &&
+    (!tracksStock || isPurchaseInventoryFieldsValid(inv));
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) return setError("Product name is required.");
@@ -210,7 +216,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
           <Button variant="secondary" type="button" onClick={handleClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form="add-purchase-form" disabled={saving || (tracksStock && !isPurchaseInventoryFieldsValid(inv))}>
+          <Button type="submit" form="add-purchase-form" disabled={saving || !isFormValid}>
             {saving ? "Saving…" : "Add Purchase"}
           </Button>
         </>
