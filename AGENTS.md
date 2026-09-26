@@ -104,6 +104,12 @@ New shared code from the migration:
   unauthenticated-but-signed webhook alongside Stripe's — it verifies an
   HMAC-SHA1 of `body + callbackURL`, so the callback URL is part of the
   signed material and must match the registered webhook exactly.
+- `src/lib/inventory/` — advanced inventory (Business plan): `inventoryErrors.ts`
+  (pure, client-safe `INV_*` error copy), `access.ts` (pure enable rule),
+  `authGuard.ts` (server-only `requireAdvancedInventoryAdmin()`).
+  `src/app/api/inventory/enable-advanced/` flips the per-tenant switch via the
+  service-role RPC `enable_advanced_inventory`. The ledger itself is Postgres
+  triggers — see `supabase/migrations/047_advanced_inventory.sql`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

@@ -11,6 +11,11 @@ interface PlanLimits {
   // general platformIntegrations gate (Pro + Business) the rest of the
   // Integrations-dependent features use.
   messagingAndListings: boolean;
+  // Batches, locations and FIFO cost of goods (advanced inventory) —
+  // Business only. The ledger itself is switched on per tenant by
+  // /api/inventory/enable-advanced; this gate decides who may switch it on
+  // and who sees the UI.
+  advancedInventory: boolean;
 }
 
 const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
@@ -18,10 +23,10 @@ const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
   // bookkeeping, so a trial that cannot connect eBay/Amazon cannot
   // demonstrate the product. Safe only because proxy.ts enforces
   // trial_ends_at — see isTrialExpired in lib/utils/trial.ts.
-  trial:    { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true  },
-  starter:  { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false },
-  pro:      { maxUsers: 5,        platformIntegrations: true,  aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false },
-  business: { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true  },
+  trial:    { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true  },
+  starter:  { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false },
+  pro:      { maxUsers: 5,        platformIntegrations: true,  aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false },
+  business: { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true  },
 };
 
 export function getPlanLimits(plan: TenantPlan): PlanLimits {
@@ -46,4 +51,8 @@ export function getAiGenerationLimit(plan: TenantPlan): number {
 
 export function hasMessagingAndListings(plan: TenantPlan): boolean {
   return PLAN_LIMITS[plan].messagingAndListings;
+}
+
+export function hasAdvancedInventory(plan: TenantPlan): boolean {
+  return PLAN_LIMITS[plan].advancedInventory;
 }

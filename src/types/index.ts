@@ -114,6 +114,14 @@ export interface Purchase {
   original_total_amount: number | null;
   fx_rate: number | null;
   fx_rate_date: string | null; // ISO date
+  // Advanced inventory (migration 047). Optional: Starter/Pro tenants never
+  // send them, and the DB fills location_id from inventory_settings when
+  // advanced inventory is on. Landed unit cost =
+  // (total_amount − vat_amount + freight + customs + other) / quantity.
+  location_id?: string | null;
+  freight_cost?: number | null;
+  customs_cost?: number | null;
+  other_cost?: number | null;
 }
 
 export interface Sale {
@@ -180,6 +188,12 @@ export interface Sale {
   original_total_amount: number | null;
   fx_rate: number | null;
   fx_rate_date: string | null; // ISO date
+  // Advanced inventory (migration 047). fulfillment_location_id is filled
+  // from the platform default by a DB trigger when omitted. cogs_amount is
+  // written ONLY by the FIFO trigger — never send it (the trigger discards
+  // client-supplied values).
+  fulfillment_location_id?: string | null;
+  cogs_amount?: number | null;
 }
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
@@ -195,6 +209,60 @@ export interface Product {
   updated_at: string;
 }
 
+// ─── Advanced inventory (Business plan) ───────────────────────────────────────
+// Batches (lots), locations and transfers — see
+// docs/superpowers/specs/2026-09-25-advanced-inventory-batches-locations-design.md.
+// stock_lots / stock_movements / inventory_settings are written only by
+// Postgres triggers and RPCs; the client writes stock_locations,
+// platform_location_defaults and stock_transfers.
+
+export type StockLocationType = "own" | "fba" | "3pl" | "dropship";
+
+export interface StockLocation {
+  id: string;
+  name: string;
+  type: StockLocationType;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface InventorySettings {
+  advanced_enabled: boolean;
+  enabled_at: string | null;
+  default_location_id: string | null;
+}
+
+export type StockLotKind = "purchase" | "opening" | "transfer" | "shortfall";
+
+export interface StockLot {
+  id: string;
+  product_id: string;
+  location_id: string;
+  purchase_id: string | null;
+  source_lot_id: string | null;
+  kind: StockLotKind;
+  received_at: string;
+  cost_addon: number;
+  unit_cost: number;
+  qty_received: number;
+  qty_remaining: number; // negative only when kind === "shortfall"
+  created_at: string;
+}
+
+export interface StockTransfer {
+  id: string;
+  product_id: string;
+  from_location_id: string;
+  to_location_id: string;
+  quantity: number;
+  transfer_cost: number | null;
+  date: string;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 export type AuditAction =
@@ -207,7 +275,7 @@ export type AuditAction =
   | "permission_change"
   | "status_change";
 
-export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment";
+export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment" | "stock_location" | "stock_transfer";
 
 export interface AuditLog {
   id: string;

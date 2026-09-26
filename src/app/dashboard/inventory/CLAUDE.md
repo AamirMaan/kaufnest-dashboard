@@ -25,6 +25,7 @@ pagination is active.
   selector state, all mutations, and fetchInventoryPage/fetchInventorySelectors
   async cases. Run with `npx jest dashboard/inventory`.
 - `_components/AddProductModal.tsx` / `EditProductModal.tsx` — create/edit forms.
+- `_lib/landedCost.ts` (+ test) — TS mirror of the SQL landed-unit-cost formula, for the purchase form read-out (Phase 3).
 
 ## How stock levels actually update — read this before changing anything here
 
@@ -38,6 +39,31 @@ lives in the Purchases/Sales Add/Edit modals (`product_id` select), and the
 arithmetic lives entirely in the database so client and server can never drift.
 If you need to change how stock is calculated, edit the migration triggers, not
 this slice.
+
+## Advanced inventory ledger (Business plan) — Phase 1 of 4
+
+Batches, locations and FIFO cost of goods live entirely in Postgres
+(`supabase/migrations/047_advanced_inventory.sql`, installer
+`install_advanced_inventory`). Inert until a tenant admin calls
+`POST /api/inventory/enable-advanced` (`src/lib/inventory/authGuard.ts`,
+Business/trial + admin only), which creates "Main", maps every platform to
+it, and turns today's `current_stock` into one opening lot per product at
+cost 0. From then on:
+
+- purchases create **lots** at landed cost (`_lib/landedCost.ts` mirrors the
+  SQL formula); sales consume lots **FIFO** at their `fulfillment_location_id`
+  (default per platform) and get `sales.cogs_amount`; missing stock goes to a
+  **shortfall** lot that the next receipt settles and re-costs;
+- `stock_transfers` move lots between locations (immutable; delete only while
+  untouched); dropship-type locations never hold stock;
+- the legacy `current_stock` triggers keep running unchanged for every plan.
+
+Tables: `stock_locations`, `inventory_settings`, `platform_location_defaults`,
+`stock_lots`, `stock_transfers`, `stock_movements`. Client-writable: locations,
+platform defaults (admin), transfers. Everything else is trigger/RPC-owned.
+Trigger errors are `INV_*: detail` — show them with
+`inventoryErrorMessage()` (`src/lib/inventory/inventoryErrors.ts`).
+UI arrives in Phases 2–4 (see the spec's "Phasing").
 
 ## Pagination data flow
 
@@ -92,7 +118,8 @@ editable fields.
 - `lib/utils/audit`
 - `lib/utils/pagedQuery` — `rangeFor`, `DEFAULT_PAGE_SIZE`
 - `types` (`Product`)
+- `lib/inventory/{inventoryErrors,access,authGuard}` — advanced-inventory error copy, enable rule, route guard
 
 ## Tests
 
-`npx jest dashboard/inventory` runs `_store/inventorySlice.test.ts`.
+`npx jest dashboard/inventory` runs the slice and `_lib/landedCost` tests; SQL trigger tests: `supabase/tests/advanced_inventory.test.sql` (see `supabase/SKILL.md`).

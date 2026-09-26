@@ -593,11 +593,13 @@ BEGIN
       platform_sub AS (
         SELECT 'ebay' AS platform, coalesce(sum(amount), 0) AS amount
         FROM filtered
-        WHERE vendor ILIKE '%ebay%' OR title ILIKE '%ebay%'
+        -- Doubled percent signs: this body is a format() string, which
+        -- reads a single one as a type specifier and fails at provisioning.
+        WHERE vendor ILIKE '%%ebay%%' OR title ILIKE '%%ebay%%'
         UNION ALL
         SELECT 'amazon' AS platform, coalesce(sum(amount), 0) AS amount
         FROM filtered
-        WHERE vendor ILIKE '%amazon%' OR title ILIKE '%amazon%'
+        WHERE vendor ILIKE '%%amazon%%' OR title ILIKE '%%amazon%%'
       )
       SELECT jsonb_build_object(
         'total', (SELECT coalesce(sum(amount), 0) FROM filtered),
@@ -1040,6 +1042,16 @@ BEGIN
 
   EXECUTE format('DROP TRIGGER IF EXISTS notify_message_received ON %1$I.ebay_messages', schema_name);
   EXECUTE format('CREATE TRIGGER notify_message_received AFTER INSERT ON %1$I.ebay_messages FOR EACH ROW EXECUTE FUNCTION %1$I.notify_message_received()', schema_name);
+
+  -- ── 9. Advanced inventory (batches, locations, FIFO) ──────
+  -- One shared installer instead of duplicating its SQL here — see
+  -- 047_advanced_inventory.sql. Must stay last: it REVOKEs privileges that
+  -- the blanket GRANT above would otherwise re-open. Guarded so re-applying
+  -- 005 before 047 can't break sign-up; apply 047 first for new tenants to
+  -- get the feature.
+  IF to_regprocedure('public.install_advanced_inventory(text)') IS NOT NULL THEN
+    PERFORM public.install_advanced_inventory(schema_name);
+  END IF;
 
 END;
 $$;

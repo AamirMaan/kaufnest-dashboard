@@ -1,4 +1,4 @@
-import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser, getAiGenerationLimit, hasAiFeatures } from "./planGating";
+import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser, getAiGenerationLimit, hasAiFeatures, hasAdvancedInventory } from "./planGating";
 
 describe("hasMessagingAndListings", () => {
   it("is true for business and for trial (trial mirrors business)", () => {
@@ -56,5 +56,17 @@ describe("getAiGenerationLimit", () => {
     for (const plan of ["trial", "starter", "pro", "business"] as const) {
       if (!hasAiFeatures(plan)) expect(getAiGenerationLimit(plan)).toBe(0);
     }
+  });
+});
+
+describe("hasAdvancedInventory", () => {
+  it("is true for business and for trial (trial mirrors business)", () => {
+    expect(hasAdvancedInventory("business")).toBe(true);
+    expect(hasAdvancedInventory("trial")).toBe(true);
+  });
+
+  it("is false for pro and starter", () => {
+    expect(hasAdvancedInventory("pro")).toBe(false);
+    expect(hasAdvancedInventory("starter")).toBe(false);
   });
 });
