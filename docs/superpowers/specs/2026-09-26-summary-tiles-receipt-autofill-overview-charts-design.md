@@ -53,9 +53,9 @@ Rules:
 Three functions per tenant schema:
 
 ```
-get_sales_summary(p_from date, p_to date, p_platform text, p_currency text, p_status text, p_search text)
-get_purchases_summary(p_from date, p_to date, p_currency text, p_search text)
-get_expenses_summary(p_from date, p_to date, p_category text, p_currency text, p_search text)
+get_sales_summary(p_from date, p_to date, p_platform text, p_currency text, p_status text, p_pattern text)
+get_purchases_summary(p_from date, p_to date, p_currency text, p_pattern text)
+get_expenses_summary(p_from date, p_to date, p_category text, p_currency text, p_pattern text)
 ```
 
 Each returns `SETOF` one row per currency with the sums/counts above
@@ -67,8 +67,11 @@ used by the page thunks today:
 - purchases: `product_name`, `vendor`, `description`
 - expenses: `title`, `vendor`, `description`, `invoice_number`
 
-Search term is bound as a parameter (`'%' || p_search || '%'`), never
-concatenated into SQL.
+`p_pattern` arrives pre-built by the client's `ilikePattern()` (`%term%`
+with LIKE metacharacters escaped) and is bound as a parameter, never
+concatenated into SQL. Building it client-side keeps literal `%` out of the
+SQL bodies, which would otherwise need `%%` escaping in the `format()`-based
+copy inside `005_tenant_provisioning.sql`.
 
 Row volume: the functions aggregate server-side and return ≤ one row per
 currency — structurally bounded by the number of currencies in use, so no
