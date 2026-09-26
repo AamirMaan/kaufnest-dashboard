@@ -89,6 +89,14 @@ since modal dropdowns use a different state key than the table.
   logic; `_store/stockByLocation.ts` (`fetchStockByLocation`) owns the RPC
   call and id-chunking. Change the column count/labels in `_lib/`, not by
   hand-editing the map in `ProductsTab.tsx`.
+- **Change the product batches modal or opening-cost editing** (Phase 3
+  Task 8, 2026-09-26): `_components/ProductLotsModal.tsx` (the modal itself
+  — table, edit form, save flow), `_lib/productLots.ts` (+ test —
+  `lotSourceLabel`/`lotReceivedLabel`/`sortLotsFifo`/`canEditLotCost`/
+  `parseUnitCostInput`), `_store/productLots.ts` (`fetchOpenLots`,
+  `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
+  computation live in `_components/ProductsTab.tsx` only — don't duplicate
+  the admin-role check anywhere else in this feature.
 
 ## Test command
 
@@ -407,3 +415,53 @@ since modal dropdowns use a different state key than the table.
   + Other/Total/Avg. cost, a shortfall renders a red negative number in its
   cell, and a Starter/Pro tenant (or a Business tenant that hasn't enabled
   advanced inventory) still sees the plain "Current Stock" column.
+- **`ProductLotsModal` only ever lists OPEN batches** (`qty_remaining <> 0`,
+  Phase 3 Task 8, 2026-09-26) — a fully-consumed purchase lot or a settled
+  shortfall simply disappears from the list once its remaining quantity
+  hits 0. This is by design (the modal answers "what stock is left and at
+  what cost", not "show me every batch ever"), not a bug if a lot you
+  expect to see is missing.
+- **Editing an opening lot's cost re-costs dependent orders server-side —
+  the modal does no client-side COGS math.** `set_opening_lot_cost` (Phase
+  1, `047_advanced_inventory.sql`) is the only thing that may write an
+  opening lot's `unit_cost`, and it recomputes every sale that consumed
+  units from that lot (`sales.cogs_amount`) in the same transaction. The
+  modal's only job after a successful RPC call is to reload the lot list
+  (`load(product.id)`) — do not add any local COGS recalculation here.
+- **`canEditLotCost` mirrors the RPC's own guard, it doesn't replace it.**
+  `set_opening_lot_cost` independently enforces admin-only + opening-lot-only
+  server-side; the pencil icon's visibility is purely a UI convenience so a
+  non-admin (or a non-opening batch) never sees an edit control that would
+  fail anyway. Don't remove the RPC-side check if you ever "simplify" this
+  by trusting the client gate alone.
+- **`ProductLotsModal`'s load result and edit target are both derived, not
+  reset with a synchronous `setState` in an effect body** — same
+  `react-hooks/set-state-in-effect` constraint as `ProductsTab.tsx`'s
+  `StockRequestResult` and `FulfillmentLocationField.tsx`'s keyed `stock`
+  state. The brief's original sketch called `setLots(null); setEditing(null)`
+  directly in the effect whenever `product` changed; the shipped version
+  instead keys the fetch result by product id (`LotsResult { key, data,
+  error }`) and derives `lots`/`loadError` by comparing that key against the
+  current product — a stale result from a since-switched product is simply
+  ignored, not cleared. **The load effect inlines `fetchOpenLots(...).then(
+  ...).catch(...)` directly rather than calling a `useCallback` helper** —
+  a `useCallback`-wrapped `load(productId)` that itself calls `setResult`
+  (even only after an `await`) still gets flagged by the lint rule when
+  called from the effect, so the effect's `.then`/`.catch` are inlined
+  (mirroring `FulfillmentLocationField.tsx`'s own stock-lookup effect) and a
+  separate `reload(productId)` `useCallback` — functionally identical, just
+  not invoked from an effect — is used by `handleSaveCost` after a
+  successful edit, where calling a state-setting function directly is fine.
+  `editing` is likewise derived (`lots?.find(l => l.id === editingId)`),
+  which self-resets when switching to a different product (lot ids are
+  globally unique UUIDs, so a stale `editingId` never matches a new
+  product's lots). The one case that derivation alone can't cover —
+  reopening the *same* product right after closing without saving, which
+  would otherwise show the edit form still open — is handled by clearing
+  `editingId` in `handleClose` (a plain event handler passed to `Modal`'s
+  `onClose`, not an effect) before calling the parent's `onClose`. If you
+  touch this component's state shape, keep all three of these — the
+  keyed-result derivation, the inlined effect vs. the separate `reload`
+  helper, and the `handleClose` reset — rather than reintroducing a
+  synchronous effect-body reset or delegating the effect's fetch to a
+  `useCallback`.

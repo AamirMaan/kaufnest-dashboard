@@ -19,6 +19,7 @@ import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import { useAdvancedInventory } from "../_store/useAdvancedInventory";
 import { fetchStockByLocation } from "../_store/stockByLocation";
 import { stockColumns, summarizeStock, type ProductStockSummary } from "../_lib/stockByLocation";
+import { ProductLotsModal } from "./ProductLotsModal";
 import type { Product } from "@/types";
 
 function isLowStock(p: Product): boolean {
@@ -58,10 +59,15 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
   const total = useAppSelector((s) => s.inventory.total);
   const isFetching = useAppSelector((s) => s.inventory.isFetching);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
+  const isAdmin = useAppSelector((s) => {
+    const role = s.currentUser.profile?.role;
+    return role === "admin" || role === "super_admin";
+  });
 
   const [search, setSearch] = useState("");
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [lotsProduct, setLotsProduct] = useState<Product | null>(null);
 
   // ── Stock by location (advanced inventory) ──────────────────────────────
 
@@ -134,9 +140,19 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
     {
       header: "Product",
       sortValue: (p: Product) => p.name.toLowerCase(),
-      render: (p: Product) => (
-        <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.name}</span>
-      ),
+      render: (p: Product) =>
+        advanced.active ? (
+          <button
+            type="button"
+            onClick={() => setLotsProduct(p)}
+            className="text-left text-sm font-medium text-(--color-primary) hover:underline"
+            aria-label={`Show batches for ${p.name}`}
+          >
+            {p.name}
+          </button>
+        ) : (
+          <span className="text-sm font-medium text-[var(--color-text-strong)]">{p.name}</span>
+        ),
     },
     {
       header: "SKU",
@@ -279,6 +295,7 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
         onConfirm={handleDelete}
         onClose={() => setDeleteTarget(null)}
       />
+      <ProductLotsModal product={lotsProduct} isAdmin={isAdmin} onClose={() => setLotsProduct(null)} />
     </div>
   );
 }

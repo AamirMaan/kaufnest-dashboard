@@ -127,7 +127,42 @@ pagination is active.
   fallback for tenants whose schema doesn't have the RPC yet (migration 049
   pending), not an error state to "fix". The Status badge is unaffected —
   it still reads legacy `current_stock`/`reorder_threshold`, so it can
-  disagree with the new Total column (see SKILL.md gotcha).
+  disagree with the new Total column (see SKILL.md gotcha). **(Phase 3 Task
+  8, 2026-09-26)** When `advanced.active`, the Product name cell becomes a
+  button (`aria-label="Show batches for <name>"`) that opens
+  `<ProductLotsModal>` (`_components/ProductLotsModal.tsx`) via
+  `lotsProduct` state; non-active views keep the plain name span
+  unchanged. `isAdmin` (role `admin` or `super_admin`, from
+  `state.currentUser.profile?.role`) is computed alongside the existing
+  `isSuperAdmin` selector and passed straight through as a prop.
+- `_components/ProductLotsModal.tsx` (Phase 3 Task 8, 2026-09-26) —
+  `ProductLotsModal({ product, isAdmin, onClose })`: shows one product's
+  open batches (stock lots with `qty_remaining !== 0`), oldest-first, via
+  `fetchOpenLots` (`_store/productLots.ts`) + `sortLotsFifo` (`_lib/productLots.ts`).
+  Columns: Batch (`lotSourceLabel`), Location (name from
+  `useAdvancedInventory().locations`), Received (`lotReceivedLabel` — hides
+  the 1970 FIFO placeholder date on opening batches), Remaining (a red
+  `Badge` for a negative shortfall row, plain tabular text otherwise), Unit
+  cost (a pencil `Button` next to it only when `canEditLotCost(lot,
+  isAdmin)` — admin AND `kind === "opening"`). The pencil opens an inline
+  `<form id="opening-cost-form">` in the modal body; the footer's Save
+  button is `type="submit" form="opening-cost-form"`, disabled while
+  `saving` or the parsed cost is invalid, calling the `set_opening_lot_cost`
+  RPC (Phase 1) then a best-effort audit log
+  (`entityType: "product"`, `metadata.event: "opening_cost_changed"`) and a
+  reload of the lot list. Load result and edit target are both **derived**
+  rather than reset with a synchronous `setState` in an effect — see the
+  file's own doc comment and the SKILL.md gotcha below.
+- `_lib/productLots.ts` (+ test, Phase 3 Task 8, 2026-09-26) — pure helpers
+  behind the modal: `lotSourceLabel`, `lotReceivedLabel`, `sortLotsFifo`
+  (received_at → created_at → id, mirrors the ledger's own FIFO order),
+  `canEditLotCost(lot, isAdmin)` (mirrors the `set_opening_lot_cost` RPC's
+  own admin + opening-only guard), `parseUnitCostInput` (trims, rejects
+  blank/negative/non-numeric, rounds to 4 decimals).
+- `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26) — `PRODUCT_LOTS_CAP`
+  (1000) + `fetchOpenLots(productId)`: pages `stock_lots` for one product
+  (`qty_remaining <> 0`) via `fetchAllRowsOrThrow`, mapping any thrown/DB
+  error through `inventoryErrorMessage`.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
   Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
