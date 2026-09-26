@@ -50,6 +50,14 @@ since modal dropdowns use a different state key than the table.
   when to render it (`view === "enable"`) and passes `isAdmin`. The route it
   calls (`POST /api/inventory/enable-advanced`) is Phase 1 (Task 1) and out
   of scope here unless the request/response contract itself changes.
+- **Change the Locations tab** (list, add/edit, deactivate/reactivate,
+  delete): `_components/LocationsTab.tsx` (list + row actions + the shared
+  `DeleteConfirmModal`), `_components/LocationModal.tsx` (add/edit form),
+  `_lib/advancedInventory.ts` (`sortLocations`, `LOCATION_TYPE_LABELS`,
+  `locationDeactivationBlocker`, `isLocationNameTaken`), and
+  `_store/advancedInventorySlice.ts` (`locationSaved`/`locationRemoved`).
+  `page.tsx` only owns which tab is active and the "+ Add Location" button's
+  open state — see the `InventoryTabs` gotcha below.
 
 ## Test command
 
@@ -65,10 +73,13 @@ since modal dropdowns use a different state key than the table.
   only decides which of `upsell`/`loading`/`error` banners to show above
   `<ProductsTab>`, via `advancedInventoryView(plan, advanced)`. Don't add
   table/search logic back into `page.tsx` — it belongs in `ProductsTab`.
-- **`InventoryTabs` exists but isn't rendered yet** — built in Task 3 for
-  Task 6 (once a Locations tab exists to switch to). Don't wire it into
-  `page.tsx` before the Locations tab is real, or the enable/active views
-  would show a tab strip with nothing behind the second tab.
+- **`InventoryTabs` is wired into `page.tsx` (Task 6, 2026-09-26)**, but only
+  when `view === "active"` — the tab strip only ever appears once advanced
+  inventory is actually on, never above the upsell/loading/error/enable
+  states. `page.tsx` owns `tab`/`addLocationOpen` state and the "+ Add
+  Location" vs "+ Add Product" `PageHeader` action switch
+  (`showLocations = view === "active" && tab === "locations"`); the tab's
+  own component (`LocationsTab`) only owns its modals, not the header.
 - **Two separate Redux keys**: `state.inventory.items` = paginated table data;
   `state.inventory.selectorItems` = full list for modal dropdowns. Never use
   `items` in Sales/Purchases modals — it is page-limited and will show only
@@ -209,3 +220,17 @@ since modal dropdowns use a different state key than the table.
   after a successful save is in its own inner try/catch that swallows errors
   (mirrors `EnableAdvancedCard`, commit a826115) — a failure there must not
   turn an already-saved location into an error toast.
+- **`DeleteConfirmModal.handleConfirm` only resets its own `deleting`/`reason`
+  state on the line *after* `await onConfirm(reason)` returns** (Task 6,
+  2026-09-26) — it does not wrap that await in try/catch itself. So if the
+  `onConfirm` handler you pass in ever lets a rejection escape,
+  `DeleteConfirmModal` gets stuck showing "Deleting…" forever with Cancel
+  disabled, and there is no way out short of a page refresh. Any
+  `onConfirm` passed to this shared modal (see `LocationsTab.handleDelete`)
+  must therefore catch everything itself and resolve normally — never
+  `throw`/reject — even on failure, so the shared modal's own cleanup runs.
+  On failure, leave the caller-owned target state (e.g. `deleteTarget`) set
+  so the modal (whose `open` prop is driven by that state) stays open for
+  retry — `DeleteConfirmModal` still clears the typed reason text on every
+  settle, success or failure, which is existing shared behavior, not
+  something this feature works around.

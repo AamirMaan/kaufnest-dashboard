@@ -11,6 +11,8 @@ import { fetchAdvancedInventory } from "./_store/advancedInventorySlice";
 import { ProductsTab } from "./_components/ProductsTab";
 import { AdvancedInventoryUpsellCard } from "./_components/AdvancedInventoryUpsellCard";
 import { EnableAdvancedCard } from "./_components/EnableAdvancedCard";
+import { InventoryTabs, type InventoryTabId } from "./_components/InventoryTabs";
+import { LocationsTab } from "./_components/LocationsTab";
 
 export default function InventoryPage() {
   const dispatch = useAppDispatch();
@@ -19,9 +21,12 @@ export default function InventoryPage() {
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const isAdmin = role === "admin" || role === "super_admin";
   const [addProductOpen, setAddProductOpen] = useState(false);
+  const [tab, setTab] = useState<InventoryTabId>("products");
+  const [addLocationOpen, setAddLocationOpen] = useState(false);
 
   const entitled = !!plan && hasAdvancedInventory(plan);
   const view = advancedInventoryView(plan, advanced);
+  const showLocations = view === "active" && tab === "locations";
 
   useEffect(() => {
     if (entitled && !advanced.loaded && !advanced.loading && !advanced.error) {
@@ -34,7 +39,13 @@ export default function InventoryPage() {
       <PageHeader
         title="Inventory"
         description="Products tracked through linked purchases and sales"
-        action={<Button onClick={() => setAddProductOpen(true)}>+ Add Product</Button>}
+        action={
+          showLocations ? (
+            isAdmin ? <Button onClick={() => setAddLocationOpen(true)}>+ Add Location</Button> : undefined
+          ) : (
+            <Button onClick={() => setAddProductOpen(true)}>+ Add Product</Button>
+          )
+        }
       />
 
       {view === "upsell" && <AdvancedInventoryUpsellCard />}
@@ -56,7 +67,24 @@ export default function InventoryPage() {
 
       {view === "enable" && <EnableAdvancedCard isAdmin={isAdmin} />}
 
-      <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
+      {view === "active" && (
+        <InventoryTabs
+          tabs={[
+            { id: "products", label: "Products" },
+            { id: "locations", label: "Locations" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      )}
+
+      {showLocations ? (
+        <LocationsTab isAdmin={isAdmin} addOpen={addLocationOpen} onAddClose={() => setAddLocationOpen(false)} />
+      ) : (
+        <div id="inventory-panel-products" role={view === "active" ? "tabpanel" : undefined} aria-labelledby={view === "active" ? "inventory-tab-products" : undefined}>
+          <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
+        </div>
+      )}
     </div>
   );
 }

@@ -7,18 +7,26 @@ pagination is active.
 ## Files in this folder
 
 - `page.tsx` (Phase 2 shell, 2026-09-26) — thin shell only: `<PageHeader>` +
-  "+ Add Product" button state, the advanced-inventory `upsell`/`loading`/
-  `error` banners driven by `advancedInventoryView(plan, advanced)`
-  (`_lib/advancedInventory.ts`) and `fetchAdvancedInventory()`
-  (`_store/advancedInventorySlice.ts`, dispatched on mount only when
-  `hasAdvancedInventory(plan)` and not yet loaded/loading/errored), and
-  renders `<ProductsTab>` unconditionally below them. No table/search code
-  lives here anymore — see `_components/ProductsTab.tsx`. Also computes
-  `isAdmin` from `state.currentUser.profile?.role` (`admin`/`super_admin`)
-  and renders `<EnableAdvancedCard isAdmin={isAdmin} />` when `view ===
-  "enable"` (Task 4). The `active` view still renders the same plain
-  products page (no half-built UI yet) — the `InventoryTabs` strip (Task 6,
-  only once there's a Locations tab) is not wired in yet.
+  "+ Add Product"/"+ Add Location" button state (whichever the active tab
+  owns), the advanced-inventory `upsell`/`loading`/`error` banners driven by
+  `advancedInventoryView(plan, advanced)` (`_lib/advancedInventory.ts`) and
+  `fetchAdvancedInventory()` (`_store/advancedInventorySlice.ts`, dispatched
+  on mount only when `hasAdvancedInventory(plan)` and not yet
+  loaded/loading/errored). Also computes `isAdmin` from
+  `state.currentUser.profile?.role` (`admin`/`super_admin`) and renders
+  `<EnableAdvancedCard isAdmin={isAdmin} />` when `view === "enable"` (Task
+  4). **When `view === "active"` (Task 6, 2026-09-26)** it renders
+  `<InventoryTabs>` (Products/Locations) above the active panel; `tab` state
+  (`InventoryTabId`) plus `showLocations = view === "active" && tab ===
+  "locations"` decide whether `<LocationsTab>` or `<ProductsTab>` renders,
+  and which "+ Add …" button `PageHeader`'s `action` shows (Locations' Add
+  button is hidden entirely for non-admins, matching `LocationsTab`'s own
+  read-only row-actions gate). Any other view (`upsell`/`loading`/`error`/
+  `enable`) still renders the plain `<ProductsTab>` below the banner, with no
+  tab strip — `InventoryTabs` only ever appears once advanced inventory is
+  actually active. No table/search code lives in `page.tsx` — see
+  `_components/ProductsTab.tsx` for products, `_components/LocationsTab.tsx`
+  for locations.
 - `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
   locations" card shown when `advancedInventoryView` returns `"enable"`
   (entitled tenant, `inventory_settings.advanced_enabled` still false).
@@ -41,8 +49,38 @@ pagination is active.
   state live in `page.tsx` (the header), this component only owns the modal.
 - `_components/InventoryTabs.tsx` — accessible tab strip
   (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
-  Built in Phase 2 Task 3 but **not yet rendered by `page.tsx`** — wired in
-  once the Locations tab exists (Task 6).
+  Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
+  when `view === "active"`.
+- `_components/LocationsTab.tsx` (Phase 2 Task 6, 2026-09-26) —
+  `LocationsTab({ isAdmin, addOpen, onAddClose })`: the Locations list.
+  `DataTable` columns are Location (name + a "Default" `Badge` when
+  `settings.default_location_id === l.id`, sortable), Type
+  (`LOCATION_TYPE_LABELS`, sortable), Status (Active/Inactive `Badge`), and
+  — admin only — Actions (edit/deactivate-reactivate/delete icon buttons via
+  `Button size="icon"`). Rows come from `sortLocations(locations)`
+  (`_lib/advancedInventory.ts`, active-first then alphabetical). Renders
+  `<LocationModal>` for both add and edit (same `key={editTarget?.id ??
+  (addOpen ? "new-location" : "closed")}` remount rule as its own docs) and
+  the shared `<DeleteConfirmModal>` for delete. `handleToggleActive` first
+  checks `locationDeactivationBlocker` (blocks deactivating the current
+  default with a warning toast, no network call) before writing
+  `is_active`. Both `handleToggleActive` and `handleDelete` wrap their
+  Supabase call in try/catch/finally: a *thrown* error (network/auth
+  failure) shows "Please check your connection and try again." and — for
+  toggle — always clears `togglingId` via `finally`; a *returned* `error`
+  shows `inventoryErrorMessage(error, …)` instead (this is how
+  `INV_LOCATION_IN_USE`/`INV_DEFAULT_LOCATION` surface as the "in use" /
+  "default location" copy from the DB triggers). The post-success
+  `audit(...)` call (writes an `stock_location` audit log entry) is wrapped
+  in its own inner try/catch that silently swallows errors — an audit
+  failure must never turn an already-successful update/delete into a
+  failure toast or skip the success toast/state update, matching
+  `LocationModal`'s and `EnableAdvancedCard`'s existing pattern. On delete
+  failure, `deleteTarget` is deliberately left set so `DeleteConfirmModal`
+  stays open for retry/cancel — `DeleteConfirmModal` clears its own internal
+  `deleting` busy state (and the typed reason) once the awaited `onConfirm`
+  promise settles either way, so `handleDelete` must never let that promise
+  reject or `deleting` gets stuck `true` forever.
 - `_components/AdvancedInventoryUpsellCard.tsx` — Business-plan upsell card
   shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; pure
   presentational, links to `/dashboard/settings`.
@@ -70,9 +108,8 @@ pagination is active.
   name non-empty + not already taken (`isLocationNameTaken`, mirrors the DB's
   unique index on `lower(name)` — a `23505` write-time race still shows the
   same message). On success dispatches `locationSaved` and writes an audit
-  log (`entityType: "stock_location"`, before/after diff on edit). Not yet
-  wired into `page.tsx`/`ProductsTab` — that's Task 6, once the Locations tab
-  exists.
+  log (`entityType: "stock_location"`, before/after diff on edit). Wired into
+  `_components/LocationsTab.tsx` (Task 6, 2026-09-26) for both add and edit.
 - `_lib/landedCost.ts` (+ test) — TS mirror of the SQL landed-unit-cost formula, for the purchase form read-out (Phase 3).
 
 ## How stock levels actually update — read this before changing anything here
