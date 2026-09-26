@@ -62,6 +62,17 @@ pagination is active.
   selector state, all mutations, and fetchInventoryPage/fetchInventorySelectors
   async cases. Run with `npx jest dashboard/inventory`.
 - `_components/AddProductModal.tsx` / `EditProductModal.tsx` — create/edit forms.
+- `_components/LocationModal.tsx` (Phase 2 Task 5, 2026-09-26) — add/edit
+  `stock_locations` modal. `LocationModal({ open, location, locations,
+  onClose })` — `location: StockLocation | null` (null = add); render with
+  `key={location?.id ?? "new-location"}` so its `name`/`type` state resets
+  per target instead of reusing stale state across different rows. Validates
+  name non-empty + not already taken (`isLocationNameTaken`, mirrors the DB's
+  unique index on `lower(name)` — a `23505` write-time race still shows the
+  same message). On success dispatches `locationSaved` and writes an audit
+  log (`entityType: "stock_location"`, before/after diff on edit). Not yet
+  wired into `page.tsx`/`ProductsTab` — that's Task 6, once the Locations tab
+  exists.
 - `_lib/landedCost.ts` (+ test) — TS mirror of the SQL landed-unit-cost formula, for the purchase form read-out (Phase 3).
 
 ## How stock levels actually update — read this before changing anything here
