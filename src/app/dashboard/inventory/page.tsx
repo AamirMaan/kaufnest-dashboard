@@ -10,11 +10,14 @@ import { advancedInventoryView } from "./_lib/advancedInventory";
 import { fetchAdvancedInventory } from "./_store/advancedInventorySlice";
 import { ProductsTab } from "./_components/ProductsTab";
 import { AdvancedInventoryUpsellCard } from "./_components/AdvancedInventoryUpsellCard";
+import { EnableAdvancedCard } from "./_components/EnableAdvancedCard";
 
 export default function InventoryPage() {
   const dispatch = useAppDispatch();
   const plan = useAppSelector((s) => s.currentUser.tenantPlan);
   const advanced = useAppSelector((s) => s.advancedInventory);
+  const role = useAppSelector((s) => s.currentUser.profile?.role);
+  const isAdmin = role === "admin" || role === "super_admin";
   const [addProductOpen, setAddProductOpen] = useState(false);
 
   const entitled = !!plan && hasAdvancedInventory(plan);
@@ -50,6 +53,8 @@ export default function InventoryPage() {
           </Button>
         </div>
       )}
+
+      {view === "enable" && <EnableAdvancedCard isAdmin={isAdmin} />}
 
       <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
     </div>

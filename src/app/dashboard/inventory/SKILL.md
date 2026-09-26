@@ -45,6 +45,11 @@ since modal dropdowns use a different state key than the table.
   (installer) + `supabase/tests/advanced_inventory.test.sql`; if the landed-cost
   formula changes, also `_lib/landedCost.ts` + its test. Re-run the installer on
   all tenants (see `supabase/SKILL.md`).
+- **Change the enable flow** (the one-way "Batches & locations" confirm
+  card): `_components/EnableAdvancedCard.tsx` only — `page.tsx` just decides
+  when to render it (`view === "enable"`) and passes `isAdmin`. The route it
+  calls (`POST /api/inventory/enable-advanced`) is Phase 1 (Task 1) and out
+  of scope here unless the request/response contract itself changes.
 
 ## Test command
 
@@ -170,3 +175,12 @@ since modal dropdowns use a different state key than the table.
   revert can recompute a sibling sale's COGS; if that sibling is in the same
   multi-row DELETE, Postgres raises "tuple to be deleted was already
   modified". The app deletes one sale at a time.
+- **`EnableAdvancedCard` has no local "success" state.** After a successful
+  `POST /api/inventory/enable-advanced`, it dispatches
+  `fetchAdvancedInventory()` and relies entirely on the reloaded
+  `inventory_settings.advanced_enabled` flipping `advancedInventoryView`'s
+  result from `"enable"` to `"active"` in `page.tsx` — that's what makes the
+  card disappear (its own `open`/`enabling` state only controls the confirm
+  modal, not whether the card itself renders). If you ever change
+  `fetchAdvancedInventory` to skip refetching `inventory_settings`, this
+  card will keep showing "Enable" after a successful enable.

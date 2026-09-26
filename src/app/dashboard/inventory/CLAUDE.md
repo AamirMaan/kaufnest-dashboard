@@ -13,10 +13,26 @@ pagination is active.
   (`_store/advancedInventorySlice.ts`, dispatched on mount only when
   `hasAdvancedInventory(plan)` and not yet loaded/loading/errored), and
   renders `<ProductsTab>` unconditionally below them. No table/search code
-  lives here anymore — see `_components/ProductsTab.tsx`. The `enable` and
-  `active` views both currently render the same plain products page (no
-  half-built UI); the enable card (Task 4) and the `InventoryTabs` strip
-  (Task 6, only once there's a Locations tab) are not wired in yet.
+  lives here anymore — see `_components/ProductsTab.tsx`. Also computes
+  `isAdmin` from `state.currentUser.profile?.role` (`admin`/`super_admin`)
+  and renders `<EnableAdvancedCard isAdmin={isAdmin} />` when `view ===
+  "enable"` (Task 4). The `active` view still renders the same plain
+  products page (no half-built UI yet) — the `InventoryTabs` strip (Task 6,
+  only once there's a Locations tab) is not wired in yet.
+- `_components/EnableAdvancedCard.tsx` (Task 4, 2026-09-26) — the "Batches &
+  locations" card shown when `advancedInventoryView` returns `"enable"`
+  (entitled tenant, `inventory_settings.advanced_enabled` still false).
+  Admins see an "Enable" button; non-admins see the same card with "Ask an
+  admin to turn it on." instead. Enable opens a one-way confirm `Modal`
+  (explicitly states "This can't be turned off again."); confirming calls
+  `POST /api/inventory/enable-advanced`, writes an `inventory_settings`
+  audit log entry (`writeAuditLog` + `addAuditLog`) on success, then
+  dispatches `fetchAdvancedInventory()` to reload settings/locations so
+  `page.tsx`'s `view` flips to `"active"` and the card unmounts itself —
+  there is no local "enabled" state here, the view transition is entirely
+  driven by the reloaded Redux state. Toasts on both outcomes
+  (`useToast()`), busy-verb button while `enabling`, disabled Cancel/Enable
+  and non-dismissable modal while the request is in flight.
 - `_components/ProductsTab.tsx` — the actual list view, moved out of
   `page.tsx` unchanged: name search (`ilike` filter), `<Pagination>`,
   loading overlay, `(this page)` count label, row actions, wires up
