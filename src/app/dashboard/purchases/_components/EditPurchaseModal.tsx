@@ -11,6 +11,14 @@ import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
+import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { PurchaseInventoryFields } from "./PurchaseInventoryFields";
+import {
+  isPurchaseInventoryFieldsValid,
+  purchaseInventoryFieldsFrom,
+  purchaseInventoryPayload,
+} from "../_lib/purchaseInventoryFields";
 import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -63,6 +71,8 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const [form, setForm] = useState<FormState>(() => (purchase ? purchaseToForm(purchase, defaultVatRate) : blankForm));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const advanced = useAdvancedInventory();
+  const [inv, setInv] = useState(() => purchaseInventoryFieldsFrom(purchase ?? {}));
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -83,72 +93,98 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
+  const tracksStock = advanced.active && !!form.product_id;
+  const defaultLocationName = advanced.locations.find((l) => l.id === advanced.settings?.default_location_id)?.name ?? null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!purchase) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (price <= 0) return setError("Unit price must be greater than 0.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
+    if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
     setSaving(true);
 
-    const supabase = await createTenantClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const supabase = await createTenantClient();
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const { data, error: dbError } = await supabase
-      .from("purchases")
-      .update({
-        product_name: form.product_name.trim(),
-        product_id: form.product_id || null,
-        quantity: qty,
-        unit_price: price,
-        total_amount: total,
-        currency: form.currency,
-        vendor: form.vendor.trim() || null,
-        date: form.date,
-        description: form.description.trim() || null,
-        vat_rate: form.vat_included ? vatRate : null,
-        vat_amount: form.vat_included ? vatAmount : null,
-      })
-      .eq("id", purchase.id)
-      .select()
-      .single<Purchase>();
+      const { data, error: dbError } = await supabase
+        .from("purchases")
+        .update({
+          product_name: form.product_name.trim(),
+          product_id: form.product_id || null,
+          quantity: qty,
+          unit_price: price,
+          total_amount: total,
+          currency: form.currency,
+          vendor: form.vendor.trim() || null,
+          date: form.date,
+          description: form.description.trim() || null,
+          vat_rate: form.vat_included ? vatRate : null,
+          vat_amount: form.vat_included ? vatAmount : null,
+          ...(tracksStock ? purchaseInventoryPayload(inv) : {}),
+        })
+        .eq("id", purchase.id)
+        .select()
+        .single<Purchase>();
 
-    if (dbError) {
-      setError(dbError.message);
+      if (dbError) {
+        setError(inventoryErrorMessage(dbError, "Could not save the purchase."));
+        return;
+      }
+
+      dispatch(updatePurchase(data));
+
+      // Re-fetch product(s) whose stock the trigger may have changed.
+      // product_id could have changed, so refresh both old and new if they differ.
+      const productIdsToRefresh = new Set(
+        [purchase.product_id, data.product_id].filter((id): id is string => !!id)
+      );
+      for (const pid of productIdsToRefresh) {
+        const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
+        if (fresh) dispatch(updateProduct(fresh));
+      }
+
+      // An audit-write failure must never turn an already-saved purchase into a failure toast.
+      try {
+        const log = await writeAuditLog(supabase, {
+          userId: user!.id,
+          userEmail: user!.email ?? "",
+          action: "update",
+          entityType: "purchase",
+          entityId: purchase.id,
+          metadata: {
+            before: {
+              product_name: purchase.product_name, product_id: purchase.product_id, quantity: purchase.quantity,
+              unit_price: purchase.unit_price, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date,
+              vat_rate: purchase.vat_rate, vat_amount: purchase.vat_amount,
+              location_id: purchase.location_id ?? null, freight_cost: purchase.freight_cost ?? null,
+              customs_cost: purchase.customs_cost ?? null, other_cost: purchase.other_cost ?? null,
+            },
+            after: {
+              product_name: data.product_name, product_id: data.product_id, quantity: data.quantity,
+              unit_price: data.unit_price, vendor: data.vendor, currency: data.currency, date: data.date,
+              vat_rate: data.vat_rate, vat_amount: data.vat_amount,
+              location_id: data.location_id ?? null, freight_cost: data.freight_cost ?? null,
+              customs_cost: data.customs_cost ?? null, other_cost: data.other_cost ?? null,
+            },
+            reason: form.reason.trim(),
+          },
+        });
+        if (log) dispatch(addAuditLog(log));
+      } catch {
+        // swallow — the purchase itself already saved successfully
+      }
+
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setError(inventoryErrorMessage(err, "Could not save the purchase. Please check your connection and try again."));
+    } finally {
       setSaving(false);
-      return;
     }
-
-    dispatch(updatePurchase(data));
-
-    // Re-fetch product(s) whose stock the trigger may have changed.
-    // product_id could have changed, so refresh both old and new if they differ.
-    const productIdsToRefresh = new Set(
-      [purchase.product_id, data.product_id].filter((id): id is string => !!id)
-    );
-    for (const pid of productIdsToRefresh) {
-      const { data: fresh } = await supabase.from("products").select("*").eq("id", pid).single<Product>();
-      if (fresh) dispatch(updateProduct(fresh));
-    }
-
-    const log = await writeAuditLog(supabase, {
-      userId: user!.id,
-      userEmail: user!.email ?? "",
-      action: "update",
-      entityType: "purchase",
-      entityId: purchase.id,
-      metadata: {
-        before: { product_name: purchase.product_name, product_id: purchase.product_id, quantity: purchase.quantity, unit_price: purchase.unit_price, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date, vat_rate: purchase.vat_rate, vat_amount: purchase.vat_amount },
-        after:  { product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, vendor: data.vendor, currency: data.currency, date: data.date, vat_rate: data.vat_rate, vat_amount: data.vat_amount },
-        reason: form.reason.trim(),
-      },
-    });
-    if (log) dispatch(addAuditLog(log));
-
-    setSaving(false);
-    onSuccess?.();
-    onClose();
   }
 
   return (
@@ -159,7 +195,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
       footer={
         <>
           <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" form="edit-purchase-form" disabled={saving}>
+          <Button type="submit" form="edit-purchase-form" disabled={saving || (tracksStock && !isPurchaseInventoryFieldsValid(inv))}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </>
@@ -243,6 +279,20 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+
+        {tracksStock && (
+          <PurchaseInventoryFields
+            value={inv}
+            onChange={setInv}
+            locations={advanced.locations}
+            defaultLocationName={defaultLocationName}
+            quantity={qty}
+            totalAmount={total}
+            vatAmount={vatAmount}
+            currency={form.currency}
+            disabled={saving}
+          />
+        )}
 
         <Field label="Description">
           <Textarea value={form.description} onChange={(e) => set("description", e.target.value)} placeholder="Optional notes…" />

@@ -29,6 +29,25 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   `addPurchase`/`removePurchase` total arithmetic, `fetchPurchasesPage`
   pending/fulfilled/rejected cases). Run with `npx jest dashboard/purchases`.
 - `_components/AddPurchaseModal.tsx` / `EditPurchaseModal.tsx` — create/edit forms.
+  Both also render `_components/PurchaseInventoryFields.tsx` (location +
+  landed costs) — see "Advanced inventory: location & landed costs" below.
+- `_lib/purchaseInventoryFields.ts` (+ test, Phase 3 Task 4, 2026-09-26) —
+  pure state/validation/payload helpers for the advanced-inventory fields on
+  the purchase form: `PurchaseInventoryFieldsState { locationId, freight,
+  customs, other }` (all strings — form-bound), `emptyPurchaseInventoryFields()`,
+  `purchaseInventoryFieldsFrom(purchase)` (round-trips a `Purchase`, treats
+  missing fields on older rows as empty), `isPurchaseInventoryFieldsValid`,
+  `purchaseInventoryPayload` (→ `{ location_id, freight_cost, customs_cost,
+  other_cost }`, `""`/empty → `null`), `hasLandedCosts` (drives the
+  collapsible section's initial open state), `parseLandedPreview` (lenient
+  parse for the live read-out only — invalid/empty reads as 0, unlike the
+  strict validator).
+- `_components/PurchaseInventoryFields.tsx` (Phase 3 Task 4, 2026-09-26) —
+  the Location select + collapsible Freight/Customs/Other landed-cost
+  inputs + live "Landed cost per unit" read-out (`landedUnitCost` from
+  `inventory/_lib/landedCost.ts`). Pure presentational, driven entirely by
+  the `value`/`onChange` props — see "Advanced inventory" below for when
+  it's rendered.
 - `_components/ImportPurchasesModal.tsx` — bulk CSV import: same pattern as
   `ImportSalesModal` but for purchases. See "CSV import/export" below.
 - `_components/purchaseImportFormats.ts` (+ colocated `.test.ts`, 2026-09-17)
@@ -107,6 +126,53 @@ editable fields.
   not a generated one — verified live: `is_generated = NEVER`) remains the
   gross/paid figure either way.
 
+## Advanced inventory: location & landed costs (Business plan, Phase 3 Task 4)
+
+Both `AddPurchaseModal.tsx` and `EditPurchaseModal.tsx` call
+`useAdvancedInventory()` (`inventory/_store/useAdvancedInventory.ts`) and
+compute a local `tracksStock` boolean:
+- Add: `advanced.active && (!!form.product_id || (form.add_to_inventory &&
+  isNewProductName))` — true once the purchase either links an existing
+  inventory product or will create+link a new one.
+- Edit: `advanced.active && !!form.product_id`.
+
+`<PurchaseInventoryFields>` renders **only when `tracksStock` is true** —
+for Starter/Pro tenants, or a Business tenant that hasn't enabled advanced
+inventory yet, or a purchase with no inventory link, the form is
+byte-for-byte what it was before this feature: no new fields render and the
+insert/update payload gets `{}` spread in (i.e. nothing added) via
+`...(tracksStock ? purchaseInventoryPayload(inv) : {})`.
+
+- **`""` (empty) `locationId` means "use the tenant's default location"** —
+  the DB fills `location_id` from `inventory_settings.default_location_id`
+  when advanced inventory is on; the component shows this as "Default
+  location (<name>)" rather than an empty option.
+- **The landed-cost read-out is display-only.** `landedUnitCost()`
+  (`inventory/_lib/landedCost.ts`) is a TS mirror of the SQL formula the
+  database actually uses to cost the stock lot — never derive the stored
+  landed cost from this component; it exists purely so the user sees a
+  preview while typing.
+- The submit button is disabled while `tracksStock && !isPurchaseInventoryFieldsValid(inv)` (negative or
+  non-numeric freight/customs/other), in addition to the existing
+  `saving` check — matches the "mutating button must never look clickable
+  when it can't succeed" convention (AGENTS.md → Form conventions).
+- `EditPurchaseModal` initialises `inv` via
+  `purchaseInventoryFieldsFrom(purchase ?? {})` — safe because the modal is
+  always rendered with `key={editTarget?.id ?? "edit-purchase"}` at its
+  call site (`page.tsx`), so a new purchase target remounts the component
+  and re-runs `useState`'s initializer instead of reusing stale state.
+- Both modals map a mutation's DB error with
+  `inventoryErrorMessage(dbError, "Could not save the purchase.")` instead
+  of showing the raw Postgres message — this is what surfaces
+  `INV_CONSUMED` ("…units from this batch are already sold…") when editing
+  a consumed batch's quantity/location. Both `handleSubmit`s are now
+  wrapped in `try { … } catch (err) { setError(inventoryErrorMessage(err, …
+  )); } finally { setSaving(false); }` so a thrown error (not just a
+  returned `{ error }`) can't leave the button stuck on "Saving…" forever,
+  and the post-success `writeAuditLog` call has its own inner
+  try/catch so an audit-write failure never turns an already-saved
+  purchase into a failure toast.
+
 ## Sale link (`sale_id`)
 
 `sale_id: string | null` — when non-null, this purchase was created as the cost-of-goods record for a specific sale. The purchases list renders a "Linked to order →" link below the product name for these rows (navigates to `/dashboard/sales/{sale_id}`). The FK is `ON DELETE SET NULL` — if the linked sale is deleted, the purchase survives with `sale_id` reset to `null`.
@@ -124,8 +190,17 @@ editable fields.
   by every CRUD feature
 - `app/dashboard/inventory/_store/inventorySlice` — read-only here, for the
   product-link `Select` (`s.inventory.items`)
+- `app/dashboard/inventory/_store/useAdvancedInventory` (Phase 3 Task 4) —
+  entitlement/active state + `locations`/`settings` for the Location &
+  landed-costs fields
+- `app/dashboard/inventory/_lib/advancedInventory` (`LOCATION_TYPE_LABELS`,
+  `platformLocationOptions`) and `app/dashboard/inventory/_lib/landedCost`
+  (`landedUnitCost`) — consumed by `PurchaseInventoryFields.tsx`
+- `lib/inventory/inventoryErrors` (`inventoryErrorMessage`) — maps `INV_*`
+  trigger errors (and any other DB/thrown error) to user-safe copy in both
+  modals
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv,pagedQuery,fetchAllRows}`, `store/slices/companyProfileSlice`
-- `types` (`Purchase`, `Product`)
+- `types` (`Purchase`, `Product`, `StockLocation`)
 
 ## CSV import/export
 
@@ -175,5 +250,6 @@ either file's CLAUDE.md section for the full two-pass row lifecycle.
 
 ## Tests
 
-`npx jest dashboard/purchases` runs `_store/purchasesSlice.test.ts` and
-`_components/purchaseImportFormats.test.ts`.
+`npx jest dashboard/purchases` runs `_store/purchasesSlice.test.ts`,
+`_components/purchaseImportFormats.test.ts`, and (Phase 3 Task 4)
+`_lib/purchaseInventoryFields.test.ts`.
