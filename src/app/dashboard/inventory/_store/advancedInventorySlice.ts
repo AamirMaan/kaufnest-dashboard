@@ -35,7 +35,7 @@ const initialState: AdvancedInventoryState = {
 
 export const fetchAdvancedInventory = createAsyncThunk(
   "advancedInventory/fetch",
-  async (_, { rejectWithValue }) => {
+  async () => {
     const supabase = await createTenantClient();
     const [settingsRes, defaultsRes, locations] = await Promise.all([
       // Singleton row (primary key id = true).
