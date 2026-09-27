@@ -18,6 +18,7 @@ export function TopProductsCard({ sales, currency }: { sales: SalesOverview | nu
       headline={top ? kit.money(top.revenue) : kit.money(0)}
       meta={top ? `Best seller: ${top.name} · ${top.units} unit${top.units !== 1 ? "s" : ""}` : undefined}
       empty={products.length === 0}
+      bodyClassName="mt-4"
     >
       <table className="w-full text-sm">
         <thead>

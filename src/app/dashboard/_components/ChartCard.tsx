@@ -16,6 +16,10 @@ interface ChartCardProps {
   action?: ReactNode;
   /** Replaces the chart with "No data in this period". */
   empty?: boolean;
+  /** Chart/body slot classes. Default is the fixed-height chart slot; pass a
+   *  height-less class (e.g. "mt-4") for content that sizes itself, such as
+   *  a table. */
+  bodyClassName?: string;
   children: ReactNode;
 }
 
@@ -37,6 +41,7 @@ export function ChartCard({
   meta,
   action,
   empty = false,
+  bodyClassName = "mt-4 h-[220px]",
   children,
 }: ChartCardProps) {
   const tone = changeTone(change ?? null, goodWhen);
@@ -62,9 +67,9 @@ export function ChartCard({
         )}
       </div>
       {meta && <div className="mt-1 text-xs text-(--color-text-muted)">{meta}</div>}
-      <div className="mt-4 h-[220px]">
+      <div className={bodyClassName}>
         {empty ? (
-          <div className="h-full flex items-center justify-center text-sm text-(--color-text-faint)">
+          <div className="h-full min-h-[220px] flex items-center justify-center text-sm text-(--color-text-faint)">
             No data in this period
           </div>
         ) : (
