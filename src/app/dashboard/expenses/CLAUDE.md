@@ -70,6 +70,11 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   saves — this component never writes to the `expenses` table. Thumbnails
   are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
   bucket is private, unlike `listing-images`.
+- `_lib/parseReceipt.ts` (+ colocated `.test.ts`) — pure, rule-based receipt
+  text → suggested expense fields (German/English); `parseReceipt(text, options?)
+  → ParsedReceipt`, `toNumber(raw: string) → number`. Input comes from
+  `extractReceiptText` (not yet implemented). Every field is optional — the
+  form fills only blank fields.
 - `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
   `buildReceiptPath(tenantSchema, expenseId, fileName)`,
   `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename

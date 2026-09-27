@@ -36,6 +36,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `src/lib/utils/importAliases.ts` instead (Sales reads the same table). A new
   *column* also needs a `templateExample` value inserted at the same index —
   see the gotcha below.
+- **Improve receipt field detection**: `_lib/parseReceipt.ts` — change a
+  regex pattern, add a category keyword, or refine amount/date/VAT logic. Add
+  a fixture to its test for every rule change (every fixture is a real receipt
+  that documents the rule in action).
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
 - **Change the VAT-preservation decision on edit**: `_lib/vatPreservation.ts`
@@ -447,3 +451,21 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   outside the known set used to render the literal word "undefined" instead
   of the value itself. Keep both fallbacks if you add a 9th place that reads
   `CATEGORY_LABELS[...]` directly.
+
+## Gotchas — `parseReceipt`
+
+- **Amounts must have exactly 2 decimals.** The `AMOUNT_RE` regex matches only
+  amounts with exactly two decimal places (e.g. `44,63`, `1200.00`), which all
+  real receipts have. The lookarounds `(?<![\d.,])` and `(?![.,]?\d)` prevent
+  dates like `12.03.2026` from yielding a false match like `"12.03"` or `"2026"`.
+  Do not remove them; they are the entire safeguard against parsing dates as amounts.
+- **Mixed VAT rates deliberately suggest no rate.** A supermarket receipt with
+  both 7% and 19% VAT can't be represented by the form's single `vat_rate` field.
+  The parser returns `vatRate: undefined` rather than guessing, leaving the user
+  to enter it manually — this is correct behaviour and has a test. Do not add
+  fallback logic to pick the highest or most common rate; that would silently
+  charge the wrong input tax.
+- **Title is never suggested by `parseReceipt`.** Every field (date, amount,
+  currency, VAT, vendor, invoice number) can be auto-filled, but title is
+  deliberately left blank because the user's own naming convention is more
+  valuable than any extracted text. Do not add title extraction.
