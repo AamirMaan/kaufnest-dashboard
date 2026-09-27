@@ -289,6 +289,14 @@ since modal dropdowns use a different state key than the table.
   takes both (product, location) advisory locks, then checks the destination
   lots are untouched (`FOR UPDATE`), so a concurrent sale can't be cascaded
   away.
+- **A transfer that settles negative stock at its destination can't be
+  deleted right away.** If the destination was short (a shortfall lot),
+  `inv_settle_shortfall` (047) immediately uses the arriving units to settle
+  it, marking those destination batches as consumed — `inv_transfer_before_delete`'s
+  untouched-batches check then sees consumption and raises `INV_CONSUMED`,
+  the same as a transfer whose destination units were later sold or moved
+  on elsewhere. `TransfersTab.tsx`'s `DeleteConfirmModal` copy calls this
+  out alongside "sold" and "moved on".
 - **No bulk sale deletes while advanced inventory is on.** The BEFORE DELETE
   revert can recompute a sibling sale's COGS; if that sibling is in the same
   multi-row DELETE, Postgres raises "tuple to be deleted was already
@@ -538,9 +546,11 @@ since modal dropdowns use a different state key than the table.
   `page.tsx` owns a `stockVersion` counter (`bumpStock`), passed to both
   `<ProductsTab stockVersion>` and `<LocationsTab stockVersion>`, which fold
   it into their own request keys (`ProductsTab`'s `stockRequestKey`,
-  `LocationsTab`'s `onHandKey`) so a stale per-location snapshot on an
-  inactive tab re-fetches the moment its panel becomes visible again —
-  neither tab's own request key (page ids / locations list) changes just
+  `LocationsTab`'s `onHandKey`) so a stale per-location snapshot re-fetches
+  immediately when `stockVersion` bumps — all three tabs stay mounted at all
+  times (see `page.tsx`'s entry above), so this fires right away even while
+  the tab's own panel is hidden, not deferred until the user switches back to
+  it. Neither tab's own request key (page ids / locations list) changes just
   because a transfer moved stock, so without `stockVersion` they'd keep
   showing pre-transfer numbers until an unrelated change (a page turn, a
   location edit) happened to bust their cache. `TransfersTab`'s

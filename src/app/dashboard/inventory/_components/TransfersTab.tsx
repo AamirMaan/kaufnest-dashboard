@@ -174,7 +174,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
         title="Delete Transfer"
         description={
           deleteTarget
-            ? `Move ${deleteTarget.quantity} × ${productLabel(deleteTarget)} back from ${locationName(deleteTarget.to_location_id)} to ${locationName(deleteTarget.from_location_id)}? This only works while none of the transferred units have been sold or moved on.`
+            ? `Move ${deleteTarget.quantity} × ${productLabel(deleteTarget)} back from ${locationName(deleteTarget.to_location_id)} to ${locationName(deleteTarget.from_location_id)}? This only works while none of the transferred units have been sold, moved on, or used to cover negative stock at the destination.`
             : ""
         }
         onConfirm={handleDelete}

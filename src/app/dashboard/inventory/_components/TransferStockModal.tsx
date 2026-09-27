@@ -42,10 +42,14 @@ interface Props {
 }
 
 /**
- * Source lots keyed by the "<product>:<location>" they were fetched for —
- * derived at render, never reset with a synchronous setState in the effect
+ * Source lots keyed by "<product>:<location>:<lotsVersion>" — derived at
+ * render, never reset with a synchronous setState in the effect
  * (react-hooks/set-state-in-effect is an error here). Same pattern as
- * ProductLotsModal.tsx's LotsResult.
+ * ProductLotsModal.tsx's LotsResult. The key is only used for matching a
+ * stale result against the current request, never parsed back apart — the
+ * product/location ids that drove the fetch are captured directly from
+ * `draft` in the effect closure instead, since naively splitting a 3-part
+ * key on ":" would be ambiguous.
  */
 interface SourceLotsResult {
   key: string;
@@ -61,14 +65,26 @@ export function TransferStockModal({ open, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState<TransferDraft>(() => emptyTransferDraft(settings?.default_location_id ?? null, today()));
   const [saving, setSaving] = useState(false);
   const [sourceResult, setSourceResult] = useState<SourceLotsResult | null>(null);
+  /**
+   * Bumped after a submit fails on the DB (e.g. INV_INSUFFICIENT because
+   * stock changed between preview and submit) so the source-lots request key
+   * below changes and the effect treats it as a new request, re-fetching
+   * fresh availability instead of leaving the stale preview (and an
+   * incorrectly-enabled Transfer button) in place.
+   */
+  const [lotsVersion, setLotsVersion] = useState(0);
 
   const options = useMemo(() => transferLocationOptions(locations), [locations]);
-  const sourceKey = draft.productId && draft.fromLocationId ? `${draft.productId}:${draft.fromLocationId}` : "";
+  const sourceKey = draft.productId && draft.fromLocationId ? `${draft.productId}:${draft.fromLocationId}:${lotsVersion}` : "";
 
   useEffect(() => {
     if (!open || sourceKey === "") return;
     let cancelled = false;
-    const [productId, locationId] = sourceKey.split(":");
+    // Captured directly from `draft`, not parsed back out of `sourceKey` —
+    // the key now has a 3rd (`lotsVersion`) segment, so splitting it on ":"
+    // would be ambiguous. The key itself is only used for matching results.
+    const productId = draft.productId;
+    const locationId = draft.fromLocationId;
     fetchAvailableLots(productId, locationId)
       .then((rows) => {
         if (!cancelled) setSourceResult({ key: sourceKey, data: rows, error: null });
@@ -77,7 +93,7 @@ export function TransferStockModal({ open, onClose, onSaved }: Props) {
         if (!cancelled) setSourceResult({ key: sourceKey, data: null, error: e.message });
       });
     return () => { cancelled = true; };
-  }, [open, sourceKey]);
+  }, [open, sourceKey, draft.productId, draft.fromLocationId]);
 
   const sourceMatches = sourceKey !== "" && sourceResult?.key === sourceKey;
   const sourceLots = sourceMatches ? sourceResult!.data : null;
@@ -116,6 +132,10 @@ export function TransferStockModal({ open, onClose, onSaved }: Props) {
       const { data, error } = await supabase.from("stock_transfers").insert(payload).select("*").single<StockTransfer>();
       if (error || !data) {
         toastError("Transfer not saved", inventoryErrorMessage(error, "Could not record the transfer."));
+        // Stock may have changed between the preview and this submit
+        // (e.g. INV_INSUFFICIENT) — force the source lots to re-fetch so
+        // the preview/available units and isFormValid reflect current stock.
+        setLotsVersion((v) => v + 1);
         return;
       }
       try {

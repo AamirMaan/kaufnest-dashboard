@@ -402,9 +402,11 @@ Phase 2 shipped the enable flow and the Locations tab. Phase 3 shipped
 purchase location + landed costs, sale "Fulfilled from" with a shortage
 warning, FIFO cost of goods on the order page, per-location stock columns on
 the Products tab, on-hand units on the Locations tab, and the product
-batches drawer. Phase 4 shipped the Transfers tab: transfer-stock modal with
-a live FIFO preview, paginated transfer history, and delete-to-undo — see
-the Purchases/Sales `CLAUDE.md`s and the gotchas below for the details.
+batches drawer — see the Purchases/Sales `CLAUDE.md`s for those details.
+Phase 4 shipped the Transfers tab: transfer-stock modal with a live FIFO
+preview, paginated transfer history, and delete-to-undo — see this file's
+`TransfersTab.tsx`/`TransferStockModal.tsx` entries above and SKILL.md's
+gotchas for the details.
 Transfer creation and deletion in the UI are **admin-only** (the header's
 "+ Transfer Stock" button and each row's delete icon are hidden for
 non-admins, who see read-only history); the underlying RLS on
