@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { Expense } from "@/types";
+import type { Expense, ExpensesSummaryRow } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type { ExpenseFilters } from "@/lib/utils/filters";
@@ -12,6 +12,13 @@ interface ExpensesState {
   pageSize: number;
   total: number;
   isFetching: boolean;
+  summary: ExpensesSummaryRow[];
+  summaryLoading: boolean;
+  summaryError: boolean;
+  /** Bumped by add/update/remove so the page refetches filtered totals after any mutation. */
+  summaryVersion: number;
+  /** requestId of the latest summary fetch — older responses are dropped (fast filter typing). */
+  summaryRequestId: string | null;
 }
 
 const initialState: ExpensesState = {
@@ -21,6 +28,11 @@ const initialState: ExpensesState = {
   pageSize: DEFAULT_PAGE_SIZE,
   total: 0,
   isFetching: false,
+  summary: [],
+  summaryLoading: false,
+  summaryError: false,
+  summaryVersion: 0,
+  summaryRequestId: null,
 };
 
 // ─── Thunk ────────────────────────────────────────────────────────────────────
@@ -56,6 +68,22 @@ export const fetchExpensesPage = createAsyncThunk(
   }
 );
 
+/**
+ * Filtered totals across ALL matching expenses (not just the loaded page) —
+ * one row per currency from get_expenses_summary (049). Uses the same
+ * `expensesFilterParams` as `fetchExpensesPage`, so tiles and table can't disagree.
+ */
+export const fetchExpensesSummary = createAsyncThunk(
+  "expenses/fetchSummary",
+  async (filters: ExpenseFilters) => {
+    const supabase = await createTenantClient();
+    const { data, error } = await supabase.rpc("get_expenses_summary", expensesFilterParams(filters));
+    // Never forward the raw Postgres error — the page shows a generic message.
+    if (error) throw new Error("expenses_summary_failed");
+    return (data ?? []) as ExpensesSummaryRow[];
+  }
+);
+
 // ─── Shared page-hydration helper ─────────────────────────────────────────────
 
 function applyHydratePage(
@@ -88,15 +116,18 @@ export const expensesSlice = createSlice({
     addExpense(state, action: PayloadAction<Expense>) {
       state.items.unshift(action.payload);
       state.total += 1;
+      state.summaryVersion += 1;
     },
     updateExpense(state, action: PayloadAction<Expense>) {
       const idx = state.items.findIndex((e) => e.id === action.payload.id);
       if (idx !== -1) state.items[idx] = action.payload;
+      state.summaryVersion += 1;
     },
     removeExpense(state, action: PayloadAction<string>) {
       const before = state.items.length;
       state.items = state.items.filter((e) => e.id !== action.payload);
       if (state.items.length < before) state.total -= 1;
+      state.summaryVersion += 1;
     },
   },
   extraReducers: (builder) => {
@@ -109,6 +140,21 @@ export const expensesSlice = createSlice({
       })
       .addCase(fetchExpensesPage.rejected, (state) => {
         state.isFetching = false;
+      })
+      .addCase(fetchExpensesSummary.pending, (state, action) => {
+        state.summaryRequestId = action.meta.requestId;
+        state.summaryLoading = true;
+      })
+      .addCase(fetchExpensesSummary.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summary = action.payload;
+        state.summaryLoading = false;
+        state.summaryError = false;
+      })
+      .addCase(fetchExpensesSummary.rejected, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summaryLoading = false;
+        state.summaryError = true;
       });
   },
 });

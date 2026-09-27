@@ -528,6 +528,30 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchSalesSummary`'s stale-response guard compares `requestId`, not
+  request order.** `state.summaryRequestId` is set on `.pending` and checked
+  on both `.fulfilled` and `.rejected` — a response whose `meta.requestId`
+  doesn't match the latest one is silently dropped. This is what lets a page
+  dispatch the thunk on every keystroke of a filter without a slower earlier
+  response clobbering a faster later one. Don't "simplify" this to a plain
+  loading boolean — that's exactly the race it exists to prevent.
+- **`summaryVersion` is bumped by `addSale`/`updateSale`/`removeSale`, not by
+  `fetchSalesPage`.** It exists so a page can `useEffect`-refetch
+  `fetchSalesSummary` after a local mutation without re-running on every
+  page/filter change already covered by its own effect. If you add a new
+  mutation-shaped reducer to this slice, bump it there too.
+- **`fetchSalesSummary` reuses `salesFilterParams`, the exact mapper
+  `fetchSalesPage` uses** — this is deliberate, not incidental: it's what
+  guarantees the summary tiles and the table rows can never disagree about
+  which filter predicates apply. Don't hand-roll a second filter-to-RPC-args
+  mapping for the summary thunk.
+- **The thunk never forwards the raw Postgres `error`** — it throws
+  `new Error("sales_summary_failed")` and the page (Task 5+) shows a generic
+  message. Same rule as every other Supabase-touching route/thunk in this
+  repo (see `AGENTS.md`'s New Supabase query checklist, point 6).
+
 ## Gotchas — server-side pagination
 
 - **Do not call `filterSales()` in `page.tsx`** — filters are pushed to Supabase

@@ -21,7 +21,7 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `sortValue` null-sentinel is `Number.NEGATIVE_INFINITY` — `-1` collided with
   real credit-note VAT. See the SKILL.md gotchas.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
-  `page`, `pageSize`, `total`, `isFetching`).
+  `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
   `addExpense`, `updateExpense`, `removeExpense`, `setFetching`.
   Thunk: `fetchExpensesPage({ page, pageSize, filters })` — builds a Supabase query
@@ -30,6 +30,16 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `invoice_number`, sanitized with `sanitizeIlikeSearchTerm`),
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
+  **Summary thunk** (2026-09-26): `fetchExpensesSummary(filters:
+  ExpenseFilters)` calls the `get_expenses_summary` RPC (migration 049) via
+  `expensesFilterParams` — the same mapper `fetchExpensesPage` uses — and
+  returns one `ExpensesSummaryRow` per currency (`src/types/index.ts`,
+  includes `top_category`/`top_category_amount`). State:
+  `summary`/`summaryLoading`/`summaryError`/`summaryVersion` (bumped by
+  `addExpense`/`updateExpense`/`removeExpense`)/`summaryRequestId`
+  (stale-response guard — see the Sales feature's CLAUDE.md for the full
+  pattern, identical here). A raw Postgres error is never forwarded — the
+  thunk throws `new Error("expenses_summary_failed")` instead.
   Used **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.

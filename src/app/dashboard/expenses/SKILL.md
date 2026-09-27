@@ -64,6 +64,18 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchExpensesSummary` follows the exact same shape as Sales'
+  `fetchSalesSummary`** — `summaryRequestId` stale-response guard,
+  `summaryVersion` bumped by `addExpense`/`updateExpense`/`removeExpense`,
+  reuses `expensesFilterParams` (the same mapper `fetchExpensesPage` uses),
+  and never forwards a raw Postgres error (throws
+  `new Error("expenses_summary_failed")` instead). `ExpensesSummaryRow` also
+  carries `top_category`/`top_category_amount` (nullable) — the RPC's own
+  top-category computation, not derived client-side. See the Sales feature's
+  SKILL.md gotcha for the full reasoning — it applies here unchanged.
+
 ## Gotchas
 
 - **Server-side pagination**: `page.tsx` dispatches `fetchExpensesPage` on every

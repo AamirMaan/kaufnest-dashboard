@@ -14,7 +14,8 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
   Max Rows gotcha), **Import CSV** button, wires up the modals below.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
-  `loaded`, `page`, `pageSize`, `total`, `isFetching`).
+  `loaded`, `page`, `pageSize`, `total`, `isFetching`, plus the summary
+  fields below).
   Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),
   `addPurchase`, `updatePurchase`, `removePurchase`, `setFetching`.
   Thunk: `fetchPurchasesPage({ page, pageSize, filters })` — builds a Supabase query
@@ -23,6 +24,15 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   with `sanitizeIlikeSearchTerm`), `.select("*", { count: "exact" })`,
   `.order("date")`, and `.range(from, to)` from `rangeFor()`. There is no
   standalone vendor filter — the general search box covers vendor.
+  **Summary thunk** (2026-09-26): `fetchPurchasesSummary(filters:
+  PurchaseFilters)` calls the `get_purchases_summary` RPC (migration 049) via
+  `purchasesFilterParams` — the same mapper `fetchPurchasesPage` uses — and
+  returns one `PurchasesSummaryRow` per currency (`src/types/index.ts`).
+  State: `summary`/`summaryLoading`/`summaryError`/`summaryVersion` (bumped
+  by `addPurchase`/`updatePurchase`/`removePurchase`)/`summaryRequestId`
+  (stale-response guard — see the Sales feature's CLAUDE.md for the full
+  pattern, identical here). A raw Postgres error is never forwarded — the
+  thunk throws `new Error("purchases_summary_failed")` instead.
   Used **only** by this feature — registered centrally in `src/store/store.ts`
   and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/purchasesSlice.test.ts` — reducer tests (covers `hydratePurchases`,

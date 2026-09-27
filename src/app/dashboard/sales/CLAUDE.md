@@ -44,7 +44,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `/dashboard/sales` after delete). Net proceeds computed via
   `_components/orderMath.ts`.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
-  `page`, `pageSize`, `total`, `isFetching`).
+  `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
   `addSale`, `updateSale`, `removeSale`, `setFetching`.
   Thunk: `fetchSalesPage({ page, pageSize, filters })` — builds a Supabase query
@@ -53,6 +53,18 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `external_order_id`/`description`, sanitized with `sanitizeIlikeSearchTerm`),
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
+  **Summary thunk** (2026-09-26): `fetchSalesSummary(filters: SalesFilters)`
+  calls the `get_sales_summary` RPC (migration 049) via `salesFilterParams` —
+  the same mapper `fetchSalesPage` uses, so the filtered-summary tiles and the
+  table can never disagree — and returns one `SalesSummaryRow` per currency
+  (`src/types/index.ts`). State: `summary: SalesSummaryRow[]`,
+  `summaryLoading`, `summaryError`, `summaryVersion` (bumped by
+  `addSale`/`updateSale`/`removeSale` so a page can refetch totals after any
+  mutation), `summaryRequestId` (the in-flight thunk's `requestId` —
+  `fulfilled`/`rejected` handlers no-op when it doesn't match `state
+  .summaryRequestId`, so a stale response from a fast filter change can never
+  overwrite a newer one). A raw Postgres error is never forwarded — the thunk
+  throws `new Error("sales_summary_failed")` instead.
   Also exports `fetchSaleById(saleId)` — a plain async helper (not a thunk)
   that re-reads one `sales` row and returns it or `null`. It exists so
   `EditSaleModal` and `[id]/page.tsx` share one way to reconcile Redux after a

@@ -5,9 +5,11 @@ import {
   updateExpense,
   removeExpense,
   setFetching,
+  fetchExpensesSummary,
 } from "./expensesSlice";
 import type { Expense } from "@/types";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
+import type { ExpenseFilters } from "@/lib/utils/filters";
 
 const makeExpense = (overrides: Partial<Expense> = {}): Expense => ({
   id: "expense-1",
@@ -144,5 +146,47 @@ describe("expensesSlice", () => {
     const state = reducer(initial, removeExpense("nonexistent"));
     expect(state.items).toHaveLength(1);
     expect(state.total).toBe(3);
+  });
+});
+
+describe("summary state", () => {
+  const reducer = expensesSlice.reducer;
+  const init = () => reducer(undefined, { type: "@@init" });
+  const filters: ExpenseFilters = { preset: "all", dateFrom: "", dateTo: "", category: "all", currency: "all", search: "" };
+  const row = {
+    currency: "EUR" as const,
+    expense_count: 1,
+    gross: 10,
+    vat: 1.6,
+    top_category: "shipping" as const,
+    top_category_amount: 10,
+  };
+
+  it("stores rows from the latest request only", () => {
+    let s = reducer(init(), fetchExpensesSummary.pending("req-1", filters));
+    s = reducer(s, fetchExpensesSummary.pending("req-2", filters));
+    expect(s.summaryLoading).toBe(true);
+    s = reducer(s, fetchExpensesSummary.fulfilled([{ ...row, gross: 1 }], "req-1", filters));
+    expect(s.summary).toEqual([]); // stale response ignored
+    s = reducer(s, fetchExpensesSummary.fulfilled([row], "req-2", filters));
+    expect(s.summary).toEqual([row]);
+    expect(s.summaryLoading).toBe(false);
+    expect(s.summaryError).toBe(false);
+  });
+
+  it("flags an error for the latest request", () => {
+    let s = reducer(init(), fetchExpensesSummary.pending("req-1", filters));
+    s = reducer(s, fetchExpensesSummary.rejected(new Error("x"), "req-1", filters));
+    expect(s.summaryError).toBe(true);
+    expect(s.summaryLoading).toBe(false);
+  });
+
+  it("bumps summaryVersion on add, update and remove", () => {
+    let s = init();
+    const expense = makeExpense();
+    s = reducer(s, addExpense(expense));
+    s = reducer(s, updateExpense(expense));
+    s = reducer(s, removeExpense(expense.id));
+    expect(s.summaryVersion).toBe(3);
   });
 });

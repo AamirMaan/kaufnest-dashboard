@@ -48,6 +48,16 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchPurchasesSummary` follows the exact same shape as Sales'
+  `fetchSalesSummary`** — `summaryRequestId` stale-response guard,
+  `summaryVersion` bumped by `addPurchase`/`updatePurchase`/`removePurchase`,
+  reuses `purchasesFilterParams` (the same mapper `fetchPurchasesPage` uses),
+  and never forwards a raw Postgres error (throws
+  `new Error("purchases_summary_failed")` instead). See the Sales feature's
+  SKILL.md gotcha for the full reasoning — it applies here unchanged.
+
 ## Gotchas
 
 - `purchasesSlice` is registered centrally in `src/store/store.ts` and hydrated

@@ -5,8 +5,10 @@ import {
   updatePurchase,
   removePurchase,
   fetchPurchasesPage,
+  fetchPurchasesSummary,
 } from "./purchasesSlice";
 import type { Purchase } from "@/types";
+import type { PurchaseFilters } from "@/lib/utils/filters";
 
 const makePurchase = (overrides: Partial<Purchase> = {}): Purchase => ({
   id: "purchase-1",
@@ -127,5 +129,40 @@ describe("purchasesSlice", () => {
       fetchPurchasesPage.rejected(new Error("fail"), "req-id", { page: 1, pageSize: 50, filters: { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" } })
     );
     expect(state.isFetching).toBe(false);
+  });
+});
+
+describe("summary state", () => {
+  const reducer = purchasesSlice.reducer;
+  const init = () => reducer(undefined, { type: "@@init" });
+  const filters: PurchaseFilters = { preset: "all", dateFrom: "", dateTo: "", currency: "all", search: "" };
+  const row = { currency: "EUR" as const, purchase_count: 1, units: 3, gross: 30, vat: 0 };
+
+  it("stores rows from the latest request only", () => {
+    let s = reducer(init(), fetchPurchasesSummary.pending("req-1", filters));
+    s = reducer(s, fetchPurchasesSummary.pending("req-2", filters));
+    expect(s.summaryLoading).toBe(true);
+    s = reducer(s, fetchPurchasesSummary.fulfilled([{ ...row, gross: 1 }], "req-1", filters));
+    expect(s.summary).toEqual([]); // stale response ignored
+    s = reducer(s, fetchPurchasesSummary.fulfilled([row], "req-2", filters));
+    expect(s.summary).toEqual([row]);
+    expect(s.summaryLoading).toBe(false);
+    expect(s.summaryError).toBe(false);
+  });
+
+  it("flags an error for the latest request", () => {
+    let s = reducer(init(), fetchPurchasesSummary.pending("req-1", filters));
+    s = reducer(s, fetchPurchasesSummary.rejected(new Error("x"), "req-1", filters));
+    expect(s.summaryError).toBe(true);
+    expect(s.summaryLoading).toBe(false);
+  });
+
+  it("bumps summaryVersion on add, update and remove", () => {
+    let s = init();
+    const purchase = makePurchase();
+    s = reducer(s, addPurchase(purchase));
+    s = reducer(s, updatePurchase(purchase));
+    s = reducer(s, removePurchase(purchase.id));
+    expect(s.summaryVersion).toBe(3);
   });
 });

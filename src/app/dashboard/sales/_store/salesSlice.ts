@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { Sale } from "@/types";
+import type { Sale, SalesSummaryRow } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type { SalesFilters } from "@/lib/utils/filters";
@@ -12,6 +12,13 @@ interface SalesState {
   pageSize: number;
   total: number;
   isFetching: boolean;
+  summary: SalesSummaryRow[];
+  summaryLoading: boolean;
+  summaryError: boolean;
+  /** Bumped by add/update/remove so the page refetches filtered totals after any mutation. */
+  summaryVersion: number;
+  /** requestId of the latest summary fetch — older responses are dropped (fast filter typing). */
+  summaryRequestId: string | null;
 }
 
 const initialState: SalesState = {
@@ -21,6 +28,11 @@ const initialState: SalesState = {
   pageSize: DEFAULT_PAGE_SIZE,
   total: 0,
   isFetching: false,
+  summary: [],
+  summaryLoading: false,
+  summaryError: false,
+  summaryVersion: 0,
+  summaryRequestId: null,
 };
 
 // ─── Thunk ────────────────────────────────────────────────────────────────────
@@ -54,6 +66,22 @@ export const fetchSalesPage = createAsyncThunk(
     if (error) throw error;
 
     return { data: (data ?? []) as Sale[], count: count ?? 0, page, pageSize };
+  }
+);
+
+/**
+ * Filtered totals across ALL matching sales (not just the loaded page) —
+ * one row per currency from get_sales_summary (049). Uses the same
+ * `salesFilterParams` as `fetchSalesPage`, so tiles and table can't disagree.
+ */
+export const fetchSalesSummary = createAsyncThunk(
+  "sales/fetchSummary",
+  async (filters: SalesFilters) => {
+    const supabase = await createTenantClient();
+    const { data, error } = await supabase.rpc("get_sales_summary", salesFilterParams(filters));
+    // Never forward the raw Postgres error — the page shows a generic message.
+    if (error) throw new Error("sales_summary_failed");
+    return (data ?? []) as SalesSummaryRow[];
   }
 );
 
@@ -112,15 +140,18 @@ export const salesSlice = createSlice({
     addSale(state, action: PayloadAction<Sale>) {
       state.items.unshift(action.payload);
       state.total += 1;
+      state.summaryVersion += 1;
     },
     updateSale(state, action: PayloadAction<Sale>) {
       const idx = state.items.findIndex((s) => s.id === action.payload.id);
       if (idx !== -1) state.items[idx] = action.payload;
+      state.summaryVersion += 1;
     },
     removeSale(state, action: PayloadAction<string>) {
       const before = state.items.length;
       state.items = state.items.filter((s) => s.id !== action.payload);
       if (state.items.length < before) state.total -= 1;
+      state.summaryVersion += 1;
     },
   },
   extraReducers: (builder) => {
@@ -133,6 +164,21 @@ export const salesSlice = createSlice({
       })
       .addCase(fetchSalesPage.rejected, (state) => {
         state.isFetching = false;
+      })
+      .addCase(fetchSalesSummary.pending, (state, action) => {
+        state.summaryRequestId = action.meta.requestId;
+        state.summaryLoading = true;
+      })
+      .addCase(fetchSalesSummary.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summary = action.payload;
+        state.summaryLoading = false;
+        state.summaryError = false;
+      })
+      .addCase(fetchSalesSummary.rejected, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summaryLoading = false;
+        state.summaryError = true;
       });
   },
 });
