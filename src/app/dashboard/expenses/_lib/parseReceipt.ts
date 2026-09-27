@@ -39,36 +39,58 @@ export function toNumber(raw: string): number {
   return Number(`${intPart}.${s.slice(last + 1)}`);
 }
 
-function amountsIn(line: string): number[] {
-  return Array.from(line.matchAll(AMOUNT_RE), (m) => toNumber(m[0]));
-}
-
 const TOTAL_RE =
   /\b(gesamtbetrag|gesamtsumme|gesamt|summe|endbetrag|rechnungsbetrag|zu zahlen|zahlbetrag|total|amount due|balance due|betrag)\b/i;
-const NOT_TOTAL_RE = /(zwischensumme|sub-?total|netto|\bnet\b|mwst|\bust\b|vat|steuer|\btax\b)/i;
+const SUBTOTAL_RE = /(zwischensumme|sub-?total|netto|\bnet\b)/i;
+const VAT_WORD_RE = /(mwst|\bust\b|vat|steuer|\btax\b)/i;
+// "Gesamtbetrag inkl. MwSt" / "Total incl. VAT" IS the grand total — only
+// a line that states a VAT figure ("Summe MwSt 7,13") is not.
+const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|inc|enth|enthalten)\b\.?\s*(\d{1,2}(?:[.,]\d{1,2})?\s?%\s*)?(mwst|ust|vat|steuer|tax)/i;
 
-function largestByMagnitude(values: number[]): number | undefined {
-  if (values.length === 0) return undefined;
-  return values.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
+/** A grand-total line: a total keyword, not a subtotal, and VAT only mentioned as "incl. VAT". */
+function isTotalLine(line: string): boolean {
+  if (!TOTAL_RE.test(line) || SUBTOTAL_RE.test(line)) return false;
+  return !VAT_WORD_RE.test(line) || INCLUSIVE_VAT_RE.test(line);
 }
 
-function findTotal(lines: string[]): { amount: number; line: number } | undefined {
-  const candidates: { amount: number; line: number }[] = [];
-  lines.forEach((line, i) => {
-    if (!TOTAL_RE.test(line) || NOT_TOTAL_RE.test(line)) return;
-    // PDF text and OCR often put the figure on the line after its label.
-    const onLine = amountsIn(line);
-    const values = onLine.length > 0 ? onLine : amountsIn(lines[i + 1] ?? "");
-    const amount = largestByMagnitude(values);
-    if (amount !== undefined) candidates.push({ amount, line: onLine.length > 0 ? i : i + 1 });
-  });
-  if (candidates.length > 0) {
-    return candidates.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a));
+interface LocatedAmount {
+  amount: number;
+  line: number;
+  index: number; // character offset of the amount within its line
+}
+
+function amountMatches(line: string): { value: number; index: number }[] {
+  return Array.from(line.matchAll(AMOUNT_RE), (m) => ({ value: toNumber(m[0]), index: m.index ?? 0 }));
+}
+
+function amountsIn(line: string): number[] {
+  return amountMatches(line).map((m) => m.value);
+}
+
+function largestOnLine(lines: string[], i: number): LocatedAmount | undefined {
+  let best: LocatedAmount | undefined;
+  for (const m of amountMatches(lines[i] ?? "")) {
+    if (!best || Math.abs(m.value) > Math.abs(best.amount)) best = { amount: m.value, line: i, index: m.index };
   }
-  let best: { amount: number; line: number } | undefined;
+  return best;
+}
+
+function larger(a: LocatedAmount | undefined, b: LocatedAmount | undefined): LocatedAmount | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return Math.abs(b.amount) > Math.abs(a.amount) ? b : a;
+}
+
+function findTotal(lines: string[]): LocatedAmount | undefined {
+  let best: LocatedAmount | undefined;
   lines.forEach((line, i) => {
-    const amount = largestByMagnitude(amountsIn(line));
-    if (amount !== undefined && (!best || Math.abs(amount) > Math.abs(best.amount))) best = { amount, line: i };
+    if (!isTotalLine(line)) return;
+    // PDF text and OCR often put the figure on the line after its label.
+    best = larger(best, largestOnLine(lines, i) ?? largestOnLine(lines, i + 1));
+  });
+  if (best) return best;
+  lines.forEach((_, i) => {
+    best = larger(best, largestOnLine(lines, i));
   });
   return best;
 }
@@ -81,9 +103,26 @@ const CURRENCY_PATTERNS: [Currency, RegExp][] = [
   ["USD", /\$|\bUSD\b/g],
 ];
 
-function findCurrency(lines: string[], totalLine: number | undefined): Currency | undefined {
-  if (totalLine !== undefined) {
-    const near = [lines[totalLine - 1], lines[totalLine], lines[totalLine + 1]].join(" ");
+function currencyNearest(line: string, index: number): Currency | undefined {
+  let best: Currency | undefined;
+  let bestDistance = Infinity;
+  for (const [code, re] of CURRENCY_PATTERNS) {
+    for (const m of line.matchAll(re)) {
+      const distance = Math.abs((m.index ?? 0) - index);
+      if (distance < bestDistance) {
+        best = code;
+        bestDistance = distance;
+      }
+    }
+  }
+  return best;
+}
+
+function findCurrency(lines: string[], total: LocatedAmount | undefined): Currency | undefined {
+  if (total) {
+    const onLine = currencyNearest(lines[total.line], total.index);
+    if (onLine) return onLine;
+    const near = [lines[total.line - 1] ?? "", lines[total.line + 1] ?? ""].join(" ");
     for (const [code, re] of CURRENCY_PATTERNS) if (new RegExp(re.source).test(near)) return code;
   }
   const text = lines.join("\n");
@@ -115,7 +154,7 @@ function findVat(lines: string[], total: number | undefined): { rate?: number; a
   const rates = new Set<number>();
   let amount: number | undefined;
   for (const line of lines) {
-    if (!VAT_LINE_RE.test(line)) continue;
+    if (!VAT_LINE_RE.test(line) || isTotalLine(line)) continue;
     const rateMatch = RATE_RE.exec(line);
     const rate = rateMatch ? Number(rateMatch[1].replace(",", ".")) : undefined;
     if (rate !== undefined && rate > 0 && rate <= 30) rates.add(rate);
@@ -179,7 +218,11 @@ const MONTHS: Record<string, number> = {
   sep: 9, sept: 9, september: 9, okt: 10, oktober: 10, oct: 10, october: 10, nov: 11, november: 11,
   dez: 12, dezember: 12, dec: 12, december: 12,
 };
-const DATE_LABEL_RE = /(rechnungsdatum|belegdatum|datum|invoice date|\bdate\b)/i;
+const INVOICE_DATE_LABEL_RE = /(rechnungsdatum|belegdatum|ausstellungsdatum|invoice date|date of issue)/i;
+const DATE_LABEL_RE = /\b(datum|date)\b/i;
+// Delivery/order/due dates are real dates on the page but never the expense date.
+const OTHER_DATE_LABEL_RE =
+  /((liefer|bestell|fällig|faellig|versand|leistungs)datum|\b(delivery|order|due|shipping|ship)\s+date\b|zahlungsziel)/i;
 
 function iso(y: number, m: number, d: number): string | undefined {
   if (y < 100) y += 2000;
@@ -216,14 +259,25 @@ function findDate(lines: string[], today: string): string | undefined {
   limit.setUTCDate(limit.getUTCDate() + 1);
   const max = limit.toISOString().slice(0, 10);
   const ok = (d: string) => d >= "2000-01-01" && d <= max;
-  let first: string | undefined;
+  const onOrAfter = (i: number) => [...datesIn(lines[i]), ...datesIn(lines[i + 1] ?? "")].filter(ok);
+
+  // 1. An invoice-date label wins, even on a combined "Rechnungsdatum/Lieferdatum" line.
   for (let i = 0; i < lines.length; i++) {
-    const labelled = DATE_LABEL_RE.test(lines[i]);
-    const candidates = [...datesIn(lines[i]), ...(labelled ? datesIn(lines[i + 1] ?? "") : [])].filter(ok);
-    if (labelled && candidates.length > 0) return candidates[0];
-    first ??= candidates[0];
+    if (INVOICE_DATE_LABEL_RE.test(lines[i]) && onOrAfter(i).length > 0) return onOrAfter(i)[0];
   }
-  return first;
+  // 2. A generic "Datum"/"Date" label that isn't a delivery/order date.
+  for (let i = 0; i < lines.length; i++) {
+    if (DATE_LABEL_RE.test(lines[i]) && !OTHER_DATE_LABEL_RE.test(lines[i]) && onOrAfter(i).length > 0) {
+      return onOrAfter(i)[0];
+    }
+  }
+  // 3. The first unlabelled date, never one on a delivery/order/due line.
+  for (const line of lines) {
+    if (OTHER_DATE_LABEL_RE.test(line)) continue;
+    const found = datesIn(line).filter(ok);
+    if (found.length > 0) return found[0];
+  }
+  return undefined;
 }
 
 // ─── Vendor & category ────────────────────────────────────────────────────────
@@ -268,7 +322,7 @@ export function parseReceipt(text: string, options: ParseReceiptOptions = {}): P
   const result: ParsedReceipt = {
     date: findDate(lines, today),
     amount: total?.amount,
-    currency: findCurrency(lines, total?.line),
+    currency: findCurrency(lines, total),
     vatRate: vat.rate,
     vatAmount: vat.amount,
     vendorVatNumber: findVatNumber(lines),

@@ -173,4 +173,56 @@ describe("parseReceipt", () => {
     expect(parse("hello world")).toEqual({ vendor: "hello world" });
     expect(parse("")).toEqual({});
   });
+
+  it("takes a total phrased 'inkl. MwSt' over a larger list price", () => {
+    const text = [
+      "Webshop Muster GmbH",
+      "Regulärer Preis 199,00",
+      "Rabatt -50,00",
+      "Gesamtbetrag inkl. MwSt 149,00 €",
+      "Datum 10.09.2026",
+    ].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 149, currency: "EUR", date: "2026-09-10" });
+  });
+
+  it("takes a total phrased 'incl. VAT' over a larger list price", () => {
+    const text = ["List price $259.00", "Total incl. VAT $199.00"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 199, currency: "USD" });
+  });
+
+  it("prefers the invoice date over an earlier delivery date", () => {
+    const text = ["Bestellbestätigung", "Lieferdatum 01.09.2026", "Rechnungsdatum 05.09.2026", "Gesamtbetrag 25,00 EUR"].join("\n");
+    expect(parse(text).date).toBe("2026-09-05");
+  });
+
+  it("does not use a delivery or order date as the expense date", () => {
+    const text = ["Lieferdatum 01.09.2026", "Bestelldatum 28.08.2026", "Summe 10,00 €"].join("\n");
+    expect(parse(text).date).toBeUndefined();
+  });
+
+  it("reads Amazon-style PDF text", () => {
+    const text = [
+      "Amazon EU S.à r.l.",
+      "Rechnungsdatum/Lieferdatum 18 September 2026",
+      "Rechnungsnummer DE6ABCD12345",
+      "USt-IdNr. LU20260743",
+      "Zahlbetrag 34,99 €",
+      "MwSt. 19% 5,59 €",
+    ].join("\n");
+    expect(parse(text)).toMatchObject({
+      date: "2026-09-18",
+      amount: 34.99,
+      currency: "EUR",
+      vatRate: 19,
+      vatAmount: 5.59,
+      vendorVatNumber: "LU20260743",
+      invoiceNumber: "DE6ABCD12345",
+      vendor: "Amazon EU S.à r.l.",
+    });
+  });
+
+  it("takes the currency printed next to the total when a receipt shows two", () => {
+    const text = ["Order total: $120.00 USD", "Charged in EUR: €110.40"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 120, currency: "USD" });
+  });
 });

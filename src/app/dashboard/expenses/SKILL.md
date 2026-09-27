@@ -469,3 +469,24 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   currency, VAT, vendor, invoice number) can be auto-filled, but title is
   deliberately left blank because the user's own naming convention is more
   valuable than any extracted text. Do not add title extraction.
+- **A total line saying "inkl./incl. VAT" is still the grand total; only lines
+  stating a VAT figure are excluded.** `isTotalLine()` tests a line against
+  `SUBTOTAL_RE` (excludes "Zwischensumme", "subtotal", "net") and then checks
+  VAT keywords. A line with "MwSt" is still the grand total if it says
+  "Gesamtbetrag inkl. MwSt" (matching `INCLUSIVE_VAT_RE`); only a line stating
+  a separate VAT amount is skipped — this prevents "Summe inkl. MwSt 149,00"
+  from being discarded when it's the actual total.
+- **Delivery/order/due dates are never used as the expense date; an invoice-date
+  label beats a generic "Datum".** `findDate()` prioritizes `INVOICE_DATE_LABEL_RE`
+  (Rechnungsdatum, invoice date) even on combined lines like
+  "Rechnungsdatum/Lieferdatum"; next checks generic "Datum"/"Date" labels that
+  aren't `OTHER_DATE_LABEL_RE` (delivery, order, due dates); finally uses the
+  first unlabelled date that isn't on a delivery/order/due line. Never return a
+  delivery date as the expense date — a combined "Rechnungsdatum/Lieferdatum"
+  line splits that precedence correctly.
+- **Currency is the symbol nearest the chosen total on its line.** `findCurrency()`
+  first tries `currencyNearest()`, which finds the currency symbol with the smallest
+  distance to the amount's character position on that line. Only if no symbol is on
+  the same line does it fall back to nearby lines or full-text frequency. This stops
+  "Order total: $120.00 USD" / "Charged in EUR: €110.40" from picking the more
+  frequent EUR when USD is right next to the chosen amount.
