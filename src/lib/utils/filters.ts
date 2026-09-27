@@ -229,6 +229,34 @@ export function sanitizeIlikeSearchTerm(term: string): string {
     .replace(/_/g, "\\_");
 }
 
+/**
+ * Inclusive ISO date bounds for a filter set's date preset. `null` = that side
+ * is unbounded. Shared by every `fetchXPage` thunk and its `get_x_summary`
+ * RPC so the table and its summary tiles can never filter different dates.
+ */
+export function resolveDateBounds(f: {
+  preset: DatePreset;
+  dateFrom: string;
+  dateTo: string;
+}): { from: string | null; to: string | null } {
+  if (f.preset === "all") return { from: null, to: null };
+  if (f.preset === "custom") return { from: f.dateFrom || null, to: f.dateTo || null };
+  const range = getPresetRange(f.preset);
+  return { from: range?.from ?? null, to: range?.to ?? null };
+}
+
+/**
+ * `%term%` ILIKE pattern with LIKE wildcards escaped, or `null` for a blank
+ * search. Backslash-escaping makes any character literal in LIKE, so the
+ * same string is safe both inside a PostgREST `.or()` quoted value and as a
+ * plain SQL `ILIKE` argument to the summary RPCs.
+ */
+export function ilikePattern(search: string): string | null {
+  const term = search.trim();
+  if (term === "") return null;
+  return `%${sanitizeIlikeSearchTerm(term)}%`;
+}
+
 // Canonical revenue-eligibility rule — update here to change everywhere.
 /** Returns true for sales that count toward revenue (not returned, not cancelled). */
 export function isRevenueSale(sale: { status: string | null }): boolean {

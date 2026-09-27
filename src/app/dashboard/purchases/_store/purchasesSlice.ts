@@ -2,8 +2,8 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type { Purchase } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
-import { getPresetRange, sanitizeIlikeSearchTerm } from "@/lib/utils/filters";
 import type { PurchaseFilters } from "@/lib/utils/filters";
+import { purchasesFilterParams } from "./purchasesFilterParams";
 
 interface PurchasesState {
   items: Purchase[];
@@ -36,23 +36,13 @@ export const fetchPurchasesPage = createAsyncThunk(
       .select("*", { count: "exact" })
       .order("date", { ascending: false });
 
-    // Date filters — resolve preset or custom range
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-
-    if (filters.currency !== "all") {
-      query = query.eq("currency", filters.currency);
-    }
-
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
+    const p = purchasesFilterParams(filters);
+    if (p.p_from) query = query.gte("date", p.p_from);
+    if (p.p_to) query = query.lte("date", p.p_to);
+    if (p.p_currency) query = query.eq("currency", p.p_currency);
+    if (p.p_pattern) {
       query = query.or(
-        `product_name.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%"`
+        `product_name.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
       );
     }
 
