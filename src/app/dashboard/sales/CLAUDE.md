@@ -12,7 +12,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   see `components/ui/SKILL.md`'s FilterBar entry — currency, platform,
   status, general keyword search across product name/order ID/description),
   row selection, invoice
-  trigger, Gross/VAT/Net summary **(this page)**, **Export CSV** button
+  trigger, filtered summary tiles (Orders/Gross/VAT/Net/Fees/Shipping
+  charged/Excluded — covers ALL matching rows, not just the current page,
+  see "Summary thunk" below), **Export CSV** button
   (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
   5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
   Max Rows gotcha), **Import CSV** button, wires up the modals below.
@@ -43,6 +45,19 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   permission override, same gate as list page, navigates back to
   `/dashboard/sales` after delete). Net proceeds computed via
   `_components/orderMath.ts`.
+- `_store/salesFilterParams.ts` (+ colocated `.test.ts`) — pure mapper from
+  `SalesFilters` to the RPC/query param shape (`p_from`/`p_to`/`p_platform`/
+  `p_currency`/`p_status`/`p_pattern`), shared by `fetchSalesPage` and
+  `fetchSalesSummary` so the table and the summary tiles can never disagree
+  about which filter predicates apply.
+- `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
+  `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
+  `page.tsx` to render the filtered summary tiles above the Orders table.
+  Builds Orders/Gross/VAT/Net/Fees/Shipping charged/Excluded tiles via the
+  shared `moneyTile`/`countTile`/`compactTiles` helpers
+  (`@/components/ui/summaryTileHelpers` — renamed from `summaryTiles.ts`
+  during this task, see `components/ui/SKILL.md`'s gotcha for why); VAT and
+  Net are omitted together when VAT is all-zero.
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
@@ -64,7 +79,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `fulfilled`/`rejected` handlers no-op when it doesn't match `state
   .summaryRequestId`, so a stale response from a fast filter change can never
   overwrite a newer one). A raw Postgres error is never forwarded — the thunk
-  throws `new Error("sales_summary_failed")` instead.
+  throws `new Error("sales_summary_failed")` instead. **Consumed by `page.tsx`**
+  (Task 5, 2026-09-26): a `useEffect` dispatches `fetchSalesSummary(filters)`
+  whenever `filters` or `summaryVersion` changes (NOT on page/sort change),
+  and `buildSalesTiles(summaryRows)` (`_lib/salesSummaryTiles.ts`) turns the
+  result into the `<SummaryTiles>` row rendered above the Orders table,
+  replacing the old page-scoped "(this page)" Gross/VAT/Net block.
   Also exports `fetchSaleById(saleId)` — a plain async helper (not a thunk)
   that re-reads one `sales` row and returns it or `null`. It exists so
   `EditSaleModal` and `[id]/page.tsx` share one way to reconcile Redux after a
@@ -211,9 +231,11 @@ in memory** — all filtering happens in `fetchSalesPage` (the thunk in
 5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
    `hydrateSales`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
 
-**Summary cards** show "(this page)" totals only — they are computed from
-`state.sales.items` (current page), not all matching rows. This is clearly
-labelled in the UI.
+**Summary tiles** (2026-09-26, Task 5 — supersedes the old page-scoped
+"(this page)" Gross/VAT/Net block) cover ALL rows matching the current
+filters, not just the loaded page — they come from a separate
+`fetchSalesSummary(filters)` dispatch (see "Summary thunk" above), not from
+`state.sales.items`. See "Gotchas — filtered-summary state" in `SKILL.md`.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
 with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up to
@@ -306,10 +328,12 @@ editable fields.
   as the inventory link below.
 - **Revenue/profit exclusion**: `isRevenueSale` (`lib/utils/filters.ts`)
   excludes a row from revenue when `status === "returned"` **or**
-  `status === "cancelled"` — nothing else. It gates the Gross/VAT/Net summary
-  in `page.tsx` (`summary` useMemo) and `effectiveSales` on the Overview page
-  (`app/dashboard/page.tsx`). `page.tsx` shows an "N returned/cancelled
-  order(s) excluded from totals" note when `excludedCount > 0`. **`refunded`
+  `status === "cancelled"` — nothing else. It gates `effectiveSales` on the
+  Overview page (`app/dashboard/page.tsx`). **As of Task 5 (2026-09-26),
+  `page.tsx` no longer computes this client-side** — the equivalent
+  exclusion (and the "Excluded" tile's count) now lives in the
+  `get_sales_summary` RPC (049), mirroring the earlier `get_sales_overview`
+  (045) move. **`refunded`
   is deliberately NOT in this exclusion** — a refunded order stays in both
   totals at its reduced `total_amount` (the REFUND import path deducts the
   refund from `total_amount`/`shipping_charged` in place, see "Amazon

@@ -1,4 +1,4 @@
-import { compactTiles, countTile, moneyTile } from "./summaryTiles";
+import { compactTiles, countTile, moneyTile } from "./summaryTileHelpers";
 import { formatCurrency } from "@/lib/utils/currency";
 
 const rows = [

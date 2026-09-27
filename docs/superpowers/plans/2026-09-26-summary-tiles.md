@@ -44,7 +44,7 @@
 | `supabase/migrations/049_table_summary_functions.sql` | create | three summary functions on all tenants |
 | `supabase/migrations/005_tenant_provisioning.sql` | modify | same three functions for new tenants |
 | `src/app/dashboard/_lib/summaryRpc.integration.test.ts` | create | real-DB check (integration suite only) |
-| `src/components/ui/summaryTiles.ts` (+ `.test.ts`) | create | pure `moneyTile`/`countTile`/`compactTiles` |
+| `src/components/ui/summaryTileHelpers.ts` (+ `.test.ts`) | create | pure `moneyTile`/`countTile`/`compactTiles` |
 | `src/components/ui/SummaryTiles.tsx` | create | the tiles row atom |
 | `src/components/ui/Badge.tsx` | modify | export `CATEGORY_LABELS` |
 | `src/app/dashboard/sales/_lib/salesSummaryTiles.ts` (+ `.test.ts`) | create | Orders tile set |
@@ -873,7 +873,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 4: `SummaryTiles` atom + pure tile helpers
 
 **Files:**
-- Create: `src/components/ui/summaryTiles.ts`, `src/components/ui/summaryTiles.test.ts`
+- Create: `src/components/ui/summaryTileHelpers.ts`, `src/components/ui/summaryTileHelpers.test.ts`
 - Create: `src/components/ui/SummaryTiles.tsx`
 - Modify: `src/components/ui/SKILL.md`
 
@@ -885,10 +885,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `compactTiles(tiles: (SummaryTile | null)[]): SummaryTile[]` — drops nulls
   - `<SummaryTiles tiles={SummaryTile[]} loading={boolean} error={boolean} />`
 
-- [ ] **Step 1: Write the failing test** `src/components/ui/summaryTiles.test.ts`:
+- [ ] **Step 1: Write the failing test** `src/components/ui/summaryTileHelpers.test.ts`:
 
 ```ts
-import { compactTiles, countTile, moneyTile } from "./summaryTiles";
+import { compactTiles, countTile, moneyTile } from "./summaryTileHelpers";
 import { formatCurrency } from "@/lib/utils/currency";
 
 const rows = [
@@ -938,10 +938,10 @@ describe("compactTiles", () => {
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `npx jest src/components/ui/summaryTiles.test.ts`
-Expected: FAIL — cannot find module `./summaryTiles`.
+Run: `npx jest src/components/ui/summaryTileHelpers.test.ts`
+Expected: FAIL — cannot find module `./summaryTileHelpers`.
 
-- [ ] **Step 3: Implement** `src/components/ui/summaryTiles.ts`:
+- [ ] **Step 3: Implement** `src/components/ui/summaryTileHelpers.ts`:
 
 ```ts
 import { formatCurrency } from "@/lib/utils/currency";
@@ -982,13 +982,13 @@ export function compactTiles(tiles: (SummaryTile | null)[]): SummaryTile[] {
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `npx jest src/components/ui/summaryTiles.test.ts`
+Run: `npx jest src/components/ui/summaryTileHelpers.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Implement the atom** `src/components/ui/SummaryTiles.tsx`:
 
 ```tsx
-import type { SummaryTile } from "./summaryTiles";
+import type { SummaryTile } from "./summaryTileHelpers";
 
 interface SummaryTilesProps {
   tiles: SummaryTile[];
@@ -1001,7 +1001,7 @@ const SKELETON_COUNT = 4;
 
 /**
  * Display-only row of compact summary tiles above a data table. Values are
- * built by pure helpers in `./summaryTiles` — this component only lays
+ * built by pure helpers in `./summaryTileHelpers` — this component only lays
  * them out. Deliberately not interactive (no button semantics, no hover).
  */
 export function SummaryTiles({ tiles, loading, error, className = "" }: SummaryTilesProps) {
@@ -1047,12 +1047,12 @@ export function SummaryTiles({ tiles, loading, error, className = "" }: SummaryT
 
 (The `rounded-(--radius-btn)` / `text-(--color-…)` shorthand is what `StatCard.tsx` and the pages already use in this Tailwind version.)
 
-- [ ] **Step 6: Document it.** Add a `SummaryTiles` entry to `src/components/ui/SKILL.md`, next to the StatCard entry. Cover: its purpose (compact, display-only filtered totals above a table, used by Orders/Purchases/Expenses); building tiles with `moneyTile`/`countTile`/`compactTiles`; hide-zero and count-always rules; no currency conversion. Gotcha: "`summaryTiles.ts` is pure and has a test. Keep formatting/visibility logic there, not in the `.tsx`."
+- [ ] **Step 6: Document it.** Add a `SummaryTiles` entry to `src/components/ui/SKILL.md`, next to the StatCard entry. Cover: its purpose (compact, display-only filtered totals above a table, used by Orders/Purchases/Expenses); building tiles with `moneyTile`/`countTile`/`compactTiles`; hide-zero and count-always rules; no currency conversion. Gotcha: "`summaryTileHelpers.ts` is pure and has a test. Keep formatting/visibility logic there, not in the `.tsx`."
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/components/ui/summaryTiles.ts src/components/ui/summaryTiles.test.ts \
+git add src/components/ui/summaryTileHelpers.ts src/components/ui/summaryTileHelpers.test.ts \
   src/components/ui/SummaryTiles.tsx src/components/ui/SKILL.md
 git commit -m "feat(ui): SummaryTiles atom with pure tile helpers
 
@@ -1123,7 +1123,7 @@ Expected: FAIL — cannot find module.
 - [ ] **Step 3: Implement** `src/app/dashboard/sales/_lib/salesSummaryTiles.ts`:
 
 ```ts
-import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTiles";
+import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTileHelpers";
 import type { SalesSummaryRow } from "@/types";
 
 const sum = (rows: SalesSummaryRow[], pick: (r: SalesSummaryRow) => number) =>
@@ -1257,7 +1257,7 @@ Expected: FAIL — cannot find module.
 - [ ] **Step 3: Implement** `src/app/dashboard/purchases/_lib/purchasesSummaryTiles.ts`:
 
 ```ts
-import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTiles";
+import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTileHelpers";
 import type { PurchasesSummaryRow } from "@/types";
 
 const sum = (rows: PurchasesSummaryRow[], pick: (r: PurchasesSummaryRow) => number) =>
@@ -1375,7 +1375,7 @@ Expected: FAIL — cannot find module.
 - [ ] **Step 3: Implement** `src/app/dashboard/expenses/_lib/expensesSummaryTiles.ts`:
 
 ```ts
-import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTiles";
+import { compactTiles, countTile, moneyTile, type SummaryTile } from "@/components/ui/summaryTileHelpers";
 import { formatCurrency } from "@/lib/utils/currency";
 import type { ExpenseCategory, ExpensesSummaryRow } from "@/types";
 

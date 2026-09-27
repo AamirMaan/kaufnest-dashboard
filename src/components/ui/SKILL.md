@@ -166,13 +166,24 @@ elements and forward all native props directly.
 (success/danger/muted). Used on the dashboard overview for summary metrics.
 Purely presentational, no state.
 
-## SummaryTiles.tsx + summaryTiles.ts
+## SummaryTiles.tsx + summaryTileHelpers.ts
 
 Compact display-only summary tiles shown above data tables (Orders/Purchases/
 Expenses list pages) to show filtered-result totals. Always display-only —
 no interactions, no hover affordance, no button semantics.
 
-`summaryTiles.ts` exports pure, tested helpers:
+**Renamed from `summaryTiles.ts` during Task 5 (2026-09-26):** the original
+name differed from the component's `SummaryTiles.tsx` only in casing, which
+resolves fine on case-sensitive Linux CI but collides on a case-insensitive
+filesystem (macOS/Windows) — `import ... from "@/components/ui/SummaryTiles"`
+resolved to this file instead of the component, since TS tries `.ts` before
+`.tsx` and the OS treats the two filenames as the same path. The collision
+went undetected in Task 4 because nothing imported the component yet; Task 5
+was the first real consumer and hit a `tsc` error. Fixed by renaming the pure
+module to `summaryTileHelpers.ts` — keep the two names visibly distinct if
+you ever touch either file.
+
+`summaryTileHelpers.ts` exports pure, tested helpers:
 - `moneyTile<T extends { currency }>(label, rows, value: (r) => number): SummaryTile | null`
   — renders one line per row by calling `formatCurrency(value(r), r.currency)` for each row.
   **Callers must pass rows that are already grouped by currency** (e.g., the result of
@@ -192,9 +203,11 @@ no interactions, no hover affordance, no button semantics.
 - When `loading && tiles.length > 0`, renders tiles with `opacity-60`.
 - Otherwise, renders a flex row of `dl` elements: each tile has a `<dt>` label and `<dd>` value lines.
 
-**Gotcha:** `summaryTiles.ts` is pure and has a test (`summaryTiles.test.ts`). Keep
-all formatting (currency, count grouping, hide-zero logic) in the helper functions,
-not in the `.tsx`. The component only handles layout and loading states.
+**Gotcha:** `summaryTileHelpers.ts` is pure and has a test
+(`summaryTileHelpers.test.ts`). Keep all formatting (currency, count
+grouping, hide-zero logic) in the helper functions, not in the `.tsx`. The
+component only handles layout and loading states. See the rename note above
+before naming any other file `summaryTiles*` in this folder.
 
 ## ThemeProvider.tsx
 

@@ -1,4 +1,4 @@
-import type { SummaryTile } from "./summaryTiles";
+import type { SummaryTile } from "./summaryTileHelpers";
 
 interface SummaryTilesProps {
   tiles: SummaryTile[];

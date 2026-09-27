@@ -64,6 +64,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   route. Reuses `addressFromCompanyProfile`/`addressFromSale` from
   `src/lib/shipping/addressMappers.ts` unchanged; do not duplicate their
   validation logic here.
+- **Add/change an Orders summary tile**: `_lib/salesSummaryTiles.ts` (+ its
+  colocated test) — plus SQL in `049_...sales_summary.sql` **and**
+  `005_tenant_provisioning.sql` if the tile needs a new aggregate column
+  from `get_sales_summary`. A new filter must also be added to
+  `_store/salesFilterParams.ts` AND the 049/005 SQL, or the tiles and the
+  table will silently disagree about which rows are included.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
@@ -551,6 +557,15 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `new Error("sales_summary_failed")` and the page (Task 5+) shows a generic
   message. Same rule as every other Supabase-touching route/thunk in this
   repo (see `AGENTS.md`'s New Supabase query checklist, point 6).
+- **`summaryVersion` also bumps on hydration-only dispatches** (e.g.
+  `updateSale`/`addSale` fired from `sales/[id]/page.tsx` just to sync Redux
+  after a server-side write, not a user-initiated mutation on the list
+  page) — harmless, because the refetch effect that reacts to it only runs
+  while the list page (`page.tsx`) is mounted.
+- **Tiles cover all filtered rows, not the page.** A new filter must be
+  added to `salesFilterParams` (`_store/salesFilterParams.ts`) AND the
+  049/005 SQL, or the tiles (`get_sales_summary`) and the table
+  (`fetchSalesPage`) will silently disagree about which rows are included.
 
 ## Gotchas — server-side pagination
 
@@ -578,13 +593,12 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **CSV export** runs a separate Supabase query without `.range()` — it does
   NOT use the Redux items. This ensures the export always covers all matching
   records (up to the 5 000-row safety cap), even when the user is on page 3.
-- **`excludedCount` is page-scoped** — it counts non-revenue orders
-  (`!isRevenueSale`, i.e. `returned` or `cancelled`) within `state.sales.items`
-  (the current page), not across all matching rows. The UI note "N
-  returned/cancelled order(s) excluded from totals" is therefore page-local;
-  it is not labelled "(this page)" in the UI, but that is what it reflects.
-  `refunded` orders are NOT counted here — they still count toward revenue,
-  see `sales/CLAUDE.md` → "Order status + returns".
+- **`excludedCount` no longer exists in `page.tsx` (removed Task 5,
+  2026-09-26)** — the "Excluded" summary tile now reads `excluded_count`
+  straight off `get_sales_summary`'s per-currency rows (RPC 049), covering
+  ALL matching orders, not just the current page. `refunded` orders are NOT
+  counted here — they still count toward revenue, see `sales/CLAUDE.md` →
+  "Order status + returns".
 - **Invoice modal falls back to current page only when nothing is selected** —
   `InvoiceModal` receives the `selected` rows array. When `selected` is empty,
   it has no records to render; the Generate Invoice button is disabled until at
@@ -789,10 +803,12 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `provision_tenant_schema()` in `005_tenant_provisioning.sql` for every
   tenant schema including `tenant_kaufnest`) is
   `(status = 'returned' AND restock) ? 0 : -quantity`. If you add a new
-  revenue/profit aggregation (in this page's `summary` or in
+  revenue/profit aggregation (in this feature's summary tiles or in
   `app/dashboard/page.tsx`'s StatCards/charts), filter out
-  `status === "returned"` rows first (`page.tsx` does this inline in the
-  `summary` useMemo; Overview uses an `effectiveSales` array) — otherwise
+  `status === "returned"` rows first (this feature's tiles get that
+  exclusion from `get_sales_summary`'s SQL, migration 049 — see "Add/change
+  an Orders summary tile" above; Overview uses an `effectiveSales` array)
+  — otherwise
   written-off/returned orders will inflate those figures.
 - The UI says "Orders" everywhere (page title, Sidebar, modal titles, toast
   messages) but the route, table, type, and slice all stay "sales" — don't

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeSale, fetchSalesPage } from "./_store/salesSlice";
+import { removeSale, fetchSalesPage, fetchSalesSummary } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
+import { SummaryTiles } from "@/components/ui/SummaryTiles";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import Link from "next/link";
@@ -20,14 +21,13 @@ import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
+import { formatCurrency } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
-  isRevenueSale,
   DEFAULT_SALES_FILTERS,
   getPresetRange,
   sanitizeIlikeSearchTerm,
@@ -36,7 +36,8 @@ import {
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
-import type { Platform, Sale, Currency, Product } from "@/types";
+import { buildSalesTiles } from "./_lib/salesSummaryTiles";
+import type { Platform, Sale, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
 
@@ -51,6 +52,10 @@ export default function SalesPage() {
   const pageSize = useAppSelector((s) => s.sales.pageSize);
   const total = useAppSelector((s) => s.sales.total);
   const isFetching = useAppSelector((s) => s.sales.isFetching);
+  const summaryRows = useAppSelector((s) => s.sales.summary);
+  const summaryLoading = useAppSelector((s) => s.sales.summaryLoading);
+  const summaryError = useAppSelector((s) => s.sales.summaryError);
+  const summaryVersion = useAppSelector((s) => s.sales.summaryVersion);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
   const hasDeleteOverride = useAppSelector(
     (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
@@ -59,6 +64,18 @@ export default function SalesPage() {
 
   const [filters, setFilters] = useState<SalesFilters>(DEFAULT_SALES_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  // Filtered totals for the tiles — refetch when filters change or after any
+  // add/edit/delete (summaryVersion), but NOT on page/sort change.
+  useEffect(() => {
+    dispatch(fetchSalesSummary(filters));
+  }, [dispatch, filters, summaryVersion]);
+
+  const summaryTiles = useMemo(() => buildSalesTiles(summaryRows), [summaryRows]);
+
+  useEffect(() => {
+    if (summaryError) toastError("Couldn't load order totals");
+  }, [summaryError, toastError]);
 
   const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
 
@@ -88,27 +105,6 @@ export default function SalesPage() {
     [sales, selectedIds]
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : sales;
-
-  const excludedCount = useMemo(() => sales.filter((s) => !isRevenueSale(s)).length, [sales]);
-
-  // Summary computed from current page items only — labelled "(this page)" to
-  // make clear these are page-scoped totals, not all-time aggregates.
-  const summary = useMemo(() => {
-    const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
-    for (const s of sales) {
-      if (!isRevenueSale(s)) continue;
-      const entry = byCurrency.get(s.currency) ?? { gross: [], vat: [] };
-      entry.gross.push(s.total_amount);
-      if (s.vat_amount != null) entry.vat.push(s.vat_amount);
-      byCurrency.set(s.currency, entry);
-    }
-    return Array.from(byCurrency.entries()).map(([currency, { gross, vat }]) => ({
-      currency,
-      gross: sumAmounts(gross),
-      vat: sumAmounts(vat),
-    }));
-  }, [sales]);
-  const hasVat = summary.some((s) => s.vat > 0);
 
   // Status options built from current page + known preset statuses.
   // The "all" statuses dropdown is approximate — it only shows what's on the
@@ -412,39 +408,7 @@ export default function SalesPage() {
 
       {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
       <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
-        <div className="flex items-start justify-between mb-3 text-sm">
-          <span className="text-(--color-text-muted) pt-0.5">
-            {total} order{total !== 1 ? "s" : ""} total
-          </span>
-          {(summary.length > 0 || excludedCount > 0) && (
-            <div className="text-right space-y-0.5">
-              {summary.length > 0 && (
-                hasVat ? (
-                  <>
-                    <p className="font-medium text-(--color-text-strong)">
-                      Gross (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-                    </p>
-                    <p className="text-(--color-text-muted)">
-                      VAT (this page): {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                    </p>
-                    <p className="font-medium text-(--color-text-strong)">
-                      Net (this page): {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                    </p>
-                  </>
-                ) : (
-                  <p className="font-medium text-(--color-text-strong)">
-                    Total (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-                  </p>
-                )
-              )}
-              {excludedCount > 0 && (
-                <p className="text-xs text-(--color-text-muted)">
-                  {excludedCount} returned/cancelled order{excludedCount !== 1 ? "s" : ""} excluded from totals
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        <SummaryTiles tiles={summaryTiles} loading={summaryLoading} error={summaryError} className="mb-3" />
 
         <DataTable
           columns={columns}
