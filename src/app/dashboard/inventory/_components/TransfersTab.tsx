@@ -42,6 +42,19 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? "Unknown location";
   const productLabel = (t: StockTransferRow) => t.product_name ?? "Deleted product";
 
+  // "Loading…" only applies to the very first, still-in-flight fetch — once
+  // that fetch has settled (loaded), a subsequent error must not keep
+  // claiming to be loading (the error banner above already carries the
+  // detail + Retry). The button hint in the empty-but-loaded case is only
+  // true for admins, who are the only ones who see a "Transfer Stock" button.
+  const emptyMessage = !loaded
+    ? error
+      ? "Transfers couldn't be loaded."
+      : "Loading transfers…"
+    : isAdmin
+      ? "No transfers yet — move stock between your locations with “Transfer Stock”."
+      : "No transfers yet.";
+
   function handleSaved() {
     dispatch(fetchTransfersPage({ page: 1, pageSize }));
     onStockChanged();
@@ -144,7 +157,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
           columns={columns}
           rows={items}
           keyField="id"
-          emptyMessage={loaded ? "No transfers yet — move stock between your locations with “Transfer Stock”." : "Loading transfers…"}
+          emptyMessage={emptyMessage}
         />
         <Pagination
           page={page}
