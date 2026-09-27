@@ -40,6 +40,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   regex pattern, add a category keyword, or refine amount/date/VAT logic. Add
   a fixture to its test for every rule change (every fixture is a real receipt
   that documents the rule in action).
+- **Change how receipt text is extracted (pdf.js/tesseract)**:
+  `_lib/extractReceiptText.ts` + its colocated `.test.ts` (only
+  `hasUsablePdfText` is unit-testable — the two libraries need a real
+  browser). Keep both libraries' imports dynamic (`await import(...)` inside
+  a function body) — see the gotcha below.
 - **Change how a parsed receipt is merged into the form**: `_lib/applyReceiptToForm.ts` +
   its test. This module owns the "never overwrite user input" logic. If you need
   a new field to auto-fill, add it to the fill logic here and ensure the Add and Edit
@@ -471,6 +476,25 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   outside the known set used to render the literal word "undefined" instead
   of the value itself. Keep both fallbacks if you add a 9th place that reads
   `CATEGORY_LABELS[...]` directly.
+
+## Gotchas — `extractReceiptText`
+
+- **Never import `pdfjs-dist`/`tesseract.js` at top level** — bundle size and
+  SSR. Both are loaded only via a dynamic `import()` inside a function body
+  (`ocr()`/`extractReceiptText()`), never as a module-level `import`
+  statement, so the module stays safe to import under Jest
+  (`testEnvironment: node`) and neither library enters the main bundle.
+- **Workers/language data load from jsdelivr.** The pdf.js worker
+  (`pdf.worker.min.mjs`, version-pinned to the installed `pdfjs.version`) and
+  tesseract's core + `deu`/`eng` traineddata all come from
+  `cdn.jsdelivr.net` at runtime — if a Content-Security-Policy is ever added,
+  `script-src`/`worker-src`/`connect-src` must allow `cdn.jsdelivr.net` or
+  extraction silently fails.
+- **Scanned PDFs: only page 1 is OCR'd.** If `hasUsablePdfText` says the
+  text layer is too thin (fewer than `MIN_PDF_TEXT_CHARS` non-whitespace
+  characters — a scan), only the first page is rendered to a canvas and
+  OCR'd; any content on later pages of a scanned PDF is never read. This
+  matches the global spec's scope, not an oversight.
 
 ## Gotchas — `applyReceiptToForm`
 
