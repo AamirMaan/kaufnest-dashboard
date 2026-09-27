@@ -40,6 +40,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   regex pattern, add a category keyword, or refine amount/date/VAT logic. Add
   a fixture to its test for every rule change (every fixture is a real receipt
   that documents the rule in action).
+- **Change how a parsed receipt is merged into the form**: `_lib/applyReceiptToForm.ts` +
+  its test. This module owns the "never overwrite user input" logic. If you need
+  a new field to auto-fill, add it to the fill logic here and ensure the Add and Edit
+  modals' `baseline` parameters align with the gotcha below.
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
 - **Change the VAT-preservation decision on edit**: `_lib/vatPreservation.ts`
@@ -451,6 +455,19 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   outside the known set used to render the literal word "undefined" instead
   of the value itself. Keep both fallbacks if you add a 9th place that reads
   `CATEGORY_LABELS[...]` directly.
+
+## Gotchas — `applyReceiptToForm`
+
+- **Autofill never overwrites user input.** A field is filled only if it's blank,
+  or if it still holds the Add modal's untouched default (today's date, `EUR`,
+  category `other`). The baseline parameter embodies this rule: the Add modal
+  passes `{ currency: "EUR", category: "other", date: "today" }` so a receipt
+  can replace those defaults; the Edit modal passes `{}`, so only genuinely
+  empty fields fill on an existing expense.
+- **The VAT pair fills only while "Amount includes VAT" is unticked.**
+  Once the user checks that box or manually enters a rate, the receipt's rate
+  suggestion is ignored. This prevents a receipt's 20% from silently overwriting
+  the user's 7% after they've already decided.
 
 ## Gotchas — `parseReceipt`
 

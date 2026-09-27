@@ -75,6 +75,14 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   → ParsedReceipt`, `toNumber(raw: string) → number`. Input comes from
   `extractReceiptText` (not yet implemented). Every field is optional — the
   form fills only blank fields.
+- `_lib/applyReceiptToForm.ts` (+ colocated `.test.ts`) — pure, non-overwriting
+  merge of a `ParsedReceipt` into an expense form. Exports `ReceiptFillableForm`
+  (shared interface for Add and Edit modals), `ReceiptField` (its keys), `ReceiptFillBaseline`
+  (defaults that count as "untouched"), and `applyReceiptToForm<F>(form, parsed, baseline)
+  → { form, filled }`. The Add modal passes its defaults as the baseline
+  (so today/EUR/other can be replaced); the Edit modal passes `{}` (so only blank fields fill).
+  VAT fills only while "Amount includes VAT" is unticked. Returns both the merged form
+  and the list of fields whose value actually changed, for UI highlighting and toasts.
 - `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
   `buildReceiptPath(tenantSchema, expenseId, fileName)`,
   `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
