@@ -51,7 +51,20 @@ export function useReceiptAutofill<F extends ReceiptFillableForm>(
     formRef.current = form;
   });
 
+  // Bumped by `reset()` (close/cancel/after save) and on unmount, so an
+  // in-flight read that resolves afterward recognizes it's stale and makes
+  // no state writes/toast — the Add modal never unmounts (`page.tsx` only
+  // toggles `open`), so an abandoned read would otherwise land its result
+  // on the next "Add Expense" session.
+  const generation = useRef(0);
+  useEffect(() => {
+    return () => {
+      generation.current += 1;
+    };
+  }, []);
+
   async function fillFromReceipt(receipt: ExpenseReceipt) {
+    const myGeneration = generation.current;
     setFillingPath(receipt.path);
     try {
       const blob = await downloadReceipt(receipt);
@@ -59,6 +72,8 @@ export function useReceiptAutofill<F extends ReceiptFillableForm>(
       const { text } = await extractReceiptText(blob, receipt.mime);
       const parsed = parseReceipt(text);
       const { form: next, filled } = applyReceiptToForm(formRef.current, parsed, baseline);
+
+      if (generation.current !== myGeneration) return;
 
       if (filled.length > 0) {
         setForm(next);
@@ -73,9 +88,10 @@ export function useReceiptAutofill<F extends ReceiptFillableForm>(
         toastError("Couldn't read any details from this receipt", "Fill the fields in manually.");
       }
     } catch {
+      if (generation.current !== myGeneration) return;
       toastError("Couldn't read this receipt", "Try a clearer photo, or fill the fields in manually.");
     } finally {
-      setFillingPath(null);
+      if (generation.current === myGeneration) setFillingPath(null);
     }
   }
 
@@ -88,11 +104,18 @@ export function useReceiptAutofill<F extends ReceiptFillableForm>(
     });
   }
 
+  /** Clears highlights and abandons any in-flight read — call on close/cancel/after save. */
+  function reset() {
+    generation.current += 1;
+    setFillingPath(null);
+    setFilledFields(new Set());
+  }
+
   return {
     fillingPath,
     fillFromReceipt,
     highlight: (field: ReceiptField) => (filledFields.has(field) ? AUTOFILL_HIGHLIGHT : undefined),
     clearHighlight,
-    resetHighlights: () => setFilledFields(new Set()),
+    reset,
   };
 }

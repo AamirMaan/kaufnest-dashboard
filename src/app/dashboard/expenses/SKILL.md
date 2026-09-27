@@ -527,6 +527,21 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   (`disabled={... || autofill.fillingPath !== null}` on both modals' submit
   buttons), so the merge can never land after submit already fired — there is
   no race between "form just saved" and "receipt just finished parsing".
+- **Closing/cancelling a modal calls `autofill.reset()`, which abandons an
+  in-flight read (generation counter)** — a late OCR result never lands in a
+  closed or reopened form, and never toasts. This matters most for the Add
+  modal, which never unmounts (`page.tsx` only toggles `open`): without the
+  generation guard, clicking Fill then Cancel before the read finishes would
+  let the read resolve into the hidden modal's state, so the next "Add
+  Expense" opened pre-filled from a receipt the user had already discarded.
+  `reset()` also covers the unmount case (Edit modal closing, or any future
+  caller that does unmount) via a cleanup effect that bumps the same counter.
+- **The Add modal's autofill baseline date is computed once per mount**
+  (`autofillBaseline`'s `useMemo`, keyed on `defaultVatRate`) — a modal left
+  open across midnight still treats the earlier "today" as untouched.
+  Accepted: reopening the modal recomputes it, and a session spanning
+  midnight with the modal open the whole time is not a case worth adding
+  state for.
 
 ## Gotchas — `parseReceipt`
 

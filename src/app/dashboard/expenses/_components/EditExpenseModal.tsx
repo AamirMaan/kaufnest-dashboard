@@ -162,7 +162,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     }
 
     dispatch(updateExpense(data));
-    autofill.resetHighlights();
+    autofill.reset();
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,
@@ -184,7 +184,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   }
 
   function handleClose() {
-    autofill.resetHighlights();
+    autofill.reset();
     onClose();
   }
 

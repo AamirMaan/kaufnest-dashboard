@@ -103,13 +103,17 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
 - `_components/useReceiptAutofill.ts` — the "Fill from receipt" hook shared by
   `AddExpenseModal`/`EditExpenseModal`: `useReceiptAutofill(form, setForm,
   baseline)` returns `{ fillingPath, fillFromReceipt, highlight,
-  clearHighlight, resetHighlights }`. Data flow: Fill → download blob
+  clearHighlight, reset }`. Data flow: Fill → download blob
   (tenant-checked path via `pathFromStoredReceipt`) → `extractReceiptText`
   (dynamic import) → `parseReceipt` → `applyReceiptToForm` against the latest
   form. `fillFromReceipt` reads the form from a `useRef` synced in an effect
   (not during render — this repo's `react-hooks/refs` lint rule forbids that),
   so a slow OCR read merges into whatever the user has typed by the time it
-  resolves, not a stale click-time snapshot.
+  resolves, not a stale click-time snapshot. A `generation` counter (bumped by
+  `reset()` and on unmount) makes an abandoned read a no-op — see the
+  SKILL.md gotcha; the Add modal never unmounts (`page.tsx` only toggles
+  `open`), so without this a Cancel during a slow OCR read would have the
+  read's result land on the next Add session instead.
 - `_lib/applyReceiptToForm.ts` (+ colocated `.test.ts`) — pure, non-overwriting
   merge of a `ParsedReceipt` into an expense form. Exports `ReceiptFillableForm`
   (shared interface for Add and Edit modals), `ReceiptField` (its keys), `ReceiptFillBaseline`

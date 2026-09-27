@@ -180,7 +180,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setForm(makeDefaults(defaultVatRate));
-    autofill.resetHighlights();
+    autofill.reset();
     setSaving(false);
     onSuccess?.(data.title);
     onClose();
@@ -188,7 +188,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
 
   function handleClose() {
     setForm(makeDefaults(defaultVatRate));
-    autofill.resetHighlights();
+    autofill.reset();
     setError(null);
     onClose();
   }
