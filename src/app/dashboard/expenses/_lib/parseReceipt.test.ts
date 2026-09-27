@@ -225,4 +225,16 @@ describe("parseReceipt", () => {
     const text = ["Order total: $120.00 USD", "Charged in EUR: €110.40"].join("\n");
     expect(parse(text)).toMatchObject({ amount: 120, currency: "USD" });
   });
+
+  it("uses the neighbouring line that repeats the total to pick its currency", () => {
+    const text = ["Amount charged: 25.00 USD", "Total: 25.00", "Displayed as: 22.50 EUR"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 25, currency: "USD" });
+  });
+
+  it("suggests no currency when the lines around the total disagree", () => {
+    const text = ["EUR prices shown", "Total: 30.00", "USD equivalent available"].join("\n");
+    const parsed = parse(text);
+    expect(parsed.amount).toBe(30);
+    expect(parsed.currency).toBeUndefined();
+  });
 });

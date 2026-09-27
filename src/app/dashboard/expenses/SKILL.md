@@ -484,9 +484,16 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   first unlabelled date that isn't on a delivery/order/due line. Never return a
   delivery date as the expense date — a combined "Rechnungsdatum/Lieferdatum"
   line splits that precedence correctly.
-- **Currency is the symbol nearest the chosen total on its line.** `findCurrency()`
-  first tries `currencyNearest()`, which finds the currency symbol with the smallest
-  distance to the amount's character position on that line. Only if no symbol is on
-  the same line does it fall back to nearby lines or full-text frequency. This stops
-  "Order total: $120.00 USD" / "Charged in EUR: €110.40" from picking the more
-  frequent EUR when USD is right next to the chosen amount.
+- **Currency = symbol nearest the total on its own line; else a neighbouring line
+  that repeats the total's figure; else neighbours only if they agree; else the
+  single most frequent on the page. Any disagreement or tie → no currency suggested.**
+  `findCurrency()` applies this precedence: (1) `currencyNearest()` on the total's
+  line; (2) a neighbouring line with `amountMatches()` that equals the total's amount
+  (e.g. "Amount charged: 25.00 USD" when "Total: 25.00"), take currency from it; (3)
+  if neighbours contain currencies, return it only if all neighbours agree on ONE
+  currency, else undefined if they disagree (more than one currency), else fall
+  through to (4); (4) frequency across the whole page, returning the single most
+  frequent currency. A tie (two currencies appear equally often) returns undefined.
+  This prevents "Amount charged: 25.00 USD" / "Total: 25.00" / "Displayed as: 22.50 EUR"
+  from picking EUR (frequency), and prevents "EUR prices shown" / "Total: 30.00" /
+  "USD equivalent available" from picking EUR (disagreement between neighbours).

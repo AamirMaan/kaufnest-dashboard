@@ -45,7 +45,7 @@ const SUBTOTAL_RE = /(zwischensumme|sub-?total|netto|\bnet\b)/i;
 const VAT_WORD_RE = /(mwst|\bust\b|vat|steuer|\btax\b)/i;
 // "Gesamtbetrag inkl. MwSt" / "Total incl. VAT" IS the grand total — only
 // a line that states a VAT figure ("Summe MwSt 7,13") is not.
-const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|inc|enth|enthalten)\b\.?\s*(\d{1,2}(?:[.,]\d{1,2})?\s?%\s*)?(mwst|ust|vat|steuer|tax)/i;
+const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|enth|enthalten)\b\.?\s*(\d{1,2}(?:[.,]\d{1,2})?\s?%\s*)?(mwst|ust|vat|steuer|tax)/i;
 
 /** A grand-total line: a total keyword, not a subtotal, and VAT only mentioned as "incl. VAT". */
 function isTotalLine(line: string): boolean {
@@ -118,24 +118,39 @@ function currencyNearest(line: string, index: number): Currency | undefined {
   return best;
 }
 
+function currenciesIn(line: string): Set<Currency> {
+  const found = new Set<Currency>();
+  for (const [code, re] of CURRENCY_PATTERNS) if (new RegExp(re.source).test(line)) found.add(code);
+  return found;
+}
+
 function findCurrency(lines: string[], total: LocatedAmount | undefined): Currency | undefined {
   if (total) {
     const onLine = currencyNearest(lines[total.line], total.index);
     if (onLine) return onLine;
-    const near = [lines[total.line - 1] ?? "", lines[total.line + 1] ?? ""].join(" ");
-    for (const [code, re] of CURRENCY_PATTERNS) if (new RegExp(re.source).test(near)) return code;
-  }
-  const text = lines.join("\n");
-  let best: Currency | undefined;
-  let bestCount = 0;
-  for (const [code, re] of CURRENCY_PATTERNS) {
-    const count = (text.match(re) ?? []).length;
-    if (count > bestCount) {
-      best = code;
-      bestCount = count;
+
+    const neighbours = [total.line - 1, total.line + 1].filter((i) => i >= 0 && i < lines.length);
+    // A neighbouring line that repeats the total's figure is describing it.
+    for (const i of neighbours) {
+      const same = amountMatches(lines[i]).find((m) => m.value === total.amount);
+      if (same) {
+        const c = currencyNearest(lines[i], same.index);
+        if (c) return c;
+      }
     }
+    // Otherwise only trust the neighbours if they agree on one currency.
+    const nearby = new Set<Currency>();
+    for (const i of neighbours) for (const c of currenciesIn(lines[i])) nearby.add(c);
+    if (nearby.size === 1) return [...nearby][0];
+    if (nearby.size > 1) return undefined;
   }
-  return best;
+  // Whole page: the single most frequent currency; a tie suggests nothing.
+  const text = lines.join("\n");
+  const counts = CURRENCY_PATTERNS.map(([code, re]) => [code, (text.match(re) ?? []).length] as const)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (counts.length === 0 || (counts.length > 1 && counts[0][1] === counts[1][1])) return undefined;
+  return counts[0][0];
 }
 
 // ─── VAT ──────────────────────────────────────────────────────────────────────
