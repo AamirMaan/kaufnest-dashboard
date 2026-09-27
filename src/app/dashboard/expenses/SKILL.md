@@ -19,8 +19,16 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (`lib/utils/filters.ts`). **Also update `ImportExpensesModal.tsx`** if the
   field needs import support.
 - **Change list/filter/table behavior**: `page.tsx` only (filters dispatch `fetchExpensesPage`, no in-memory filtering).
+- **Change the filtered summary tiles above the table**: `_lib/expensesSummaryTiles.ts`
+  (`buildExpensesTiles`) + its colocated test for tile content/order; `_store/expensesSlice.ts`'s
+  `fetchExpensesSummary` thunk (+ `_store/expensesFilterParams.ts`) if the underlying data
+  changes; `page.tsx`'s `summaryTiles` useMemo only wires the two together.
 - **Change reducer logic**: `_store/expensesSlice.ts` + its test.
-- **Change export columns**: `handleExport()` in `page.tsx`.
+- **Change export columns**: `handleExport()` in `page.tsx` — edit the
+  `headers` array and the row-mapping lambda; its filter predicates come
+  from `expensesFilterParams(filters)` (2026-09-27 final-review fix, same
+  mapper `fetchExpensesPage`/`fetchExpensesSummary` use — change
+  `_store/expensesFilterParams.ts` instead of hand-rolling a new block here).
 - **Change import validation / accepted columns / add an import format**:
   `_components/expenseImportFormats.ts` + its colocated test — the pure
   registry (`EXPENSE_IMPORT_FORMATS`, `classifySkip`, `validateExpenseRow`).
@@ -64,6 +72,32 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchExpensesSummary` follows the exact same shape as Sales'
+  `fetchSalesSummary`** — `summaryRequestId` stale-response guard,
+  `summaryVersion` bumped by `addExpense`/`updateExpense`/`removeExpense`,
+  reuses `expensesFilterParams` (the same mapper `fetchExpensesPage` uses),
+  and never forwards a raw Postgres error (throws
+  `new Error("expenses_summary_failed")` instead). `ExpensesSummaryRow` also
+  carries `top_category`/`top_category_amount` (nullable) — the RPC's own
+  top-category computation, not derived client-side. See the Sales feature's
+  SKILL.md gotcha for the full reasoning — it applies here unchanged.
+- **`buildExpensesTiles` (`_lib/expensesSummaryTiles.ts`)** renders
+  Expenses/Gross/VAT/Net/Top category, in that order. VAT and Net are
+  omitted together (via the shared `moneyTile` helper) when every row's VAT
+  is exactly `0`; Top category is omitted when no row carries one
+  (`top_category`/`top_category_amount` both `null`). `categoryLabel` is
+  injected by `page.tsx` (passing `CATEGORY_LABELS` from `Badge.tsx`) so this
+  module has no React import and stays unit-testable with a plain function.
+- **Negative VAT (credit notes) must still show.** `moneyTile` hides a tile
+  only when every value is exactly `0` — a period made entirely of refunds
+  sums to a negative VAT total that is still real VAT to report, and it must
+  render, not disappear. Don't add a `> 0` or truthiness check on top of
+  `moneyTile`'s own `=== 0` test; this is the same rule the retired
+  page-scoped `hasVat` gate used to enforce inline (see the `!== 0` gotcha
+  further below), now centralized in `moneyTile` itself.
+
 ## Gotchas
 
 - **Server-side pagination**: `page.tsx` dispatches `fetchExpensesPage` on every
@@ -73,7 +107,11 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **Summary cards** are computed from `state.expenses.items` (current page) and
   labelled "(this page)" — they are not all-time aggregates.
 - **Export** calls Supabase directly with the same filters but no `.range()` (up
-  to 5 000 rows) so it always covers all matching records, not just the current page.
+  to 5 000 rows) so it always covers all matching records, not just the current
+  page. Its filter predicates come from `expensesFilterParams(filters)`
+  (2026-09-27) — the same mapper the table/summary thunks use, so it can't
+  drift from either; it previously hand-rolled its own filter block, including
+  an invalid `"0000-00-00"`/`"9999-99-99"` custom-range fallback.
 - `expensesSlice` is registered centrally in `src/store/store.ts` and hydrated in
   `src/store/StoreProvider.tsx` — those two files import it via the
   `@/app/dashboard/expenses/_store/expensesSlice` alias. If you rename the slice
@@ -169,9 +207,12 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   meet these rows on.
 - **VAT "is there any" checks test `!== 0`, never `> 0`.** Credit notes carry
   negative input tax, so a period made only of refunds sums to a negative VAT
-  total that is still real VAT to report. Both `hasVat` (`expenses/page.tsx`)
-  and `hasVatData` (`dashboard/page.tsx`) used `> 0` and hid their entire VAT
-  summary for exactly those periods.
+  total that is still real VAT to report. `hasVatData` (`dashboard/page.tsx`)
+  used `> 0` and hid its entire VAT summary for exactly those periods; this
+  page's own page-scoped `hasVat` had the identical bug before the 2026-09-26
+  summary-tiles rewrite retired it — the same `!== 0` rule now lives in the
+  shared `moneyTile` helper (`@/components/ui/summaryTileHelpers`), see the
+  gotcha above.
 - **The VAT column's sort sentinel is `Number.NEGATIVE_INFINITY`, not `-1`.**
   `sortValue: (e) => e.vat_amount ?? -1` meant "no VAT sorts below everything",
   which stopped being true once credit notes brought negative `vat_amount`s: a
@@ -389,5 +430,20 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - The "Search" box in `FilterBar` matches `title`, `vendor`, `description`,
   and `invoice_number` via a Supabase `.or()`/`ilike` clause (see
   `fetchExpensesPage` in `_store/expensesSlice.ts`), sanitized with
-  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`). `handleExport` mirrors
-  the same predicate — keep both in sync if the column set ever changes.
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`, applied inside
+  `expensesFilterParams`'s `p_pattern`). `handleExport` (2026-09-27) applies
+  the identical `p.p_pattern`-based `.or()` string from the same
+  `expensesFilterParams` call, rather than a second hand-rolled block — a
+  generic shared "apply filters" helper across the table/export query
+  builders was considered and rejected (see the Purchases feature's
+  SKILL.md for why: Supabase's `PostgrestFilterBuilder` types each filter
+  method against the query's specific `Row` generic, so a structurally-typed
+  wrapper generic enough for both call sites would need `any`).
+- **`CategoryBadge` (`components/ui/Badge.tsx`) and the summary tiles'
+  `categoryLabel` lambda in `page.tsx` both fall back to the raw category
+  string (`CATEGORY_LABELS[c] ?? c`) when it isn't one of the 8 known
+  `ExpenseCategory` values** (2026-09-27 final-review fix) — `expenses.category`
+  is unconstrained `text` in the DB, so an imported or hand-typed value
+  outside the known set used to render the literal word "undefined" instead
+  of the value itself. Keep both fallbacks if you add a 9th place that reads
+  `CATEGORY_LABELS[...]` directly.

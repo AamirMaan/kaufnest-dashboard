@@ -1,6 +1,15 @@
-import { salesSlice, hydratePage, addSale, updateSale, removeSale, setFetching } from "./salesSlice";
+import {
+  salesSlice,
+  hydratePage,
+  addSale,
+  updateSale,
+  removeSale,
+  setFetching,
+  fetchSalesSummary,
+} from "./salesSlice";
 import type { Sale } from "@/types";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
+import { DEFAULT_SALES_FILTERS } from "@/lib/utils/filters";
 
 const makeSale = (overrides: Partial<Sale> = {}): Sale => ({
   id: "sale-1",
@@ -158,5 +167,39 @@ describe("salesSlice", () => {
     const state = reducer(initial, removeSale("nonexistent"));
     expect(state.items).toHaveLength(1);
     expect(state.total).toBe(3);
+  });
+});
+
+describe("summary state", () => {
+  const reducer = salesSlice.reducer;
+  const init = () => reducer(undefined, { type: "@@init" });
+  const row = { currency: "EUR" as const, order_count: 2, gross: 100, vat: 19, fees: 5, shipping_charged: 0, excluded_count: 1 };
+
+  it("stores rows from the latest request only", () => {
+    let s = reducer(init(), fetchSalesSummary.pending("req-1", DEFAULT_SALES_FILTERS));
+    s = reducer(s, fetchSalesSummary.pending("req-2", DEFAULT_SALES_FILTERS));
+    expect(s.summaryLoading).toBe(true);
+    s = reducer(s, fetchSalesSummary.fulfilled([{ ...row, gross: 1 }], "req-1", DEFAULT_SALES_FILTERS));
+    expect(s.summary).toEqual([]); // stale response ignored
+    s = reducer(s, fetchSalesSummary.fulfilled([row], "req-2", DEFAULT_SALES_FILTERS));
+    expect(s.summary).toEqual([row]);
+    expect(s.summaryLoading).toBe(false);
+    expect(s.summaryError).toBe(false);
+  });
+
+  it("flags an error for the latest request", () => {
+    let s = reducer(init(), fetchSalesSummary.pending("req-1", DEFAULT_SALES_FILTERS));
+    s = reducer(s, fetchSalesSummary.rejected(new Error("x"), "req-1", DEFAULT_SALES_FILTERS));
+    expect(s.summaryError).toBe(true);
+    expect(s.summaryLoading).toBe(false);
+  });
+
+  it("bumps summaryVersion on add, update and remove", () => {
+    let s = init();
+    const sale = makeSale();
+    s = reducer(s, addSale(sale));
+    s = reducer(s, updateSale(sale));
+    s = reducer(s, removeSale(sale.id));
+    expect(s.summaryVersion).toBe(3);
   });
 });

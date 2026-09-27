@@ -10,6 +10,8 @@ import {
   DEFAULT_PURCHASE_FILTERS,
   periodRange,
   describePeriod,
+  resolveDateBounds,
+  ilikePattern,
 } from "./filters";
 import type { Sale } from "@/types";
 
@@ -252,5 +254,39 @@ describe("describePeriod", () => {
   it("returns null for an empty or malformed 'from'", () => {
     expect(describePeriod("", "2026-12-31")).toBeNull();
     expect(describePeriod("not-a-date", "2026-12-31")).toBeNull();
+  });
+});
+
+describe("resolveDateBounds", () => {
+  afterEach(() => jest.useRealTimers());
+
+  it("returns unbounded for the 'all' preset", () => {
+    expect(resolveDateBounds({ preset: "all", dateFrom: "2026-01-01", dateTo: "2026-01-31" }))
+      .toEqual({ from: null, to: null });
+  });
+
+  it("uses custom dates, treating blanks as unbounded", () => {
+    expect(resolveDateBounds({ preset: "custom", dateFrom: "2026-02-01", dateTo: "" }))
+      .toEqual({ from: "2026-02-01", to: null });
+    expect(resolveDateBounds({ preset: "custom", dateFrom: "", dateTo: "" }))
+      .toEqual({ from: null, to: null });
+  });
+
+  it("resolves a preset through getPresetRange", () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 8, 26, 12));
+    expect(resolveDateBounds({ preset: "this_month", dateFrom: "", dateTo: "" }))
+      .toEqual({ from: "2026-09-01", to: "2026-09-30" });
+  });
+});
+
+describe("ilikePattern", () => {
+  it("returns null for blank input", () => {
+    expect(ilikePattern("   ")).toBeNull();
+  });
+  it("wraps a trimmed term in wildcards", () => {
+    expect(ilikePattern("  lamp ")).toBe("%lamp%");
+  });
+  it("escapes LIKE wildcards in the term", () => {
+    expect(ilikePattern("50%_off")).toBe("%50\\%\\_off%");
   });
 });

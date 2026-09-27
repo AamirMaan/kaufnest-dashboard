@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { Purchase } from "@/types";
+import type { Purchase, PurchasesSummaryRow } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
-import { getPresetRange, sanitizeIlikeSearchTerm } from "@/lib/utils/filters";
 import type { PurchaseFilters } from "@/lib/utils/filters";
+import { purchasesFilterParams } from "./purchasesFilterParams";
 
 interface PurchasesState {
   items: Purchase[];
@@ -12,6 +12,13 @@ interface PurchasesState {
   pageSize: number;
   total: number;
   isFetching: boolean;
+  summary: PurchasesSummaryRow[];
+  summaryLoading: boolean;
+  summaryError: boolean;
+  /** Bumped by add/update/remove so the page refetches filtered totals after any mutation. */
+  summaryVersion: number;
+  /** requestId of the latest summary fetch — older responses are dropped (fast filter typing). */
+  summaryRequestId: string | null;
 }
 
 const initialState: PurchasesState = {
@@ -21,6 +28,11 @@ const initialState: PurchasesState = {
   pageSize: DEFAULT_PAGE_SIZE,
   total: 0,
   isFetching: false,
+  summary: [],
+  summaryLoading: false,
+  summaryError: false,
+  summaryVersion: 0,
+  summaryRequestId: null,
 };
 
 // ─── Thunk ────────────────────────────────────────────────────────────────────
@@ -36,23 +48,13 @@ export const fetchPurchasesPage = createAsyncThunk(
       .select("*", { count: "exact" })
       .order("date", { ascending: false });
 
-    // Date filters — resolve preset or custom range
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-
-    if (filters.currency !== "all") {
-      query = query.eq("currency", filters.currency);
-    }
-
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
+    const p = purchasesFilterParams(filters);
+    if (p.p_from) query = query.gte("date", p.p_from);
+    if (p.p_to) query = query.lte("date", p.p_to);
+    if (p.p_currency) query = query.eq("currency", p.p_currency);
+    if (p.p_pattern) {
       query = query.or(
-        `product_name.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%"`
+        `product_name.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
       );
     }
 
@@ -62,6 +64,22 @@ export const fetchPurchasesPage = createAsyncThunk(
     if (error) throw error;
 
     return { data: (data ?? []) as Purchase[], count: count ?? 0, page, pageSize };
+  }
+);
+
+/**
+ * Filtered totals across ALL matching purchases (not just the loaded page) —
+ * one row per currency from get_purchases_summary (050). Uses the same
+ * `purchasesFilterParams` as `fetchPurchasesPage`, so tiles and table can't disagree.
+ */
+export const fetchPurchasesSummary = createAsyncThunk(
+  "purchases/fetchSummary",
+  async (filters: PurchaseFilters) => {
+    const supabase = await createTenantClient();
+    const { data, error } = await supabase.rpc("get_purchases_summary", purchasesFilterParams(filters));
+    // Never forward the raw Postgres error — the page shows a generic message.
+    if (error) throw new Error("purchases_summary_failed");
+    return (data ?? []) as PurchasesSummaryRow[];
   }
 );
 
@@ -97,15 +115,18 @@ export const purchasesSlice = createSlice({
     addPurchase(state, action: PayloadAction<Purchase>) {
       state.items.unshift(action.payload);
       state.total += 1;
+      state.summaryVersion += 1;
     },
     updatePurchase(state, action: PayloadAction<Purchase>) {
       const idx = state.items.findIndex((p) => p.id === action.payload.id);
       if (idx !== -1) state.items[idx] = action.payload;
+      state.summaryVersion += 1;
     },
     removePurchase(state, action: PayloadAction<string>) {
       const before = state.items.length;
       state.items = state.items.filter((p) => p.id !== action.payload);
       if (state.items.length < before) state.total -= 1;
+      state.summaryVersion += 1;
     },
   },
   extraReducers: (builder) => {
@@ -118,6 +139,21 @@ export const purchasesSlice = createSlice({
       })
       .addCase(fetchPurchasesPage.rejected, (state) => {
         state.isFetching = false;
+      })
+      .addCase(fetchPurchasesSummary.pending, (state, action) => {
+        state.summaryRequestId = action.meta.requestId;
+        state.summaryLoading = true;
+      })
+      .addCase(fetchPurchasesSummary.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summary = action.payload;
+        state.summaryLoading = false;
+        state.summaryError = false;
+      })
+      .addCase(fetchPurchasesSummary.rejected, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summaryLoading = false;
+        state.summaryError = true;
       });
   },
 });

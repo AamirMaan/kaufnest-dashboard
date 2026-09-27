@@ -9,19 +9,29 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
   see `components/ui/SKILL.md`'s FilterBar entry — currency, category,
   general keyword search across title/vendor/description/invoice number),
-  row selection, invoice trigger,
-  Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
-  query, paginated via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see
-  "CSV import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha),
-  **Import CSV** button, wires up the modals below.
-  Two sign-aware details, both because expenses may be negative: the Amount
-  cell colours by sign (negative `--color-success`, positive `--color-danger`,
-  matching the Overview page's Expenses-by-Category list), and the VAT
-  summary's `hasVat` gate tests `!== 0` rather than `> 0`. The VAT column's
+  row selection, invoice trigger, filtered summary tiles
+  (Expenses/Gross/VAT/Net/Top category — covers ALL matching rows, not just
+  the current page, see "Summary thunk" below), **Export CSV** button
+  (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
+  5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
+  Max Rows gotcha), **Import CSV** button, wires up the modals below.
+  One sign-aware detail, because expenses may be negative: the Amount cell
+  colours by sign (negative `--color-success`, positive `--color-danger`,
+  matching the Overview page's Expenses-by-Category list). The VAT column's
   `sortValue` null-sentinel is `Number.NEGATIVE_INFINITY` — `-1` collided with
   real credit-note VAT. See the SKILL.md gotchas.
+- `_lib/expensesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
+  `buildExpensesTiles(rows: ExpensesSummaryRow[], categoryLabel: (c:
+  ExpenseCategory) => string): SummaryTile[]`, consumed by `page.tsx` to
+  render the filtered summary tiles above the Expenses table. Builds
+  Expenses/Gross/VAT/Net/Top category tiles via the shared
+  `moneyTile`/`countTile`/`compactTiles` helpers
+  (`@/components/ui/summaryTileHelpers`); VAT and Net are omitted together
+  when VAT is all-zero, and Top category is omitted when no row carries one.
+  `categoryLabel` is injected by the page (passing `CATEGORY_LABELS` from
+  `Badge.tsx`) so this module stays React-free and testable.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
-  `page`, `pageSize`, `total`, `isFetching`).
+  `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
   `addExpense`, `updateExpense`, `removeExpense`, `setFetching`.
   Thunk: `fetchExpensesPage({ page, pageSize, filters })` — builds a Supabase query
@@ -30,6 +40,16 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `invoice_number`, sanitized with `sanitizeIlikeSearchTerm`),
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
+  **Summary thunk** (2026-09-26): `fetchExpensesSummary(filters:
+  ExpenseFilters)` calls the `get_expenses_summary` RPC (migration 050) via
+  `expensesFilterParams` — the same mapper `fetchExpensesPage` uses — and
+  returns one `ExpensesSummaryRow` per currency (`src/types/index.ts`,
+  includes `top_category`/`top_category_amount`). State:
+  `summary`/`summaryLoading`/`summaryError`/`summaryVersion` (bumped by
+  `addExpense`/`updateExpense`/`removeExpense`)/`summaryRequestId`
+  (stale-response guard — see the Sales feature's CLAUDE.md for the full
+  pattern, identical here). A raw Postgres error is never forwarded — the
+  thunk throws `new Error("expenses_summary_failed")` instead.
   Used **only** by this feature — registered centrally in `src/store/store.ts` and
   hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/expensesSlice.test.ts` — reducer tests. Run with `npx jest dashboard/expenses`.
@@ -119,8 +139,12 @@ in memory** — all filtering happens in `fetchExpensesPage` (the thunk in
 5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
    `hydrateExpenses`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
 
-**Summary cards** show "(this page)" totals only — computed from `state.expenses.items`
-(current page). Clearly labelled in the UI.
+**Summary tiles** (2026-09-26, Task 7 — supersedes the old page-scoped
+"(this page)" Gross/VAT block) cover ALL rows matching the current filters,
+not just the loaded page — they come from a separate
+`fetchExpensesSummary(filters)` dispatch (see "Summary thunk" above), not
+from `state.expenses.items`. See "Gotchas — filtered-summary state" in
+`SKILL.md`.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
 with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
@@ -179,7 +203,11 @@ tenant hasn't had migration 046 applied yet.
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
-  `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`), `Toast`
+  `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`, and — 2026-09-26 —
+  `CATEGORY_LABELS`, injected into `_lib/expensesSummaryTiles.ts`'s
+  `buildExpensesTiles` as its `categoryLabel` function so that pure module
+  never imports Badge.tsx directly), `SummaryTiles`/`summaryTileHelpers`
+  (`moneyTile`/`countTile`/`compactTiles`), `Toast`
 - `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
   Purchases (don't fork these; extend them if you need new shared behavior —
   `DeleteConfirmModal` also grew optional `confirmLabel`/`confirmingLabel`/
@@ -192,11 +220,14 @@ tenant hasn't had migration 046 applied yet.
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
-cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
-`exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
-vat_rate, vat_amount, description`.
+**Export**: `handleExport()` in `page.tsx` derives its filter predicates from
+`expensesFilterParams(filters)` (2026-09-27 final-review fix — the same
+mapper `fetchExpensesPage`/`fetchExpensesSummary` use, replacing an earlier
+hand-rolled filter block with an invalid `"0000-00-00"`/`"9999-99-99"`
+custom-range fallback), runs a fresh Supabase query, paginated via
+`fetchAllRows` up to a 5 000-row overall cap (see `dashboard/SKILL.md`'s Max
+Rows gotcha) and calls `exportToCsv`. Columns: `date, title, category,
+vendor, amount, currency, vat_rate, vat_amount, description`.
 
 **Import** (`ImportExpensesModal`): required and optional columns depend on the
 chosen format — see the table below. Dates, decimal separators and header names

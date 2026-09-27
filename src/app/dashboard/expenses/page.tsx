@@ -2,14 +2,15 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeExpense, fetchExpensesPage } from "./_store/expensesSlice";
+import { removeExpense, fetchExpensesPage, fetchExpensesSummary } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
-import { CategoryBadge } from "@/components/ui/Badge";
+import { SummaryTiles } from "@/components/ui/SummaryTiles";
+import { CategoryBadge, CATEGORY_LABELS } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
 import { AddExpenseModal } from "./_components/AddExpenseModal";
@@ -19,7 +20,7 @@ import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
-import { formatCurrency, sumAmounts } from "@/lib/utils/currency";
+import { formatCurrency } from "@/lib/utils/currency";
 import { exportToCsv } from "@/lib/utils/csv";
 import { formatDate } from "@/lib/utils/date";
 import { fetchAllRows } from "@/lib/utils/fetchAllRows";
@@ -27,12 +28,12 @@ import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
-  getPresetRange,
-  sanitizeIlikeSearchTerm,
   type ExpenseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
-import type { ExpenseCategory, Expense, Currency } from "@/types";
+import { buildExpensesTiles } from "./_lib/expensesSummaryTiles";
+import { expensesFilterParams } from "./_store/expensesFilterParams";
+import type { ExpenseCategory, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
   "shipping", "advertising", "software", "office",
@@ -50,6 +51,10 @@ export default function ExpensesPage() {
   const pageSize = useAppSelector((s) => s.expenses.pageSize);
   const total = useAppSelector((s) => s.expenses.total);
   const isFetching = useAppSelector((s) => s.expenses.isFetching);
+  const summaryRows = useAppSelector((s) => s.expenses.summary);
+  const summaryLoading = useAppSelector((s) => s.expenses.summaryLoading);
+  const summaryError = useAppSelector((s) => s.expenses.summaryError);
+  const summaryVersion = useAppSelector((s) => s.expenses.summaryVersion);
   const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
   const hasDeleteOverride = useAppSelector(
     (s) => s.currentUser.profile?.permission_overrides?.includes("delete_expense") ?? false
@@ -58,6 +63,21 @@ export default function ExpensesPage() {
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
+
+  // Filtered totals for the tiles — refetch when filters change or after any
+  // add/edit/delete (summaryVersion), but NOT on page/sort change.
+  useEffect(() => {
+    dispatch(fetchExpensesSummary(filters));
+  }, [dispatch, filters, summaryVersion]);
+
+  const summaryTiles = useMemo(
+    () => buildExpensesTiles(summaryRows, (c) => CATEGORY_LABELS[c] ?? c),
+    [summaryRows]
+  );
+
+  useEffect(() => {
+    if (summaryError) toastError("Couldn't load expense totals");
+  }, [summaryError, toastError]);
 
   const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
 
@@ -87,28 +107,6 @@ export default function ExpensesPage() {
     [expenses, selectedIds]
   );
   const invoiceItems = selectedItems.length > 0 ? selectedItems : expenses;
-
-  // Summary computed from current page items only — labelled "(this page)" to
-  // make clear these are page-scoped totals, not all-time aggregates.
-  const summary = useMemo(() => {
-    const byCurrency = new Map<Currency, { gross: number[]; vat: number[] }>();
-    for (const e of expenses) {
-      const entry = byCurrency.get(e.currency) ?? { gross: [], vat: [] };
-      entry.gross.push(e.amount);
-      if (e.vat_amount != null) entry.vat.push(e.vat_amount);
-      byCurrency.set(e.currency, entry);
-    }
-    return Array.from(byCurrency.entries()).map(([currency, { gross, vat }]) => ({
-      currency,
-      gross: sumAmounts(gross),
-      vat: sumAmounts(vat),
-    }));
-  }, [expenses]);
-  // `!== 0`, not `> 0`: credit notes carry NEGATIVE input tax, so a page (or a
-  // filtered period) made up only of refunds sums to a negative VAT total that
-  // is still real VAT to report. `> 0` hid the whole summary for exactly those
-  // rows. Same reasoning as `hasVatData` on the Overview page.
-  const hasVat = summary.some((s) => s.vat !== 0);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
@@ -149,11 +147,7 @@ export default function ExpensesPage() {
 
   async function handleExport() {
     const supabase = await createTenantClient();
-
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
+    const p = expensesFilterParams(filters);
 
     const allRows = await fetchAllRows<Expense>(async (from, to) => {
       let query = supabase
@@ -162,16 +156,13 @@ export default function ExpensesPage() {
         .order("date", { ascending: false })
         .range(from, to);
 
-      if (range && filters.preset !== "all") {
-        query = query.gte("date", range.from).lte("date", range.to);
-      }
-      if (filters.category !== "all") query = query.eq("category", filters.category);
-      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-
-      if (filters.search.trim() !== "") {
-        const term = sanitizeIlikeSearchTerm(filters.search);
+      if (p.p_from) query = query.gte("date", p.p_from);
+      if (p.p_to) query = query.lte("date", p.p_to);
+      if (p.p_category) query = query.eq("category", p.p_category);
+      if (p.p_currency) query = query.eq("currency", p.p_currency);
+      if (p.p_pattern) {
         query = query.or(
-          `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
+          `title.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}",invoice_number.ilike."${p.p_pattern}"`
         );
       }
 
@@ -363,32 +354,7 @@ export default function ExpensesPage() {
 
       {/* Loading overlay — subtle opacity fade while a page fetch is in flight */}
       <div className={isFetching ? "opacity-60 pointer-events-none transition-opacity" : ""}>
-        <div className="flex items-start justify-between mb-3 text-sm">
-          <span className="text-(--color-text-muted) pt-0.5">
-            {total} expense{total !== 1 ? "s" : ""} total
-          </span>
-          {summary.length > 0 && (
-            <div className="text-right space-y-0.5">
-              {hasVat ? (
-                <>
-                  <p className="font-medium text-(--color-text-strong)">
-                    Gross (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-                  </p>
-                  <p className="text-(--color-text-muted)">
-                    VAT (this page): {summary.map((s) => formatCurrency(s.vat, s.currency)).join(" + ")}
-                  </p>
-                  <p className="font-medium text-(--color-text-strong)">
-                    Net (this page): {summary.map((s) => formatCurrency(s.gross - s.vat, s.currency)).join(" + ")}
-                  </p>
-                </>
-              ) : (
-                <p className="font-medium text-(--color-text-strong)">
-                  Total (this page): {summary.map((s) => formatCurrency(s.gross, s.currency)).join(" + ")}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        <SummaryTiles tiles={summaryTiles} loading={summaryLoading} error={summaryError} className="mb-3" />
 
         <DataTable
           columns={columns}

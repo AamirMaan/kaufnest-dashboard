@@ -20,11 +20,15 @@ every mutation follows.
   (`lib/utils/filters.ts`). **Also update `ImportPurchasesModal.tsx`** if the
   field needs import support.
 - **Change list/filter/table behavior**: `page.tsx` only.
-- **Change server-side filter pushdown**: `_store/purchasesSlice.ts`
-  (`fetchPurchasesPage` thunk) + `page.tsx` (`handleExport` must mirror the same
-  predicates).
+- **Change server-side filter pushdown**: `_store/purchasesFilterParams.ts` —
+  `fetchPurchasesPage`, `fetchPurchasesSummary`, and `page.tsx`'s
+  `handleExport` (2026-09-27 final-review fix) all call this one mapper, so
+  changing it changes all three call sites at once. Don't hand-roll a filter
+  block in any of them.
 - **Change reducer logic**: `_store/purchasesSlice.ts` + its test.
-- **Change export columns**: `handleExport()` in `page.tsx`.
+- **Change export columns**: `handleExport()` in `page.tsx` — edit the
+  `headers` array and the row-mapping lambda; its filter predicates come
+  from `purchasesFilterParams`, above.
 - **Change import validation / accepted columns**: `validateRow()` in
   `_components/ImportPurchasesModal.tsx` only.
 - **Change the advanced-inventory location/landed-cost fields** (Business
@@ -34,6 +38,10 @@ every mutation follows.
   `tracksStock` gating + payload spread + audit diff. Don't touch
   `inventory/_lib/landedCost.ts` here — it must stay byte-identical to the
   SQL formula; see its own file comment.
+- **Change the filtered summary tiles**: `_lib/purchasesSummaryTiles.ts` (+
+  its test) for tile content/order; `_store/purchasesSlice.ts`'s
+  `fetchPurchasesSummary` or `_store/purchasesFilterParams.ts` only if the
+  underlying filter/RPC shape changes.
 
 ## Test command
 
@@ -48,6 +56,25 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchPurchasesSummary` follows the exact same shape as Sales'
+  `fetchSalesSummary`** — `summaryRequestId` stale-response guard,
+  `summaryVersion` bumped by `addPurchase`/`updatePurchase`/`removePurchase`,
+  reuses `purchasesFilterParams` (the same mapper `fetchPurchasesPage` uses),
+  and never forwards a raw Postgres error (throws
+  `new Error("purchases_summary_failed")` instead). See the Sales feature's
+  SKILL.md gotcha for the full reasoning — it applies here unchanged.
+- `summaryVersion` also bumps on hydration-only `addPurchase` dispatches
+  (e.g. the order-detail page hydrating a linked purchase); harmless,
+  because the refetch effect only runs while the list page is mounted.
+- **Wired into `page.tsx`** (Task 6, 2026-09-26): the filtered summary tiles
+  above the Purchases table (Purchases/Units bought/Gross/VAT/Net) are built
+  by `_lib/purchasesSummaryTiles.ts`'s `buildPurchasesTiles(summaryRows)` —
+  mirrors Sales' `buildSalesTiles` exactly (`compactTiles`/`countTile`/
+  `moneyTile` from `@/components/ui/summaryTileHelpers`), VAT and Net hidden
+  together when VAT is all-zero.
+
 ## Gotchas
 
 - `purchasesSlice` is registered centrally in `src/store/store.ts` and hydrated
@@ -58,11 +85,16 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   calls `hydratePurchases({ data, count, page: 1, pageSize: DEFAULT_PAGE_SIZE })`.
   The old `hydrate(Purchase[])` signature is gone; always pass the full
   `{ data, count, page, pageSize }` shape.
-- Summary cards in `page.tsx` are computed from `state.purchases.items` (current
-  page only) and labelled "(this page)" — they are NOT all-time aggregates.
+- Summary tiles in `page.tsx` come from `fetchPurchasesSummary` (ALL matching
+  rows, not just the current page) — see "Gotchas — filtered-summary state"
+  above. They are no longer computed from `state.purchases.items`.
 - The Export button queries Supabase directly with **no `.range()`** (capped at
   5 000 rows) so it always covers all matching records regardless of which page
-  is shown. Mirror filter predicates from `fetchPurchasesPage` exactly.
+  is shown. Its filter predicates come from `purchasesFilterParams(filters)`
+  (2026-09-27) — the same mapper `fetchPurchasesPage`/`fetchPurchasesSummary`
+  use, so it can't drift from either; it previously hand-rolled its own filter
+  block, including an invalid `"0000-00-00"`/`"9999-99-99"` custom-range
+  fallback.
 - `DeleteConfirmModal` and `InvoiceModal` are shared with Sales and Expenses
   (`src/components/modals/`) — modify them carefully, changes ripple to those
   features.
@@ -81,8 +113,16 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - There is no standalone vendor filter (removed — the general "Search" box
   covers it). Search matches `product_name`, `vendor`, and `description` via
   `.or()`/`ilike` (see `fetchPurchasesPage`), sanitized with
-  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`). `handleExport` mirrors
-  the same predicate — keep both in sync if the column set ever changes.
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`, applied inside
+  `purchasesFilterParams`'s `p_pattern`). `handleExport` (2026-09-27) applies
+  the identical `p.p_pattern`-based `.or()` string from the same
+  `purchasesFilterParams` call — a generic shared `.gte/.lte/.eq/.or`
+  "apply filters" helper was considered (to remove the last bit of textual
+  duplication across the two `.or()` call sites) but rejected: Supabase's
+  `PostgrestFilterBuilder` types each filter method's column/value against
+  the query's specific `Row` generic, so a structurally-typed wrapper
+  generic enough to serve both `fetchPurchasesPage`'s query and
+  `handleExport`'s would need `any`, which the project verifier flags.
 - `<PurchaseInventoryFields>` (location + landed costs) only renders when a
   local `tracksStock` boolean is true — it's computed differently in each
   modal (Add also covers the "create a new inventory product and link it"

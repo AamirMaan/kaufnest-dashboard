@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
-import type { Expense } from "@/types";
+import type { Expense, ExpensesSummaryRow } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
-import { getPresetRange, sanitizeIlikeSearchTerm } from "@/lib/utils/filters";
 import type { ExpenseFilters } from "@/lib/utils/filters";
+import { expensesFilterParams } from "./expensesFilterParams";
 
 interface ExpensesState {
   items: Expense[];
@@ -12,6 +12,13 @@ interface ExpensesState {
   pageSize: number;
   total: number;
   isFetching: boolean;
+  summary: ExpensesSummaryRow[];
+  summaryLoading: boolean;
+  summaryError: boolean;
+  /** Bumped by add/update/remove so the page refetches filtered totals after any mutation. */
+  summaryVersion: number;
+  /** requestId of the latest summary fetch — older responses are dropped (fast filter typing). */
+  summaryRequestId: string | null;
 }
 
 const initialState: ExpensesState = {
@@ -21,6 +28,11 @@ const initialState: ExpensesState = {
   pageSize: DEFAULT_PAGE_SIZE,
   total: 0,
   isFetching: false,
+  summary: [],
+  summaryLoading: false,
+  summaryError: false,
+  summaryVersion: 0,
+  summaryRequestId: null,
 };
 
 // ─── Thunk ────────────────────────────────────────────────────────────────────
@@ -36,26 +48,14 @@ export const fetchExpensesPage = createAsyncThunk(
       .select("*", { count: "exact" })
       .order("date", { ascending: false });
 
-    // Date filters — resolve preset or custom range
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
-    if (range && filters.preset !== "all") {
-      query = query.gte("date", range.from).lte("date", range.to);
-    }
-
-    if (filters.category !== "all") {
-      query = query.eq("category", filters.category);
-    }
-    if (filters.currency !== "all") {
-      query = query.eq("currency", filters.currency);
-    }
-
-    if (filters.search.trim() !== "") {
-      const term = sanitizeIlikeSearchTerm(filters.search);
+    const p = expensesFilterParams(filters);
+    if (p.p_from) query = query.gte("date", p.p_from);
+    if (p.p_to) query = query.lte("date", p.p_to);
+    if (p.p_category) query = query.eq("category", p.p_category);
+    if (p.p_currency) query = query.eq("currency", p.p_currency);
+    if (p.p_pattern) {
       query = query.or(
-        `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
+        `title.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}",invoice_number.ilike."${p.p_pattern}"`
       );
     }
 
@@ -65,6 +65,22 @@ export const fetchExpensesPage = createAsyncThunk(
     if (error) throw error;
 
     return { data: (data ?? []) as Expense[], count: count ?? 0, page, pageSize };
+  }
+);
+
+/**
+ * Filtered totals across ALL matching expenses (not just the loaded page) —
+ * one row per currency from get_expenses_summary (050). Uses the same
+ * `expensesFilterParams` as `fetchExpensesPage`, so tiles and table can't disagree.
+ */
+export const fetchExpensesSummary = createAsyncThunk(
+  "expenses/fetchSummary",
+  async (filters: ExpenseFilters) => {
+    const supabase = await createTenantClient();
+    const { data, error } = await supabase.rpc("get_expenses_summary", expensesFilterParams(filters));
+    // Never forward the raw Postgres error — the page shows a generic message.
+    if (error) throw new Error("expenses_summary_failed");
+    return (data ?? []) as ExpensesSummaryRow[];
   }
 );
 
@@ -100,15 +116,18 @@ export const expensesSlice = createSlice({
     addExpense(state, action: PayloadAction<Expense>) {
       state.items.unshift(action.payload);
       state.total += 1;
+      state.summaryVersion += 1;
     },
     updateExpense(state, action: PayloadAction<Expense>) {
       const idx = state.items.findIndex((e) => e.id === action.payload.id);
       if (idx !== -1) state.items[idx] = action.payload;
+      state.summaryVersion += 1;
     },
     removeExpense(state, action: PayloadAction<string>) {
       const before = state.items.length;
       state.items = state.items.filter((e) => e.id !== action.payload);
       if (state.items.length < before) state.total -= 1;
+      state.summaryVersion += 1;
     },
   },
   extraReducers: (builder) => {
@@ -121,6 +140,21 @@ export const expensesSlice = createSlice({
       })
       .addCase(fetchExpensesPage.rejected, (state) => {
         state.isFetching = false;
+      })
+      .addCase(fetchExpensesSummary.pending, (state, action) => {
+        state.summaryRequestId = action.meta.requestId;
+        state.summaryLoading = true;
+      })
+      .addCase(fetchExpensesSummary.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summary = action.payload;
+        state.summaryLoading = false;
+        state.summaryError = false;
+      })
+      .addCase(fetchExpensesSummary.rejected, (state, action) => {
+        if (action.meta.requestId !== state.summaryRequestId) return;
+        state.summaryLoading = false;
+        state.summaryError = true;
       });
   },
 });

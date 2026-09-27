@@ -38,7 +38,13 @@ to a known domain enum — they own the label text + color mapping):
 
 - `RoleBadge({ role: UserRole })` — `super_admin`→danger, `admin`→warning, `accountant`→info
 - `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning, permission_change→warning, status_change→warning
-- `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`, just maps the enum to a display label
+- `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`,
+  maps the enum to a display label via `CATEGORY_LABELS[category] ?? category`
+  (2026-09-27 final-review fix — `expenses.category` is unconstrained `text`
+  in the DB, so a value outside the known 8-entry enum falls back to itself
+  instead of rendering the literal word "undefined"; the Expenses feature's
+  own summary-tile `categoryLabel` lambda in `page.tsx` needs the identical
+  `?? c` fallback wherever it reads `CATEGORY_LABELS` directly)
 - `PlatformBadge({ platform: Platform })` — amazon→warning, ebay→danger, etsy→success, shopify→info, other→default
 - `StatusBadge({ status: string })` — generic (not typed to a specific enum,
   so adding a value needs no `Record<Enum,...>` TS enforcement — easy to
@@ -165,6 +171,52 @@ elements and forward all native props directly.
 `trend?: "up" | "down" | "neutral"` only controls the `subtext` color
 (success/danger/muted). Used on the dashboard overview for summary metrics.
 Purely presentational, no state.
+
+## SummaryTiles.tsx + summaryTileHelpers.ts
+
+Compact display-only summary tiles shown above data tables (Orders/Purchases/
+Expenses list pages) to show filtered-result totals. Always display-only —
+no interactions, no hover affordance, no button semantics.
+
+**Renamed from `summaryTiles.ts` during Task 5 (2026-09-26):** the original
+name differed from the component's `SummaryTiles.tsx` only in casing, which
+resolves fine on case-sensitive Linux CI but collides on a case-insensitive
+filesystem (macOS/Windows) — `import ... from "@/components/ui/SummaryTiles"`
+resolved to this file instead of the component, since TS tries `.ts` before
+`.tsx` and the OS treats the two filenames as the same path. The collision
+went undetected in Task 4 because nothing imported the component yet; Task 5
+was the first real consumer and hit a `tsc` error. Fixed by renaming the pure
+module to `summaryTileHelpers.ts` — keep the two names visibly distinct if
+you ever touch either file. (`SummaryTiles.tsx`'s own top-of-file doc comment
+still said `./summaryTiles` after the rename until a 2026-09-27 final-review
+fix — a reminder that a rename needs a repo-wide grep for the old name in
+comments too, not just import statements, which `tsc` doesn't catch.)
+
+`summaryTileHelpers.ts` exports pure, tested helpers:
+- `moneyTile<T extends { currency }>(label, rows, value: (r) => number): SummaryTile | null`
+  — renders one line per row by calling `formatCurrency(value(r), r.currency)` for each row.
+  **Callers must pass rows that are already grouped by currency** (e.g., the result of
+  a `get_*_summary` RPC). This function does not group or sum. Returns `null` (hidden)
+  when there are no rows or all values are exactly 0. Negative values (e.g., credit notes)
+  are real and still render.
+- `countTile(label, count): SummaryTile` — always renders, even for 0.
+  Formats count via `Intl.NumberFormat("de-DE").format(count)` (German thousands separator).
+- `compactTiles(tiles: (SummaryTile | null)[]): SummaryTile[]` — filters out nulls, preserving order.
+
+**No currency conversion** — one line per currency, never summed.
+
+`SummaryTiles` component lays out the built tiles:
+- `tiles: SummaryTile[]`, `loading: boolean`, `error: boolean`, `className?: string`.
+- When `error`, renders "Totals unavailable" in muted text.
+- When `loading && tiles.length === 0`, renders 4 pulsing skeleton boxes.
+- When `loading && tiles.length > 0`, renders tiles with `opacity-60`.
+- Otherwise, renders a flex row of `dl` elements: each tile has a `<dt>` label and `<dd>` value lines.
+
+**Gotcha:** `summaryTileHelpers.ts` is pure and has a test
+(`summaryTileHelpers.test.ts`). Keep all formatting (currency, count
+grouping, hide-zero logic) in the helper functions, not in the `.tsx`. The
+component only handles layout and loading states. See the rename note above
+before naming any other file `summaryTiles*` in this folder.
 
 ## ThemeProvider.tsx
 

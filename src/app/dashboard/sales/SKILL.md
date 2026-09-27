@@ -64,6 +64,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   route. Reuses `addressFromCompanyProfile`/`addressFromSale` from
   `src/lib/shipping/addressMappers.ts` unchanged; do not duplicate their
   validation logic here.
+- **Add/change an Orders summary tile**: `_lib/salesSummaryTiles.ts` (+ its
+  colocated test) — plus SQL in `050_table_summary_functions.sql` **and**
+  `005_tenant_provisioning.sql` if the tile needs a new aggregate column
+  from `get_sales_summary`. A new filter must also be added to
+  `_store/salesFilterParams.ts` AND the 050/005 SQL, or the tiles and the
+  table will silently disagree about which rows are included.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
@@ -73,7 +79,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (`DEFAULT_PAGE_SIZE`) — affects all features once they adopt this pattern.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx` — edit the `headers`
-  array and the row-mapping lambda.
+  array and the row-mapping lambda. Its filter predicates come from
+  `salesFilterParams(filters)` (2026-09-27 final-review fix — it used to
+  hand-roll its own `.gte/.lte/.eq/.or` block, including an invalid
+  `"0000-00-00"`/`"9999-99-99"` custom-range fallback, which could drift from
+  `fetchSalesPage`); don't reintroduce a second filter-building block here —
+  change `_store/salesFilterParams.ts` instead.
 - **Change import validation / accepted columns / header aliases / add a new
   import format**: `_components/importFormats.ts` only (pure registry —
   `IMPORT_FORMATS`, `ALIASES`, `validateRowForFormat`). Extend
@@ -528,6 +539,47 @@ setter passed as `onPeriodChange`) MUST update all three fields in one atomic
 call — see `components/ui/SKILL.md`'s FilterBar entry for why (closure
 staleness in the `setFilter(key, value)` pattern this page already uses).
 
+## Gotchas — filtered-summary state (2026-09-26)
+
+- **`fetchSalesSummary`'s stale-response guard compares `requestId`, not
+  request order.** `state.summaryRequestId` is set on `.pending` and checked
+  on both `.fulfilled` and `.rejected` — a response whose `meta.requestId`
+  doesn't match the latest one is silently dropped. This is what lets a page
+  dispatch the thunk on every keystroke of a filter without a slower earlier
+  response clobbering a faster later one. Don't "simplify" this to a plain
+  loading boolean — that's exactly the race it exists to prevent.
+- **`summaryVersion` is bumped by `addSale`/`updateSale`/`removeSale`, not by
+  `fetchSalesPage`.** It exists so a page can `useEffect`-refetch
+  `fetchSalesSummary` after a local mutation without re-running on every
+  page/filter change already covered by its own effect. If you add a new
+  mutation-shaped reducer to this slice, bump it there too.
+- **`fetchSalesSummary` reuses `salesFilterParams`, the exact mapper
+  `fetchSalesPage` uses** — this is deliberate, not incidental: it's what
+  guarantees the summary tiles and the table rows can never disagree about
+  which filter predicates apply. Don't hand-roll a second filter-to-RPC-args
+  mapping for the summary thunk. **`page.tsx`'s `handleExport` (2026-09-27)
+  reuses the same mapper too** — a generic `applySalesFilters(query, params)`
+  helper was considered so all three call sites share one `.gte/.lte/.eq/.or`
+  application block, but Supabase's `PostgrestFilterBuilder` types its filter
+  methods' column/value arguments against the specific `Row` generic, so a
+  structurally-typed wrapper would need `any` to stay generic across query
+  shapes — not worth it for a 6-line block. Each call site inlines the same
+  `if (p.p_x) query = query.eq(...)` pattern instead; keep all three in sync
+  by changing `salesFilterParams` first, then copying its shape.
+- **The thunk never forwards the raw Postgres `error`** — it throws
+  `new Error("sales_summary_failed")` and the page (Task 5+) shows a generic
+  message. Same rule as every other Supabase-touching route/thunk in this
+  repo (see `AGENTS.md`'s New Supabase query checklist, point 6).
+- **`summaryVersion` also bumps on hydration-only dispatches** (e.g.
+  `updateSale`/`addSale` fired from `sales/[id]/page.tsx` just to sync Redux
+  after a server-side write, not a user-initiated mutation on the list
+  page) — harmless, because the refetch effect that reacts to it only runs
+  while the list page (`page.tsx`) is mounted.
+- **Tiles cover all filtered rows, not the page.** A new filter must be
+  added to `salesFilterParams` (`_store/salesFilterParams.ts`) AND the
+  050/005 SQL, or the tiles (`get_sales_summary`) and the table
+  (`fetchSalesPage`) will silently disagree about which rows are included.
+
 ## Gotchas — server-side pagination
 
 - **Do not call `filterSales()` in `page.tsx`** — filters are pushed to Supabase
@@ -554,13 +606,16 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **CSV export** runs a separate Supabase query without `.range()` — it does
   NOT use the Redux items. This ensures the export always covers all matching
   records (up to the 5 000-row safety cap), even when the user is on page 3.
-- **`excludedCount` is page-scoped** — it counts non-revenue orders
-  (`!isRevenueSale`, i.e. `returned` or `cancelled`) within `state.sales.items`
-  (the current page), not across all matching rows. The UI note "N
-  returned/cancelled order(s) excluded from totals" is therefore page-local;
-  it is not labelled "(this page)" in the UI, but that is what it reflects.
-  `refunded` orders are NOT counted here — they still count toward revenue,
-  see `sales/CLAUDE.md` → "Order status + returns".
+  Its filter predicates come from `salesFilterParams(filters)` (2026-09-27),
+  the same mapper `fetchSalesPage`/`fetchSalesSummary` use — table, tiles, and
+  export all read the exact same three sources of truth for what "matching"
+  means.
+- **`excludedCount` no longer exists in `page.tsx` (removed Task 5,
+  2026-09-26)** — the "Excluded" summary tile now reads `excluded_count`
+  straight off `get_sales_summary`'s per-currency rows (RPC 050), covering
+  ALL matching orders, not just the current page. `refunded` orders are NOT
+  counted here — they still count toward revenue, see `sales/CLAUDE.md` →
+  "Order status + returns".
 - **Invoice modal falls back to current page only when nothing is selected** —
   `InvoiceModal` receives the `selected` rows array. When `selected` is empty,
   it has no records to render; the Generate Invoice button is disabled until at
@@ -765,10 +820,12 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `provision_tenant_schema()` in `005_tenant_provisioning.sql` for every
   tenant schema including `tenant_kaufnest`) is
   `(status = 'returned' AND restock) ? 0 : -quantity`. If you add a new
-  revenue/profit aggregation (in this page's `summary` or in
+  revenue/profit aggregation (in this feature's summary tiles or in
   `app/dashboard/page.tsx`'s StatCards/charts), filter out
-  `status === "returned"` rows first (`page.tsx` does this inline in the
-  `summary` useMemo; Overview uses an `effectiveSales` array) — otherwise
+  `status === "returned"` rows first (this feature's tiles get that
+  exclusion from `get_sales_summary`'s SQL, migration 050 — see "Add/change
+  an Orders summary tile" above; Overview uses an `effectiveSales` array)
+  — otherwise
   written-off/returned orders will inflate those figures.
 - The UI says "Orders" everywhere (page title, Sidebar, modal titles, toast
   messages) but the route, table, type, and slice all stay "sales" — don't
@@ -776,6 +833,9 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - The "Search" box in `FilterBar` matches `product_name`, `external_order_id`,
   and `description` via a Supabase `.or()`/`ilike` clause (see
   `fetchSalesPage` in `_store/salesSlice.ts`), sanitized with
-  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`) before being embedded —
-  don't build the `.or()` string from a raw, unsanitized value. `handleExport`
-  mirrors the same predicate; keep both in sync if the column set ever changes.
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`, applied inside
+  `salesFilterParams`'s `p_pattern`) before being embedded — don't build the
+  `.or()` string from a raw, unsanitized value. `handleExport` (2026-09-27)
+  applies the identical `p.p_pattern`-based `.or()` string from the same
+  `salesFilterParams` call, so the column set can't drift between table and
+  export without both call sites failing their tests.

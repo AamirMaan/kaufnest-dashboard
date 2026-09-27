@@ -8,13 +8,28 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 - `page.tsx` — list view: server-side pagination (`fetchPurchasesPage` thunk),
   `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
   see `components/ui/SKILL.md`'s FilterBar entry — currency, general keyword
-  search across product name/vendor/description), `<Pagination>`, loading
-  overlay, Gross/VAT/Net summary **(this page)**, **Export CSV** button
+  search across product name/vendor/description), row selection, invoice
+  trigger, filtered summary tiles (Purchases/Units bought/Gross/VAT/Net —
+  covers ALL matching rows, not just the current page, see "Summary thunk"
+  below), **Export CSV** button
   (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
   5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
   Max Rows gotcha), **Import CSV** button, wires up the modals below.
+- `_lib/purchasesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
+  `buildPurchasesTiles(rows: PurchasesSummaryRow[]): SummaryTile[]`, consumed
+  by `page.tsx` to render the filtered summary tiles above the Purchases
+  table. Builds Purchases/Units bought/Gross/VAT/Net tiles via the shared
+  `moneyTile`/`countTile`/`compactTiles` helpers
+  (`@/components/ui/summaryTileHelpers`); VAT and Net are omitted together
+  when VAT is all-zero.
+- `_store/purchasesFilterParams.ts` (+ colocated `.test.ts`) — pure mapper
+  from `PurchaseFilters` to the RPC/query param shape (`p_from`/`p_to`/
+  `p_currency`/`p_pattern`), shared by `fetchPurchasesPage` and
+  `fetchPurchasesSummary` so the table and the summary tiles can never
+  disagree about which filter predicates apply.
 - `_store/purchasesSlice.ts` — Redux slice for `state.purchases` (`items`,
-  `loaded`, `page`, `pageSize`, `total`, `isFetching`).
+  `loaded`, `page`, `pageSize`, `total`, `isFetching`, plus the summary
+  fields below).
   Actions: `hydratePage` (also exported as `hydratePurchases` for `StoreProvider`),
   `addPurchase`, `updatePurchase`, `removePurchase`, `setFetching`.
   Thunk: `fetchPurchasesPage({ page, pageSize, filters })` — builds a Supabase query
@@ -23,6 +38,21 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   with `sanitizeIlikeSearchTerm`), `.select("*", { count: "exact" })`,
   `.order("date")`, and `.range(from, to)` from `rangeFor()`. There is no
   standalone vendor filter — the general search box covers vendor.
+  **Summary thunk** (2026-09-26): `fetchPurchasesSummary(filters:
+  PurchaseFilters)` calls the `get_purchases_summary` RPC (migration 050) via
+  `purchasesFilterParams` — the same mapper `fetchPurchasesPage` uses — and
+  returns one `PurchasesSummaryRow` per currency (`src/types/index.ts`).
+  State: `summary`/`summaryLoading`/`summaryError`/`summaryVersion` (bumped
+  by `addPurchase`/`updatePurchase`/`removePurchase`)/`summaryRequestId`
+  (stale-response guard — see the Sales feature's CLAUDE.md for the full
+  pattern, identical here). A raw Postgres error is never forwarded — the
+  thunk throws `new Error("purchases_summary_failed")` instead. **Consumed by
+  `page.tsx`** (Task 6, 2026-09-26): a `useEffect` dispatches
+  `fetchPurchasesSummary(filters)` whenever `filters` or `summaryVersion`
+  changes (NOT on page/sort change), and `buildPurchasesTiles(summaryRows)`
+  (`_lib/purchasesSummaryTiles.ts`) turns the result into the
+  `<SummaryTiles>` row rendered above the Purchases table, replacing the old
+  page-scoped "(this page)" Gross/VAT/Net block.
   Used **only** by this feature — registered centrally in `src/store/store.ts`
   and hydrated in `src/store/StoreProvider.tsx`, but otherwise self-contained here.
 - `_store/purchasesSlice.test.ts` — reducer tests (covers `hydratePurchases`,
@@ -86,8 +116,12 @@ in memory** — all filtering happens in `fetchPurchasesPage` (the thunk in
 5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
    `hydratePurchases`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
 
-**Summary cards** show "(this page)" totals only — computed from
-`state.purchases.items` (current page). Clearly labelled in the UI.
+**Summary tiles** (2026-09-26, Task 6 — supersedes the old page-scoped
+"(this page)" Gross/VAT/Net block) cover ALL rows matching the current
+filters, not just the loaded page — they come from a separate
+`fetchPurchasesSummary(filters)` dispatch (see "Summary thunk" above), not
+from `state.purchases.items`. See "Gotchas — filtered-summary state" in
+`SKILL.md`.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
 with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
@@ -212,11 +246,15 @@ insert/update payload gets `{}` spread in (i.e. nothing added) via
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
-cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
-`exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
-total_amount, currency, vat_rate, vat_amount, description`.
+**Export**: `handleExport()` in `page.tsx` derives its filter predicates from
+`purchasesFilterParams(filters)` (2026-09-27 final-review fix — the same
+mapper `fetchPurchasesPage`/`fetchPurchasesSummary` use, replacing an earlier
+hand-rolled filter block with an invalid `"0000-00-00"`/`"9999-99-99"`
+custom-range fallback), runs a fresh Supabase query, paginated via
+`fetchAllRows` up to a 5 000-row overall cap (see `dashboard/SKILL.md`'s Max
+Rows gotcha) and calls `exportToCsv`. Columns: `date, product_name, vendor,
+quantity, unit_price, total_amount, currency, vat_rate, vat_amount,
+description`.
 
 **Import** (`ImportPurchasesModal` + `purchaseImportFormats.ts`, extracted
 2026-09-17): Required: `date`, `product_name`, `quantity`, `unit_price`.
