@@ -67,6 +67,9 @@ export function compactMoney(value: number, currency: string): string {
     style: "currency",
     currency,
     notation: "compact",
+    // Explicit minimum: currency formats default to 2, and some ICU versions
+    // then clamp it to the maximum and print "$350.0" instead of "$350".
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
   }).format(value);
 }
