@@ -414,6 +414,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   section 2. Backs `src/app/dashboard/expenses/` — see its `SKILL.md` gotcha
   for the private-bucket/signed-URL/deferred-persistence details.
 
+- `migrations/051_overview_timeseries.sql` — adds
+  `get_overview_timeseries(p_from, p_to, p_currency) RETURNS jsonb` to every
+  tenant schema via `run_on_all_tenant_schemas`; also mirrored into
+  `provision_tenant_schema()` in the same commit. One call returns
+  zero-filled monthly buckets, the previous period's totals and the top
+  purchase vendor for the Overview page's chart cards
+  (`src/app/dashboard/_components/*Card.tsx`). Not `SECURITY DEFINER`; no
+  literal percent signs in the body (the 005 copy runs through `format()`).
+  See `SKILL.md`'s file map for apply-status.
+
 ## Related code
 
 - `src/lib/supabase/{client,server,control}.ts` + their `SKILL.md` — the
