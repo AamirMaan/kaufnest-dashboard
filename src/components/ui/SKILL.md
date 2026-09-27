@@ -166,6 +166,34 @@ elements and forward all native props directly.
 (success/danger/muted). Used on the dashboard overview for summary metrics.
 Purely presentational, no state.
 
+## SummaryTiles.tsx + summaryTiles.ts
+
+Compact display-only summary tiles shown above data tables (Orders/Purchases/
+Expenses list pages) to show filtered-result totals. Always display-only —
+no interactions, no hover affordance, no button semantics.
+
+`summaryTiles.ts` exports pure, tested helpers:
+- `moneyTile<T extends { currency }>(label, rows, value: (r) => number): SummaryTile | null`
+  — groups rows by currency and formats each via `formatCurrency(value, currency)`.
+  Returns `null` (hidden) when there are no rows or all values are exactly 0.
+  Negative values (e.g., credit notes) are real and still render.
+- `countTile(label, count): SummaryTile` — always renders, even for 0.
+  Formats count via `Intl.NumberFormat("de-DE").format(count)` (German thousands separator).
+- `compactTiles(tiles: (SummaryTile | null)[]): SummaryTile[]` — filters out nulls, preserving order.
+
+**No currency conversion** — one line per currency, never summed.
+
+`SummaryTiles` component (`"use client"`) lays out the built tiles:
+- `tiles: SummaryTile[]`, `loading: boolean`, `error: boolean`, `className?: string`.
+- When `error`, renders "Totals unavailable" in muted text.
+- When `loading && tiles.length === 0`, renders 4 pulsing skeleton boxes.
+- When `loading && tiles.length > 0`, renders tiles with `opacity-60`.
+- Otherwise, renders a flex row of `dl` elements: each tile has a `<dt>` label and `<dd>` value lines.
+
+**Gotcha:** `summaryTiles.ts` is pure and has a test (`summaryTiles.test.ts`). Keep
+all formatting (currency, count grouping, hide-zero logic) in the helper functions,
+not in the `.tsx`. The component only handles layout and loading states.
+
 ## ThemeProvider.tsx
 
 `"use client"`. Exports `ThemeProvider` and `useTheme()` (returns `{ theme:
