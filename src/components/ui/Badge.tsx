@@ -50,7 +50,7 @@ export function ActionBadge({ action }: { action: AuditAction }) {
   return <Badge label={action.replace("_", " ")} variant={ACTION_VARIANTS[action]} />;
 }
 
-const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   shipping: "Shipping",
   advertising: "Advertising",
   software: "Software",

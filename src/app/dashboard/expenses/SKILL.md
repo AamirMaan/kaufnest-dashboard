@@ -19,6 +19,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (`lib/utils/filters.ts`). **Also update `ImportExpensesModal.tsx`** if the
   field needs import support.
 - **Change list/filter/table behavior**: `page.tsx` only (filters dispatch `fetchExpensesPage`, no in-memory filtering).
+- **Change the filtered summary tiles above the table**: `_lib/expensesSummaryTiles.ts`
+  (`buildExpensesTiles`) + its colocated test for tile content/order; `_store/expensesSlice.ts`'s
+  `fetchExpensesSummary` thunk (+ `_store/expensesFilterParams.ts`) if the underlying data
+  changes; `page.tsx`'s `summaryTiles` useMemo only wires the two together.
 - **Change reducer logic**: `_store/expensesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx`.
 - **Change import validation / accepted columns / add an import format**:
@@ -75,6 +79,20 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   carries `top_category`/`top_category_amount` (nullable) — the RPC's own
   top-category computation, not derived client-side. See the Sales feature's
   SKILL.md gotcha for the full reasoning — it applies here unchanged.
+- **`buildExpensesTiles` (`_lib/expensesSummaryTiles.ts`)** renders
+  Expenses/Gross/VAT/Net/Top category, in that order. VAT and Net are
+  omitted together (via the shared `moneyTile` helper) when every row's VAT
+  is exactly `0`; Top category is omitted when no row carries one
+  (`top_category`/`top_category_amount` both `null`). `categoryLabel` is
+  injected by `page.tsx` (passing `CATEGORY_LABELS` from `Badge.tsx`) so this
+  module has no React import and stays unit-testable with a plain function.
+- **Negative VAT (credit notes) must still show.** `moneyTile` hides a tile
+  only when every value is exactly `0` — a period made entirely of refunds
+  sums to a negative VAT total that is still real VAT to report, and it must
+  render, not disappear. Don't add a `> 0` or truthiness check on top of
+  `moneyTile`'s own `=== 0` test; this is the same rule the retired
+  page-scoped `hasVat` gate used to enforce inline (see the `!== 0` gotcha
+  further below), now centralized in `moneyTile` itself.
 
 ## Gotchas
 
@@ -181,9 +199,12 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   meet these rows on.
 - **VAT "is there any" checks test `!== 0`, never `> 0`.** Credit notes carry
   negative input tax, so a period made only of refunds sums to a negative VAT
-  total that is still real VAT to report. Both `hasVat` (`expenses/page.tsx`)
-  and `hasVatData` (`dashboard/page.tsx`) used `> 0` and hid their entire VAT
-  summary for exactly those periods.
+  total that is still real VAT to report. `hasVatData` (`dashboard/page.tsx`)
+  used `> 0` and hid its entire VAT summary for exactly those periods; this
+  page's own page-scoped `hasVat` had the identical bug before the 2026-09-26
+  summary-tiles rewrite retired it — the same `!== 0` rule now lives in the
+  shared `moneyTile` helper (`@/components/ui/summaryTileHelpers`), see the
+  gotcha above.
 - **The VAT column's sort sentinel is `Number.NEGATIVE_INFINITY`, not `-1`.**
   `sortValue: (e) => e.vat_amount ?? -1` meant "no VAT sorts below everything",
   which stopped being true once credit notes brought negative `vat_amount`s: a

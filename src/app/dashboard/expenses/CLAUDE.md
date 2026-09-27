@@ -9,17 +9,27 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
   see `components/ui/SKILL.md`'s FilterBar entry — currency, category,
   general keyword search across title/vendor/description/invoice number),
-  row selection, invoice trigger,
-  Gross/VAT/Net summary **(this page)**, **Export CSV** button (server-side
-  query, paginated via `@/lib/utils/fetchAllRows` up to a 5 000-row cap — see
-  "CSV import/export" below and `dashboard/SKILL.md`'s Max Rows gotcha),
-  **Import CSV** button, wires up the modals below.
-  Two sign-aware details, both because expenses may be negative: the Amount
-  cell colours by sign (negative `--color-success`, positive `--color-danger`,
-  matching the Overview page's Expenses-by-Category list), and the VAT
-  summary's `hasVat` gate tests `!== 0` rather than `> 0`. The VAT column's
+  row selection, invoice trigger, filtered summary tiles
+  (Expenses/Gross/VAT/Net/Top category — covers ALL matching rows, not just
+  the current page, see "Summary thunk" below), **Export CSV** button
+  (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
+  5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
+  Max Rows gotcha), **Import CSV** button, wires up the modals below.
+  One sign-aware detail, because expenses may be negative: the Amount cell
+  colours by sign (negative `--color-success`, positive `--color-danger`,
+  matching the Overview page's Expenses-by-Category list). The VAT column's
   `sortValue` null-sentinel is `Number.NEGATIVE_INFINITY` — `-1` collided with
   real credit-note VAT. See the SKILL.md gotchas.
+- `_lib/expensesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
+  `buildExpensesTiles(rows: ExpensesSummaryRow[], categoryLabel: (c:
+  ExpenseCategory) => string): SummaryTile[]`, consumed by `page.tsx` to
+  render the filtered summary tiles above the Expenses table. Builds
+  Expenses/Gross/VAT/Net/Top category tiles via the shared
+  `moneyTile`/`countTile`/`compactTiles` helpers
+  (`@/components/ui/summaryTileHelpers`); VAT and Net are omitted together
+  when VAT is all-zero, and Top category is omitted when no row carries one.
+  `categoryLabel` is injected by the page (passing `CATEGORY_LABELS` from
+  `Badge.tsx`) so this module stays React-free and testable.
 - `_store/expensesSlice.ts` — Redux slice for `state.expenses` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateExpenses` for `StoreProvider`),
@@ -129,8 +139,12 @@ in memory** — all filtering happens in `fetchExpensesPage` (the thunk in
 5. The initial hydration (`StoreProvider`) calls `hydratePage` too (aliased as
    `hydrateExpenses`) with `page=1, pageSize=DEFAULT_PAGE_SIZE`.
 
-**Summary cards** show "(this page)" totals only — computed from `state.expenses.items`
-(current page). Clearly labelled in the UI.
+**Summary tiles** (2026-09-26, Task 7 — supersedes the old page-scoped
+"(this page)" Gross/VAT block) cover ALL rows matching the current filters,
+not just the loaded page — they come from a separate
+`fetchExpensesSummary(filters)` dispatch (see "Summary thunk" above), not
+from `state.expenses.items`. See "Gotchas — filtered-summary state" in
+`SKILL.md`.
 
 **CSV export** (`handleExport`) bypasses Redux and runs a fresh Supabase query
 with the same filter predicates, paginated via `@/lib/utils/fetchAllRows` up
@@ -189,7 +203,11 @@ tenant hasn't had migration 046 applied yet.
 ## Shared dependencies (live outside this folder on purpose)
 
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
-  `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`), `Toast`
+  `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`, and — 2026-09-26 —
+  `CATEGORY_LABELS`, injected into `_lib/expensesSummaryTiles.ts`'s
+  `buildExpensesTiles` as its `categoryLabel` function so that pure module
+  never imports Badge.tsx directly), `SummaryTiles`/`summaryTileHelpers`
+  (`moneyTile`/`countTile`/`compactTiles`), `Toast`
 - `components/modals/{DeleteConfirmModal,InvoiceModal}` — shared with Sales and
   Purchases (don't fork these; extend them if you need new shared behavior —
   `DeleteConfirmModal` also grew optional `confirmLabel`/`confirmingLabel`/
