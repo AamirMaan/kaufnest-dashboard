@@ -36,6 +36,25 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `src/lib/utils/importAliases.ts` instead (Sales reads the same table). A new
   *column* also needs a `templateExample` value inserted at the same index —
   see the gotcha below.
+- **Improve receipt field detection**: `_lib/parseReceipt.ts` — change a
+  regex pattern, add a category keyword, or refine amount/date/VAT logic. Add
+  a fixture to its test for every rule change (every fixture is a real receipt
+  that documents the rule in action).
+- **Change how receipt text is extracted (pdf.js/tesseract)**:
+  `_lib/extractReceiptText.ts` + its colocated `.test.ts` (only
+  `hasUsablePdfText` is unit-testable — the two libraries need a real
+  browser). Keep both libraries' imports dynamic (`await import(...)` inside
+  a function body) — see the gotcha below.
+- **Change how a parsed receipt is merged into the form**: `_lib/applyReceiptToForm.ts` +
+  its test. This module owns the "never overwrite user input" logic. If you need
+  a new field to auto-fill, add it to the fill logic here and ensure the Add and Edit
+  modals' `baseline` parameters align with the gotcha below.
+- **Change the "Fill from receipt" button/flow itself** (busy state, toast
+  copy, which fields highlight): `_components/useReceiptAutofill.ts` +
+  `_components/ReceiptUploader.tsx` (the per-tile Fill button). Both
+  `AddExpenseModal.tsx`/`EditExpenseModal.tsx` just call the hook and pass
+  `autofill.highlight("<field>")` as each fillable control's `className` —
+  the merge/highlight/toast logic itself lives in the hook, not the modals.
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
 - **Change the VAT-preservation decision on edit**: `_lib/vatPreservation.ts`
@@ -44,10 +63,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   initial snapshot (`EditExpenseModal`'s `initialForm` state), never against
   `expense`'s raw `vat_rate`/`vat_amount` — see the gotcha below for why.
 - **Add/change expense receipts**: `_components/ReceiptUploader.tsx` (the
-  upload/thumbnail/remove UI), `_lib/receiptPath.ts` (bucket id + path
-  helpers), wired into both `AddExpenseModal.tsx` and `EditExpenseModal.tsx`.
-  Schema change: `supabase/migrations/046_expense_receipts.sql` (2-places
-  rule — also mirror into `provision_tenant_schema()`).
+  upload/thumbnail/remove/open UI), `_lib/receiptPath.ts` (bucket id + path
+  helpers), `_lib/receiptFileType.ts` (+ colocated `.test.ts` — accepted
+  mime types, PDF detection), wired into both `AddExpenseModal.tsx` and
+  `EditExpenseModal.tsx`. Schema change: `supabase/migrations/046_expense_receipts.sql`
+  (2-places rule — also mirror into `provision_tenant_schema()`).
 - **Change the import modal's UI/plumbing** (dropdown, summary line, category
   preview, file reading): `_components/ImportExpensesModal.tsx` only — and read
   `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
@@ -416,6 +436,21 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   difference from `listing-images` (public, since eBay must fetch those
   URLs) — see the design doc's section 2 for why a receipt has no such
   requirement.
+- **PDFs need no bucket change — 046 sets no `allowed_mime_types`.** A
+  receipt is accepted as either an image or a PDF
+  (`_lib/receiptFileType.ts`'s `RECEIPT_ACCEPT`/`isAcceptedReceiptType`); the
+  `expense-receipts` Storage bucket (`046_expense_receipts.sql`) never
+  restricted mime types, so PDF upload already worked before this UI change
+  — the only new plumbing was accepting the type client-side and rendering
+  it as a file tile instead of an `<img>` thumbnail.
+- **`openReceipt` opens the tab before awaiting the signed URL**, because a
+  `window.open` called after an `await` is popup-blocked. It opens a blank
+  `_blank` tab synchronously inside the click handler, then points it at a
+  freshly-signed 60s URL once that resolves (or closes the tab and toasts on
+  failure). Thumbnails' 60s signed URLs (`signedUrls` state, refreshed by
+  the effect) are never reused for opening — a receipt tile is always opened
+  with its own fresh signed URL. A blocked popup (`window.open` → `null`) is
+  toasted, never silent.
 - **`AddExpenseModal` creates the expense row early if a receipt is
   attached before the rest of the form is submitted** (`handleExpenseCreated`,
   wired to `ReceiptUploader`'s `onExpenseCreated` — mirrors `ImageGrid`'s
@@ -447,3 +482,182 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   outside the known set used to render the literal word "undefined" instead
   of the value itself. Keep both fallbacks if you add a 9th place that reads
   `CATEGORY_LABELS[...]` directly.
+
+## Gotchas — `extractReceiptText`
+
+- **Never import `pdfjs-dist`/`tesseract.js` at top level** — bundle size and
+  SSR. Both are loaded only via a dynamic `import()` inside a function body
+  (`ocr()`/`extractReceiptText()`), never as a module-level `import`
+  statement, so the module stays safe to import under Jest
+  (`testEnvironment: node`) and neither library enters the main bundle.
+- **Workers/language data load from jsdelivr.** The pdf.js worker
+  (`pdf.worker.min.mjs`, version-pinned to the installed `pdfjs.version`) and
+  tesseract's core + `deu`/`eng` traineddata all come from
+  `cdn.jsdelivr.net` at runtime — if a Content-Security-Policy is ever added,
+  `script-src`/`worker-src`/`connect-src` must allow `cdn.jsdelivr.net` or
+  extraction silently fails.
+- **Scanned PDFs: only page 1 is OCR'd.** If `hasUsablePdfText` says the
+  text layer is too thin (fewer than `MIN_PDF_TEXT_CHARS` non-whitespace
+  characters — a scan), only the first page is rendered to a canvas and
+  OCR'd; any content on later pages of a scanned PDF is never read. This
+  matches the global spec's scope, not an oversight.
+
+## Gotchas — `applyReceiptToForm`
+
+- **Autofill never overwrites user input.** A field is filled only if it's blank,
+  or if it still holds the Add modal's untouched default (today's date, `EUR`,
+  category `other`). The baseline parameter embodies this rule: the Add modal
+  passes `{ currency: "EUR", category: "other", date: "today" }` so a receipt
+  can replace those defaults; the Edit modal passes `{}`, so only genuinely
+  empty fields fill on an existing expense.
+- **The VAT pair fills only while "Amount includes VAT" is unticked.**
+  Once the user checks that box or manually enters a rate, the receipt's rate
+  suggestion is ignored. This prevents a receipt's 20% from silently overwriting
+  the user's 7% after they've already decided.
+
+## Gotchas — `useReceiptAutofill`
+
+- **The merge uses `formRef.current` at the end of reading, not the
+  click-time snapshot.** Reading a receipt (OCR especially) can take seconds;
+  `fillFromReceipt` reads the form from a ref kept in sync by an effect (not
+  during render — this repo's `react-hooks/refs` lint rule forbids writing
+  `.current` in the render body), so anything the user typed while the read
+  was in flight is respected instead of being clobbered by a stale form.
+- **Save is disabled while a receipt is being read**
+  (`disabled={... || autofill.fillingPath !== null}` on both modals' submit
+  buttons), so the merge can never land after submit already fired — there is
+  no race between "form just saved" and "receipt just finished parsing".
+- **Closing/cancelling a modal calls `autofill.reset()`, which abandons an
+  in-flight read (generation counter)** — a late OCR result never lands in a
+  closed or reopened form, and never toasts. This matters most for the Add
+  modal, which never unmounts (`page.tsx` only toggles `open`): without the
+  generation guard, clicking Fill then Cancel before the read finishes would
+  let the read resolve into the hidden modal's state, so the next "Add
+  Expense" opened pre-filled from a receipt the user had already discarded.
+  `reset()` also covers the unmount case (Edit modal closing, or any future
+  caller that does unmount) via a cleanup effect that bumps the same counter.
+- **The Add modal's autofill baseline date is computed once per mount**
+  (`autofillBaseline`'s `useMemo`, keyed on `defaultVatRate`) — a modal left
+  open across midnight still treats the earlier "today" as untouched.
+  Accepted: reopening the modal recomputes it, and a session spanning
+  midnight with the modal open the whole time is not a case worth adding
+  state for.
+
+## Gotchas — `parseReceipt`
+
+- **Amounts must have exactly 2 decimals.** The `AMOUNT_RE` regex matches only
+  amounts with exactly two decimal places (e.g. `44,63`, `1200.00`), which all
+  real receipts have. The lookarounds `(?<![\d.,])` and `(?![.,]?\d)` prevent
+  dates like `12.03.2026` from yielding a false match like `"12.03"` or `"2026"`.
+  Do not remove them; they are the entire safeguard against parsing dates as amounts.
+- **Mixed VAT rates deliberately suggest no rate.** A supermarket receipt with
+  both 7% and 19% VAT can't be represented by the form's single `vat_rate` field.
+  The parser returns `vatRate: undefined` rather than guessing, leaving the user
+  to enter it manually — this is correct behaviour and has a test. Do not add
+  fallback logic to pick the highest or most common rate; that would silently
+  charge the wrong input tax.
+- **Title is never suggested by `parseReceipt`.** Every field (date, amount,
+  currency, VAT, vendor, invoice number) can be auto-filled, but title is
+  deliberately left blank because the user's own naming convention is more
+  valuable than any extracted text. Do not add title extraction.
+- **A total line saying "inkl./incl. VAT" is still the grand total; only lines
+  stating a VAT figure are excluded.** `isTotalLine()` tests a line against
+  `SUBTOTAL_RE` (excludes "Zwischensumme", "subtotal", "net") and then checks
+  VAT keywords. A line with "MwSt" is still the grand total if it says
+  "Gesamtbetrag inkl. MwSt" (matching `INCLUSIVE_VAT_RE`); only a line stating
+  a separate VAT amount is skipped — this prevents "Summe inkl. MwSt 149,00"
+  from being discarded when it's the actual total.
+- **Delivery/order/due dates are never used as the expense date; an invoice-date
+  label beats a generic "Datum".** `findDate()` prioritizes `INVOICE_DATE_LABEL_RE`
+  (Rechnungsdatum, invoice date) even on combined lines like
+  "Rechnungsdatum/Lieferdatum"; next checks generic "Datum"/"Date" labels that
+  aren't `OTHER_DATE_LABEL_RE` (delivery, order, due dates); finally uses the
+  first unlabelled date that isn't on a delivery/order/due line. Never return a
+  delivery date as the expense date — a combined "Rechnungsdatum/Lieferdatum"
+  line splits that precedence correctly.
+- **Currency = symbol nearest the total on its own line; else a neighbouring line
+  that repeats the total's figure; else neighbours only if they agree; else the
+  single most frequent on the page. Any disagreement or tie → no currency suggested.**
+  `findCurrency()` applies this precedence: (1) `currencyNearest()` on the total's
+  line; (2) a neighbouring line with `amountMatches()` that equals the total's amount
+  (e.g. "Amount charged: 25.00 USD" when "Total: 25.00"), take currency from it; (3)
+  if neighbours contain currencies, return it only if all neighbours agree on ONE
+  currency, else undefined if they disagree (more than one currency), else fall
+  through to (4); (4) frequency across the whole page, returning the single most
+  frequent currency. A tie (two currencies appear equally often) returns undefined.
+  This prevents "Amount charged: 25.00 USD" / "Total: 25.00" / "Displayed as: 22.50 EUR"
+  from picking EUR (frequency), and prevents "EUR prices shown" / "Total: 30.00" /
+  "USD equivalent available" from picking EUR (disagreement between neighbours).
+- **The parser prefers leaving a field empty to guessing.** This is the guiding
+  rule behind every fixture below and every future rule change: a missing value
+  is fine, a wrong value is not. When a signal is ambiguous (mixed VAT rates, a
+  currency disagreement between neighbouring lines, a buyer's own VAT ID) the
+  parser returns `undefined` for that field rather than picking the more-likely
+  answer.
+- **`TOTAL_RE` must include the German GROSS-total labels** (`brutto`,
+  `bruttobetrag`, `bruttosumme`, `endsumme`, `rechnungssumme`, `gesamtpreis`),
+  not just `gesamtbetrag`/`summe`/`total`. `\bsumme\b` does NOT match inside
+  `Endsumme` (no word boundary between "d" and "s") — `endsumme` needs its own
+  alternative. **A column-header line is not a total line even if it contains
+  the keyword** — "Pos Menge Einzelpreis Summe" must never claim the item row
+  below it as "the total on the next line". `findTotal` only reads the figure
+  from the next line when the label line has no amount of its own AND the
+  next line holds exactly one amount (an item row under a column header has
+  several). "Total due" / "50,00" works; a header over "1 2 50,00 100,00"
+  does not.
+- **No page-wide fallback.** If no total line is recognised, `findTotal`
+  returns `undefined` and Amount stays blank. The old "largest amount on the
+  page" fallback picked item rows and subtotals (a WRONG value) whenever the
+  total label wasn't recognised — don't reintroduce it.
+- **A plain space is a thousands separator ONLY on a total line with a single
+  amount.** `AMOUNT_RE` itself never accepts a space (`[.,']`), so an item row
+  like "2 125,00" (quantity + price) is never merged. `totalLineAmounts()` then
+  merges space groups back ("Gesamtbetrag 1 234,56 €" → 1234.56) only when the
+  total line holds exactly one amount whose integer part is 3 digits. A line
+  like "1 100,00 100,00" is ambiguous (two amounts) → nothing merged.
+  A leading minus belongs to the first group ("-1 234,56" → -1234.56). Known,
+  accepted ambiguity: a quantity written directly before the price ON the
+  total line ("Summe 2 125,00") merges to 2125 — indistinguishable from
+  "12 345,67"; realistic forms ("Summe 2 Artikel 125,00") don't merge.
+- **Savings/discount/change/tendered lines are never totals**, even though some
+  contain a generic total keyword: `"Total savings £4.50"` must not beat the
+  real `"Total £3.20"` on the same receipt. `isTotalLine()`'s `NOT_TOTAL_RE`
+  excludes `savings|saved|discount|rabatt|ersparnis|gespart|gegeben|
+  rückgeld|change|tendered`. **Cash-PAID totals are totals** — "Summe bar
+  12,00" / "Total paid by cash" — so `bar`/`cash` must not be added back.
+- **The buyer's own VAT ID is skipped, not just deprioritized.** A line
+  matching `ihre|your|kunde|customer|empfänger|recipient|buyer` (e.g. "Ihre
+  USt-IdNr.: DE111111111") is excluded from `findVatNumber` entirely — it can
+  win neither the labelled match nor the fallback, regardless of which order
+  it appears in relative to the vendor's own ID.
+- **`vatAmount` is parsed only to derive/validate the rate — it never fills a
+  form field.** `applyReceiptToForm` has no `vat_amount` in
+  `ReceiptFillableForm`; only `vatRate` (as `vat_rate` + ticking
+  `vat_included`) is ever written to the form. Don't add a `vat_amount` fill —
+  the form doesn't store it independently of `vat_rate`/`amount`.
+- **`findVendor` must skip any line containing an amount, and any recipient
+  line.** `COMPANY_RE` no longer includes `kg` (a weight unit on an item row,
+  not a company-form suffix — "Bananen 1,2 kg 2,39" is not a vendor); both the
+  company and plain-text branches also skip a line with an `AMOUNT_RE` match
+  and a recipient line — "An: Kaufnest GmbH" names the *recipient*, and would
+  otherwise win the company branch on its own `GmbH` suffix. A bare "An"/"To"
+  counts as a recipient label **only with a colon**: "To Fresh Bakery Ltd" and
+  "An Konditorei GmbH" are vendors. Multi-word labels (bill to, ship to,
+  Rechnungsempfänger, Lieferadresse) match with or without a colon.
+- **A credit note's own number beats the invoice it references.**
+  `findInvoiceNumber` checks `CREDIT_NOTE_INVOICE_RE`
+  (`gutschrift(s)?nr\.?`/`credit note no.`) across all lines before falling
+  back to the ordinary `Rechnung Nr.` pattern, and a line matching `zur
+  rechnung|to invoice|bezüglich` is skipped entirely in both passes — so
+  "Gutschrift Nr. GS-12" / "zur Rechnung Nr. RE-99" yields `GS-12`, not `RE-99`.
+- **`useReceiptAutofill`'s highlight set is a union across Fills, not a
+  replace.** A second "Fill from receipt" (a second attached receipt)
+  `setFilledFields(prev => new Set([...prev, ...filled]))`s onto the existing
+  set — replacing it would silently clear the first Fill's highlighted
+  fields the moment a second one succeeds.
+- **`ReceiptUploader`'s `openReceipt` wraps its async lookup in try/catch.**
+  The tab is opened synchronously (popup-blocker safe) *before* the `await`s;
+  if `currentTenantSchema()` or `createSignedUrl` throws (not just resolves
+  with an error), the blank tab must still be closed and the same "Couldn't
+  open receipt" toast fired — a bare `await` chain would otherwise leave a
+  dangling blank tab on an unhandled rejection.

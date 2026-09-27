@@ -150,7 +150,10 @@ Lightweight form primitives shared by all "Add"/"Edit" modals:
 
 `Input`/`Select`/`Textarea` all share one `inputClass` constant (token-based
 border/bg/focus-ring styling) — they're thin styled wrappers over native
-elements and forward all native props directly.
+elements and forward all native props directly. `className` on
+`Input`/`Select`/`Textarea` is appended to the base input style (used for the
+receipt-autofill highlight ring), not a replacement — no current caller
+relies on the old replace behavior.
 
 ## Modal.tsx
 

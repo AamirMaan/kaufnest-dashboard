@@ -11,6 +11,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { resolveVatAmount } from "../_lib/vatPreservation";
 import { ReceiptUploader } from "./ReceiptUploader";
+import { useReceiptAutofill } from "./useReceiptAutofill";
 import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -65,6 +66,10 @@ const blankForm: FormState = {
   vendor_vat_number: "", invoice_number: "", reason: "", receipts: [],
 };
 
+// A saved expense has no "untouched defaults" the way the Add modal's fresh
+// form does — only genuinely blank fields fill.
+const EDIT_AUTOFILL_BASELINE = {} as const;
+
 export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
@@ -72,6 +77,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receiptsBusy, setReceiptsBusy] = useState(false);
+  const autofill = useReceiptAutofill(form, setForm, EDIT_AUTOFILL_BASELINE);
 
   // Snapshot of the form exactly as it was populated from `expense`, used to
   // decide whether the user has touched any VAT-relevant input at all — see
@@ -90,6 +96,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
   }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
+    autofill.clearHighlight(key);
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -155,6 +162,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     }
 
     dispatch(updateExpense(data));
+    autofill.reset();
 
     const log = await writeAuditLog(supabase, {
       userId: user!.id,
@@ -175,16 +183,21 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
     onClose();
   }
 
+  function handleClose() {
+    autofill.reset();
+    onClose();
+  }
+
   return (
     <Modal
       title="Edit Expense"
       open={!!expense}
-      onClose={onClose}
+      onClose={handleClose}
       footer={
         <>
-          <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" form="edit-expense-form" disabled={saving || receiptsBusy}>
-            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Save Changes"}
+          <Button variant="secondary" type="button" onClick={handleClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" form="edit-expense-form" disabled={saving || receiptsBusy || autofill.fillingPath !== null}>
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : autofill.fillingPath ? "Reading receipt…" : "Save Changes"}
           </Button>
         </>
       }
@@ -202,14 +215,24 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
 
         <Row>
           <Field label="Category" required>
-            <Select value={form.category} onChange={(e) => set("category", e.target.value as ExpenseCategory)}>
+            <Select
+              value={form.category}
+              onChange={(e) => set("category", e.target.value as ExpenseCategory)}
+              className={autofill.highlight("category")}
+            >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
               ))}
             </Select>
           </Field>
           <Field label="Date" required>
-            <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} required />
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(e) => set("date", e.target.value)}
+              required
+              className={autofill.highlight("date")}
+            />
           </Field>
         </Row>
 
@@ -218,10 +241,21 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
             {/* No `min` — a credit note is a negative expense, and the browser's
                 own constraint validation would otherwise block Save before
                 `handleSubmit` ever runs. See the amount comment above. */}
-            <Input type="number" step="0.01" value={form.amount} onChange={(e) => set("amount", e.target.value)} required />
+            <Input
+              type="number"
+              step="0.01"
+              value={form.amount}
+              onChange={(e) => set("amount", e.target.value)}
+              required
+              className={autofill.highlight("amount")}
+            />
           </Field>
           <Field label="Currency" required>
-            <Select value={form.currency} onChange={(e) => set("currency", e.target.value as Currency)}>
+            <Select
+              value={form.currency}
+              onChange={(e) => set("currency", e.target.value as Currency)}
+              className={autofill.highlight("currency")}
+            >
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
           </Field>
@@ -236,7 +270,12 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
         )}
 
         <Field label="Vendor">
-          <Input value={form.vendor} onChange={(e) => set("vendor", e.target.value)} placeholder="Optional" />
+          <Input
+            value={form.vendor}
+            onChange={(e) => set("vendor", e.target.value)}
+            placeholder="Optional"
+            className={autofill.highlight("vendor")}
+          />
         </Field>
 
         <Row>
@@ -245,6 +284,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
               value={form.invoice_number}
               onChange={(e) => set("invoice_number", e.target.value)}
               placeholder="e.g. RE-2024-001"
+              className={autofill.highlight("invoice_number")}
             />
           </Field>
           <Field label="Vendor VAT Number">
@@ -252,6 +292,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
               value={form.vendor_vat_number}
               onChange={(e) => set("vendor_vat_number", e.target.value)}
               placeholder="e.g. DE123456789"
+              className={autofill.highlight("vendor_vat_number")}
             />
           </Field>
         </Row>
@@ -272,6 +313,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
                   step="0.1"
                   value={form.vat_rate}
                   onChange={(e) => set("vat_rate", e.target.value)}
+                  className={autofill.highlight("vat_rate")}
                 />
               </Field>
               {/* Gated on "is a number", not "> 0" — a credit note's breakdown
@@ -293,6 +335,8 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
             onExpenseCreated={async () => expense!.id}
             onBusyChange={setReceiptsBusy}
             disabled={saving}
+            onFillFromReceipt={autofill.fillFromReceipt}
+            fillingPath={autofill.fillingPath}
           />
         </Field>
 

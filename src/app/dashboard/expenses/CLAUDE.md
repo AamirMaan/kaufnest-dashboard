@@ -63,18 +63,75 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `amount > 0` guard here makes every imported credit note permanently
   uneditable — see the SKILL.md gotcha before reinstating one.
 - `_components/ReceiptUploader.tsx` — thumbnail strip, add, remove,
-  per-file progress for an expense's image receipts. Used by both
-  `AddExpenseModal` and `EditExpenseModal`. Same model as `ImageGrid.tsx`
-  (`dashboard/listings/`): Storage upload/delete happen immediately, but the
-  `receipts` array itself is local form state until the surrounding modal
-  saves — this component never writes to the `expenses` table. Thumbnails
-  are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
-  bucket is private, unlike `listing-images`.
+  per-file progress for an expense's receipts — **images or PDFs**
+  (`RECEIPT_ACCEPT`/`isAcceptedReceiptType` from `_lib/receiptFileType.ts`).
+  Used by both `AddExpenseModal` and `EditExpenseModal`. Same model as
+  `ImageGrid.tsx` (`dashboard/listings/`): Storage upload/delete happen
+  immediately, but the `receipts` array itself is local form state until the
+  surrounding modal saves — this component never writes to the `expenses`
+  table. Thumbnails are signed URLs (`createSignedUrl`, 60s) since the
+  `expense-receipts` bucket is private, unlike `listing-images`. A PDF
+  receipt renders as a file tile (`isPdfReceipt`) instead of a thumbnail —
+  clicking it calls `openReceipt`, which opens a blank tab synchronously
+  (popup-blocker safe) then points it at a freshly-signed 60s URL. The
+  module-level `currentTenantSchema()` helper is the single `getSession()` →
+  `app_metadata.tenant_schema` lookup, used by the signed-URL effect,
+  `handleFiles`, `removeReceipt`, and `openReceipt`. Optional props
+  `onFillFromReceipt`/`fillingPath` add a per-tile "Fill" button (only
+  rendered when `onFillFromReceipt` is passed) that calls back into
+  `useReceiptAutofill` — the remove button is also disabled while that
+  receipt's `fillingPath` matches, so a receipt can't be removed mid-read.
+- `_lib/parseReceipt.ts` (+ colocated `.test.ts`) — pure, rule-based receipt
+  text → suggested expense fields (German/English); `parseReceipt(text, options?)
+  → ParsedReceipt`, `toNumber(raw: string) → number`. Input comes from
+  `extractReceiptText` (below). Every field is optional — the
+  form fills only blank fields.
+- `_lib/extractReceiptText.ts` (+ colocated `.test.ts`) — **browser-only**
+  text extraction for a receipt file: `extractReceiptText(file: Blob, mime:
+  string) → Promise<{ text: string; source: "pdf-text" | "ocr" }>`,
+  `hasUsablePdfText(text: string) → boolean`, `MIN_PDF_TEXT_CHARS = 40`. A
+  PDF's text layer is read via `pdfjs-dist`; when it has fewer than
+  `MIN_PDF_TEXT_CHARS` non-whitespace characters (a scan), page 1 is rendered
+  to a canvas and OCR'd via `tesseract.js` (`deu`+`eng`). A non-PDF file
+  (image) is OCR'd directly. Both libraries are imported only via dynamic
+  `import()` inside the function bodies — never at module top level — so the
+  module loads cleanly under Jest (`testEnvironment: node`) and neither
+  library enters the main bundle. Only `hasUsablePdfText` is unit-tested;
+  `extractReceiptText` itself needs a real browser (pdf.js worker, canvas,
+  tesseract WASM) and isn't exercised by Jest. Not yet wired into any
+  component — the next task calls it from a hook.
+- `_components/useReceiptAutofill.ts` — the "Fill from receipt" hook shared by
+  `AddExpenseModal`/`EditExpenseModal`: `useReceiptAutofill(form, setForm,
+  baseline)` returns `{ fillingPath, fillFromReceipt, highlight,
+  clearHighlight, reset }`. Data flow: Fill → download blob
+  (tenant-checked path via `pathFromStoredReceipt`) → `extractReceiptText`
+  (dynamic import) → `parseReceipt` → `applyReceiptToForm` against the latest
+  form. `fillFromReceipt` reads the form from a `useRef` synced in an effect
+  (not during render — this repo's `react-hooks/refs` lint rule forbids that),
+  so a slow OCR read merges into whatever the user has typed by the time it
+  resolves, not a stale click-time snapshot. A `generation` counter (bumped by
+  `reset()` and on unmount) makes an abandoned read a no-op — see the
+  SKILL.md gotcha; the Add modal never unmounts (`page.tsx` only toggles
+  `open`), so without this a Cancel during a slow OCR read would have the
+  read's result land on the next Add session instead.
+- `_lib/applyReceiptToForm.ts` (+ colocated `.test.ts`) — pure, non-overwriting
+  merge of a `ParsedReceipt` into an expense form. Exports `ReceiptFillableForm`
+  (shared interface for Add and Edit modals), `ReceiptField` (its keys), `ReceiptFillBaseline`
+  (defaults that count as "untouched"), and `applyReceiptToForm<F>(form, parsed, baseline)
+  → { form, filled }`. The Add modal passes its defaults as the baseline
+  (so today/EUR/other can be replaced); the Edit modal passes `{}` (so only blank fields fill).
+  VAT fills only while "Amount includes VAT" is unticked. Returns both the merged form
+  and the list of fields whose value actually changed, for UI highlighting and toasts.
 - `_lib/receiptPath.ts` (+ colocated `.test.ts`) — `EXPENSE_RECEIPTS_BUCKET`,
   `buildReceiptPath(tenantSchema, expenseId, fileName)`,
   `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
   is discarded in favour of a UUID, same reasoning as the listings sibling
   `storagePath.ts`.
+- `_lib/receiptFileType.ts` (+ colocated `.test.ts`) — pure
+  `RECEIPT_ACCEPT` (`"image/*,application/pdf"`, the file-picker `accept`
+  string), `isAcceptedReceiptType(mime)`, `isPdfReceipt(receipt)`. A receipt
+  may be any image or a PDF — `ReceiptUploader` rejects everything else
+  before it reaches Storage.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -180,7 +237,10 @@ editable fields.
 
 `Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
 uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
-(migration `046_expense_receipts.sql`). `AddExpenseModal` supports
+(migration `046_expense_receipts.sql`). A receipt may be an image or a PDF
+(`mime` is `file.type` as-is, so a PDF's stored mime is `application/pdf`) —
+no bucket/migration change was needed, since `046` sets no
+`allowed_mime_types`. `AddExpenseModal` supports
 attaching a receipt before the rest of the form is filled in: it generates
 the expense's `id` client-side (`crypto.randomUUID()`, held in `pendingId`
 state) as soon as the modal opens, and hands that id to `ReceiptUploader`
@@ -217,6 +277,10 @@ tenant hasn't had migration 046 applied yet.
   by every CRUD feature
 - `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
 - `types` (`Expense`, `ExpenseCategory`)
+- `pdfjs-dist`, `tesseract.js` — dynamically imported only, inside
+  `_lib/extractReceiptText.ts`'s function bodies; never a top-level import
+  (bundle size + SSR safety — see that file's bullet above and the SKILL.md
+  gotcha)
 
 ## CSV import/export
 
@@ -402,4 +466,6 @@ Rules that are easy to get wrong and are pinned by
 
 `npx jest dashboard/expenses` runs `_store/expensesSlice.test.ts`,
 `_lib/expenseCategory.test.ts`, `_lib/vatPreservation.test.ts`,
-`_lib/receiptPath.test.ts` and `_components/expenseImportFormats.test.ts`.
+`_lib/receiptPath.test.ts`, `_lib/extractReceiptText.test.ts` (only
+`hasUsablePdfText` — see its bullet above) and
+`_components/expenseImportFormats.test.ts`.

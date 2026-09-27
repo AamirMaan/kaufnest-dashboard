@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
@@ -11,6 +11,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { ReceiptUploader } from "./ReceiptUploader";
+import { useReceiptAutofill } from "./useReceiptAutofill";
 import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -67,6 +68,14 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [receiptsBusy, setReceiptsBusy] = useState(false);
 
+  // Values that still count as "untouched" for autofill — a receipt may
+  // replace today's date, EUR and "other", never anything typed.
+  const autofillBaseline = useMemo(() => {
+    const d = makeDefaults(defaultVatRate);
+    return { currency: d.currency, category: d.category, date: d.date };
+  }, [defaultVatRate]);
+  const autofill = useReceiptAutofill(form, setForm, autofillBaseline);
+
   // Client-generated id for a not-yet-saved expense — lets ReceiptUploader
   // build a real Storage path immediately with NO early row insert, so
   // there's nothing to clean up if the user cancels. (An earlier version of
@@ -94,6 +103,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
   }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
+    autofill.clearHighlight(key);
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -170,6 +180,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
     if (log) dispatch(addAuditLog(log));
 
     setForm(makeDefaults(defaultVatRate));
+    autofill.reset();
     setSaving(false);
     onSuccess?.(data.title);
     onClose();
@@ -177,6 +188,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
 
   function handleClose() {
     setForm(makeDefaults(defaultVatRate));
+    autofill.reset();
     setError(null);
     onClose();
   }
@@ -191,8 +203,8 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
           <Button variant="secondary" type="button" onClick={handleClose} disabled={saving || receiptsBusy}>
             Cancel
           </Button>
-          <Button type="submit" form="add-expense-form" disabled={saving || receiptsBusy}>
-            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : "Add Expense"}
+          <Button type="submit" form="add-expense-form" disabled={saving || receiptsBusy || autofill.fillingPath !== null}>
+            {saving ? "Saving…" : receiptsBusy ? "Uploading…" : autofill.fillingPath ? "Reading receipt…" : "Add Expense"}
           </Button>
         </>
       }
@@ -218,6 +230,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             <Select
               value={form.category}
               onChange={(e) => set("category", e.target.value as ExpenseCategory)}
+              className={autofill.highlight("category")}
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -233,6 +246,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
               value={form.date}
               onChange={(e) => set("date", e.target.value)}
               required
+              className={autofill.highlight("date")}
             />
           </Field>
         </Row>
@@ -250,6 +264,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
               onChange={(e) => set("amount", e.target.value)}
               placeholder="0.00"
               required
+              className={autofill.highlight("amount")}
             />
           </Field>
 
@@ -257,6 +272,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             <Select
               value={form.currency}
               onChange={(e) => set("currency", e.target.value as Currency)}
+              className={autofill.highlight("currency")}
             >
               {CURRENCIES.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -270,6 +286,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             value={form.vendor}
             onChange={(e) => set("vendor", e.target.value)}
             placeholder="e.g. DHL, Google Ads…"
+            className={autofill.highlight("vendor")}
           />
         </Field>
 
@@ -279,6 +296,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
               value={form.invoice_number}
               onChange={(e) => set("invoice_number", e.target.value)}
               placeholder="e.g. RE-2024-001"
+              className={autofill.highlight("invoice_number")}
             />
           </Field>
           <Field label="Vendor VAT Number">
@@ -286,6 +304,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
               value={form.vendor_vat_number}
               onChange={(e) => set("vendor_vat_number", e.target.value)}
               placeholder="e.g. DE123456789"
+              className={autofill.highlight("vendor_vat_number")}
             />
           </Field>
         </Row>
@@ -306,6 +325,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
                   step="0.1"
                   value={form.vat_rate}
                   onChange={(e) => set("vat_rate", e.target.value)}
+                  className={autofill.highlight("vat_rate")}
                 />
               </Field>
               {/* Gated on "is a number", not "> 0" — a credit note's breakdown
@@ -327,6 +347,8 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             onExpenseCreated={handleExpenseCreated}
             onBusyChange={setReceiptsBusy}
             disabled={saving}
+            onFillFromReceipt={autofill.fillFromReceipt}
+            fillingPath={autofill.fillingPath}
           />
         </Field>
 
