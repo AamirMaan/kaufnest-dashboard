@@ -208,25 +208,32 @@ export function ReceiptUploader({
     // Open synchronously (inside the click) so popup blockers allow it, then
     // point it at a freshly signed URL — the thumbnail URLs expire after 60s.
     const tab = window.open("", "_blank");
-    const tenantSchema = await currentTenantSchema();
-    const path = tenantSchema ? pathFromStoredReceipt(receipt, tenantSchema) : null;
-    const signed = path
-      ? await createClient().storage.from(EXPENSE_RECEIPTS_BUCKET).createSignedUrl(path, 60)
-      : null;
-    if (!signed?.data?.signedUrl) {
+    try {
+      const tenantSchema = await currentTenantSchema();
+      const path = tenantSchema ? pathFromStoredReceipt(receipt, tenantSchema) : null;
+      const signed = path
+        ? await createClient().storage.from(EXPENSE_RECEIPTS_BUCKET).createSignedUrl(path, 60)
+        : null;
+      if (!signed?.data?.signedUrl) {
+        tab?.close();
+        toastError("Couldn't open receipt", "Try again in a moment.");
+        return;
+      }
+      if (!tab) {
+        toastError(
+          "Couldn't open receipt",
+          "Your browser blocked the new tab — allow pop-ups for this site and try again."
+        );
+        return;
+      }
+      tab.opener = null;
+      tab.location.href = signed.data.signedUrl;
+    } catch {
+      // currentTenantSchema()/createSignedUrl can throw (session lookup,
+      // network) — the blank tab must never be left dangling on failure.
       tab?.close();
       toastError("Couldn't open receipt", "Try again in a moment.");
-      return;
     }
-    if (!tab) {
-      toastError(
-        "Couldn't open receipt",
-        "Your browser blocked the new tab — allow pop-ups for this site and try again."
-      );
-      return;
-    }
-    tab.opener = null;
-    tab.location.href = signed.data.signedUrl;
   }
 
   return (

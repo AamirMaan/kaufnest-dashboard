@@ -588,3 +588,64 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   This prevents "Amount charged: 25.00 USD" / "Total: 25.00" / "Displayed as: 22.50 EUR"
   from picking EUR (frequency), and prevents "EUR prices shown" / "Total: 30.00" /
   "USD equivalent available" from picking EUR (disagreement between neighbours).
+- **The parser prefers leaving a field empty to guessing.** This is the guiding
+  rule behind every fixture below and every future rule change: a missing value
+  is fine, a wrong value is not. When a signal is ambiguous (mixed VAT rates, a
+  currency disagreement between neighbouring lines, a buyer's own VAT ID) the
+  parser returns `undefined` for that field rather than picking the more-likely
+  answer.
+- **`TOTAL_RE` must include the German GROSS-total labels** (`brutto`,
+  `bruttobetrag`, `bruttosumme`, `endsumme`, `rechnungssumme`, `gesamtpreis`),
+  not just `gesamtbetrag`/`summe`/`total`. `\bsumme\b` does NOT match inside
+  `Endsumme` (no word boundary between "d" and "s") — `endsumme` needs its own
+  alternative. **A column-header line is not a total line even if it contains
+  the keyword** — "Pos Menge Einzelpreis Summe" must never claim the item row
+  below it as "the total on the next line". `findTotal`'s next-line fallback is
+  gated on `isLabelAloneLine()`: only when the label has no other alphabetic
+  words besides the total keyword itself (plus an optional currency
+  symbol/code or colon) is the line below trusted as the figure.
+- **A plain space is never a thousands separator in `AMOUNT_RE`.** A qty/price
+  row like `"1 100,00 100,00"` (quantity 1, unit price 100,00, line total
+  100,00) must not read `"1 100,00"` as 1100 — the separator class is
+  `[.,']`, with the space deliberately dropped. `toNumber()` itself still
+  strips spaces (`"1 234,56" → 1234.56` stays correct) — only `AMOUNT_RE`'s
+  *matching* changed, not the numeric conversion.
+- **Savings/discount/cash/change lines are never totals**, even though some
+  contain a generic total keyword: `"Total savings £4.50"` must not beat the
+  real `"Total £3.20"` on the same receipt. `isTotalLine()`'s `NOT_TOTAL_RE`
+  excludes `savings|saved|discount|rabatt|ersparnis|gespart|gegeben|
+  rückgeld|change|tendered|bar|cash`.
+- **The buyer's own VAT ID is skipped, not just deprioritized.** A line
+  matching `ihre|your|kunde|customer|empfänger|recipient|buyer` (e.g. "Ihre
+  USt-IdNr.: DE111111111") is excluded from `findVatNumber` entirely — it can
+  win neither the labelled match nor the fallback, regardless of which order
+  it appears in relative to the vendor's own ID.
+- **`vatAmount` is parsed only to derive/validate the rate — it never fills a
+  form field.** `applyReceiptToForm` has no `vat_amount` in
+  `ReceiptFillableForm`; only `vatRate` (as `vat_rate` + ticking
+  `vat_included`) is ever written to the form. Don't add a `vat_amount` fill —
+  the form doesn't store it independently of `vat_rate`/`amount`.
+- **`findVendor` must skip any line containing an amount, and any recipient
+  line.** `COMPANY_RE` no longer includes `kg` (a weight unit on an item row,
+  not a company-form suffix — "Bananen 1,2 kg 2,39" is not a vendor); both the
+  company and plain-text branches also skip a line with an `AMOUNT_RE` match
+  and a line matching `^(an|to|bill to|rechnungsempfänger|lieferadresse|ship
+  to)\b[:\s]` — "An: Kaufnest GmbH" names the *recipient*, and would otherwise
+  win the company branch on its own `GmbH` suffix.
+- **A credit note's own number beats the invoice it references.**
+  `findInvoiceNumber` checks `CREDIT_NOTE_INVOICE_RE`
+  (`gutschrift(s)?nr\.?`/`credit note no.`) across all lines before falling
+  back to the ordinary `Rechnung Nr.` pattern, and a line matching `zur
+  rechnung|to invoice|bezüglich` is skipped entirely in both passes — so
+  "Gutschrift Nr. GS-12" / "zur Rechnung Nr. RE-99" yields `GS-12`, not `RE-99`.
+- **`useReceiptAutofill`'s highlight set is a union across Fills, not a
+  replace.** A second "Fill from receipt" (a second attached receipt)
+  `setFilledFields(prev => new Set([...prev, ...filled]))`s onto the existing
+  set — replacing it would silently clear the first Fill's highlighted
+  fields the moment a second one succeeds.
+- **`ReceiptUploader`'s `openReceipt` wraps its async lookup in try/catch.**
+  The tab is opened synchronously (popup-blocker safe) *before* the `await`s;
+  if `currentTenantSchema()` or `createSignedUrl` throws (not just resolves
+  with an error), the blank tab must still be closed and the same "Couldn't
+  open receipt" toast fired — a bare `await` chain would otherwise leave a
+  dangling blank tab on an unhandled rejection.

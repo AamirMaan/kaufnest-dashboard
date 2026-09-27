@@ -28,8 +28,10 @@ export interface ParseReceiptOptions {
 
 // A money amount always has exactly two decimals on a receipt. The
 // lookarounds stop a date like 12.03.2026 from yielding "12.03", and stop a
-// match starting mid-number.
-const AMOUNT_RE = /(?<![\d.,])-?\d{1,3}(?:[.,' ]\d{3})*[.,]\d{2}(?![.,]?\d)|(?<![\d.,])-?\d+[.,]\d{2}(?![.,]?\d)/g;
+// match starting mid-number. A plain space is deliberately NOT a thousands
+// separator here (unlike `toNumber`, which strips spaces) — a qty/price row
+// like "1 100,00 100,00" would otherwise read "1 100,00" as 1100.
+const AMOUNT_RE = /(?<![\d.,])-?\d{1,3}(?:[.,']\d{3})*[.,]\d{2}(?![.,]?\d)|(?<![\d.,])-?\d+[.,]\d{2}(?![.,]?\d)/g;
 
 /** "1.234,56" / "1,234.56" / "1234,56" / "-12.00" → number. The LAST separator is the decimal point. */
 export function toNumber(raw: string): number {
@@ -40,17 +42,39 @@ export function toNumber(raw: string): number {
 }
 
 const TOTAL_RE =
-  /\b(gesamtbetrag|gesamtsumme|gesamt|summe|endbetrag|rechnungsbetrag|zu zahlen|zahlbetrag|total|amount due|balance due|betrag)\b/i;
+  /\b(gesamtbetrag|gesamtsumme|gesamtpreis|gesamt|summe|endsumme|endbetrag|rechnungsbetrag|rechnungssumme|brutto|bruttobetrag|bruttosumme|zu zahlen|zahlbetrag|total|amount due|balance due|betrag)\b/i;
 const SUBTOTAL_RE = /(zwischensumme|sub-?total|netto|\bnet\b)/i;
 const VAT_WORD_RE = /(mwst|\bust\b|vat|steuer|\btax\b)/i;
 // "Gesamtbetrag inkl. MwSt" / "Total incl. VAT" IS the grand total — only
 // a line that states a VAT figure ("Summe MwSt 7,13") is not.
 const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|enth|enthalten)\b\.?\s*(\d{1,2}(?:[.,]\d{1,2})?\s?%\s*)?(mwst|ust|vat|steuer|tax)/i;
+// A line naming cash tendered, change given back, or a discount/savings
+// figure is never the grand total — even though some contain a generic
+// total keyword ("Total savings £4.50", "Gegebener Betrag 150,00").
+const NOT_TOTAL_RE =
+  /(savings|saved|discount|rabatt|ersparnis|gespart|gegeben|rückgeld|change|tendered|\bbar\b|\bcash\b)/i;
 
-/** A grand-total line: a total keyword, not a subtotal, and VAT only mentioned as "incl. VAT". */
+/** A grand-total line: a total keyword, not a subtotal/savings/cash line, and VAT only mentioned as "incl. VAT". */
 function isTotalLine(line: string): boolean {
-  if (!TOTAL_RE.test(line) || SUBTOTAL_RE.test(line)) return false;
+  if (!TOTAL_RE.test(line) || SUBTOTAL_RE.test(line) || NOT_TOTAL_RE.test(line)) return false;
   return !VAT_WORD_RE.test(line) || INCLUSIVE_VAT_RE.test(line);
+}
+
+// A currency symbol/code or a bare colon may sit alongside the total
+// keyword without breaking the "label is alone on its line" test below.
+const CURRENCY_TOKEN_RE = /€|£|\$|\bEUR\b|\bUSD\b|\bGBP\b/gi;
+
+/**
+ * True when a total-line's label has no other alphabetic words besides the
+ * total keyword itself (plus an optional currency symbol/code or colon) —
+ * i.e. the label is effectively alone on its line. A column-header row like
+ * "Pos Menge Einzelpreis Summe" also contains the word "Summe" but is not
+ * alone, so it must never trigger the next-line total fallback below.
+ */
+function isLabelAloneLine(line: string): boolean {
+  const withoutTotal = line.replace(TOTAL_RE, " ");
+  const withoutCurrency = withoutTotal.replace(CURRENCY_TOKEN_RE, " ");
+  return !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(withoutCurrency);
 }
 
 interface LocatedAmount {
@@ -85,8 +109,13 @@ function findTotal(lines: string[]): LocatedAmount | undefined {
   let best: LocatedAmount | undefined;
   lines.forEach((line, i) => {
     if (!isTotalLine(line)) return;
-    // PDF text and OCR often put the figure on the line after its label.
-    best = larger(best, largestOnLine(lines, i) ?? largestOnLine(lines, i + 1));
+    // PDF text and OCR often put the figure on the line after its label —
+    // but only trust that fallback when the label is alone on its line, so
+    // a column-header row ("Pos Menge Einzelpreis Summe") never claims the
+    // first item row below it as "the total on the next line".
+    const onThisLine = largestOnLine(lines, i);
+    const fallback = onThisLine || !isLabelAloneLine(line) ? undefined : largestOnLine(lines, i + 1);
+    best = larger(best, onThisLine ?? fallback);
   });
   if (best) return best;
   lines.forEach((_, i) => {
@@ -201,11 +230,14 @@ const VAT_ID_RE =
   /\b(AT|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|FR|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK|XI|GB) ?([0-9A-Z]{8,12})\b/g;
 const VAT_ID_LABEL_RE = /(ust-?id|ust\.?-?idnr|umsatzsteuer-?id|vat\s*(no|number|id|reg)|\buid\b|tax id)/i;
 const BANK_LINE_RE = /(iban|bic|swift|konto|bank)/i;
+// The buyer's own VAT ID ("Ihre USt-IdNr.", "Your VAT No.") is never the
+// vendor's — skip it entirely rather than risk it winning as the fallback.
+const BUYER_VAT_LINE_RE = /(ihre|your|kunde|customer|empfänger|recipient|buyer)/i;
 
 function findVatNumber(lines: string[]): string | undefined {
   let fallback: string | undefined;
   for (const line of lines) {
-    if (BANK_LINE_RE.test(line)) continue;
+    if (BANK_LINE_RE.test(line) || BUYER_VAT_LINE_RE.test(line)) continue;
     for (const m of line.matchAll(VAT_ID_RE)) {
       if ((m[2].match(/\d/g) ?? []).length < 7) continue;
       const id = `${m[1]}${m[2]}`;
@@ -218,9 +250,22 @@ function findVatNumber(lines: string[]): string | undefined {
 
 const INVOICE_RE =
   /(rechnungs?-?\s?(?:nummer|nr\.?)|rechnung\s+nr\.?|beleg-?\s?(?:nummer|nr\.?)|bon-?\s?nr\.?|invoice\s*(?:no\.?|number|#))\s*[:#.]?\s*([A-Za-z0-9][A-Za-z0-9\-/.]{2,})/i;
+// A credit note's own number ("Gutschrift Nr. GS-12") must win over the
+// original invoice it references ("zur Rechnung Nr. RE-99") — checked first.
+const CREDIT_NOTE_INVOICE_RE =
+  /(gutschrifts?-?\s?(?:nummer|nr\.?)|credit\s*note\s*(?:no\.?|number)?)\s*[:#.]?\s*([A-Za-z0-9][A-Za-z0-9\-/.]{2,})/i;
+// A line pointing back at the original invoice ("zur Rechnung Nr. RE-99",
+// "to invoice", "bezüglich Rechnung ...") never yields the number itself.
+const REFERS_TO_INVOICE_RE = /(zur rechnung|to invoice|bezüglich)/i;
 
 function findInvoiceNumber(lines: string[]): string | undefined {
   for (const line of lines) {
+    if (REFERS_TO_INVOICE_RE.test(line)) continue;
+    const m = CREDIT_NOTE_INVOICE_RE.exec(line);
+    if (m && /\d/.test(m[2])) return m[2].replace(/[.]+$/, "");
+  }
+  for (const line of lines) {
+    if (REFERS_TO_INVOICE_RE.test(line)) continue;
     const m = INVOICE_RE.exec(line);
     if (m && /\d/.test(m[2])) return m[2].replace(/[.]+$/, "");
   }
@@ -299,17 +344,31 @@ function findDate(lines: string[], today: string): string | undefined {
 
 // ─── Vendor & category ────────────────────────────────────────────────────────
 
-const COMPANY_RE = /\b(gmbh|ag|ug|kg|ohg|e\.\s?k\.|ltd|limited|inc|llc|plc|s\.a\.|b\.v\.|se)\b/i;
+// "kg" is deliberately excluded — it's a weight unit on an item line
+// ("Bananen 1,2 kg 2,39"), not a company-form suffix.
+const COMPANY_RE = /\b(gmbh|ag|ug|ohg|e\.\s?k\.|ltd|limited|inc|llc|plc|s\.a\.|b\.v\.|se)\b/i;
 const NOT_VENDOR_RE =
-  /(rechnung|invoice|receipt|quittung|kassenbon|beleg|datum|date|tel|fax|www\.|http|@|str\.|straße|strasse|street|road|\b\d{5}\b|seite|page|kunde|customer)/i;
+  /(rechnung|invoice|receipt|quittung|kassenbon|beleg|datum|date|tel|fax|www\.|http|@|str\.|straße|strasse|street|road|\b\d{5}\b|seite|page|kunde|customer|gutschrift|credit note)/i;
+// "An: Kaufnest GmbH" / "Bill to: ..." names the RECIPIENT, not the vendor —
+// even a line that otherwise looks like a company name must be skipped.
+const RECIPIENT_LINE_RE = /^(an|to|bill to|rechnungsempfänger|lieferadresse|ship to)\b[:\s]/i;
 
 function findVendor(lines: string[]): string | undefined {
   const head = lines.slice(0, 10).map((l) => l.trim()).filter(Boolean);
-  const company = head.find((l) => COMPANY_RE.test(l) && !/@|www\.|http/i.test(l));
+  const company = head.find(
+    (l) => COMPANY_RE.test(l) && !/@|www\.|http/i.test(l) && amountsIn(l).length === 0 && !RECIPIENT_LINE_RE.test(l)
+  );
   if (company) return company.slice(0, 60);
   const plain = head
     .slice(0, 5)
-    .find((l) => !NOT_VENDOR_RE.test(l) && !/^\d/.test(l) && (l.match(/[A-Za-zÄÖÜäöüß]/g) ?? []).length >= 3);
+    .find(
+      (l) =>
+        !NOT_VENDOR_RE.test(l) &&
+        !/^\d/.test(l) &&
+        amountsIn(l).length === 0 &&
+        !RECIPIENT_LINE_RE.test(l) &&
+        (l.match(/[A-Za-zÄÖÜäöüß]/g) ?? []).length >= 3
+    );
   return plain?.slice(0, 60);
 }
 

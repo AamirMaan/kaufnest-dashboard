@@ -83,4 +83,12 @@ describe("applyReceiptToForm", () => {
     expect(form).toEqual(start);
     expect(filled).toEqual([]);
   });
+
+  it("ticks vat_included but reports no vat_rate change when the parsed rate already matches", () => {
+    const start = { ...addDefaults(), vat_included: false, vat_rate: "19" };
+    const { form, filled } = applyReceiptToForm(start, { vatRate: 19 }, ADD_BASELINE);
+    expect(form.vat_included).toBe(true);
+    expect(form.vat_rate).toBe("19");
+    expect(filled).toEqual(["vat_included"]);
+  });
 });

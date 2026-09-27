@@ -77,7 +77,9 @@ export function useReceiptAutofill<F extends ReceiptFillableForm>(
 
       if (filled.length > 0) {
         setForm(next);
-        setFilledFields(new Set(filled));
+        // Union, not replace — a second Fill (from a second receipt) must
+        // not clear the first Fill's highlights.
+        setFilledFields((prev) => new Set([...prev, ...filled]));
         success(
           `Filled ${filled.length} field${filled.length !== 1 ? "s" : ""} from receipt`,
           "Check the highlighted fields before saving."

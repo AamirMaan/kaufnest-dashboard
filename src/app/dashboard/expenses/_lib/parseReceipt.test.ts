@@ -244,4 +244,66 @@ describe("parseReceipt", () => {
     expect(parsed.amount).toBe(20);
     expect(parsed.currency).toBeUndefined();
   });
+
+  // ─── Final-review fixes ─────────────────────────────────────────────────
+
+  it("recognises Brutto as the grand total (German gross-total label)", () => {
+    const text = ["Netto 100,00", "MwSt 19% 19,00", "Brutto 119,00", "Bar 150,00", "Rückgeld 31,00"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 119, vatRate: 19 });
+  });
+
+  it("recognises Brutto over a non-amount line containing a date-like number", () => {
+    const text = ["Rechnung 2026.09", "Artikel 12,00", "Brutto 12,00"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 12 });
+  });
+
+  it("does not treat a column-header line as the total, and recognises Endsumme", () => {
+    const text = ["Pos Menge Einzelpreis Summe", "1 2 50,00 100,00", "Endsumme 119,00 €"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 119, currency: "EUR" });
+  });
+
+  it("does not read a space as a thousands separator in a qty/price row", () => {
+    const text = ["Gesamt", "1 100,00 100,00"].join("\n");
+    expect(parse(text).amount).toBe(100);
+  });
+
+  it("does not let 'Total savings' beat the real Total", () => {
+    const text = ["TESCO", "Total savings £4.50", "Total £3.20", "Cash £5.00", "Change £1.80"].join("\n");
+    expect(parse(text)).toMatchObject({ amount: 3.2, currency: "GBP" });
+  });
+
+  it("skips the buyer's own VAT ID (Ihre USt-IdNr.) in favour of the vendor's", () => {
+    const text = [
+      "Lieferant GmbH",
+      "USt-IdNr.: DE222222222",
+      "Ihre USt-IdNr.: DE111111111",
+      "Gesamtbetrag 100,00 €",
+    ].join("\n");
+    expect(parse(text).vendorVatNumber).toBe("DE222222222");
+  });
+
+  it("skips the buyer's own VAT ID even when it appears first", () => {
+    const text = [
+      "Lieferant GmbH",
+      "Ihre USt-IdNr.: DE111111111",
+      "USt-IdNr.: DE222222222",
+      "Gesamtbetrag 100,00 €",
+    ].join("\n");
+    expect(parse(text).vendorVatNumber).toBe("DE222222222");
+  });
+
+  it("does not mistake a weight unit ('kg') or an amount-bearing line for the vendor", () => {
+    const text = ["ALDI SÜD", "Bananen 1,2 kg 2,39", "Summe 2,39 €"].join("\n");
+    expect(parse(text).vendor).toBe("ALDI SÜD");
+  });
+
+  it("does not take the recipient ('An:') line as the vendor", () => {
+    const text = ["An: Kaufnest GmbH", "Musterstraße 1", "Rechnung", "Gesamtbetrag 10,00 €"].join("\n");
+    expect(parse(text).vendor).toBeUndefined();
+  });
+
+  it("prefers a credit note's own number over the original invoice it references", () => {
+    const text = ["Gutschrift Nr. GS-12", "zur Rechnung Nr. RE-99", "Gesamtbetrag -20,00 €"].join("\n");
+    expect(parse(text)).toMatchObject({ invoiceNumber: "GS-12", amount: -20 });
+  });
 });
