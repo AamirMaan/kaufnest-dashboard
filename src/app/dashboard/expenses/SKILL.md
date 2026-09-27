@@ -600,21 +600,27 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `Endsumme` (no word boundary between "d" and "s") — `endsumme` needs its own
   alternative. **A column-header line is not a total line even if it contains
   the keyword** — "Pos Menge Einzelpreis Summe" must never claim the item row
-  below it as "the total on the next line". `findTotal`'s next-line fallback is
-  gated on `isLabelAloneLine()`: only when the label has no other alphabetic
-  words besides the total keyword itself (plus an optional currency
-  symbol/code or colon) is the line below trusted as the figure.
-- **A plain space is never a thousands separator in `AMOUNT_RE`.** A qty/price
-  row like `"1 100,00 100,00"` (quantity 1, unit price 100,00, line total
-  100,00) must not read `"1 100,00"` as 1100 — the separator class is
-  `[.,']`, with the space deliberately dropped. `toNumber()` itself still
-  strips spaces (`"1 234,56" → 1234.56` stays correct) — only `AMOUNT_RE`'s
-  *matching* changed, not the numeric conversion.
-- **Savings/discount/cash/change lines are never totals**, even though some
+  below it as "the total on the next line". `findTotal` only reads the figure
+  from the next line when the label line has no amount of its own AND the
+  next line holds exactly one amount (an item row under a column header has
+  several). "Total due" / "50,00" works; a header over "1 2 50,00 100,00"
+  does not.
+- **No page-wide fallback.** If no total line is recognised, `findTotal`
+  returns `undefined` and Amount stays blank. The old "largest amount on the
+  page" fallback picked item rows and subtotals (a WRONG value) whenever the
+  total label wasn't recognised — don't reintroduce it.
+- **A plain space is a thousands separator ONLY on a total line with a single
+  amount.** `AMOUNT_RE` itself never accepts a space (`[.,']`), so an item row
+  like "2 125,00" (quantity + price) is never merged. `totalLineAmounts()` then
+  merges space groups back ("Gesamtbetrag 1 234,56 €" → 1234.56) only when the
+  total line holds exactly one amount whose integer part is 3 digits. A line
+  like "1 100,00 100,00" is ambiguous (two amounts) → nothing merged.
+- **Savings/discount/change/tendered lines are never totals**, even though some
   contain a generic total keyword: `"Total savings £4.50"` must not beat the
   real `"Total £3.20"` on the same receipt. `isTotalLine()`'s `NOT_TOTAL_RE`
   excludes `savings|saved|discount|rabatt|ersparnis|gespart|gegeben|
-  rückgeld|change|tendered|bar|cash`.
+  rückgeld|change|tendered`. **Cash-PAID totals are totals** — "Summe bar
+  12,00" / "Total paid by cash" — so `bar`/`cash` must not be added back.
 - **The buyer's own VAT ID is skipped, not just deprioritized.** A line
   matching `ihre|your|kunde|customer|empfänger|recipient|buyer` (e.g. "Ihre
   USt-IdNr.: DE111111111") is excluded from `findVatNumber` entirely — it can
@@ -629,9 +635,11 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   line.** `COMPANY_RE` no longer includes `kg` (a weight unit on an item row,
   not a company-form suffix — "Bananen 1,2 kg 2,39" is not a vendor); both the
   company and plain-text branches also skip a line with an `AMOUNT_RE` match
-  and a line matching `^(an|to|bill to|rechnungsempfänger|lieferadresse|ship
-  to)\b[:\s]` — "An: Kaufnest GmbH" names the *recipient*, and would otherwise
-  win the company branch on its own `GmbH` suffix.
+  and a recipient line — "An: Kaufnest GmbH" names the *recipient*, and would
+  otherwise win the company branch on its own `GmbH` suffix. A bare "An"/"To"
+  counts as a recipient label **only with a colon**: "To Fresh Bakery Ltd" and
+  "An Konditorei GmbH" are vendors. Multi-word labels (bill to, ship to,
+  Rechnungsempfänger, Lieferadresse) match with or without a colon.
 - **A credit note's own number beats the invoice it references.**
   `findInvoiceNumber` checks `CREDIT_NOTE_INVOICE_RE`
   (`gutschrift(s)?nr\.?`/`credit note no.`) across all lines before falling

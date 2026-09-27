@@ -262,9 +262,9 @@ describe("parseReceipt", () => {
     expect(parse(text)).toMatchObject({ amount: 119, currency: "EUR" });
   });
 
-  it("does not read a space as a thousands separator in a qty/price row", () => {
+  it("does not read a qty/price row '1 100,00 100,00' as 1100 (ambiguous → left empty)", () => {
     const text = ["Gesamt", "1 100,00 100,00"].join("\n");
-    expect(parse(text).amount).toBe(100);
+    expect(parse(text).amount).toBeUndefined();
   });
 
   it("does not let 'Total savings' beat the real Total", () => {
@@ -305,5 +305,34 @@ describe("parseReceipt", () => {
   it("prefers a credit note's own number over the original invoice it references", () => {
     const text = ["Gutschrift Nr. GS-12", "zur Rechnung Nr. RE-99", "Gesamtbetrag -20,00 €"].join("\n");
     expect(parse(text)).toMatchObject({ invoiceNumber: "GS-12", amount: -20 });
+  });
+
+  // ─── Targeted fix (round 2 re-review regressions) ────────────────────────
+
+  it("reads a total on the next line after a multi-word label", () => {
+    expect(parse(["Item 1 15,00", "Item 2 200,00", "Total due", "50,00"].join("\n")).amount).toBe(50);
+    expect(parse(["Subtotal items 300,00", "Total amount payable", "50,00"].join("\n")).amount).toBe(50);
+  });
+
+  it("reads a space-grouped four-digit total", () => {
+    expect(parse("Gesamtbetrag 1 234,56 €")).toMatchObject({ amount: 1234.56, currency: "EUR" });
+  });
+
+  it("does not merge a quantity into an item price", () => {
+    expect(parse(["Anzahl 2 125,00", "Summe 125,00"].join("\n")).amount).toBe(125);
+  });
+
+  it("treats a cash-paid total as the total", () => {
+    expect(parse(["Artikel A 5,00", "Artikel B 99,00", "Summe bar 12,00"].join("\n")).amount).toBe(12);
+    expect(parse(["Subtotal 10,00", "Discount -6,80", "Total paid by cash 3,20"].join("\n")).amount).toBe(3.2);
+  });
+
+  it("leaves the amount empty when no total line is recognised", () => {
+    expect(parse(["Artikel 5,00", "Artikel 99,00"].join("\n")).amount).toBeUndefined();
+  });
+
+  it("keeps a vendor whose name starts with To or An", () => {
+    expect(parse(["To Fresh Bakery Ltd", "Some street 1", "Berlin", "Gesamtbetrag 10,00 €"].join("\n")).vendor).toBe("To Fresh Bakery Ltd");
+    expect(parse(["An Konditorei GmbH", "Hauptstr 1", "München", "Gesamtbetrag 10,00 €"].join("\n")).vendor).toBe("An Konditorei GmbH");
   });
 });

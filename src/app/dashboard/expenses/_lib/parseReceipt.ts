@@ -48,33 +48,17 @@ const VAT_WORD_RE = /(mwst|\bust\b|vat|steuer|\btax\b)/i;
 // "Gesamtbetrag inkl. MwSt" / "Total incl. VAT" IS the grand total — only
 // a line that states a VAT figure ("Summe MwSt 7,13") is not.
 const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|enth|enthalten)\b\.?\s*(\d{1,2}(?:[.,]\d{1,2})?\s?%\s*)?(mwst|ust|vat|steuer|tax)/i;
-// A line naming cash tendered, change given back, or a discount/savings
+// A line naming change given back, cash tendered, or a discount/savings
 // figure is never the grand total — even though some contain a generic
-// total keyword ("Total savings £4.50", "Gegebener Betrag 150,00").
-const NOT_TOTAL_RE =
-  /(savings|saved|discount|rabatt|ersparnis|gespart|gegeben|rückgeld|change|tendered|\bbar\b|\bcash\b)/i;
+// total keyword ("Total savings £4.50", "Gegebener Betrag 150,00"). A
+// cash-PAID total ("Summe bar 12,00", "Total paid by cash") IS the total,
+// so "bar"/"cash" alone must not appear here.
+const NOT_TOTAL_RE = /(savings|saved|discount|rabatt|ersparnis|gespart|gegeben|rückgeld|change|tendered)/i;
 
-/** A grand-total line: a total keyword, not a subtotal/savings/cash line, and VAT only mentioned as "incl. VAT". */
+/** A grand-total line: a total keyword, not a subtotal/savings/change line, and VAT only mentioned as "incl. VAT". */
 function isTotalLine(line: string): boolean {
   if (!TOTAL_RE.test(line) || SUBTOTAL_RE.test(line) || NOT_TOTAL_RE.test(line)) return false;
   return !VAT_WORD_RE.test(line) || INCLUSIVE_VAT_RE.test(line);
-}
-
-// A currency symbol/code or a bare colon may sit alongside the total
-// keyword without breaking the "label is alone on its line" test below.
-const CURRENCY_TOKEN_RE = /€|£|\$|\bEUR\b|\bUSD\b|\bGBP\b/gi;
-
-/**
- * True when a total-line's label has no other alphabetic words besides the
- * total keyword itself (plus an optional currency symbol/code or colon) —
- * i.e. the label is effectively alone on its line. A column-header row like
- * "Pos Menge Einzelpreis Summe" also contains the word "Summe" but is not
- * alone, so it must never trigger the next-line total fallback below.
- */
-function isLabelAloneLine(line: string): boolean {
-  const withoutTotal = line.replace(TOTAL_RE, " ");
-  const withoutCurrency = withoutTotal.replace(CURRENCY_TOKEN_RE, " ");
-  return !/[A-Za-zÀ-ÖØ-öø-ÿ]/.test(withoutCurrency);
 }
 
 interface LocatedAmount {
@@ -83,7 +67,12 @@ interface LocatedAmount {
   index: number; // character offset of the amount within its line
 }
 
-function amountMatches(line: string): { value: number; index: number }[] {
+interface AmountMatch {
+  value: number;
+  index: number;
+}
+
+function amountMatches(line: string): AmountMatch[] {
   return Array.from(line.matchAll(AMOUNT_RE), (m) => ({ value: toNumber(m[0]), index: m.index ?? 0 }));
 }
 
@@ -91,10 +80,31 @@ function amountsIn(line: string): number[] {
   return amountMatches(line).map((m) => m.value);
 }
 
-function largestOnLine(lines: string[], i: number): LocatedAmount | undefined {
+// Space-separated thousands groups directly before an amount: "1 " in "1 234,56".
+const SPACE_GROUPS_BEFORE_RE = /(?<![\d.,])(\d{1,3}(?: \d{3})*) $/;
+const THREE_DIGIT_AMOUNT_RE = /^-?\d{3}[.,]\d{2}/;
+
+/**
+ * Amounts on a grand-total line (or the line holding its figure). A plain
+ * space counts as a thousands separator ONLY here, and only when the line
+ * holds a single amount whose integer part is exactly 3 digits — so
+ * "Gesamtbetrag 1 234,56 €" reads 1234.56, while an item row "2 125,00"
+ * (quantity + price) is never merged, because item rows never come here.
+ */
+function totalLineAmounts(line: string): AmountMatch[] {
+  const matches = amountMatches(line);
+  if (matches.length !== 1) return matches;
+  const [only] = matches;
+  const token = THREE_DIGIT_AMOUNT_RE.exec(line.slice(only.index))?.[0];
+  const groups = token ? SPACE_GROUPS_BEFORE_RE.exec(line.slice(0, only.index))?.[1] : undefined;
+  if (!token || !groups) return matches;
+  return [{ value: toNumber(`${groups} ${token}`), index: only.index - groups.length - 1 }];
+}
+
+function largestOf(matches: AmountMatch[], line: number): LocatedAmount | undefined {
   let best: LocatedAmount | undefined;
-  for (const m of amountMatches(lines[i] ?? "")) {
-    if (!best || Math.abs(m.value) > Math.abs(best.amount)) best = { amount: m.value, line: i, index: m.index };
+  for (const m of matches) {
+    if (!best || Math.abs(m.value) > Math.abs(best.amount)) best = { amount: m.value, line, index: m.index };
   }
   return best;
 }
@@ -109,18 +119,21 @@ function findTotal(lines: string[]): LocatedAmount | undefined {
   let best: LocatedAmount | undefined;
   lines.forEach((line, i) => {
     if (!isTotalLine(line)) return;
-    // PDF text and OCR often put the figure on the line after its label —
-    // but only trust that fallback when the label is alone on its line, so
-    // a column-header row ("Pos Menge Einzelpreis Summe") never claims the
-    // first item row below it as "the total on the next line".
-    const onThisLine = largestOnLine(lines, i);
-    const fallback = onThisLine || !isLabelAloneLine(line) ? undefined : largestOnLine(lines, i + 1);
-    best = larger(best, onThisLine ?? fallback);
+    const own = totalLineAmounts(line);
+    if (own.length > 0) {
+      best = larger(best, largestOf(own, i));
+      return;
+    }
+    // PDF text and OCR often put the figure on the line after its label.
+    // Trust that only when the next line holds exactly one amount — a
+    // column-header row ("Pos Menge Einzelpreis Summe") is followed by an
+    // item row with several, which must never be read as the total.
+    const next = totalLineAmounts(lines[i + 1] ?? "");
+    if (next.length === 1) best = larger(best, largestOf(next, i + 1));
   });
-  if (best) return best;
-  lines.forEach((_, i) => {
-    best = larger(best, largestOnLine(lines, i));
-  });
+  // Deliberately no page-wide "largest amount" fallback: without a
+  // recognised total line the Amount stays empty. A guess would be the
+  // largest item row or subtotal — a wrong value, which is worse than none.
   return best;
 }
 
@@ -351,7 +364,9 @@ const NOT_VENDOR_RE =
   /(rechnung|invoice|receipt|quittung|kassenbon|beleg|datum|date|tel|fax|www\.|http|@|str\.|straße|strasse|street|road|\b\d{5}\b|seite|page|kunde|customer|gutschrift|credit note)/i;
 // "An: Kaufnest GmbH" / "Bill to: ..." names the RECIPIENT, not the vendor —
 // even a line that otherwise looks like a company name must be skipped.
-const RECIPIENT_LINE_RE = /^(an|to|bill to|rechnungsempfänger|lieferadresse|ship to)\b[:\s]/i;
+// A bare "An"/"To" is a recipient label only with a colon ("An: Kaufnest
+// GmbH") — "To Fresh Bakery Ltd" is a vendor. Multi-word labels need none.
+const RECIPIENT_LINE_RE = /^(?:(?:an|to)\s*:|(?:bill to|ship to|rechnungsempfänger|lieferadresse)\b)/i;
 
 function findVendor(lines: string[]): string | undefined {
   const head = lines.slice(0, 10).map((l) => l.trim()).filter(Boolean);
