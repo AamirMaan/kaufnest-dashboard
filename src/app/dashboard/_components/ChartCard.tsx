@@ -47,7 +47,7 @@ export function ChartCard({
       style={{ boxShadow: "var(--shadow-card)" }}
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-sm font-semibold text-(--color-text-base)">{title}</h2>
+        <h2 className="text-base font-semibold text-(--color-text-strong)">{title}</h2>
         {action}
       </div>
       <div className="mt-1 flex items-baseline gap-2 flex-wrap">

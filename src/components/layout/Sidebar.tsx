@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { BrandMark } from "./BrandMark";
 import {
   LayoutDashboard,
+  BarChart3,
   TrendingUp,
   TrendingDown,
   ShoppingCart,
@@ -43,6 +44,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Overview",
     href: "/dashboard",
     Icon: LayoutDashboard,
+    roles: ["super_admin", "admin", "accountant"],
+  },
+  {
+    label: "Analytics",
+    href: "/dashboard/analytics",
+    Icon: BarChart3,
     roles: ["super_admin", "admin", "accountant"],
   },
   {

@@ -1,27 +1,16 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Currency } from "@/types";
 import type { SalesOverview } from "../_lib/overviewTypes";
 import { ChartCard } from "./ChartCard";
 import { useChartKit } from "./useChartKit";
 
-function truncate(name: string, max = 22): string {
-  return name.length > max ? `${name.slice(0, max - 1)}…` : name;
-}
-
-export function TopProductsCard({
-  sales,
-  currency,
-}: {
-  sales: SalesOverview | null;
-  currency: Currency;
-}) {
+export function TopProductsCard({ sales, currency }: { sales: SalesOverview | null; currency: Currency }) {
   const kit = useChartKit(currency);
   // get_sales_overview already groups, sorts and limits to the top 5.
   const products = sales?.topProducts ?? [];
   const top = products[0];
-  const data = products.map((p) => ({ ...p, short: truncate(p.name) }));
+  const periodRevenue = sales?.revenue ?? 0;
 
   return (
     <ChartCard
@@ -30,23 +19,34 @@ export function TopProductsCard({
       meta={top ? `Best seller: ${top.name} · ${top.units} unit${top.units !== 1 ? "s" : ""}` : undefined}
       empty={products.length === 0}
     >
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={kit.colors.grid} horizontal={false} />
-          <XAxis type="number" {...kit.axis} tickFormatter={kit.compact} />
-          <YAxis type="category" dataKey="short" {...kit.axis} width={140} />
-          <Tooltip
-            {...kit.tooltip}
-            cursor={{ fill: kit.colors.grid, opacity: 0.4 }}
-            labelFormatter={(_, payload) => String(payload?.[0]?.payload?.name ?? "")}
-            formatter={(value, _name, item) => [
-              `${kit.money(Number(value ?? 0))} · ${item?.payload?.units ?? 0} units`,
-              "Revenue",
-            ]}
-          />
-          <Bar dataKey="revenue" name="Revenue" fill={kit.colors.positive} radius={[0, 3, 3, 0]} maxBarSize={22} />
-        </BarChart>
-      </ResponsiveContainer>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-(--color-text-muted) border-b border-(--color-border-subtle)">
+            <th className="py-2 pr-2 font-medium w-8">#</th>
+            <th className="py-2 pr-2 font-medium">Product</th>
+            <th className="py-2 pr-2 font-medium text-right">Units</th>
+            <th className="py-2 font-medium text-right">Revenue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((p, i) => {
+            const share = periodRevenue > 0 ? Math.min(100, (p.revenue / periodRevenue) * 100) : 0;
+            return (
+              <tr key={p.name} className="border-b border-(--color-border-subtle) last:border-0">
+                <td className="py-2.5 pr-2 text-(--color-text-faint) tabular-nums">{i + 1}</td>
+                <td className="py-2.5 pr-2 min-w-0">
+                  <p className="truncate max-w-[16rem] text-(--color-text-strong)" title={p.name}>{p.name}</p>
+                  <div className="mt-1 h-1 w-full max-w-[16rem] rounded-full bg-(--color-border-subtle)">
+                    <div className="h-1 rounded-full bg-(--color-primary)" style={{ width: `${share}%` }} />
+                  </div>
+                </td>
+                <td className="py-2.5 pr-2 text-right tabular-nums text-(--color-text-base)">{p.units.toLocaleString()}</td>
+                <td className="py-2.5 text-right tabular-nums font-medium text-(--color-text-strong)">{kit.money(p.revenue)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </ChartCard>
   );
 }
