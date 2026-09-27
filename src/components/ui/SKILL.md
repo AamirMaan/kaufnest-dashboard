@@ -174,16 +174,18 @@ no interactions, no hover affordance, no button semantics.
 
 `summaryTiles.ts` exports pure, tested helpers:
 - `moneyTile<T extends { currency }>(label, rows, value: (r) => number): SummaryTile | null`
-  — groups rows by currency and formats each via `formatCurrency(value, currency)`.
-  Returns `null` (hidden) when there are no rows or all values are exactly 0.
-  Negative values (e.g., credit notes) are real and still render.
+  — renders one line per row by calling `formatCurrency(value(r), r.currency)` for each row.
+  **Callers must pass rows that are already grouped by currency** (e.g., the result of
+  a `get_*_summary` RPC). This function does not group or sum. Returns `null` (hidden)
+  when there are no rows or all values are exactly 0. Negative values (e.g., credit notes)
+  are real and still render.
 - `countTile(label, count): SummaryTile` — always renders, even for 0.
   Formats count via `Intl.NumberFormat("de-DE").format(count)` (German thousands separator).
 - `compactTiles(tiles: (SummaryTile | null)[]): SummaryTile[]` — filters out nulls, preserving order.
 
 **No currency conversion** — one line per currency, never summed.
 
-`SummaryTiles` component (`"use client"`) lays out the built tiles:
+`SummaryTiles` component lays out the built tiles:
 - `tiles: SummaryTile[]`, `loading: boolean`, `error: boolean`, `className?: string`.
 - When `error`, renders "Totals unavailable" in muted text.
 - When `loading && tiles.length === 0`, renders 4 pulsing skeleton boxes.
