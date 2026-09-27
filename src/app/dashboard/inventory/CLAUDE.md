@@ -150,8 +150,8 @@ pagination is active.
   Avg. cost re-fetches (F7).
   A load failure renders the mapped `inventoryErrorMessage` text as a small
   red line under the count row (`stockError`) — this is the designed
-  fallback for tenants whose schema doesn't have the RPC yet (migration 049
-  pending), not an error state to "fix". The Status badge is unaffected —
+  generic-error fallback (RPC/network failure, RLS denial, etc.), not an
+  error state to "fix". The Status badge is unaffected —
   it still reads legacy `current_stock`/`reorder_threshold`, so it can
   disagree with the new Total column (see SKILL.md gotcha). **(Phase 3 Task
   8, 2026-09-26)** When `advanced.active`, the Product name cell becomes a
@@ -276,9 +276,9 @@ pagination is active.
   satisfy `react-hooks/set-state-in-effect`). A dropship location always
   renders "—" (it never holds stock); any other location renders "—" while
   `data` is still `null` — both the initial load and a failed RPC call (the
-  totals RPC isn't rolled out to every tenant yet, migration 049 pending) —
-  and the numeric total, styled with the danger-text color when negative,
-  once loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
+  generic-error fallback, same as `ProductsTab.tsx`'s `stockError`) — and
+  the numeric total, styled with the danger-text color when negative, once
+  loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
   render's fallback).
 - `_components/TransfersTab.tsx` (Phase 4 Task 4, 2026-09-26) —
   `TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChanged })`:
@@ -288,9 +288,13 @@ pagination is active.
   Route (from → to location names, an `ArrowRight` icon with `aria-hidden`
   plus a `<span className="sr-only">to</span>` rather than an `aria-label`
   on the icon itself), Units, Transfer cost, Note, and — admin only — a
-  delete icon. Delete goes through the shared `<DeleteConfirmModal>`
-  (`.select("id")` so an RLS no-op reads as a failure, matching
-  `LocationsTab`'s pattern) and, on success, re-pages to
+  delete icon. There is no edit UI — transfers are immutable
+  (`INV_TRANSFER_IMMUTABLE`); a delete undoes a transfer only while its
+  destination batches are still untouched, otherwise the DB trigger raises
+  `INV_CONSUMED`, shown via `inventoryErrorMessage(deleteError, "Could not
+  delete the transfer.")`. Delete goes through the shared
+  `<DeleteConfirmModal>` (`.select("id")` so an RLS no-op reads as a
+  failure, matching `LocationsTab`'s pattern) and, on success, re-pages to
   `pageAfterRemoval(page, pageSize, total)` (`_lib/transfers.ts`) so the last
   page never ends up empty. Both a successful transfer (`onSaved`, wired
   from `<TransferStockModal onSaved={handleSaved}>`) and a successful delete
@@ -370,7 +374,7 @@ arithmetic lives entirely in the database so client and server can never drift.
 If you need to change how stock is calculated, edit the migration triggers, not
 this slice.
 
-## Advanced inventory ledger (Business plan) — 3 of 4 phases shipped
+## Advanced inventory ledger (Business plan) — all 4 phases shipped
 
 Batches, locations and FIFO cost of goods live entirely in Postgres
 (`supabase/migrations/047_advanced_inventory.sql`, installer
@@ -384,8 +388,9 @@ cost 0. From then on:
   SQL formula); sales consume lots **FIFO** at their `fulfillment_location_id`
   (default per platform) and get `sales.cogs_amount`; missing stock goes to a
   **shortfall** lot that the next receipt settles and re-costs;
-- `stock_transfers` move lots between locations (immutable; delete only while
-  untouched); dropship-type locations never hold stock;
+- `stock_transfers` move lots between locations (immutable — no edit UI,
+  `INV_TRANSFER_IMMUTABLE`; delete only while the destination batches are
+  untouched, else `INV_CONSUMED`); dropship-type locations never hold stock;
 - the legacy `current_stock` triggers keep running unchanged for every plan.
 
 Tables: `stock_locations`, `inventory_settings`, `platform_location_defaults`,
@@ -397,8 +402,14 @@ Phase 2 shipped the enable flow and the Locations tab. Phase 3 shipped
 purchase location + landed costs, sale "Fulfilled from" with a shortage
 warning, FIFO cost of goods on the order page, per-location stock columns on
 the Products tab, on-hand units on the Locations tab, and the product
-batches drawer — see the Purchases/Sales `CLAUDE.md`s and the gotchas below
-for the details. Only transfers (Phase 4) remain.
+batches drawer. Phase 4 shipped the Transfers tab: transfer-stock modal with
+a live FIFO preview, paginated transfer history, and delete-to-undo — see
+the Purchases/Sales `CLAUDE.md`s and the gotchas below for the details.
+Transfer creation and deletion in the UI are **admin-only** (the header's
+"+ Transfer Stock" button and each row's delete icon are hidden for
+non-admins, who see read-only history); the underlying RLS on
+`stock_transfers` allows any tenant member, so this is a UI rule, not a
+database one — see `TransfersTab.tsx`'s entry above.
 
 ## Pagination data flow
 
