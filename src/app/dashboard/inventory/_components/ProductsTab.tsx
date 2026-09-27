@@ -53,9 +53,11 @@ interface Props {
   /** The page header owns the "+ Add Product" button; this tab owns the modal. */
   addOpen: boolean;
   onAddClose: () => void;
+  /** Bumped by the page after a transfer, so per-location stock re-fetches. */
+  stockVersion?: number;
 }
 
-export function ProductsTab({ addOpen, onAddClose }: Props) {
+export function ProductsTab({ addOpen, onAddClose, stockVersion }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const products = useAppSelector((s) => s.inventory.items);
@@ -81,7 +83,7 @@ export function ProductsTab({ addOpen, onAddClose }: Props) {
   const pageIds = useMemo(() => products.map((p) => p.id).join(","), [products]);
   // Bumped after a batch's opening cost is edited, so Avg. cost re-fetches.
   const [stockRefresh, setStockRefresh] = useState(0);
-  const stockRequestKey = `${advanced.active}:${pageIds}:${stockRefresh}`;
+  const stockRequestKey = `${advanced.active}:${pageIds}:${stockRefresh}:${stockVersion ?? 0}`;
   const [stockResult, setStockResult] = useState<StockRequestResult | null>(null);
 
   useEffect(() => {

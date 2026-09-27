@@ -105,8 +105,19 @@ since modal dropdowns use a different state key than the table.
   `_lib/transfers.ts` (+ test — pure preview/validation/payload helpers),
   `_components/TransferStockModal.tsx` (the form itself — product/location
   pickers, the live FIFO preview table, submit). `_store/productLots.ts`
-  (`fetchAvailableLots`) is the source-lot fetcher both depend on. Not yet
-  mounted anywhere (Task 4 wires it into a page).
+  (`fetchAvailableLots`) is the source-lot fetcher both depend on. Mounted by
+  `_components/TransfersTab.tsx` (Task 4) only while its `addOpen` prop is true.
+- **Change the Transfers tab** (history, delete, stock refresh — Phase 4
+  Task 4, 2026-09-26): `_components/TransfersTab.tsx` (list + row actions +
+  the shared `DeleteConfirmModal` + mounting `TransferStockModal`),
+  `_store/transfersSlice.ts` (`fetchTransfersPage`), `_lib/transfers.ts`
+  (`pageAfterRemoval`). `page.tsx` only owns `tab`/`transferOpen`/
+  `stockVersion` state and the "+ Transfer Stock" header button — see the
+  "Add a tab" and `stockVersion` gotchas below.
+- **Add a tab**: `InventoryTabs.tsx`'s `InventoryTabId` union +
+  `page.tsx`'s `tabs` array/header `action` switch + a panel id
+  `inventory-panel-<id>` on the new tab component's root element (matching
+  its `role="tabpanel"`/`aria-labelledby="inventory-tab-<id>"`).
 
 ## Test command
 
@@ -521,3 +532,33 @@ since modal dropdowns use a different state key than the table.
   cost allocation formula must stay in sync between `fifoPreview` and the
   DB trigger — changes to one without the other will silently diverge
   the preview from the actual transfer behavior.
+- **Stock caches on other tabs are keyed by `stockVersion`; bump it after any
+  mutation that moves stock between locations (Phase 4 Task 4, 2026-09-26).**
+  `page.tsx` owns a `stockVersion` counter (`bumpStock`), passed to both
+  `<ProductsTab stockVersion>` and `<LocationsTab stockVersion>`, which fold
+  it into their own request keys (`ProductsTab`'s `stockRequestKey`,
+  `LocationsTab`'s `onHandKey`) so a stale per-location snapshot on an
+  inactive tab re-fetches the moment its panel becomes visible again —
+  neither tab's own request key (page ids / locations list) changes just
+  because a transfer moved stock, so without `stockVersion` they'd keep
+  showing pre-transfer numbers until an unrelated change (a page turn, a
+  location edit) happened to bust their cache. `TransfersTab`'s
+  `onStockChanged` prop is what triggers the bump — call it after both a
+  successful transfer (`onSaved`) and a successful delete, not just one.
+  Any future mutation that moves stock between locations should call the
+  same prop rather than inventing a second refresh mechanism.
+- **`TransferStockModal` is mounted only while open, not
+  always-mounted-behind-a-remount-key (Phase 4 Task 4, 2026-09-26 — a
+  deliberate deviation from this feature's usual `key={... ?? "closed"}`
+  remount pattern used by `LocationModal`/`EditProductModal`).** The modal
+  seeds its draft (default source location, today's date) in a lazy
+  `useState` initializer, which runs once per mount. Keeping it mounted
+  while closed (as a remount-on-close `key` bump would) means that
+  initializer runs at tab-mount time or right after the previous close —
+  long before the user actually opens it again — so a changed default
+  location or a date rollover past midnight would go stale. `TransfersTab`
+  instead renders `{isAdmin && addOpen && <TransferStockModal open
+  onClose={onAddClose} onSaved={handleSaved} />}`: the component (and its
+  `useState` initializer) only exists while `addOpen` is true, so every open
+  is a fresh mount with a fresh draft. Don't "fix" this back to the
+  remount-key pattern without re-solving the staleness this avoids.

@@ -1,6 +1,6 @@
 "use client";
 
-export type InventoryTabId = "products" | "locations";
+export type InventoryTabId = "products" | "locations" | "transfers";
 
 interface Props {
   tabs: { id: InventoryTabId; label: string }[];

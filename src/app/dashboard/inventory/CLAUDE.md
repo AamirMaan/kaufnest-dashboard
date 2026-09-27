@@ -7,47 +7,63 @@ pagination is active.
 ## Files in this folder
 
 - `page.tsx` (Phase 2 shell, 2026-09-26; loading moved to
-  `useAdvancedInventory()` Task 2, 2026-09-26) — thin shell only:
-  `<PageHeader>` + "+ Add Product"/"+ Add Location" button state (whichever
-  the active tab owns), the advanced-inventory `upsell`/`loading`/`error`
-  banners driven entirely by `const advanced = useAdvancedInventory()`
-  (`_store/useAdvancedInventory.ts`) — `page.tsx` no longer selects
-  `plan`/`state.advancedInventory` or computes `view`/dispatches the fetch
-  itself; it just reads `advanced.view`/`advanced.error` and wires the error
-  banner's Retry button to `advanced.reload`. Also computes `isAdmin` from
-  `state.currentUser.profile?.role` (`admin`/`super_admin`) and renders
-  `<EnableAdvancedCard isAdmin={isAdmin} />` when `view === "enable"` (Task
-  4). **When `view === "active"` (Task 6, 2026-09-26)** it renders
-  `<InventoryTabs>` (Products/Locations) above the active panels; `tab`
-  state (`InventoryTabId`) plus `showLocations = view === "active" && tab
-  === "locations"` decide which "+ Add …" button `PageHeader`'s `action`
-  shows (Locations' Add button is hidden entirely for non-admins, matching
-  `LocationsTab`'s own read-only row-actions gate). **Both `<ProductsTab>`
-  and `<LocationsTab>` stay mounted at all times once `view === "active"`**
-  (fix round 1, 2026-09-26) — only their visibility toggles via the native
-  `hidden` attribute (`ProductsTab`'s wrapper div gets `hidden={view ===
-  "active" && tab !== "products"}`; `LocationsTab` takes its own `hidden`
-  prop, applied to its root `tabpanel` div, `hidden={tab !== "locations"}`).
+  `useAdvancedInventory()` Task 2, 2026-09-26; Transfers tab wired in Phase 4
+  Task 4, 2026-09-26) — thin shell only:
+  `<PageHeader>` + "+ Add Product"/"+ Add Location"/"+ Transfer Stock" button
+  state (whichever the active tab owns), the advanced-inventory
+  `upsell`/`loading`/`error` banners driven entirely by `const advanced =
+  useAdvancedInventory()` (`_store/useAdvancedInventory.ts`) — `page.tsx` no
+  longer selects `plan`/`state.advancedInventory` or computes `view`/
+  dispatches the fetch itself; it just reads `advanced.view`/`advanced.error`
+  and wires the error banner's Retry button to `advanced.reload`. Also
+  computes `isAdmin` from `state.currentUser.profile?.role`
+  (`admin`/`super_admin`) and renders `<EnableAdvancedCard isAdmin={isAdmin}
+  />` when `view === "enable"` (Task 4). **When `view === "active"` (Task 6,
+  2026-09-26; three tabs as of Task 4, Phase 4)** it renders
+  `<InventoryTabs>` (Products/Locations/Transfers) above the active panels;
+  `tab` state (`InventoryTabId`) plus `showLocations = view === "active" &&
+  tab === "locations"` / `showTransfers = view === "active" && tab ===
+  "transfers"` decide which "+ Add …"/"+ Transfer Stock" button
+  `PageHeader`'s `action` shows (Locations' Add button and Transfers'
+  Transfer Stock button are both hidden entirely for non-admins, matching
+  `LocationsTab`/`TransfersTab`'s own read-only row-actions gate). **All
+  three of `<ProductsTab>`, `<LocationsTab>` and `<TransfersTab>` stay
+  mounted at all times once `view === "active"`** (fix round 1, 2026-09-26;
+  extended to Transfers in Task 4) — only their visibility toggles via the
+  native `hidden` attribute (`ProductsTab`'s wrapper div gets `hidden={view
+  === "active" && tab !== "products"}`; `LocationsTab`/`TransfersTab` each
+  take their own `hidden` prop, applied to their root `tabpanel` div,
+  `hidden={tab !== "locations"}` / `hidden={tab !== "transfers"}`).
   Unmounting the inactive tab on every switch was tried first and reverted:
   it reset `ProductsTab`'s local search state and threw away any in-progress
   `LocationsTab`/`LocationModal` state every time the user switched tabs.
   Any other view (`upsell`/`loading`/`error`/`enable`) renders `ProductsTab`
   visible with no `role`/`aria-labelledby` (not a real tabpanel yet) and
-  `LocationsTab` isn't rendered at all — `InventoryTabs` and `LocationsTab`
-  only ever appear once advanced inventory is actually active. No
-  table/search code lives in `page.tsx` — see `_components/ProductsTab.tsx`
-  for products, `_components/LocationsTab.tsx` for locations. Modals in both
-  tabs are portals (`Modal.tsx`), but this is safe with both tabs mounted:
-  a modal can only be opened via its own tab's header button or an in-panel
-  row action, both of which are covered by the other tab's `hidden` panel
-  (unreachable, not just visually hidden), and any already-open modal's
-  backdrop blocks mouse clicks on the tab strip underneath it, so a mouse
-  user can't reach a hidden tab's modal that way. `Modal.tsx` has no focus
-  trap, though, so keyboard Tab from the header's action button can still
-  reach the tab strip and switch tabs while a modal is open — since modals
-  render through a portal, the modal itself stays open and visible, on top
-  of the now-hidden panel underneath it. Known minor/cosmetic gap, not a
-  functional bug; no extra open-state reset was added for this.
+  `LocationsTab`/`TransfersTab` aren't rendered at all — `InventoryTabs`,
+  `LocationsTab` and `TransfersTab` only ever appear once advanced inventory
+  is actually active. No table/search code lives in `page.tsx` — see
+  `_components/ProductsTab.tsx` for products, `_components/LocationsTab.tsx`
+  for locations, `_components/TransfersTab.tsx` for transfer history.
+  **`stockVersion` (Task 4, Phase 4)**: `page.tsx` owns a `stockVersion`
+  counter, bumped (`bumpStock`) by `TransfersTab`'s `onStockChanged` after a
+  transfer is recorded or deleted, and passed as a prop to both
+  `<ProductsTab stockVersion={stockVersion}>` and `<LocationsTab
+  stockVersion={stockVersion}>` so their per-location stock caches
+  (`ProductsTab`'s `stockRequestKey`, `LocationsTab`'s `onHandKey`) include
+  it and re-fetch without a page reload — a transfer moves stock between
+  locations, which neither tab's own request key would otherwise notice.
+  Modals in all three tabs are portals (`Modal.tsx`), but this is safe with
+  all tabs mounted: a modal can only be opened via its own tab's header
+  button or an in-panel row action, both of which are covered by the other
+  tabs' `hidden` panels (unreachable, not just visually hidden), and any
+  already-open modal's backdrop blocks mouse clicks on the tab strip
+  underneath it, so a mouse user can't reach a hidden tab's modal that way.
+  `Modal.tsx` has no focus trap, though, so keyboard Tab from the header's
+  action button can still reach the tab strip and switch tabs while a modal
+  is open — since modals render through a portal, the modal itself stays
+  open and visible, on top of the now-hidden panel underneath it. Known
+  minor/cosmetic gap, not a functional bug; no extra open-state reset was
+  added for this.
 - `_lib/advancedInventory.ts` (+ test) — pure logic behind the batches &
   locations UI: `advancedInventoryView` (upsell/loading/error/enable/active),
   `sortLocations`/`defaultLocationOptions`/`platformLocationOptions`,
@@ -110,8 +126,11 @@ pagination is active.
   `page.tsx` unchanged: name search (`ilike` filter), `<Pagination>`,
   loading overlay, `(this page)` count label, row actions, wires up
   `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
-  Takes `{ addOpen, onAddClose }` — the "+ Add Product" button and its open
-  state live in `page.tsx` (the header), this component only owns the modal.
+  Takes `{ addOpen, onAddClose, stockVersion? }` — the "+ Add Product" button
+  and its open state live in `page.tsx` (the header), this component only
+  owns the modal. `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by
+  `page.tsx` after a transfer moves stock between locations, and is folded
+  into `stockRequestKey` (below) so the per-location columns re-fetch.
   **(Phase 3 Task 7, 2026-09-26)** When `useAdvancedInventory().active` is
   true, the "Current Stock" column is replaced with one column per
   `stockColumns(advanced.locations)` entry (first 4 active, stock-holding
@@ -195,17 +214,22 @@ pagination is active.
   cost fields change. Submitting inserts into `stock_transfers`
   (`transferInsertPayload`), writes a best-effort audit log
   (`entityType: "stock_transfer"`, `action: "create"`), toasts, then calls
-  `onSaved()` and closes. Not mounted anywhere yet — Task 4 wires it into a
-  page/tab with a remount-on-open `key`.
+  `onSaved()` and closes. **(Phase 4 Task 4, 2026-09-26)** Mounted by
+  `_components/TransfersTab.tsx`, which renders it only while `addOpen` is
+  true (`{isAdmin && addOpen && <TransferStockModal open onClose={onAddClose}
+  onSaved={handleSaved} />}`) instead of always-mounted-with-a-remount-key —
+  see `TransfersTab.tsx`'s own entry below for why.
 - `_components/InventoryTabs.tsx` — accessible tab strip
-  (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations"`).
-  Built in Phase 2 Task 3; wired into `page.tsx` in Task 6, rendered only
-  when `view === "active"`.
+  (`role="tablist"`/`role="tab"`, `InventoryTabId = "products" | "locations" |
+  "transfers"` as of Phase 4 Task 4). Built in Phase 2 Task 3; wired into
+  `page.tsx` in Task 6, rendered only when `view === "active"`.
 - `_components/LocationsTab.tsx` (Phase 2 Task 6, 2026-09-26) —
-  `LocationsTab({ isAdmin, addOpen, onAddClose, hidden })`: the Locations
-  list. `hidden` (fix round 1, 2026-09-26) is applied to the component's own
-  root `tabpanel` div so `page.tsx` can keep this component mounted while
-  the Products tab is showing — see `page.tsx`'s entry above for why.
+  `LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersion? })`:
+  the Locations list. `hidden` (fix round 1, 2026-09-26) is applied to the
+  component's own root `tabpanel` div so `page.tsx` can keep this component
+  mounted while another tab is showing — see `page.tsx`'s entry above for
+  why. `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by `page.tsx`
+  after a transfer and folded into `onHandKey` (below) so "On hand" re-fetches.
   `DataTable` columns are Location (name + a "Default" `Badge` when
   `settings.default_location_id === l.id`, sortable), Type
   (`LOCATION_TYPE_LABELS`, sortable), Status (Active/Inactive `Badge`), and
@@ -242,9 +266,12 @@ pagination is active.
   elsewhere (a location edited/deactivated, a reload). **(Task 9,
   2026-09-26)** An "On hand" column sits between Type and Status:
   `fetchLocationStockTotals()` (`_store/stockByLocation.ts`) is called from
-  an effect keyed by `locationsKey = locations.map((l) => l.id).join(",")`;
+  an effect keyed by `onHandKey = \`${locationsKey}|${stockVersion ?? 0}\``
+  (Phase 4 Task 4, 2026-09-26 — folds in the `stockVersion` prop, on top of
+  the locations-list snapshot `locationsKey = locations.map((l) =>
+  l.id).join(",")`, so a transfer's stock move re-fetches this column too);
   the result is stored as `{ key, data }` and only read at render when
-  `key === locationsKey` (the same derived-not-reset pattern as
+  `key === onHandKey` (the same derived-not-reset pattern as
   `ProductsTab.tsx`'s stock effect and `FulfillmentLocationField.tsx`, to
   satisfy `react-hooks/set-state-in-effect`). A dropship location always
   renders "—" (it never holds stock); any other location renders "—" while
@@ -253,6 +280,28 @@ pagination is active.
   and the numeric total, styled with the danger-text color when negative,
   once loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
   render's fallback).
+- `_components/TransfersTab.tsx` (Phase 4 Task 4, 2026-09-26) —
+  `TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChanged })`:
+  the transfer history list. `state.stockTransfers` (`fetchTransfersPage`)
+  hydrates on first mount (`if (!loaded) dispatch(...)`); the `<DataTable>`
+  shows Date (`formatDate`), Product (`product_name ?? "Deleted product"`),
+  Route (from → to location names, an `ArrowRight` icon with `aria-hidden`
+  plus a `<span className="sr-only">to</span>` rather than an `aria-label`
+  on the icon itself), Units, Transfer cost, Note, and — admin only — a
+  delete icon. Delete goes through the shared `<DeleteConfirmModal>`
+  (`.select("id")` so an RLS no-op reads as a failure, matching
+  `LocationsTab`'s pattern) and, on success, re-pages to
+  `pageAfterRemoval(page, pageSize, total)` (`_lib/transfers.ts`) so the last
+  page never ends up empty. Both a successful transfer (`onSaved`, wired
+  from `<TransferStockModal onSaved={handleSaved}>`) and a successful delete
+  call `onStockChanged()` — `page.tsx` wires this to `bumpStock`, which
+  increments `stockVersion` so `ProductsTab`/`LocationsTab`'s own stock
+  caches refetch. **Mounts `<TransferStockModal>` only while `addOpen` is
+  true** (`{isAdmin && addOpen && <TransferStockModal open
+  onClose={onAddClose} onSaved={handleSaved} />}`), not
+  always-mounted-behind-a-remount-key — see the SKILL.md gotcha for why (the
+  modal's draft is seeded once per mount, so mounting it while closed would
+  let the default source location/today's date go stale).
 - `_components/FulfillmentDefaultsCard.tsx` (Phase 2 Task 7, 2026-09-26) —
   `FulfillmentDefaultsCard({ isAdmin })`: the tenant's default location plus
   a default fulfillment location per sales platform (`INVENTORY_PLATFORMS` —
