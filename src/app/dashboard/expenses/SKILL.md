@@ -438,7 +438,8 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   freshly-signed 60s URL once that resolves (or closes the tab and toasts on
   failure). Thumbnails' 60s signed URLs (`signedUrls` state, refreshed by
   the effect) are never reused for opening — a receipt tile is always opened
-  with its own fresh signed URL.
+  with its own fresh signed URL. A blocked popup (`window.open` → `null`) is
+  toasted, never silent.
 - **`AddExpenseModal` creates the expense row early if a receipt is
   attached before the rest of the form is submitted** (`handleExpenseCreated`,
   wired to `ReceiptUploader`'s `onExpenseCreated` — mirrors `ImageGrid`'s

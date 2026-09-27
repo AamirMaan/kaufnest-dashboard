@@ -214,10 +214,15 @@ export function ReceiptUploader({
       toastError("Couldn't open receipt", "Try again in a moment.");
       return;
     }
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = signed.data.signedUrl;
+    if (!tab) {
+      toastError(
+        "Couldn't open receipt",
+        "Your browser blocked the new tab — allow pop-ups for this site and try again."
+      );
+      return;
     }
+    tab.opener = null;
+    tab.location.href = signed.data.signedUrl;
   }
 
   return (
