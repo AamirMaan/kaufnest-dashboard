@@ -61,7 +61,14 @@ Trading API mechanics this reuses.
   same color. Every return value is a full static class string, never
   interpolated (`bg-(--color-avatar-${n})` would be invisible to Tailwind's
   JIT scanner — see the file's own comment and `components/ui/Badge.tsx`'s
-  `VARIANT_CLASSES` for the same pattern). Colocated test.
+  `VARIANT_CLASSES` for the same pattern). Colocated test. **Second consumer
+  as of 2026-09-27:** `dashboard/_components/RecentOrdersCard.tsx` imports
+  `avatarClassesFor` directly for Home's recent-orders row avatars, keyed by
+  the resolved buyer/platform label rather than an eBay username. Still a
+  Messages-owned file (2 consumers, below the "3+ features" promotion
+  threshold in the root `AGENTS.md`) — promote it to `src/components/ui/` if
+  a third feature needs it, rather than a third feature reaching into
+  `messages/_lib/` directly.
 - `_lib/dayLabel.ts` — pure `dayLabelFor(isoDate, now?)` / `isNewDay(isoDate,
   previousIsoDate)`. WhatsApp-style day-separator logic: "Today"/"Yesterday"/
   weekday name for the last week, a short date beyond that. **English**,
