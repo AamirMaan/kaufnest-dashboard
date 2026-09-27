@@ -64,49 +64,45 @@ broadly when working on a specific feature.**
   to the `{from, to}` pair passed as `p_from`/`p_to` to the 4 RPCs above — no
   client-side row filtering (`effectiveSales`/`isRevenueSale`) remains in this
   file as of the RPC rewrite; that predicate now lives in `get_sales_overview`
-  itself. Renders:
-  - 5 `StatCard`s: Revenue, Expenses, Purchases, Net Profit, Orders (sale count +
-    units sold) — grid expands to `lg:grid-cols-5`. Revenue, Net Profit, VAT
-    Collected, monthly trend revenue, Revenue by Platform, and Top Products all
-    come from `get_sales_overview`'s already-effective (returns/cancellations
-    excluded) figures — only the "Orders" StatCard's count uses
-    `salesOverview.orderCount` (total orders placed, including
-    returns/cancellations, vs. `effectiveOrderCount` used for average order
-    value).
-  - Revenue/fees/VAT/monthly-trend/platform/top-product figures are exactly
-    what each RPC returns — the two distinct revenue formulas (per-sale
-    `total_amount + shipping_charged` vs. fees deducting `shipping_cost +
-    advertising_fee`) now live in the SQL functions, not this file.
-  - **VAT Position** section (hidden when no VAT data in period): VAT Collected
-    (output, from sales), VAT Paid (input, purchases + expenses), net Due to
-    Government / Government Refund
-  - **Expenses by Category** section (hidden when no expenses): per-category totals
-    sorted by spend, rendered with `CategoryBadge`
-  - **Charts** section (hidden when no data in period): 2-column row with a
-    `recharts` `AreaChart` (Revenue/Expenses/Purchases by month, 2/3 width) and a
-    `PieChart` donut (Revenue by Platform, 1/3 width + custom legend)
-  - **Top Products** and **Expenses by Category** side-by-side in a 2-col grid
-    (each hidden when empty)
-  - **Platform balance cards** (eBay / Amazon, one per connected platform): each
-    card shows 6 tiles in a 2×3 layout — Sales, Ad Fees + Shipping, Expenses,
-    Balance Earned, Transferred, Pending. `computePlatformBalance("ebay" |
-    "amazon")` combines `salesOverview.platformBalance`,
-    `expensesOverview.platformSubtotal`, and `payoutsOverview.transferred` for
-    that platform, then calls `computePending(balance, transferred)`. A
-    "Record Transfer" button (admin/super_admin only) opens
-    `RecordTransferModal` (`_components/RecordTransferModal.tsx`).
-  Chart colours adapt to dark/light theme via `useTheme()` — hardcoded hex values
-  are passed to recharts props (CSS variables don't render reliably inside SVG).
-  No `_components`/`_store` of its own — but see `_lib/` below.
-  Shared deps:
-  `StatCard`, `CategoryBadge`, `formatCurrency`/`calculateNetProfit`,
-  `resolveDateRange`, `periodRange`/`describePeriod`, `ExpenseCategory` type,
+  itself. Also calls 051's `get_overview_timeseries` in the same `Promise.all`
+  (5 RPCs total) for the monthly chart series, previous-period totals and
+  top vendor. RPC params come from `resolveDateBounds` (null for an open
+  side), not `range` — see `SKILL.md`.
+  Renders a `grid-cols-1 lg:grid-cols-2` grid of display-only chart cards
+  from `_components/` (2026-09-27, replaced the StatCard grid and the
+  separate trend/donut/VAT/top-products/category sections):
+  Revenue (stacked bars by platform, Δ%, AOV), Net Profit (monthly line,
+  margin, best/worst month — includes sale fees, same formula as before),
+  Expenses (stacked bars by category, Δ%, largest category share),
+  Purchases (monthly bars, Δ%, units bought, top vendor), Orders (kept vs
+  returned/cancelled bars, Δ%, return rate), VAT Position (collected vs paid
+  bars, net due/refund), eBay/Amazon Balance (horizontal bars sales/fees/
+  expenses/transferred/pending, hidden when the platform had no sales, admin
+  "Record Transfer" opens `RecordTransferModal`), Top Products (horizontal
+  bars, top 5). Δ% compares with the equal-length period before the range
+  and hides for open ranges. Then the Quick Start card.
+  Shared deps: `formatCurrency`/`calculateNetProfit`, `resolveDateRange`/
+  `resolveDateBounds`, `periodRange`/`describePeriod`, `CATEGORY_LABELS`,
   `useTheme`, `recharts`, `lib/supabase/client` (`createTenantClient`),
-  `_lib/platformBalance` (`computePending`), `lib/utils/fetchEarliestYear`.
+  `lib/utils/fetchEarliestYear`.
+
+## `_components/` — Overview cards
+
+- `ChartCard.tsx` — card shell: title, headline, ▲/▼ change badge
+  (`changeTone`/`formatPct`), meta line, optional header action, 220px chart
+  slot, "No data in this period" empty state.
+- `useChartKit.ts` — `useChartKit(currency)`: theme-aware colors
+  (`chartTheme`), shared axis/tooltip/legend props, `money`/`compact`
+  formatters.
+- `StackedBars.tsx` — monthly stacked bars used by Revenue and Expenses.
+- `RevenueCard.tsx`, `NetProfitCard.tsx`, `ExpensesCard.tsx`,
+  `PurchasesCard.tsx`, `OrdersCard.tsx`, `VatCard.tsx`,
+  `PlatformBalanceCard.tsx`, `TopProductsCard.tsx` — one per card above.
+- `RecordTransferModal.tsx` — records a platform payout (admin only).
 
 ## `_lib/` — pure helpers for the Overview page
 
-Both modules below are pure (no React/Supabase/Redux) and have a colocated
+The pure modules below (no React/Supabase/Redux) each have a colocated
 test — `npx jest dashboard/_lib`. Keep new Overview maths in this shape:
 extracting it is what makes it testable without rendering the page.
 
@@ -133,6 +129,19 @@ extracting it is what makes it testable without rendering the page.
   "Max Rows" gotcha below no longer applies here. It's still used by the
   Sales/Expenses/Purchases CSV-export queries — see its bullet in the repo
   root `AGENTS.md`'s shared `src/lib/*` list.
+- `overviewTypes.ts` — response types of the five RPCs plus
+  `PlatformBalance`.
+- `overviewCharts.ts` — pure series shaping for the cards: `pctChange`,
+  `changeTone`, `formatPct`, `margin`, `monthLabel`, `sumMonths`,
+  `stackedSeries`, `netProfitSeries`, `bestWorstMonth`, `topCategoryShare`,
+  `returnRate`, `balanceBars`.
+- `chartPalette.ts` — hex palette (platforms, categories, fallbacks),
+  `seriesColor`, `chartTheme(isDark)`, `compactMoney`.
+- `platformBalance.ts` now also exports `computePlatformBalance()` (moved
+  out of `page.tsx`).
+- `overviewTimeseries.integration.test.ts` (2026-09-27) — live test of 051's
+  `get_overview_timeseries`, same setup as the one below; run after 051 is
+  applied.
 - `overviewRpc.integration.test.ts` (2026-09-17) — NOT a pure `_lib` unit
   test like the two above: it hits the four real `get_sales_overview`/
   `get_expenses_overview`/`get_purchases_overview`/`get_payouts_overview`

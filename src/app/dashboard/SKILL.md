@@ -27,18 +27,56 @@ Use this folder when the task is about:
 
 ## Overview page changes
 
-`page.tsx` fetches its four aggregates via `createTenantClient()` calling
-`supabase.rpc("get_sales_overview" | "get_expenses_overview" |
-"get_purchases_overview" | "get_payouts_overview", { p_from, p_to,
-p_currency })` (2026-09-17 rewire), storing each RPC's JSON result in local
-`useState` (NOT Redux — see `dashboard/CLAUDE.md` for why). Date-range and
-currency filtering happen in SQL now, not client-side. Derived values
-(`totalRevenue`, `monthlyTrend`, `platformData`, `computePlatformBalance()`,
-etc.) are plain reads/reshapes of those four objects — see `_lib/` in
-`dashboard/CLAUDE.md` for the two pure helpers still involved
-(`aggregateSaleRevenue`'s formula moved into the `get_sales_overview` SQL
-function itself; `computePending` still runs client-side). Stat cards come
-from `components/ui/StatCard`.
+`page.tsx` fetches five RPCs via `createTenantClient()` in one `Promise.all`:
+the four 045 aggregates (`get_sales_overview` / `get_expenses_overview` /
+`get_purchases_overview` / `get_payouts_overview`) for headline totals, and
+051's `get_overview_timeseries` for monthly chart series, previous-period
+totals and the top vendor. All take `{ p_from, p_to, p_currency }`; results
+live in local `useState` (NOT Redux — see `dashboard/CLAUDE.md` for why).
+
+The page renders chart cards from `_components/` in a
+`grid-cols-1 lg:grid-cols-2` grid. Minimal file set per change:
+
+- **New/changed card** → `_components/<Name>Card.tsx` (built on
+  `ChartCard.tsx` + `useChartKit.ts`), any series shaping in
+  `_lib/overviewCharts.ts` + its test, wiring in `page.tsx`.
+- **New figure per month** → `supabase/migrations/05x_*.sql` replacing
+  `get_overview_timeseries` (+ the `005_tenant_provisioning.sql` mirror),
+  `OverviewMonth` in `_lib/overviewTypes.ts`, the integration test.
+- **Colors** → `_lib/chartPalette.ts` only.
+
+### Gotcha: pass `resolveDateBounds`, not `resolveDateRange`, to the RPCs
+
+`resolveDateRange` fills an open side of a custom range with the
+`0000-00-00` / `9999-99-99` sentinels (for string comparison). Those aren't
+valid SQL dates — before 2026-09-27 a custom range with only From or only To
+set made every Overview RPC fail. `resolveDateBounds` returns `null` for the
+open side, which the SQL treats as unbounded. `range` is still used for the
+header's description text.
+
+### Gotcha: Net Profit includes sale fees — keep the line and headline in sync
+
+Headline = revenue − (expenses + sale fees) − purchases (`calculateNetProfit`
+with `expenses + fees`). The monthly line (`netProfitSeries`) subtracts each
+month's `fees` too; that's why 051 returns `fees` per month even though the
+original spec's formula left it out. If you change one formula, change both.
+
+### Gotcha: recharts colors and per-bar fills
+
+recharts props are SVG attributes, where CSS variables don't resolve
+reliably — colors come from `chartTheme(isDark)` in `_lib/chartPalette.ts`
+(hex mirrors of the tokens), via `useChartKit(currency)`. `Cell` is
+deprecated in recharts 3 (removed in 4); per-bar colors use the Bar `shape`
+prop returning `<Rectangle {...props} fill={colors[props.index]} />` (see
+`PlatformBalanceCard.tsx`). Month labels come from `monthLabel()` with fixed
+English names, not `toLocaleString`, so tests and SSR are deterministic.
+
+### Gotcha: change badges need a closed range
+
+`previous` in the timeseries is the equal-length window right before
+`[p_from, p_to]`, and `null` for "All Time" or a one-sided custom range — the
+badges then hide (`pctChange` → null). A previous value of 0 also hides the
+badge rather than showing an infinite change.
 
 ### Gotcha: Supabase's PostgREST "Max Rows" setting silently truncates below your `.limit()`
 
@@ -65,7 +103,7 @@ both places.
 
 ## Test command
 
-`npx jest dashboard/_lib` (`aggregateSales.test.ts`, `platformBalance.test.ts`)
+`npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`, `overviewCharts`, `chartPalette`)
 + `npx jest lib/utils/fetchAllRows` for the shared helper itself.
 
 `overviewRpc.integration.test.ts` in the same folder is NOT part of that
