@@ -658,8 +658,13 @@ never hard-deleted while in use per `_lib/advancedInventory.ts`'s
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` maps `filtered` (current filter state)
-to rows and calls `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
+**Export**: `handleExport()` in `page.tsx` derives its Supabase filter
+predicates from `salesFilterParams(filters)` (2026-09-27 final-review fix —
+the same mapper `fetchSalesPage`/`fetchSalesSummary` use, so export can never
+drift from the table or the summary tiles; it previously hand-rolled its own
+filter block, including an invalid `"0000-00-00"`/`"9999-99-99"` custom-range
+fallback), fetches ALL matching rows via `fetchAllRows`, and calls
+`exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
 Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
 currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
 advertising_fee`. Export button is disabled when no rows match the filter.

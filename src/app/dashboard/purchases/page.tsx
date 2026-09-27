@@ -28,13 +28,12 @@ import { formatDate } from "@/lib/utils/date";
 import {
   isDefaultFilters,
   DEFAULT_PURCHASE_FILTERS,
-  getPresetRange,
-  sanitizeIlikeSearchTerm,
   type PurchaseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { buildPurchasesTiles } from "./_lib/purchasesSummaryTiles";
+import { purchasesFilterParams } from "./_store/purchasesFilterParams";
 import type { Purchase, Product } from "@/types";
 
 export default function PurchasesPage() {
@@ -138,11 +137,7 @@ export default function PurchasesPage() {
 
   async function handleExport() {
     const supabase = await createTenantClient();
-
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
+    const p = purchasesFilterParams(filters);
 
     const allRows = await fetchAllRows<Purchase>(async (from, to) => {
       let query = supabase
@@ -151,15 +146,12 @@ export default function PurchasesPage() {
         .order("date", { ascending: false })
         .range(from, to);
 
-      if (range && filters.preset !== "all") {
-        query = query.gte("date", range.from).lte("date", range.to);
-      }
-      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-
-      if (filters.search.trim() !== "") {
-        const term = sanitizeIlikeSearchTerm(filters.search);
+      if (p.p_from) query = query.gte("date", p.p_from);
+      if (p.p_to) query = query.lte("date", p.p_to);
+      if (p.p_currency) query = query.eq("currency", p.p_currency);
+      if (p.p_pattern) {
         query = query.or(
-          `product_name.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%"`
+          `product_name.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
         );
       }
 

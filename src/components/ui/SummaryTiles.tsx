@@ -11,7 +11,7 @@ const SKELETON_COUNT = 4;
 
 /**
  * Display-only row of compact summary tiles above a data table. Values are
- * built by pure helpers in `./summaryTiles` — this component only lays
+ * built by pure helpers in `./summaryTileHelpers` — this component only lays
  * them out. Deliberately not interactive (no button semantics, no hover).
  */
 export function SummaryTiles({ tiles, loading, error, className = "" }: SummaryTilesProps) {

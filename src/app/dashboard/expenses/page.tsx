@@ -28,12 +28,11 @@ import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   DEFAULT_EXPENSE_FILTERS,
-  getPresetRange,
-  sanitizeIlikeSearchTerm,
   type ExpenseFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
 import { buildExpensesTiles } from "./_lib/expensesSummaryTiles";
+import { expensesFilterParams } from "./_store/expensesFilterParams";
 import type { ExpenseCategory, Expense } from "@/types";
 
 const CATEGORIES: ExpenseCategory[] = [
@@ -72,7 +71,7 @@ export default function ExpensesPage() {
   }, [dispatch, filters, summaryVersion]);
 
   const summaryTiles = useMemo(
-    () => buildExpensesTiles(summaryRows, (c) => CATEGORY_LABELS[c]),
+    () => buildExpensesTiles(summaryRows, (c) => CATEGORY_LABELS[c] ?? c),
     [summaryRows]
   );
 
@@ -148,11 +147,7 @@ export default function ExpensesPage() {
 
   async function handleExport() {
     const supabase = await createTenantClient();
-
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
+    const p = expensesFilterParams(filters);
 
     const allRows = await fetchAllRows<Expense>(async (from, to) => {
       let query = supabase
@@ -161,16 +156,13 @@ export default function ExpensesPage() {
         .order("date", { ascending: false })
         .range(from, to);
 
-      if (range && filters.preset !== "all") {
-        query = query.gte("date", range.from).lte("date", range.to);
-      }
-      if (filters.category !== "all") query = query.eq("category", filters.category);
-      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-
-      if (filters.search.trim() !== "") {
-        const term = sanitizeIlikeSearchTerm(filters.search);
+      if (p.p_from) query = query.gte("date", p.p_from);
+      if (p.p_to) query = query.lte("date", p.p_to);
+      if (p.p_category) query = query.eq("category", p.p_category);
+      if (p.p_currency) query = query.eq("currency", p.p_currency);
+      if (p.p_pattern) {
         query = query.or(
-          `title.ilike."%${term}%",vendor.ilike."%${term}%",description.ilike."%${term}%",invoice_number.ilike."%${term}%"`
+          `title.ilike."${p.p_pattern}",vendor.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}",invoice_number.ilike."${p.p_pattern}"`
         );
       }
 

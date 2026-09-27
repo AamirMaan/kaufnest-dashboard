@@ -246,11 +246,15 @@ insert/update payload gets `{}` spread in (i.e. nothing added) via
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
-cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
-`exportToCsv`. Columns: `date, product_name, vendor, quantity, unit_price,
-total_amount, currency, vat_rate, vat_amount, description`.
+**Export**: `handleExport()` in `page.tsx` derives its filter predicates from
+`purchasesFilterParams(filters)` (2026-09-27 final-review fix — the same
+mapper `fetchPurchasesPage`/`fetchPurchasesSummary` use, replacing an earlier
+hand-rolled filter block with an invalid `"0000-00-00"`/`"9999-99-99"`
+custom-range fallback), runs a fresh Supabase query, paginated via
+`fetchAllRows` up to a 5 000-row overall cap (see `dashboard/SKILL.md`'s Max
+Rows gotcha) and calls `exportToCsv`. Columns: `date, product_name, vendor,
+quantity, unit_price, total_amount, currency, vat_rate, vat_amount,
+description`.
 
 **Import** (`ImportPurchasesModal` + `purchaseImportFormats.ts`, extracted
 2026-09-17): Required: `date`, `product_name`, `quantity`, `unit_price`.

@@ -62,7 +62,10 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
 };
 
 export function CategoryBadge({ category }: { category: ExpenseCategory }) {
-  return <Badge label={CATEGORY_LABELS[category]} variant="default" />;
+  // `expenses.category` is unconstrained `text` in the DB — an imported or
+  // otherwise unrecognized value falls back to itself instead of rendering
+  // "undefined".
+  return <Badge label={CATEGORY_LABELS[category] ?? category} variant="default" />;
 }
 
 const PLATFORM_LABELS: Record<Platform, string> = {

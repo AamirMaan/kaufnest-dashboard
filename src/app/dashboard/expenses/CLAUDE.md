@@ -220,11 +220,14 @@ tenant hasn't had migration 046 applied yet.
 
 ## CSV import/export
 
-**Export**: `handleExport()` in `page.tsx` runs a fresh Supabase query with the
-same filter predicates, paginated via `fetchAllRows` up to a 5 000-row overall
-cap (see `dashboard/SKILL.md`'s Max Rows gotcha) and calls
-`exportToCsv`. Columns: `date, title, category, vendor, amount, currency,
-vat_rate, vat_amount, description`.
+**Export**: `handleExport()` in `page.tsx` derives its filter predicates from
+`expensesFilterParams(filters)` (2026-09-27 final-review fix — the same
+mapper `fetchExpensesPage`/`fetchExpensesSummary` use, replacing an earlier
+hand-rolled filter block with an invalid `"0000-00-00"`/`"9999-99-99"`
+custom-range fallback), runs a fresh Supabase query, paginated via
+`fetchAllRows` up to a 5 000-row overall cap (see `dashboard/SKILL.md`'s Max
+Rows gotcha) and calls `exportToCsv`. Columns: `date, title, category,
+vendor, amount, currency, vat_rate, vat_amount, description`.
 
 **Import** (`ImportExpensesModal`): required and optional columns depend on the
 chosen format — see the table below. Dates, decimal separators and header names

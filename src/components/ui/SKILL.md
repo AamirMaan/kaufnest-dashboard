@@ -38,7 +38,13 @@ to a known domain enum — they own the label text + color mapping):
 
 - `RoleBadge({ role: UserRole })` — `super_admin`→danger, `admin`→warning, `accountant`→info
 - `ActionBadge({ action: AuditAction })` — create→success, update→info, delete→danger, login/logout→default, role_change→warning, permission_change→warning, status_change→warning
-- `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`, just maps the enum to a display label
+- `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`,
+  maps the enum to a display label via `CATEGORY_LABELS[category] ?? category`
+  (2026-09-27 final-review fix — `expenses.category` is unconstrained `text`
+  in the DB, so a value outside the known 8-entry enum falls back to itself
+  instead of rendering the literal word "undefined"; the Expenses feature's
+  own summary-tile `categoryLabel` lambda in `page.tsx` needs the identical
+  `?? c` fallback wherever it reads `CATEGORY_LABELS` directly)
 - `PlatformBadge({ platform: Platform })` — amazon→warning, ebay→danger, etsy→success, shopify→info, other→default
 - `StatusBadge({ status: string })` — generic (not typed to a specific enum,
   so adding a value needs no `Record<Enum,...>` TS enforcement — easy to
@@ -181,7 +187,10 @@ resolved to this file instead of the component, since TS tries `.ts` before
 went undetected in Task 4 because nothing imported the component yet; Task 5
 was the first real consumer and hit a `tsc` error. Fixed by renaming the pure
 module to `summaryTileHelpers.ts` — keep the two names visibly distinct if
-you ever touch either file.
+you ever touch either file. (`SummaryTiles.tsx`'s own top-of-file doc comment
+still said `./summaryTiles` after the rename until a 2026-09-27 final-review
+fix — a reminder that a rename needs a repo-wide grep for the old name in
+comments too, not just import statements, which `tsc` doesn't catch.)
 
 `summaryTileHelpers.ts` exports pure, tested helpers:
 - `moneyTile<T extends { currency }>(label, rows, value: (r) => number): SummaryTile | null`

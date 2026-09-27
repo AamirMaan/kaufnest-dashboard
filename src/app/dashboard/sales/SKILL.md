@@ -79,7 +79,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   (`DEFAULT_PAGE_SIZE`) — affects all features once they adopt this pattern.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
 - **Change export columns**: `handleExport()` in `page.tsx` — edit the `headers`
-  array and the row-mapping lambda.
+  array and the row-mapping lambda. Its filter predicates come from
+  `salesFilterParams(filters)` (2026-09-27 final-review fix — it used to
+  hand-roll its own `.gte/.lte/.eq/.or` block, including an invalid
+  `"0000-00-00"`/`"9999-99-99"` custom-range fallback, which could drift from
+  `fetchSalesPage`); don't reintroduce a second filter-building block here —
+  change `_store/salesFilterParams.ts` instead.
 - **Change import validation / accepted columns / header aliases / add a new
   import format**: `_components/importFormats.ts` only (pure registry —
   `IMPORT_FORMATS`, `ALIASES`, `validateRowForFormat`). Extend
@@ -552,7 +557,15 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   `fetchSalesPage` uses** — this is deliberate, not incidental: it's what
   guarantees the summary tiles and the table rows can never disagree about
   which filter predicates apply. Don't hand-roll a second filter-to-RPC-args
-  mapping for the summary thunk.
+  mapping for the summary thunk. **`page.tsx`'s `handleExport` (2026-09-27)
+  reuses the same mapper too** — a generic `applySalesFilters(query, params)`
+  helper was considered so all three call sites share one `.gte/.lte/.eq/.or`
+  application block, but Supabase's `PostgrestFilterBuilder` types its filter
+  methods' column/value arguments against the specific `Row` generic, so a
+  structurally-typed wrapper would need `any` to stay generic across query
+  shapes — not worth it for a 6-line block. Each call site inlines the same
+  `if (p.p_x) query = query.eq(...)` pattern instead; keep all three in sync
+  by changing `salesFilterParams` first, then copying its shape.
 - **The thunk never forwards the raw Postgres `error`** — it throws
   `new Error("sales_summary_failed")` and the page (Task 5+) shows a generic
   message. Same rule as every other Supabase-touching route/thunk in this
@@ -593,6 +606,10 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **CSV export** runs a separate Supabase query without `.range()` — it does
   NOT use the Redux items. This ensures the export always covers all matching
   records (up to the 5 000-row safety cap), even when the user is on page 3.
+  Its filter predicates come from `salesFilterParams(filters)` (2026-09-27),
+  the same mapper `fetchSalesPage`/`fetchSalesSummary` use — table, tiles, and
+  export all read the exact same three sources of truth for what "matching"
+  means.
 - **`excludedCount` no longer exists in `page.tsx` (removed Task 5,
   2026-09-26)** — the "Excluded" summary tile now reads `excluded_count`
   straight off `get_sales_summary`'s per-currency rows (RPC 049), covering
@@ -816,6 +833,9 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - The "Search" box in `FilterBar` matches `product_name`, `external_order_id`,
   and `description` via a Supabase `.or()`/`ilike` clause (see
   `fetchSalesPage` in `_store/salesSlice.ts`), sanitized with
-  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`) before being embedded —
-  don't build the `.or()` string from a raw, unsanitized value. `handleExport`
-  mirrors the same predicate; keep both in sync if the column set ever changes.
+  `sanitizeIlikeSearchTerm` (`@/lib/utils/filters`, applied inside
+  `salesFilterParams`'s `p_pattern`) before being embedded — don't build the
+  `.or()` string from a raw, unsanitized value. `handleExport` (2026-09-27)
+  applies the identical `p.p_pattern`-based `.or()` string from the same
+  `salesFilterParams` call, so the column set can't drift between table and
+  export without both call sites failing their tests.

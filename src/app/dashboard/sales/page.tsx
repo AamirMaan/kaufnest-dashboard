@@ -29,14 +29,13 @@ import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
 import {
   isDefaultFilters,
   DEFAULT_SALES_FILTERS,
-  getPresetRange,
-  sanitizeIlikeSearchTerm,
   type SalesFilters,
   type DatePreset,
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
+import { salesFilterParams } from "./_store/salesFilterParams";
 import type { Platform, Sale, Product } from "@/types";
 
 const PLATFORMS: Platform[] = ["amazon", "ebay", "etsy", "shopify", "other"];
@@ -160,11 +159,7 @@ export default function SalesPage() {
 
   async function handleExport() {
     const supabase = await createTenantClient();
-
-    const range =
-      filters.preset === "custom"
-        ? { from: filters.dateFrom || "0000-00-00", to: filters.dateTo || "9999-99-99" }
-        : getPresetRange(filters.preset);
+    const p = salesFilterParams(filters);
 
     const allRows = await fetchAllRows<Sale>(async (from, to) => {
       let query = supabase
@@ -173,17 +168,14 @@ export default function SalesPage() {
         .order("date", { ascending: false })
         .range(from, to);
 
-      if (range && filters.preset !== "all") {
-        query = query.gte("date", range.from).lte("date", range.to);
-      }
-      if (filters.platform !== "all") query = query.eq("platform", filters.platform);
-      if (filters.currency !== "all") query = query.eq("currency", filters.currency);
-      if (filters.status !== "all") query = query.eq("status", filters.status);
-
-      if (filters.search.trim() !== "") {
-        const term = sanitizeIlikeSearchTerm(filters.search);
+      if (p.p_from) query = query.gte("date", p.p_from);
+      if (p.p_to) query = query.lte("date", p.p_to);
+      if (p.p_platform) query = query.eq("platform", p.p_platform);
+      if (p.p_currency) query = query.eq("currency", p.p_currency);
+      if (p.p_status) query = query.eq("status", p.p_status);
+      if (p.p_pattern) {
         query = query.or(
-          `product_name.ilike."%${term}%",external_order_id.ilike."%${term}%",description.ilike."%${term}%"`
+          `product_name.ilike."${p.p_pattern}",external_order_id.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
         );
       }
 
