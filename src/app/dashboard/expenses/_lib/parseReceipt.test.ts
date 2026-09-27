@@ -314,6 +314,14 @@ describe("parseReceipt", () => {
     expect(parse(["Subtotal items 300,00", "Total amount payable", "50,00"].join("\n")).amount).toBe(50);
   });
 
+  it("keeps the sign on a space-grouped negative total (credit note)", () => {
+    expect(parse("Gesamtbetrag -1 234,56 €").amount).toBe(-1234.56);
+  });
+
+  it("does not treat 'Exchange' as a change-given line", () => {
+    expect(parse("Exchange rate total 12,00 €").amount).toBe(12);
+  });
+
   it("reads a space-grouped four-digit total", () => {
     expect(parse("Gesamtbetrag 1 234,56 €")).toMatchObject({ amount: 1234.56, currency: "EUR" });
   });

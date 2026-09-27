@@ -615,6 +615,10 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   merges space groups back ("Gesamtbetrag 1 234,56 €" → 1234.56) only when the
   total line holds exactly one amount whose integer part is 3 digits. A line
   like "1 100,00 100,00" is ambiguous (two amounts) → nothing merged.
+  A leading minus belongs to the first group ("-1 234,56" → -1234.56). Known,
+  accepted ambiguity: a quantity written directly before the price ON the
+  total line ("Summe 2 125,00") merges to 2125 — indistinguishable from
+  "12 345,67"; realistic forms ("Summe 2 Artikel 125,00") don't merge.
 - **Savings/discount/change/tendered lines are never totals**, even though some
   contain a generic total keyword: `"Total savings £4.50"` must not beat the
   real `"Total £3.20"` on the same receipt. `isTotalLine()`'s `NOT_TOTAL_RE`

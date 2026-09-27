@@ -53,7 +53,7 @@ const INCLUSIVE_VAT_RE = /\b(inkl|incl|including|enth|enthalten)\b\.?\s*(\d{1,2}
 // total keyword ("Total savings £4.50", "Gegebener Betrag 150,00"). A
 // cash-PAID total ("Summe bar 12,00", "Total paid by cash") IS the total,
 // so "bar"/"cash" alone must not appear here.
-const NOT_TOTAL_RE = /(savings|saved|discount|rabatt|ersparnis|gespart|gegeben|rückgeld|change|tendered)/i;
+const NOT_TOTAL_RE = /(savings|saved|discount|rabatt|ersparnis|gespart|gegeben|rückgeld|\bchange\b|tendered)/i;
 
 /** A grand-total line: a total keyword, not a subtotal/savings/change line, and VAT only mentioned as "incl. VAT". */
 function isTotalLine(line: string): boolean {
@@ -80,8 +80,9 @@ function amountsIn(line: string): number[] {
   return amountMatches(line).map((m) => m.value);
 }
 
-// Space-separated thousands groups directly before an amount: "1 " in "1 234,56".
-const SPACE_GROUPS_BEFORE_RE = /(?<![\d.,])(\d{1,3}(?: \d{3})*) $/;
+// Space-separated thousands groups directly before an amount: "1 " in "1 234,56"
+// (and "-1 " in "-1 234,56" — the sign sits on the first group, not the token).
+const SPACE_GROUPS_BEFORE_RE = /(?<![\d.,])(-?\d{1,3}(?: \d{3})*) $/;
 const THREE_DIGIT_AMOUNT_RE = /^-?\d{3}[.,]\d{2}/;
 
 /**
