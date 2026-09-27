@@ -130,14 +130,16 @@ function findCurrency(lines: string[], total: LocatedAmount | undefined): Curren
     if (onLine) return onLine;
 
     const neighbours = [total.line - 1, total.line + 1].filter((i) => i >= 0 && i < lines.length);
-    // A neighbouring line that repeats the total's figure is describing it.
+    // A neighbouring line that repeats the total's figure is describing it —
+    // but only trust that when every such line agrees.
+    const repeated = new Set<Currency>();
     for (const i of neighbours) {
       const same = amountMatches(lines[i]).find((m) => m.value === total.amount);
-      if (same) {
-        const c = currencyNearest(lines[i], same.index);
-        if (c) return c;
-      }
+      const c = same ? currencyNearest(lines[i], same.index) : undefined;
+      if (c) repeated.add(c);
     }
+    if (repeated.size === 1) return [...repeated][0];
+    if (repeated.size > 1) return undefined;
     // Otherwise only trust the neighbours if they agree on one currency.
     const nearby = new Set<Currency>();
     for (const i of neighbours) for (const c of currenciesIn(lines[i])) nearby.add(c);

@@ -237,4 +237,11 @@ describe("parseReceipt", () => {
     expect(parsed.amount).toBe(30);
     expect(parsed.currency).toBeUndefined();
   });
+
+  it("suggests no currency when both neighbours repeat the total in different currencies", () => {
+    const text = ["20.00 USD", "Total: 20.00", "20.00 EUR"].join("\n");
+    const parsed = parse(text);
+    expect(parsed.amount).toBe(20);
+    expect(parsed.currency).toBeUndefined();
+  });
 });
