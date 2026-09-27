@@ -70,7 +70,7 @@ export const fetchExpensesPage = createAsyncThunk(
 
 /**
  * Filtered totals across ALL matching expenses (not just the loaded page) —
- * one row per currency from get_expenses_summary (049). Uses the same
+ * one row per currency from get_expenses_summary (050). Uses the same
  * `expensesFilterParams` as `fetchExpensesPage`, so tiles and table can't disagree.
  */
 export const fetchExpensesSummary = createAsyncThunk(

@@ -1,6 +1,6 @@
 import { ilikePattern, resolveDateBounds, type ExpenseFilters } from "@/lib/utils/filters";
 
-/** Arg names match `get_expenses_summary` in 049_table_summary_functions.sql exactly. */
+/** Arg names match `get_expenses_summary` in 050_table_summary_functions.sql exactly. */
 export interface ExpensesSummaryParams {
   p_from: string | null;
   p_to: string | null;

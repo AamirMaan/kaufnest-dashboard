@@ -69,7 +69,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
   **Summary thunk** (2026-09-26): `fetchSalesSummary(filters: SalesFilters)`
-  calls the `get_sales_summary` RPC (migration 049) via `salesFilterParams` —
+  calls the `get_sales_summary` RPC (migration 050) via `salesFilterParams` —
   the same mapper `fetchSalesPage` uses, so the filtered-summary tiles and the
   table can never disagree — and returns one `SalesSummaryRow` per currency
   (`src/types/index.ts`). State: `summary: SalesSummaryRow[]`,
@@ -332,7 +332,7 @@ editable fields.
   Overview page (`app/dashboard/page.tsx`). **As of Task 5 (2026-09-26),
   `page.tsx` no longer computes this client-side** — the equivalent
   exclusion (and the "Excluded" tile's count) now lives in the
-  `get_sales_summary` RPC (049), mirroring the earlier `get_sales_overview`
+  `get_sales_summary` RPC (050), mirroring the earlier `get_sales_overview`
   (045) move. **`refunded`
   is deliberately NOT in this exclusion** — a refunded order stays in both
   totals at its reduced `total_amount` (the REFUND import path deducts the

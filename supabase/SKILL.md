@@ -233,7 +233,7 @@ once `select("*")` over the full table stops being viable:
   `ilikePattern()`.** Never put a literal `%` in a function body that is
   mirrored into `005` via `format()` — `format()` treats any `%` outside the
   `%1$I` placeholder as its own substitution and errors or corrupts the SQL.
-  `049_table_summary_functions.sql`'s three functions rely on this: the
+  `050_table_summary_functions.sql`'s three functions rely on this: the
   caller (`ilikePattern()` in `src/lib/utils/filters.ts`) already wraps the
   search term in `%...%` and backslash-escapes any literal `%`/`_`/`\`/`"`
   in it, so the SQL itself only ever does a plain `ILIKE p_pattern` with no

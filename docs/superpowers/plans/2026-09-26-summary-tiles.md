@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js App Router (this repo's version — see `node_modules/next/dist/docs/`), Redux Toolkit, Supabase (PostgREST RPC), Postgres, Jest (`testEnvironment: node`), Tailwind with `var(--color-*)` tokens.
 
+> **Renumbered 2026-09-27:** this plan's migration shipped as `050_table_summary_functions.sql`, not `049` — advanced inventory's `049_advanced_inventory_phase3.sql` merged to `main` first. References below to `049` mean `050`. The tile-helper module is `summaryTileHelpers.ts` (renamed from `summaryTiles.ts`, a case collision with `SummaryTiles.tsx` on macOS).
+
 **Spec:** `docs/superpowers/specs/2026-09-26-summary-tiles-receipt-autofill-overview-charts-design.md` → "Part 1".
 
 ## Global Constraints

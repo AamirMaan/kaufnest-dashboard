@@ -78,7 +78,7 @@ export interface Expense {
   receipts: ExpenseReceipt[];
 }
 
-/** One row per currency from get_sales_summary (049). Money excludes returned/cancelled unless a status filter is set. */
+/** One row per currency from get_sales_summary (050). Money excludes returned/cancelled unless a status filter is set. */
 export interface SalesSummaryRow {
   currency: Currency;
   order_count: number;
@@ -89,7 +89,7 @@ export interface SalesSummaryRow {
   excluded_count: number;
 }
 
-/** One row per currency from get_purchases_summary (049). */
+/** One row per currency from get_purchases_summary (050). */
 export interface PurchasesSummaryRow {
   currency: Currency;
   purchase_count: number;
@@ -98,7 +98,7 @@ export interface PurchasesSummaryRow {
   vat: number;
 }
 
-/** One row per currency from get_expenses_summary (049). */
+/** One row per currency from get_expenses_summary (050). */
 export interface ExpensesSummaryRow {
   currency: Currency;
   expense_count: number;

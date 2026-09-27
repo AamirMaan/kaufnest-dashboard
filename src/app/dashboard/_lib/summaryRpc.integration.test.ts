@@ -1,8 +1,8 @@
 /**
  * Integration tests for get_sales_summary / get_purchases_summary /
- * get_expenses_summary (049_table_summary_functions.sql). Hits the REAL
+ * get_expenses_summary (050_table_summary_functions.sql). Hits the REAL
  * tenant_boughtopia schema — only runs via `npm run test:integration`, and
- * only after 049 has been applied. Same env-loading approach as
+ * only after 050 has been applied. Same env-loading approach as
  * overviewRpc.integration.test.ts (see the long comment there).
  */
 import { readFileSync } from "fs";

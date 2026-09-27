@@ -39,7 +39,7 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   `.order("date")`, and `.range(from, to)` from `rangeFor()`. There is no
   standalone vendor filter — the general search box covers vendor.
   **Summary thunk** (2026-09-26): `fetchPurchasesSummary(filters:
-  PurchaseFilters)` calls the `get_purchases_summary` RPC (migration 049) via
+  PurchaseFilters)` calls the `get_purchases_summary` RPC (migration 050) via
   `purchasesFilterParams` — the same mapper `fetchPurchasesPage` uses — and
   returns one `PurchasesSummaryRow` per currency (`src/types/index.ts`).
   State: `summary`/`summaryLoading`/`summaryError`/`summaryVersion` (bumped

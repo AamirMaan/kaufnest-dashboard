@@ -65,10 +65,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `src/lib/shipping/addressMappers.ts` unchanged; do not duplicate their
   validation logic here.
 - **Add/change an Orders summary tile**: `_lib/salesSummaryTiles.ts` (+ its
-  colocated test) — plus SQL in `049_...sales_summary.sql` **and**
+  colocated test) — plus SQL in `050_table_summary_functions.sql` **and**
   `005_tenant_provisioning.sql` if the tile needs a new aggregate column
   from `get_sales_summary`. A new filter must also be added to
-  `_store/salesFilterParams.ts` AND the 049/005 SQL, or the tiles and the
+  `_store/salesFilterParams.ts` AND the 050/005 SQL, or the tiles and the
   table will silently disagree about which rows are included.
 - **Change list/filter/table behavior**: `page.tsx` only.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
@@ -577,7 +577,7 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   while the list page (`page.tsx`) is mounted.
 - **Tiles cover all filtered rows, not the page.** A new filter must be
   added to `salesFilterParams` (`_store/salesFilterParams.ts`) AND the
-  049/005 SQL, or the tiles (`get_sales_summary`) and the table
+  050/005 SQL, or the tiles (`get_sales_summary`) and the table
   (`fetchSalesPage`) will silently disagree about which rows are included.
 
 ## Gotchas — server-side pagination
@@ -612,7 +612,7 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   means.
 - **`excludedCount` no longer exists in `page.tsx` (removed Task 5,
   2026-09-26)** — the "Excluded" summary tile now reads `excluded_count`
-  straight off `get_sales_summary`'s per-currency rows (RPC 049), covering
+  straight off `get_sales_summary`'s per-currency rows (RPC 050), covering
   ALL matching orders, not just the current page. `refunded` orders are NOT
   counted here — they still count toward revenue, see `sales/CLAUDE.md` →
   "Order status + returns".
@@ -823,7 +823,7 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   revenue/profit aggregation (in this feature's summary tiles or in
   `app/dashboard/page.tsx`'s StatCards/charts), filter out
   `status === "returned"` rows first (this feature's tiles get that
-  exclusion from `get_sales_summary`'s SQL, migration 049 — see "Add/change
+  exclusion from `get_sales_summary`'s SQL, migration 050 — see "Add/change
   an Orders summary tile" above; Overview uses an `effectiveSales` array)
   — otherwise
   written-off/returned orders will inflate those figures.

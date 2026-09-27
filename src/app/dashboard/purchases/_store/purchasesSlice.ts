@@ -69,7 +69,7 @@ export const fetchPurchasesPage = createAsyncThunk(
 
 /**
  * Filtered totals across ALL matching purchases (not just the loaded page) —
- * one row per currency from get_purchases_summary (049). Uses the same
+ * one row per currency from get_purchases_summary (050). Uses the same
  * `purchasesFilterParams` as `fetchPurchasesPage`, so tiles and table can't disagree.
  */
 export const fetchPurchasesSummary = createAsyncThunk(

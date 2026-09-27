@@ -41,7 +41,7 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
   from `rangeFor()`. Dispatches `hydratePage` on success.
   **Summary thunk** (2026-09-26): `fetchExpensesSummary(filters:
-  ExpenseFilters)` calls the `get_expenses_summary` RPC (migration 049) via
+  ExpenseFilters)` calls the `get_expenses_summary` RPC (migration 050) via
   `expensesFilterParams` — the same mapper `fetchExpensesPage` uses — and
   returns one `ExpensesSummaryRow` per currency (`src/types/index.ts`,
   includes `top_category`/`top_category_amount`). State:

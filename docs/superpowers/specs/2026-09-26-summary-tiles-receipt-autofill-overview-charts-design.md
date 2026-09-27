@@ -9,8 +9,10 @@ branch. Part 1 is reviewed before parts 2 and 3 start.
 
 ## Migration numbering
 
-`feat/advanced-inventory` (unmerged) already owns `047`/`048`. This branch
-starts at **`049`** so the two branches merge without a number collision.
+Advanced inventory (merged to `main` in #109–#112) owns `047`–`049`. This
+branch uses **`050`** (summary functions) and **`051`** (Overview timeseries).
+It was originally numbered `049`, then renumbered on rebase (2026-09-27) after
+`049_advanced_inventory_phase3.sql` landed on `main`.
 All tenant DDL goes through `public.run_on_all_tenant_schemas` **and** is
 mirrored into `provision_tenant_schema()` in `005_tenant_provisioning.sql`
 (the 2-places rule in `supabase/SKILL.md`). Functions are **not** `SECURITY
@@ -49,7 +51,7 @@ Rules:
   `hasVat` comment in `expenses/page.tsx`.
 - Count tiles always show (including 0).
 
-### Database — `049_table_summary_functions.sql`
+### Database — `050_table_summary_functions.sql`
 Three functions per tenant schema:
 
 ```
@@ -175,7 +177,7 @@ during planning.
 
 ## Part 3 — Overview as chart cards
 
-### Database — `050_overview_timeseries.sql`
+### Database — `051_overview_timeseries.sql`
 `get_overview_timeseries(p_from date, p_to date, p_currency text) RETURNS jsonb`
 (one call, like the 045 functions, filtered to the profile's base currency):
 
@@ -247,7 +249,7 @@ overview. The existing 045 functions and `payouts` stay as they are.
 ## Docs
 Same-commit updates to `sales/`, `purchases/`, `expenses/`, `dashboard/`
 `CLAUDE.md` + `SKILL.md`, `src/components/ui/SKILL.md`, and
-`supabase/SKILL.md` file-map table (049, 050 — not applied).
+`supabase/SKILL.md` file-map table (050, 051 — not applied).
 
 ## Out of scope
 AI-based receipt reading; clickable tiles/cards; currency conversion in
