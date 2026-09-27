@@ -1,30 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-} from "recharts";
-import { DollarSign, TrendingDown, ShoppingCart, BarChart3, Package } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { type Currency } from "@/types";
-import { StatCard } from "@/components/ui/StatCard";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { CategoryBadge } from "@/components/ui/Badge";
-import { useTheme } from "@/components/ui/ThemeProvider";
 import { createTenantClient } from "@/lib/supabase/client";
-import { formatCurrency, calculateNetProfit } from "@/lib/utils/currency";
+import { calculateNetProfit } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
 import {
   resolveDateRange,
+  resolveDateBounds,
   periodRange,
   describePeriod,
   PERIOD_UNIT_OPTIONS,
@@ -32,65 +17,23 @@ import {
   type PeriodUnit,
 } from "@/lib/utils/filters";
 import { fetchEarliestYear } from "@/lib/utils/fetchEarliestYear";
-import { computePending } from "./_lib/platformBalance";
+import { computePlatformBalance } from "./_lib/platformBalance";
+import type {
+  ExpensesOverview,
+  OverviewTimeseries,
+  PayoutsOverview,
+  PurchasesOverview,
+  SalesOverview,
+} from "./_lib/overviewTypes";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
-import type { ExpenseCategory } from "@/types";
-
-interface PlatformBucket {
-  platform: string;
-  value: number;
-}
-
-interface TopProductBucket {
-  name: string;
-  revenue: number;
-  units: number;
-}
-
-interface MonthlyBucket {
-  month: string;
-  revenue?: number;
-  amount?: number;
-}
-
-interface PlatformBalanceBucket {
-  platform: string;
-  sales: number;
-  adFees: number;
-  shippingFees: number;
-  count: number;
-}
-
-interface SalesOverview {
-  orderCount: number;
-  effectiveOrderCount: number;
-  unitsSold: number;
-  revenue: number;
-  fees: number;
-  vatCollected: number;
-  revenueByPlatform: PlatformBucket[];
-  topProducts: TopProductBucket[];
-  monthlyRevenue: MonthlyBucket[];
-  platformBalance: PlatformBalanceBucket[];
-}
-
-interface ExpensesOverview {
-  total: number;
-  vatPaid: number;
-  byCategory: { category: ExpenseCategory; amount: number }[];
-  monthlyExpenses: MonthlyBucket[];
-  platformSubtotal: { platform: string; amount: number }[];
-}
-
-interface PurchasesOverview {
-  total: number;
-  vatPaid: number;
-  monthlyPurchases: MonthlyBucket[];
-}
-
-interface PayoutsOverview {
-  transferred: { platform: string; amount: number }[];
-}
+import { RevenueCard } from "./_components/RevenueCard";
+import { NetProfitCard } from "./_components/NetProfitCard";
+import { ExpensesCard } from "./_components/ExpensesCard";
+import { PurchasesCard } from "./_components/PurchasesCard";
+import { OrdersCard } from "./_components/OrdersCard";
+import { VatCard } from "./_components/VatCard";
+import { PlatformBalanceCard } from "./_components/PlatformBalanceCard";
+import { TopProductsCard } from "./_components/TopProductsCard";
 
 const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "this_month", label: "This Month" },
@@ -101,25 +44,10 @@ const RANGE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "custom", label: "Custom Range" },
 ];
 
-const PLATFORM_COLORS: Record<string, string> = {
-  amazon:  "#F59E0B",
-  ebay:    "#3B82F6",
-  etsy:    "#EF4444",
-  shopify: "#10B981",
-  other:   "#8B5CF6",
-};
-const FALLBACK_COLORS = ["#6366F1", "#EC4899", "#14B8A6", "#F97316", "#84CC16"];
-
-function platformColor(key: string, index: number): string {
-  return PLATFORM_COLORS[key.toLowerCase()] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
-}
-
 const labelCls =
   "block text-[11px] font-medium uppercase tracking-wider text-(--color-text-faint) mb-1";
 const inputCls =
   "rounded-[var(--radius-btn)] border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-sm text-(--color-text-strong) focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent cursor-pointer";
-const cardCls =
-  "bg-(--color-surface) rounded-[var(--radius-card)] border border-(--color-border) p-6";
 
 function describeRange(range: { from: string; to: string } | null): string {
   if (!range) return "all time";
@@ -131,55 +59,9 @@ function describeRange(range: { from: string; to: string } | null): string {
   return "all time";
 }
 
-function compactEur(v: number): string {
-  if (v === 0) return "€0";
-  if (Math.abs(v) >= 1000) return `€${(v / 1000).toFixed(0)}k`;
-  return `€${v.toFixed(0)}`;
-}
-
-// Platform balance: gross sales minus ad fees, outbound shipping, and any
-// platform-tagged expense subtotal returned by get_expenses_overview,
-// combined with recorded payouts from get_payouts_overview. Returns null
-// when there is no sales bucket for that platform in the period (card is
-// hidden). Module-level and parameterized (not a component-body closure) so
-// it's a stable reference the useMemo hooks below don't need to list as a
-// dependency.
-function computePlatformBalance(
-  platform: "ebay" | "amazon",
-  salesOverview: SalesOverview | null,
-  expensesOverview: ExpensesOverview | null,
-  payoutsOverview: PayoutsOverview | null
-): {
-  balance: number;
-  sales: number;
-  adFees: number;
-  shippingFees: number;
-  expenses: number;
-  transferred: number;
-  pending: number;
-  count: number;
-} | null {
-  const bucket = salesOverview?.platformBalance.find((p) => p.platform === platform);
-  if (!bucket) return null;
-  const expenses = expensesOverview?.platformSubtotal.find((p) => p.platform === platform)?.amount ?? 0;
-  const balance = bucket.sales - bucket.adFees - bucket.shippingFees - expenses;
-  const transferred = payoutsOverview?.transferred.find((p) => p.platform === platform)?.amount ?? 0;
-  return {
-    balance,
-    sales: bucket.sales,
-    adFees: bucket.adFees,
-    shippingFees: bucket.shippingFees,
-    expenses,
-    transferred,
-    pending: computePending(balance, transferred),
-    count: bucket.count,
-  };
-}
-
 export default function DashboardPage() {
   const profileCurrency: Currency =
     useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
-  const { theme } = useTheme();
 
   const currentUserRole = useAppSelector((s) => s.currentUser.profile?.role);
   const canRecordTransfer = currentUserRole === "admin" || currentUserRole === "super_admin";
@@ -276,20 +158,19 @@ export default function DashboardPage() {
     setDateTo(computed.to);
   }
 
-  // Sales/expenses/purchases/payouts aggregates for this page are fetched via
-  // 4 Postgres RPCs, scoped to the selected date range and profile currency —
-  // NOT read from state.sales.items etc. Those Redux slices hold only ONE
-  // paginated page (50 rows, most-recent-first, see the Pagination
-  // architecture note in this folder's CLAUDE.md) and get replaced wholesale
-  // whenever the Sales/Expenses/Purchases pages fetch a different page — so
-  // deriving Overview's date-ranged aggregates from them silently produced
-  // wrong (often empty) results, e.g. the VAT Position section disappearing,
-  // once a tenant had more than one page of records or had recently paged
-  // through those tables elsewhere.
+  // Aggregates come from 5 Postgres RPCs scoped to the selected date range
+  // and profile currency — NOT from state.sales.items etc. Those Redux
+  // slices hold only ONE paginated page (50 rows) and get replaced whenever
+  // the Sales/Expenses/Purchases pages fetch a different page, so deriving
+  // date-ranged aggregates from them silently produced wrong (often empty)
+  // results. The four 045 RPCs give the headline totals;
+  // get_overview_timeseries (051) gives the monthly chart series, the
+  // previous-period totals for the change badges, and the top vendor.
   const [salesOverview, setSalesOverview] = useState<SalesOverview | null>(null);
   const [expensesOverview, setExpensesOverview] = useState<ExpensesOverview | null>(null);
   const [purchasesOverview, setPurchasesOverview] = useState<PurchasesOverview | null>(null);
   const [payoutsOverview, setPayoutsOverview] = useState<PayoutsOverview | null>(null);
+  const [timeseries, setTimeseries] = useState<OverviewTimeseries | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -298,17 +179,22 @@ export default function DashboardPage() {
     async function load() {
       setIsLoading(true);
       const supabase = await createTenantClient();
+      // resolveDateBounds, not `range`: a one-sided custom range is
+      // represented in `range` with 0000-00-00/9999-99-99 sentinels, which
+      // aren't valid SQL dates. Bounds give null for the open side instead.
+      const bounds = resolveDateBounds({ preset, dateFrom, dateTo });
       const rpcParams = {
-        p_from: range?.from ?? null,
-        p_to: range?.to ?? null,
+        p_from: bounds.from,
+        p_to: bounds.to,
         p_currency: profileCurrency,
       };
 
-      const [salesRes, expensesRes, purchasesRes, payoutsRes] = await Promise.all([
+      const [salesRes, expensesRes, purchasesRes, payoutsRes, timeseriesRes] = await Promise.all([
         supabase.rpc("get_sales_overview", rpcParams),
         supabase.rpc("get_expenses_overview", rpcParams),
         supabase.rpc("get_purchases_overview", rpcParams),
         supabase.rpc("get_payouts_overview", rpcParams),
+        supabase.rpc("get_overview_timeseries", rpcParams),
       ]);
 
       if (cancelled) return;
@@ -316,11 +202,13 @@ export default function DashboardPage() {
       if (expensesRes.error) console.error("get_expenses_overview failed", expensesRes.error);
       if (purchasesRes.error) console.error("get_purchases_overview failed", purchasesRes.error);
       if (payoutsRes.error) console.error("get_payouts_overview failed", payoutsRes.error);
+      if (timeseriesRes.error) console.error("get_overview_timeseries failed", timeseriesRes.error);
 
       setSalesOverview(salesRes.error ? null : (salesRes.data as SalesOverview));
       setExpensesOverview(expensesRes.error ? null : (expensesRes.data as ExpensesOverview));
       setPurchasesOverview(purchasesRes.error ? null : (purchasesRes.data as PurchasesOverview));
       setPayoutsOverview(payoutsRes.error ? null : (payoutsRes.data as PayoutsOverview));
+      setTimeseries(timeseriesRes.error ? null : (timeseriesRes.data as OverviewTimeseries));
       setIsLoading(false);
     }
 
@@ -328,78 +216,16 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [range, profileCurrency]);
+  }, [preset, dateFrom, dateTo, profileCurrency]);
 
-  // Guard against multi-currency totals: only include records in the profile
-  // currency so EUR + USD + GBP are never summed into a single meaningless number.
-  // (Currency filtering and date-range filtering now happen in SQL — the RPCs
-  // are called with p_currency/p_from/p_to above.)
   const totalRevenue = salesOverview?.revenue ?? 0;
   const totalSaleFees = salesOverview?.fees ?? 0;
   const totalExpenses = expensesOverview?.total ?? 0;
   const totalPurchases = purchasesOverview?.total ?? 0;
   const netProfit = calculateNetProfit(totalRevenue, totalExpenses + totalSaleFees, totalPurchases);
-  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
-  const avgOrderValue =
-    salesOverview && salesOverview.effectiveOrderCount > 0
-      ? totalRevenue / salesOverview.effectiveOrderCount
-      : null;
-  const unitsSold = salesOverview?.unitsSold ?? 0;
 
-  // VAT position
   const vatCollected = salesOverview?.vatCollected ?? 0;
   const vatPaid = (purchasesOverview?.vatPaid ?? 0) + (expensesOverview?.vatPaid ?? 0);
-  const vatPosition = vatCollected - vatPaid;
-  // `!== 0`, not `> 0`: expenses may be NEGATIVE (credit notes), so their
-  // input tax is negative too. Filter to a period holding only refunds and
-  // `vatPaid` goes negative while `vatCollected` stays 0 — `> 0` then hid the
-  // entire VAT Position section despite there being real input tax to report.
-  const hasVatData = vatCollected !== 0 || vatPaid !== 0;
-
-  // Monthly trend data — grouped by YYYY-MM, merging the three RPCs' monthly series
-  const monthlyTrend = useMemo(() => {
-    const map = new Map<string, { revenue: number; expenses: number; purchases: number }>();
-    const get = (k: string) => map.get(k) ?? { revenue: 0, expenses: 0, purchases: 0 };
-
-    for (const { month, revenue } of salesOverview?.monthlyRevenue ?? []) {
-      map.set(month, { ...get(month), revenue: revenue ?? 0 });
-    }
-    for (const { month, amount } of expensesOverview?.monthlyExpenses ?? []) {
-      const entry = get(month);
-      map.set(month, { ...entry, expenses: entry.expenses + (amount ?? 0) });
-    }
-    for (const { month, amount } of purchasesOverview?.monthlyPurchases ?? []) {
-      const entry = get(month);
-      map.set(month, { ...entry, purchases: entry.purchases + (amount ?? 0) });
-    }
-
-    return Array.from(map.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([ym, data]) => ({
-        month: new Date(`${ym}-15`).toLocaleString("default", { month: "short", year: "2-digit" }),
-        ...data,
-      }));
-  }, [salesOverview, expensesOverview, purchasesOverview]);
-
-  // Revenue by platform — includes fill colour so recharts v3 Pie can skip Cell
-  const platformData = useMemo(() => {
-    return (salesOverview?.revenueByPlatform ?? [])
-      .map(({ platform, value }, index) => ({
-        key: platform,
-        name: platform.charAt(0).toUpperCase() + platform.slice(1),
-        value,
-        fill: platformColor(platform, index),
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [salesOverview]);
-
-  // Top 5 products by revenue — RPC already grouped and sliced to top 5
-  const topProducts = salesOverview?.topProducts ?? [];
-
-  // Expenses by category — kept as a [category, amount] tuple array so the
-  // JSX below (which destructures `.map(([category, amount]) => ...)`) is unchanged
-  const expensesByCategory: [ExpenseCategory, number][] =
-    (expensesOverview?.byCategory ?? []).map((c) => [c.category, c.amount]);
 
   const ebayBalance = useMemo(
     () => computePlatformBalance("ebay", salesOverview, expensesOverview, payoutsOverview),
@@ -409,20 +235,6 @@ export default function DashboardPage() {
     () => computePlatformBalance("amazon", salesOverview, expensesOverview, payoutsOverview),
     [salesOverview, expensesOverview, payoutsOverview]
   );
-
-  const showCharts =
-    (salesOverview?.orderCount ?? 0) > 0 ||
-    (expensesOverview?.monthlyExpenses.length ?? 0) > 0 ||
-    (purchasesOverview?.monthlyPurchases.length ?? 0) > 0;
-
-  // Chart palette — recharts props are SVG attributes so CSS vars don't reliably resolve there;
-  // use concrete hex values derived from the current theme instead.
-  const isDark = theme === "dark";
-  const gridColor    = isDark ? "#334155" : "#e2e8f0";
-  const tickColor    = isDark ? "#94a3b8" : "#64748b";
-  const tooltipBg    = isDark ? "#1e293b" : "#ffffff";
-  const tooltipBorder = isDark ? "#334155" : "#e2e8f0";
-  const tooltipLabel = isDark ? "#cbd5e1" : "#334155";
 
   return (
     <div>
@@ -507,399 +319,51 @@ export default function DashboardPage() {
 
       {/* Loading overlay — subtle opacity fade while the date-range-scoped fetch is in flight */}
       <div className={isLoading ? "opacity-60 pointer-events-none transition-opacity" : ""}>
-      {/* KPI stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard
-          label="Revenue"
-          value={formatCurrency(totalRevenue, profileCurrency)}
-          trend="up"
-          subtext={avgOrderValue !== null ? `Avg. order: ${formatCurrency(avgOrderValue, profileCurrency)}` : undefined}
-          icon={<DollarSign size={18} />}
-        />
-        <StatCard
-          label="Expenses"
-          value={formatCurrency(totalExpenses, profileCurrency)}
-          trend="down"
-          icon={<TrendingDown size={18} />}
-        />
-        <StatCard
-          label="Purchases"
-          value={formatCurrency(totalPurchases, profileCurrency)}
-          trend="down"
-          icon={<ShoppingCart size={18} />}
-        />
-        <StatCard
-          label="Net Profit"
-          value={formatCurrency(netProfit, profileCurrency)}
-          trend={netProfit >= 0 ? "up" : "down"}
-          subtext={
-            profitMargin !== null
-              ? `${profitMargin.toFixed(1)}% margin`
-              : netProfit >= 0
-              ? "Profitable in this period"
-              : "Loss in this period"
-          }
-          icon={<BarChart3 size={18} />}
-        />
-        <StatCard
-          label="Orders"
-          value={(salesOverview?.orderCount ?? 0).toLocaleString()}
-          subtext={`${unitsSold} unit${unitsSold !== 1 ? "s" : ""} sold`}
-          trend="neutral"
-          icon={<Package size={18} />}
-        />
-      </div>
-
-      {/* Platform balances — hidden when no sales for that platform in the period */}
-      {(ebayBalance !== null || amazonBalance !== null) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+          <RevenueCard sales={salesOverview} timeseries={timeseries} currency={profileCurrency} />
+          <NetProfitCard
+            netProfit={netProfit}
+            revenue={totalRevenue}
+            timeseries={timeseries}
+            currency={profileCurrency}
+          />
+          <ExpensesCard expenses={expensesOverview} timeseries={timeseries} currency={profileCurrency} />
+          <PurchasesCard purchases={purchasesOverview} timeseries={timeseries} currency={profileCurrency} />
+          <OrdersCard sales={salesOverview} timeseries={timeseries} currency={profileCurrency} />
+          <VatCard
+            vatCollected={vatCollected}
+            vatPaid={vatPaid}
+            timeseries={timeseries}
+            currency={profileCurrency}
+          />
+          {/* Balance cards are hidden when the platform had no sales in the period */}
           {ebayBalance !== null && (
-            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-(--color-text-base)">
-                  eBay Balance
-                  <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
-                    {ebayBalance.count} order{ebayBalance.count !== 1 ? "s" : ""}
-                  </span>
-                </h2>
-                {canRecordTransfer && (
-                  <button
-                    onClick={() => setTransferModal("ebay")}
-                    className="text-xs font-medium px-2.5 py-1 rounded-(--radius-btn) bg-(--color-primary-muted) text-(--color-primary-text) hover:bg-(--color-primary) hover:text-white transition-colors cursor-pointer"
-                  >
-                    Record Transfer
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <StatCard
-                  label="Sales"
-                  value={formatCurrency(ebayBalance.sales, profileCurrency)}
-                  trend="neutral"
-                  subtext="Gross revenue"
-                />
-                <StatCard
-                  label="Ad Fees + Shipping"
-                  value={formatCurrency(ebayBalance.adFees + ebayBalance.shippingFees, profileCurrency)}
-                  trend="down"
-                  subtext={`${formatCurrency(ebayBalance.adFees, profileCurrency)} ads · ${formatCurrency(ebayBalance.shippingFees, profileCurrency)} ship`}
-                />
-                <StatCard
-                  label="Expenses"
-                  value={formatCurrency(ebayBalance.expenses, profileCurrency)}
-                  trend="down"
-                  subtext="Vendor/title contains &quot;eBay&quot;"
-                />
-                <StatCard
-                  label="Balance Earned"
-                  value={formatCurrency(ebayBalance.balance, profileCurrency)}
-                  trend={ebayBalance.balance >= 0 ? "up" : "down"}
-                  subtext="Sales − fees − expenses"
-                />
-                <StatCard
-                  label="Transferred"
-                  value={formatCurrency(ebayBalance.transferred, profileCurrency)}
-                  trend="neutral"
-                  subtext="Paid out to bank"
-                />
-                <StatCard
-                  label="Pending"
-                  value={formatCurrency(ebayBalance.pending, profileCurrency)}
-                  trend={ebayBalance.pending >= 0 ? "up" : "down"}
-                  subtext="Still in eBay account"
-                />
-              </div>
-            </div>
+            <PlatformBalanceCard
+              platform="ebay"
+              balance={ebayBalance}
+              currency={profileCurrency}
+              onRecordTransfer={canRecordTransfer ? () => setTransferModal("ebay") : undefined}
+            />
           )}
-
           {amazonBalance !== null && (
-            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-(--color-text-base)">
-                  Amazon Balance
-                  <span className="ml-2 text-xs font-normal text-(--color-text-faint)">
-                    {amazonBalance.count} order{amazonBalance.count !== 1 ? "s" : ""}
-                  </span>
-                </h2>
-                {canRecordTransfer && (
-                  <button
-                    onClick={() => setTransferModal("amazon")}
-                    className="text-xs font-medium px-2.5 py-1 rounded-(--radius-btn) bg-(--color-primary-muted) text-(--color-primary-text) hover:bg-(--color-primary) hover:text-white transition-colors cursor-pointer"
-                  >
-                    Record Transfer
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <StatCard
-                  label="Sales"
-                  value={formatCurrency(amazonBalance.sales, profileCurrency)}
-                  trend="neutral"
-                  subtext="Gross revenue"
-                />
-                <StatCard
-                  label="Ad Fees + Shipping"
-                  value={formatCurrency(amazonBalance.adFees + amazonBalance.shippingFees, profileCurrency)}
-                  trend="down"
-                  subtext={`${formatCurrency(amazonBalance.adFees, profileCurrency)} ads · ${formatCurrency(amazonBalance.shippingFees, profileCurrency)} ship`}
-                />
-                <StatCard
-                  label="Expenses"
-                  value={formatCurrency(amazonBalance.expenses, profileCurrency)}
-                  trend="down"
-                  subtext="Vendor/title contains &quot;Amazon&quot;"
-                />
-                <StatCard
-                  label="Balance Earned"
-                  value={formatCurrency(amazonBalance.balance, profileCurrency)}
-                  trend={amazonBalance.balance >= 0 ? "up" : "down"}
-                  subtext="Sales − fees − expenses"
-                />
-                <StatCard
-                  label="Transferred"
-                  value={formatCurrency(amazonBalance.transferred, profileCurrency)}
-                  trend="neutral"
-                  subtext="Paid out to bank"
-                />
-                <StatCard
-                  label="Pending"
-                  value={formatCurrency(amazonBalance.pending, profileCurrency)}
-                  trend={amazonBalance.pending >= 0 ? "up" : "down"}
-                  subtext="Still in Amazon account"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Charts — hidden when there is no data in the period */}
-      {showCharts && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-          {/* Monthly Trend — 2/3 width */}
-          <div className={`${cardCls} lg:col-span-2`} style={{ boxShadow: "var(--shadow-card)" }}>
-            <h2 className="text-sm font-semibold text-(--color-text-base) mb-5">Monthly Trend</h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={monthlyTrend} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="grad-revenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#059669" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#059669" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="grad-expenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="grad-purchases" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d97706" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#d97706" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 11, fill: tickColor }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: tickColor }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={compactEur}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: tooltipBg,
-                    border: `1px solid ${tooltipBorder}`,
-                    borderRadius: "0.5rem",
-                    fontSize: "12px",
-                  }}
-                  labelStyle={{ color: tooltipLabel, marginBottom: 4, fontWeight: 600 }}
-                  formatter={(value, name) => [
-                    formatCurrency(Number(value ?? 0), profileCurrency),
-                    String(name ?? "").charAt(0).toUpperCase() + String(name ?? "").slice(1),
-                  ]}
-                />
-                <Legend
-                  iconType="circle"
-                  iconSize={7}
-                  wrapperStyle={{ fontSize: 12, paddingTop: 10, color: tickColor }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  name="Revenue"
-                  stroke="#059669"
-                  strokeWidth={2}
-                  fill="url(#grad-revenue)"
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="expenses"
-                  name="Expenses"
-                  stroke="#dc2626"
-                  strokeWidth={2}
-                  fill="url(#grad-expenses)"
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="purchases"
-                  name="Purchases"
-                  stroke="#d97706"
-                  strokeWidth={2}
-                  fill="url(#grad-purchases)"
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Revenue by Platform donut — 1/3 width */}
-          {platformData.length > 0 && (
-            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <h2 className="text-sm font-semibold text-(--color-text-base) mb-3">Revenue by Platform</h2>
-              <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
-                  <Pie
-                    data={platformData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={42}
-                    outerRadius={68}
-                    paddingAngle={2}
-                    dataKey="value"
-                    strokeWidth={0}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: tooltipBg,
-                      border: `1px solid ${tooltipBorder}`,
-                      borderRadius: "0.5rem",
-                      fontSize: "12px",
-                    }}
-                    labelStyle={{ display: "none" }}
-                    formatter={(value, name) => [formatCurrency(Number(value ?? 0), profileCurrency), String(name ?? "")]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Custom platform legend */}
-              <div className="space-y-2 mt-2">
-                {platformData.map((entry) => (
-                  <div key={entry.key} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: entry.fill }} />
-                      <span className="text-(--color-text-muted) truncate">{entry.name}</span>
-                    </div>
-                    <span className="font-medium tabular-nums text-(--color-text-base) ml-2">
-                      {formatCurrency(entry.value, profileCurrency)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* VAT Position */}
-      {hasVatData && (
-        <div className={`${cardCls} mb-8`} style={{ boxShadow: "var(--shadow-card)" }}>
-          <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">VAT Position</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard
-              label="VAT Collected"
-              value={formatCurrency(vatCollected, profileCurrency)}
-              subtext="Output VAT — charged to customers"
-              trend="neutral"
+            <PlatformBalanceCard
+              platform="amazon"
+              balance={amazonBalance}
+              currency={profileCurrency}
+              onRecordTransfer={canRecordTransfer ? () => setTransferModal("amazon") : undefined}
             />
-            <StatCard
-              label="VAT Paid"
-              value={formatCurrency(vatPaid, profileCurrency)}
-              subtext="Input VAT — purchases & expenses"
-              trend="neutral"
-            />
-            <StatCard
-              label={vatPosition >= 0 ? "Due to Government" : "Government Refund"}
-              value={formatCurrency(Math.abs(vatPosition), profileCurrency)}
-              subtext={vatPosition >= 0 ? "Net VAT payable" : "Net VAT reclaimable"}
-              trend={vatPosition >= 0 ? "down" : "up"}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Top Products + Expenses by Category side-by-side */}
-      {(topProducts.length > 0 || expensesByCategory.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          {topProducts.length > 0 && (
-            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">Top Products</h2>
-              <div className="space-y-3">
-                {topProducts.map((p, i) => (
-                  <div key={p.name} className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-(--color-text-faint) w-4 shrink-0">{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-(--color-text-base) truncate max-w-[60%]">
-                          {p.name}
-                        </span>
-                        <span className="text-sm font-semibold tabular-nums text-(--color-success)">
-                          {formatCurrency(p.revenue)}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-(--color-border)">
-                        <div
-                          className="h-full rounded-full bg-(--color-success)"
-                          style={{ width: `${(p.revenue / topProducts[0].revenue) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs text-(--color-text-faint) shrink-0 w-14 text-right">
-                      {p.units} unit{p.units !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
-
-          {expensesByCategory.length > 0 && (
-            <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-              <h2 className="text-sm font-semibold text-(--color-text-base) mb-4">Expenses by Category</h2>
-              <div className="divide-y divide-(--color-border)">
-                {expensesByCategory.map(([category, amount]) => (
-                  <div key={category} className="flex items-center justify-between py-2.5">
-                    <CategoryBadge category={category} />
-                    <span
-                      className={`text-sm font-semibold tabular-nums ${
-                        amount < 0
-                          ? "text-(--color-success)"
-                          : "text-(--color-danger)"
-                      }`}
-                    >
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <TopProductsCard sales={salesOverview} currency={profileCurrency} />
         </div>
-      )}
 
-      <div className={cardCls} style={{ boxShadow: "var(--shadow-card)" }}>
-        <h2 className="text-sm font-semibold text-(--color-text-base) mb-1">Quick Start</h2>
-        <p className="text-sm text-(--color-text-muted)">
-          Use the sidebar to navigate to Orders, Expenses, and Purchases. Figures
-          above reflect the selected date range and use EUR as the base currency.
-        </p>
-      </div>
+        <div className="bg-(--color-surface) rounded-[var(--radius-card)] border border-(--color-border) p-6" style={{ boxShadow: "var(--shadow-card)" }}>
+          <h2 className="text-sm font-semibold text-(--color-text-base) mb-1">Quick Start</h2>
+          <p className="text-sm text-(--color-text-muted)">
+            Use the sidebar to navigate to Orders, Expenses, and Purchases. Figures
+            above reflect the selected date range and use {profileCurrency} as the base currency.
+            Change badges compare with the period of the same length just before it.
+          </p>
+        </div>
       </div>
 
       {transferModal !== null && (

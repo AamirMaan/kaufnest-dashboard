@@ -193,6 +193,10 @@ during planning.
   "top_vendor": { "name": text, "amount": n } | null
 }
 ```
+**Implementation note (2026-09-27):** each month and `previous` also carry
+`fees` (sale fees), and each month carries a flat `expenses` total, so the
+Net Profit line uses the same revenue − (expenses + fees) − purchases formula
+as the headline.
 `previous` covers the equal-length window immediately before `[p_from, p_to]`
 (null when either bound is null, i.e. "all time"). Months with no data are
 emitted as zero rows via `generate_series` so charts have no gaps. Returned/
