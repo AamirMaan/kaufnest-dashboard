@@ -63,13 +63,20 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `amount > 0` guard here makes every imported credit note permanently
   uneditable — see the SKILL.md gotcha before reinstating one.
 - `_components/ReceiptUploader.tsx` — thumbnail strip, add, remove,
-  per-file progress for an expense's image receipts. Used by both
-  `AddExpenseModal` and `EditExpenseModal`. Same model as `ImageGrid.tsx`
-  (`dashboard/listings/`): Storage upload/delete happen immediately, but the
-  `receipts` array itself is local form state until the surrounding modal
-  saves — this component never writes to the `expenses` table. Thumbnails
-  are signed URLs (`createSignedUrl`, 60s) since the `expense-receipts`
-  bucket is private, unlike `listing-images`.
+  per-file progress for an expense's receipts — **images or PDFs**
+  (`RECEIPT_ACCEPT`/`isAcceptedReceiptType` from `_lib/receiptFileType.ts`).
+  Used by both `AddExpenseModal` and `EditExpenseModal`. Same model as
+  `ImageGrid.tsx` (`dashboard/listings/`): Storage upload/delete happen
+  immediately, but the `receipts` array itself is local form state until the
+  surrounding modal saves — this component never writes to the `expenses`
+  table. Thumbnails are signed URLs (`createSignedUrl`, 60s) since the
+  `expense-receipts` bucket is private, unlike `listing-images`. A PDF
+  receipt renders as a file tile (`isPdfReceipt`) instead of a thumbnail —
+  clicking it calls `openReceipt`, which opens a blank tab synchronously
+  (popup-blocker safe) then points it at a freshly-signed 60s URL. The
+  module-level `currentTenantSchema()` helper is the single `getSession()` →
+  `app_metadata.tenant_schema` lookup, used by the signed-URL effect,
+  `handleFiles`, `removeReceipt`, and `openReceipt`.
 - `_lib/parseReceipt.ts` (+ colocated `.test.ts`) — pure, rule-based receipt
   text → suggested expense fields (German/English); `parseReceipt(text, options?)
   → ParsedReceipt`, `toNumber(raw: string) → number`. Input comes from
@@ -88,6 +95,11 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `pathFromStoredReceipt(receipt, tenantSchema)`. The user-supplied filename
   is discarded in favour of a UUID, same reasoning as the listings sibling
   `storagePath.ts`.
+- `_lib/receiptFileType.ts` (+ colocated `.test.ts`) — pure
+  `RECEIPT_ACCEPT` (`"image/*,application/pdf"`, the file-picker `accept`
+  string), `isAcceptedReceiptType(mime)`, `isPdfReceipt(receipt)`. A receipt
+  may be any image or a PDF — `ReceiptUploader` rejects everything else
+  before it reaches Storage.
 - `_components/ImportExpensesModal.tsx` — bulk CSV/Excel import with a **format
   dropdown** (Generic / German VAT ledger). Holds the raw `{headers, rows}` off
   the file in `parsedSource` so changing the format re-derives `parsed` without
@@ -193,7 +205,10 @@ editable fields.
 
 `Expense.receipts: ExpenseReceipt[]` — `{ path, name, mime, size,
 uploaded_at }`, uploaded to the private `expense-receipts` Storage bucket
-(migration `046_expense_receipts.sql`). `AddExpenseModal` supports
+(migration `046_expense_receipts.sql`). A receipt may be an image or a PDF
+(`mime` is `file.type` as-is, so a PDF's stored mime is `application/pdf`) —
+no bucket/migration change was needed, since `046` sets no
+`allowed_mime_types`. `AddExpenseModal` supports
 attaching a receipt before the rest of the form is filled in: it generates
 the expense's `id` client-side (`crypto.randomUUID()`, held in `pendingId`
 state) as soon as the modal opens, and hands that id to `ReceiptUploader`

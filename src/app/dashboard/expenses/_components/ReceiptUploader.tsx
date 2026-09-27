@@ -1,14 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EXPENSE_RECEIPTS_BUCKET, buildReceiptPath, pathFromStoredReceipt } from "../_lib/receiptPath";
+import { RECEIPT_ACCEPT, isAcceptedReceiptType, isPdfReceipt } from "../_lib/receiptFileType";
 import type { ExpenseReceipt } from "@/types";
 
 const MAX_RECEIPT_BYTES = 15 * 1024 * 1024;
 const MAX_RECEIPT_MB = Math.round(MAX_RECEIPT_BYTES / (1024 * 1024));
+
+async function currentTenantSchema(): Promise<string | undefined> {
+  const {
+    data: { session },
+  } = await createClient().auth.getSession();
+  return session?.user.app_metadata?.tenant_schema as string | undefined;
+}
 
 interface Props {
   receipts: ExpenseReceipt[];
@@ -51,10 +59,7 @@ export function ReceiptUploader({
     }
     (async () => {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const tenantSchema = session?.user.app_metadata?.tenant_schema as string | undefined;
+      const tenantSchema = await currentTenantSchema();
       if (!tenantSchema) return;
 
       // Defence in depth, mirroring the same check `removeReceipt` already
@@ -88,8 +93,8 @@ export function ReceiptUploader({
 
     // One bad file must never abort the rest of the batch.
     const valid = picked.filter((file) => {
-      if (!file.type.startsWith("image/")) {
-        failures.push(`${file.name}: only image files can be attached as receipts.`);
+      if (!isAcceptedReceiptType(file.type)) {
+        failures.push(`${file.name}: only images or PDF files can be attached as receipts.`);
         return false;
       }
       if (file.size > MAX_RECEIPT_BYTES) {
@@ -109,10 +114,7 @@ export function ReceiptUploader({
     setErrors([...failures]);
     try {
       const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const tenantSchema = session?.user.app_metadata?.tenant_schema as string | undefined;
+      const tenantSchema = await currentTenantSchema();
       if (!tenantSchema) {
         const msg = "Your workspace could not be identified. Sign out and back in.";
         setErrors([...failures, msg]);
@@ -185,10 +187,7 @@ export function ReceiptUploader({
     setReceipts(receipts.filter((r) => r.path !== receipt.path));
 
     const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const tenantSchema = session?.user.app_metadata?.tenant_schema as string | undefined;
+    const tenantSchema = await currentTenantSchema();
     const path = tenantSchema ? pathFromStoredReceipt(receipt, tenantSchema) : null;
     if (!path) return;
 
@@ -198,6 +197,26 @@ export function ReceiptUploader({
       if (error) console.warn("Failed to delete expense receipt", path, error);
     } finally {
       setCleaningUp((n) => n - 1);
+    }
+  }
+
+  async function openReceipt(receipt: ExpenseReceipt) {
+    // Open synchronously (inside the click) so popup blockers allow it, then
+    // point it at a freshly signed URL — the thumbnail URLs expire after 60s.
+    const tab = window.open("", "_blank");
+    const tenantSchema = await currentTenantSchema();
+    const path = tenantSchema ? pathFromStoredReceipt(receipt, tenantSchema) : null;
+    const signed = path
+      ? await createClient().storage.from(EXPENSE_RECEIPTS_BUCKET).createSignedUrl(path, 60)
+      : null;
+    if (!signed?.data?.signedUrl) {
+      tab?.close();
+      toastError("Couldn't open receipt", "Try again in a moment.");
+      return;
+    }
+    if (tab) {
+      tab.opener = null;
+      tab.location.href = signed.data.signedUrl;
     }
   }
 
@@ -219,11 +238,11 @@ export function ReceiptUploader({
           {uploading ? "Uploading…" : "Click to attach a receipt"}
         </span>
         <span className="text-xs text-(--color-text-faint)">
-          Images only · up to {MAX_RECEIPT_MB} MB each
+          Images or PDF · up to {MAX_RECEIPT_MB} MB each
         </span>
         <input
           type="file"
-          accept="image/*"
+          accept={RECEIPT_ACCEPT}
           multiple
           className="hidden"
           disabled={uploading || disabled}
@@ -257,7 +276,17 @@ export function ReceiptUploader({
               key={receipt.path}
               className="relative rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-1"
             >
-              {signedUrls[receipt.path] ? (
+              {isPdfReceipt(receipt) ? (
+                <button
+                  type="button"
+                  onClick={() => openReceipt(receipt)}
+                  aria-label={`Open receipt ${receipt.name}`}
+                  className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded bg-(--color-surface-subtle) px-1"
+                >
+                  <FileText size={18} className="text-(--color-text-faint)" />
+                  <span className="w-full truncate text-[11px] text-(--color-text-muted)">{receipt.name}</span>
+                </button>
+              ) : signedUrls[receipt.path] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={signedUrls[receipt.path]}

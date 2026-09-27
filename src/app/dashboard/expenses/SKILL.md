@@ -52,10 +52,11 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   initial snapshot (`EditExpenseModal`'s `initialForm` state), never against
   `expense`'s raw `vat_rate`/`vat_amount` — see the gotcha below for why.
 - **Add/change expense receipts**: `_components/ReceiptUploader.tsx` (the
-  upload/thumbnail/remove UI), `_lib/receiptPath.ts` (bucket id + path
-  helpers), wired into both `AddExpenseModal.tsx` and `EditExpenseModal.tsx`.
-  Schema change: `supabase/migrations/046_expense_receipts.sql` (2-places
-  rule — also mirror into `provision_tenant_schema()`).
+  upload/thumbnail/remove/open UI), `_lib/receiptPath.ts` (bucket id + path
+  helpers), `_lib/receiptFileType.ts` (+ colocated `.test.ts` — accepted
+  mime types, PDF detection), wired into both `AddExpenseModal.tsx` and
+  `EditExpenseModal.tsx`. Schema change: `supabase/migrations/046_expense_receipts.sql`
+  (2-places rule — also mirror into `provision_tenant_schema()`).
 - **Change the import modal's UI/plumbing** (dropdown, summary line, category
   preview, file reading): `_components/ImportExpensesModal.tsx` only — and read
   `sales/_components/ImportSalesModal.tsx` first, it is the mature sibling this
@@ -424,6 +425,20 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   difference from `listing-images` (public, since eBay must fetch those
   URLs) — see the design doc's section 2 for why a receipt has no such
   requirement.
+- **PDFs need no bucket change — 046 sets no `allowed_mime_types`.** A
+  receipt is accepted as either an image or a PDF
+  (`_lib/receiptFileType.ts`'s `RECEIPT_ACCEPT`/`isAcceptedReceiptType`); the
+  `expense-receipts` Storage bucket (`046_expense_receipts.sql`) never
+  restricted mime types, so PDF upload already worked before this UI change
+  — the only new plumbing was accepting the type client-side and rendering
+  it as a file tile instead of an `<img>` thumbnail.
+- **`openReceipt` opens the tab before awaiting the signed URL**, because a
+  `window.open` called after an `await` is popup-blocked. It opens a blank
+  `_blank` tab synchronously inside the click handler, then points it at a
+  freshly-signed 60s URL once that resolves (or closes the tab and toasts on
+  failure). Thumbnails' 60s signed URLs (`signedUrls` state, refreshed by
+  the effect) are never reused for opening — a receipt tile is always opened
+  with its own fresh signed URL.
 - **`AddExpenseModal` creates the expense row early if a receipt is
   attached before the rest of the form is submitted** (`handleExpenseCreated`,
   wired to `ReceiptUploader`'s `onExpenseCreated` — mirrors `ImageGrid`'s
