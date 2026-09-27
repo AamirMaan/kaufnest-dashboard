@@ -61,7 +61,11 @@ broadly when working on a specific feature.**
   trend instead of a single point (see `SKILL.md`'s gotcha). Results live in
   the hook's own `useState`, not a Redux slice. `isLoading` drives the same
   "opacity-60 pointer-events-none" overlay convention used by the paginated
-  list pages.
+  list pages. `trailingLoading` (2026-09-27) is a separate flag scoped to just
+  the trailing call — true until it first resolves (success or error) and
+  true again on a currency-triggered refetch — so `OverviewTrendCard` can
+  show a pulse skeleton instead of falsely rendering "No data in this period"
+  while `trailing` is still null.
 
   The date-range filter (`_components/useDateRangePicker.ts` +
   `DateRangePicker.tsx`, extracted 2026-09-27 from what used to be this
@@ -101,9 +105,12 @@ Home-only:
   read CSS custom properties). Gradient id is `useId()`-derived and sanitised
   (`.replace(/[^a-zA-Z0-9_-]/g, "")`) before use in a `url(#…)` reference —
   see `SKILL.md`'s gotcha.
-- `OverviewTrendCard.tsx` — Home's single big chart: last 12 months,
-  switchable Revenue/Orders/Profit via a segmented control; always reads
-  `trailing`, never the picked-range `timeseries`.
+- `OverviewTrendCard.tsx` — Home's single big chart, heading "Performance"
+  (not "Overview" — that's the page title): last 12 months, switchable
+  Revenue/Orders/Profit via a segmented control; always reads `trailing`,
+  never the picked-range `timeseries`. Takes a `loading` prop
+  (`useOverviewData`'s `trailingLoading`) and renders a pulse skeleton in the
+  300px chart slot while it's true, instead of "No data in this period".
 - `PlatformDonutCard.tsx` — revenue-by-platform donut (`_lib/platformShare.ts`)
   + legend with per-platform %; platforms with negative net revenue are
   excluded (a donut can't draw them).

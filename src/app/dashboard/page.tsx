@@ -49,7 +49,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <OverviewTrendCard trailing={data.trailing} currency={profileCurrency} />
+          <OverviewTrendCard trailing={data.trailing} currency={profileCurrency} loading={data.trailingLoading} />
           <PlatformDonutCard sales={data.sales} rangeLabel={rangeLabel} currency={profileCurrency} />
         </div>
       </div>

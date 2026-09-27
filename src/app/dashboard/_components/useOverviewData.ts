@@ -21,6 +21,8 @@ export interface OverviewData {
   timeseries: OverviewTimeseries | null;
   /** Trailing 12 months, independent of the picked range — feeds sparklines + Home's trend chart. */
   trailing: OverviewTimeseries | null;
+  /** True until the trailing call first resolves (success or error), and true again while it refetches on a currency change. */
+  trailingLoading: boolean;
   isLoading: boolean;
 }
 
@@ -44,6 +46,7 @@ export function useOverviewData(
   const [payouts, setPayouts] = useState<PayoutsOverview | null>(null);
   const [timeseries, setTimeseries] = useState<OverviewTimeseries | null>(null);
   const [trailing, setTrailing] = useState<OverviewTimeseries | null>(null);
+  const [trailingLoading, setTrailingLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -95,6 +98,7 @@ export function useOverviewData(
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setTrailingLoading(true);
       const supabase = await createTenantClient();
       const { from, to } = trailingRange(new Date());
       const { data, error } = await supabase.rpc("get_overview_timeseries", {
@@ -105,11 +109,12 @@ export function useOverviewData(
       if (cancelled) return;
       if (error) console.error("get_overview_timeseries (trailing) failed", error);
       setTrailing(error ? null : (data as OverviewTimeseries));
+      setTrailingLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [currency]);
 
-  return { sales, expenses, purchases, payouts, timeseries, trailing, isLoading };
+  return { sales, expenses, purchases, payouts, timeseries, trailing, trailingLoading, isLoading };
 }

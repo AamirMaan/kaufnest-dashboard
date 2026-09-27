@@ -31,7 +31,7 @@ export function TopProductsCard({ sales, currency }: { sales: SalesOverview | nu
         </thead>
         <tbody>
           {products.map((p, i) => {
-            const share = periodRevenue > 0 ? Math.min(100, (p.revenue / periodRevenue) * 100) : 0;
+            const share = periodRevenue > 0 ? Math.max(0, Math.min(100, (p.revenue / periodRevenue) * 100)) : 0;
             return (
               <tr key={p.name} className="border-b border-(--color-border-subtle) last:border-0">
                 <td className="py-2.5 pr-2 text-(--color-text-faint) tabular-nums">{i + 1}</td>

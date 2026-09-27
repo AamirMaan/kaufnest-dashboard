@@ -13,8 +13,16 @@ const METRICS: { value: TrendMetric; label: string }[] = [
   { value: "profit", label: "Profit" },
 ];
 
-/** Home's single chart: last 12 months, switchable metric (Apex "Overview" card). */
-export function OverviewTrendCard({ trailing, currency }: { trailing: OverviewTimeseries | null; currency: Currency }) {
+/** Home's single chart: last 12 months, switchable metric (Apex "Performance" card). */
+export function OverviewTrendCard({
+  trailing,
+  currency,
+  loading,
+}: {
+  trailing: OverviewTimeseries | null;
+  currency: Currency;
+  loading: boolean;
+}) {
   const kit = useChartKit(currency);
   const [metric, setMetric] = useState<TrendMetric>("revenue");
   const gradientId = `trend-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -31,7 +39,7 @@ export function OverviewTrendCard({ trailing, currency }: { trailing: OverviewTi
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-(--color-text-strong)">Overview</h2>
+          <h2 className="text-base font-semibold text-(--color-text-strong)">Performance</h2>
           <p className="text-sm text-(--color-text-muted)">Last 12 months</p>
         </div>
         <div role="group" aria-label="Chart metric"
@@ -55,7 +63,9 @@ export function OverviewTrendCard({ trailing, currency }: { trailing: OverviewTi
         </div>
       </div>
       <div className="mt-6 h-[300px]">
-        {hasData ? (
+        {loading ? (
+          <div className="h-full rounded-[var(--radius-btn)] bg-(--color-border-subtle) animate-pulse" />
+        ) : hasData ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>

@@ -1,6 +1,6 @@
 ---
 name: dashboard-shell
-description: Work on the dashboard shell, layout-level data hydration, or the Overview/home page at src/app/dashboard — use when the task spans multiple dashboard features, touches the auth guard/data-fetch in layout.tsx, or is about the Overview stats page (not a single feature like sales/expenses/etc).
+description: Work on the dashboard shell, layout-level data hydration, or the Overview/home page at src/app/dashboard — use when the task spans multiple dashboard features, touches the auth guard/data-fetch in layout.tsx, or is about the Overview stats page (not a single feature like sales/expenses/etc). This folder's `_components/`/`_lib/` also back `/dashboard/analytics` (see `analytics/`).
 ---
 
 # Working on the Dashboard shell / Overview
@@ -14,6 +14,10 @@ Use this folder when the task is about:
 - The Overview/home page stats (`page.tsx`, route `/dashboard`)
 - Something that spans multiple features (e.g. "add a new collection that
   every page needs hydrated")
+
+This folder's `_components/` and `_lib/` are also where `/dashboard/analytics`
+(`analytics/page.tsx`) gets its data hook, chart cards, and pure helpers from —
+see `analytics/CLAUDE.md`/`SKILL.md` for that page's own layout and gotchas.
 
 ## Adding a new feature with its own Supabase collection
 
@@ -36,7 +40,9 @@ and the top vendor. All take `{ p_from, p_to, p_currency }`. A **second,
 independent** call to `get_overview_timeseries` fetches a fixed
 trailing-12-month window (`trailingRange()` in `_lib/kpiTiles.ts`) and reruns
 only when `profileCurrency` changes — this is what feeds every KPI sparkline
-and `OverviewTrendCard` (see the gotcha below). Results live in the hook's
+and `OverviewTrendCard` (see the gotcha below). That second call has its own
+`trailingLoading` flag, separate from the hook's overall `isLoading` (see the
+`trailingLoading` gotcha below). Results live in the hook's
 own `useState` (NOT Redux — see `dashboard/CLAUDE.md` for why). Both
 `dashboard/page.tsx` (Home) and `analytics/page.tsx` call this same hook,
 each with its own `useDateRangePicker()` instance.
@@ -102,6 +108,23 @@ badge rather than showing an infinite change.
 a single-point sparkline/chart with nothing to draw a trend from. If you're
 adding a new sparkline-bearing tile, wire it to `trailing.months`, not
 `timeseries.months`.
+
+### Gotcha: `trailingLoading` is a separate flag from `isLoading` (2026-09-27)
+
+The trailing call runs in its own effect with no loading flag of its own
+until 2026-09-27 — before that fix, `OverviewTrendCard` had no way to tell
+"still fetching" apart from "fetched, genuinely empty," so it rendered "No
+data in this period" for the entire time the trailing RPC was in flight (and
+permanently if it errored). `useOverviewData` now exposes `trailingLoading`:
+true on mount, flips false once the trailing call resolves (success OR
+error), and flips true again for the duration of a currency-triggered
+refetch. `OverviewTrendCard` takes this as its `loading` prop and shows a
+pulse skeleton (`h-full rounded-[var(--radius-btn)]
+bg-(--color-border-subtle) animate-pulse`) in the 300px chart slot while
+true; "No data in this period" only renders once `loading` is false. This is
+independent of the page-level `isLoading` (which gates the range-scoped RPCs
+and drives the "opacity-60 pointer-events-none" overlay) — don't conflate
+the two when adding new loading-dependent UI here.
 
 ### Gotcha: `useId()` output must be sanitised before it's used in `url(#…)`
 
