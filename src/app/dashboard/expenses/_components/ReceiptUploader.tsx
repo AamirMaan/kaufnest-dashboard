@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { FileText, ImageIcon, Loader2, ScanText, Upload, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { EXPENSE_RECEIPTS_BUCKET, buildReceiptPath, pathFromStoredReceipt } from "../_lib/receiptPath";
@@ -25,6 +25,8 @@ interface Props {
   onExpenseCreated: () => Promise<string>;
   onBusyChange?: (busy: boolean) => void;
   disabled?: boolean;
+  onFillFromReceipt?: (receipt: ExpenseReceipt) => void;
+  fillingPath?: string | null;
 }
 
 export function ReceiptUploader({
@@ -34,6 +36,8 @@ export function ReceiptUploader({
   onExpenseCreated,
   onBusyChange,
   disabled,
+  onFillFromReceipt,
+  fillingPath,
 }: Props) {
   const { success, error: toastError } = useToast();
   const [uploading, setUploading] = useState(false);
@@ -303,10 +307,31 @@ export function ReceiptUploader({
                   <ImageIcon size={18} className="text-(--color-text-faint)" />
                 </div>
               )}
+              {onFillFromReceipt && (
+                <button
+                  type="button"
+                  onClick={() => onFillFromReceipt(receipt)}
+                  disabled={uploading || disabled || (fillingPath ?? null) !== null}
+                  aria-label={`Fill expense fields from ${receipt.name}`}
+                  className="mt-1 flex w-full items-center justify-center gap-1 rounded-(--radius-btn) px-1 py-0.5 text-[11px] font-medium text-(--color-primary) hover:bg-(--color-surface-subtle) disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {fillingPath === receipt.path ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      Reading…
+                    </>
+                  ) : (
+                    <>
+                      <ScanText size={12} />
+                      Fill
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => removeReceipt(receipt)}
-                disabled={uploading}
+                disabled={uploading || fillingPath === receipt.path}
                 aria-label={`Remove receipt ${receipt.name}`}
                 className="absolute -top-1.5 -right-1.5 rounded-full bg-(--color-danger-text) text-white p-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >

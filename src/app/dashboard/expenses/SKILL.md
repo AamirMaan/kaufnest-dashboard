@@ -49,6 +49,12 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   its test. This module owns the "never overwrite user input" logic. If you need
   a new field to auto-fill, add it to the fill logic here and ensure the Add and Edit
   modals' `baseline` parameters align with the gotcha below.
+- **Change the "Fill from receipt" button/flow itself** (busy state, toast
+  copy, which fields highlight): `_components/useReceiptAutofill.ts` +
+  `_components/ReceiptUploader.tsx` (the per-tile Fill button). Both
+  `AddExpenseModal.tsx`/`EditExpenseModal.tsx` just call the hook and pass
+  `autofill.highlight("<field>")` as each fillable control's `className` —
+  the merge/highlight/toast logic itself lives in the hook, not the modals.
 - **Change how a description maps to a category**: `_lib/expenseCategory.ts` +
   its test. Rule order in that file is first-match-wins.
 - **Change the VAT-preservation decision on edit**: `_lib/vatPreservation.ts`
@@ -508,6 +514,19 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   Once the user checks that box or manually enters a rate, the receipt's rate
   suggestion is ignored. This prevents a receipt's 20% from silently overwriting
   the user's 7% after they've already decided.
+
+## Gotchas — `useReceiptAutofill`
+
+- **The merge uses `formRef.current` at the end of reading, not the
+  click-time snapshot.** Reading a receipt (OCR especially) can take seconds;
+  `fillFromReceipt` reads the form from a ref kept in sync by an effect (not
+  during render — this repo's `react-hooks/refs` lint rule forbids writing
+  `.current` in the render body), so anything the user typed while the read
+  was in flight is respected instead of being clobbered by a stale form.
+- **Save is disabled while a receipt is being read**
+  (`disabled={... || autofill.fillingPath !== null}` on both modals' submit
+  buttons), so the merge can never land after submit already fired — there is
+  no race between "form just saved" and "receipt just finished parsing".
 
 ## Gotchas — `parseReceipt`
 

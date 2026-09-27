@@ -76,7 +76,11 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   (popup-blocker safe) then points it at a freshly-signed 60s URL. The
   module-level `currentTenantSchema()` helper is the single `getSession()` →
   `app_metadata.tenant_schema` lookup, used by the signed-URL effect,
-  `handleFiles`, `removeReceipt`, and `openReceipt`.
+  `handleFiles`, `removeReceipt`, and `openReceipt`. Optional props
+  `onFillFromReceipt`/`fillingPath` add a per-tile "Fill" button (only
+  rendered when `onFillFromReceipt` is passed) that calls back into
+  `useReceiptAutofill` — the remove button is also disabled while that
+  receipt's `fillingPath` matches, so a receipt can't be removed mid-read.
 - `_lib/parseReceipt.ts` (+ colocated `.test.ts`) — pure, rule-based receipt
   text → suggested expense fields (German/English); `parseReceipt(text, options?)
   → ParsedReceipt`, `toNumber(raw: string) → number`. Input comes from
@@ -96,6 +100,16 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   `extractReceiptText` itself needs a real browser (pdf.js worker, canvas,
   tesseract WASM) and isn't exercised by Jest. Not yet wired into any
   component — the next task calls it from a hook.
+- `_components/useReceiptAutofill.ts` — the "Fill from receipt" hook shared by
+  `AddExpenseModal`/`EditExpenseModal`: `useReceiptAutofill(form, setForm,
+  baseline)` returns `{ fillingPath, fillFromReceipt, highlight,
+  clearHighlight, resetHighlights }`. Data flow: Fill → download blob
+  (tenant-checked path via `pathFromStoredReceipt`) → `extractReceiptText`
+  (dynamic import) → `parseReceipt` → `applyReceiptToForm` against the latest
+  form. `fillFromReceipt` reads the form from a `useRef` synced in an effect
+  (not during render — this repo's `react-hooks/refs` lint rule forbids that),
+  so a slow OCR read merges into whatever the user has typed by the time it
+  resolves, not a stale click-time snapshot.
 - `_lib/applyReceiptToForm.ts` (+ colocated `.test.ts`) — pure, non-overwriting
   merge of a `ParsedReceipt` into an expense form. Exports `ReceiptFillableForm`
   (shared interface for Add and Edit modals), `ReceiptField` (its keys), `ReceiptFillBaseline`
