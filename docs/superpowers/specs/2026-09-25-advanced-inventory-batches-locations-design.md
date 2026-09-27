@@ -358,6 +358,12 @@ platform-default changes, transfers, enabling and opening-cost edits all call
    guard that skips inactive platform defaults.
 4. **Transfers** — tab, modal, preview.
 
+   Phase 4 status: implemented per
+   `docs/superpowers/plans/2026-09-26-advanced-inventory-phase-4-transfers.md`.
+   UI only — the transfer triggers, RLS and grants shipped in Phase 1, so no
+   migration. Transfers are admin-only in the UI, immutable (delete to undo),
+   and blocked when the source lacks stock.
+
 Each PR updates `CLAUDE.md`/`SKILL.md` for inventory (and purchases/sales where
 touched) plus `supabase/SKILL.md`'s migration table in the same commit.
 

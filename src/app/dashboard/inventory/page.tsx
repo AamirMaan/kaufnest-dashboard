@@ -11,6 +11,7 @@ import { AdvancedInventoryUpsellCard } from "./_components/AdvancedInventoryUpse
 import { EnableAdvancedCard } from "./_components/EnableAdvancedCard";
 import { InventoryTabs, type InventoryTabId } from "./_components/InventoryTabs";
 import { LocationsTab } from "./_components/LocationsTab";
+import { TransfersTab } from "./_components/TransfersTab";
 
 export default function InventoryPage() {
   const advanced = useAdvancedInventory();
@@ -19,9 +20,13 @@ export default function InventoryPage() {
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [tab, setTab] = useState<InventoryTabId>("products");
   const [addLocationOpen, setAddLocationOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [stockVersion, setStockVersion] = useState(0);
 
   const view = advanced.view;
   const showLocations = view === "active" && tab === "locations";
+  const showTransfers = view === "active" && tab === "transfers";
+  const bumpStock = () => setStockVersion((n) => n + 1);
 
   return (
     <div>
@@ -31,6 +36,8 @@ export default function InventoryPage() {
         action={
           showLocations ? (
             isAdmin ? <Button onClick={() => setAddLocationOpen(true)}>+ Add Location</Button> : undefined
+          ) : showTransfers ? (
+            isAdmin ? <Button onClick={() => setTransferOpen(true)}>+ Transfer Stock</Button> : undefined
           ) : (
             <Button onClick={() => setAddProductOpen(true)}>+ Add Product</Button>
           )
@@ -61,6 +68,7 @@ export default function InventoryPage() {
           tabs={[
             { id: "products", label: "Products" },
             { id: "locations", label: "Locations" },
+            { id: "transfers", label: "Transfers" },
           ]}
           active={tab}
           onChange={setTab}
@@ -73,7 +81,7 @@ export default function InventoryPage() {
         aria-labelledby={view === "active" ? "inventory-tab-products" : undefined}
         hidden={view === "active" && tab !== "products"}
       >
-        <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} />
+        <ProductsTab addOpen={addProductOpen} onAddClose={() => setAddProductOpen(false)} stockVersion={stockVersion} />
       </div>
 
       {view === "active" && (
@@ -82,6 +90,17 @@ export default function InventoryPage() {
           addOpen={addLocationOpen}
           onAddClose={() => setAddLocationOpen(false)}
           hidden={tab !== "locations"}
+          stockVersion={stockVersion}
+        />
+      )}
+
+      {view === "active" && (
+        <TransfersTab
+          isAdmin={isAdmin}
+          addOpen={transferOpen}
+          onAddClose={() => setTransferOpen(false)}
+          hidden={tab !== "transfers"}
+          onStockChanged={bumpStock}
         />
       )}
     </div>

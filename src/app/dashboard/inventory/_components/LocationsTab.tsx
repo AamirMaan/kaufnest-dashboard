@@ -30,11 +30,13 @@ interface Props {
    * assistive tech, matching the native `hidden` attribute's semantics.
    */
   hidden?: boolean;
+  /** Bumped by the page after a transfer, so per-location stock re-fetches. */
+  stockVersion?: number;
 }
 
 const CONNECTION_ERROR = "Please check your connection and try again.";
 
-export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
+export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersion }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const locations = useAppSelector((s) => s.advancedInventory.locations);
@@ -45,11 +47,13 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const locationsKey = locations.map((l) => l.id).join(",");
-  // On-hand units per location, keyed by the locations-list snapshot it was
-  // fetched for — derived at render below instead of reset with a
-  // synchronous setState in the effect body (react-hooks/set-state-in-effect).
-  // The RPC isn't live on every tenant yet (migration 049 pending); a failed
-  // load keeps `data: null` so the column renders "—", never an error dump.
+  // On-hand units per location, keyed by the locations-list snapshot AND
+  // stockVersion it was fetched for — derived at render below instead of
+  // reset with a synchronous setState in the effect body
+  // (react-hooks/set-state-in-effect). The RPC isn't live on every tenant
+  // yet (migration 049 pending); a failed load keeps `data: null` so the
+  // column renders "—", never an error dump.
+  const onHandKey = `${locationsKey}|${stockVersion ?? 0}`;
   const [onHandResult, setOnHandResult] = useState<{ key: string; data: Record<string, number> | null }>({
     key: "",
     data: null,
@@ -59,15 +63,15 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden }: Props) {
     let cancelled = false;
     fetchLocationStockTotals()
       .then((totals) => {
-        if (!cancelled) setOnHandResult({ key: locationsKey, data: totals });
+        if (!cancelled) setOnHandResult({ key: onHandKey, data: totals });
       })
       .catch(() => {
-        if (!cancelled) setOnHandResult({ key: locationsKey, data: null });
+        if (!cancelled) setOnHandResult({ key: onHandKey, data: null });
       });
     return () => { cancelled = true; };
-  }, [locationsKey]);
+  }, [onHandKey]);
 
-  const onHand = onHandResult.key === locationsKey ? onHandResult.data : null;
+  const onHand = onHandResult.key === onHandKey ? onHandResult.data : null;
 
   // Remounts FulfillmentDefaultsCard whenever the stored defaults/locations
   // change (save elsewhere, reload) so its local draft always starts from

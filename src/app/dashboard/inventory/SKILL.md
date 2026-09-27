@@ -97,6 +97,27 @@ since modal dropdowns use a different state key than the table.
   `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
   computation live in `_components/ProductsTab.tsx` only — don't duplicate
   the admin-role check anywhere else in this feature.
+- **Change transfer history listing or paging** (Phase 4 Task 2, 2026-09-26):
+  `_store/transfersSlice.ts` (+ test) handles the paginated `stock_transfers`
+  history. Registered in `src/store/store.ts` as `state.stockTransfers`. Any
+  new transfer history component (tab, viewer, etc.) wires `fetchTransfersPage`.
+- **Change the transfer form or preview** (Phase 4 Task 1/3, 2026-09-26):
+  `_lib/transfers.ts` (+ test — pure preview/validation/payload helpers),
+  `_components/TransferStockModal.tsx` (the form itself — product/location
+  pickers, the live FIFO preview table, submit). `_store/productLots.ts`
+  (`fetchAvailableLots`) is the source-lot fetcher both depend on. Mounted by
+  `_components/TransfersTab.tsx` (Task 4) only while its `addOpen` prop is true.
+- **Change the Transfers tab** (history, delete, stock refresh — Phase 4
+  Task 4, 2026-09-26): `_components/TransfersTab.tsx` (list + row actions +
+  the shared `DeleteConfirmModal` + mounting `TransferStockModal`),
+  `_store/transfersSlice.ts` (`fetchTransfersPage`), `_lib/transfers.ts`
+  (`pageAfterRemoval`). `page.tsx` only owns `tab`/`transferOpen`/
+  `stockVersion` state and the "+ Transfer Stock" header button — see the
+  "Add a tab" and `stockVersion` gotchas below.
+- **Add a tab**: `InventoryTabs.tsx`'s `InventoryTabId` union +
+  `page.tsx`'s `tabs` array/header `action` switch + a panel id
+  `inventory-panel-<id>` on the new tab component's root element (matching
+  its `role="tabpanel"`/`aria-labelledby="inventory-tab-<id>"`).
 
 ## Test command
 
@@ -268,6 +289,14 @@ since modal dropdowns use a different state key than the table.
   takes both (product, location) advisory locks, then checks the destination
   lots are untouched (`FOR UPDATE`), so a concurrent sale can't be cascaded
   away.
+- **A transfer that settles negative stock at its destination can't be
+  deleted right away.** If the destination was short (a shortfall lot),
+  `inv_settle_shortfall` (047) immediately uses the arriving units to settle
+  it, marking those destination batches as consumed — `inv_transfer_before_delete`'s
+  untouched-batches check then sees consumption and raises `INV_CONSUMED`,
+  the same as a transfer whose destination units were later sold or moved
+  on elsewhere. `TransfersTab.tsx`'s `DeleteConfirmModal` copy calls this
+  out alongside "sold" and "moved on".
 - **No bulk sale deletes while advanced inventory is on.** The BEFORE DELETE
   revert can recompute a sibling sale's COGS; if that sibling is in the same
   multi-row DELETE, Postgres raises "tuple to be deleted was already
@@ -333,16 +362,15 @@ since modal dropdowns use a different state key than the table.
 - **Deactivating a location is blocked while it is the tenant default OR
   any platform's default (`locationDeactivationBlocker`)** — the sale
   trigger would otherwise keep routing that platform's orders to an
-  inactive location. **The DB-side guard for the platform case is now
-  written** (migration `049_advanced_inventory_phase3.sql` — `UI` blocker
-  above stays regardless, this just closes the gap if a row somehow bypassed
-  it): `inv_sale_before_write`'s platform-default fill (and the pre-enable
-  restock branch's `v_loc` lookup in `inv_sale_after_write`) skips a
-  platform default whose `stock_locations.is_active` is false and falls
-  back to `inventory_settings.default_location_id` instead. **Not yet live
-  on any tenant** — `049` is still ⏳ pending (see `supabase/SKILL.md`'s file
-  map for the apply order), so until it's applied this guard doesn't
-  actually run yet, even though the UI-side blocker above already does.
+  inactive location. The DB-side guard for the platform case (migration
+  `049_advanced_inventory_phase3.sql`, applied and verified live on all 5
+  tenant schemas 2026-09-26) is now live too: `inv_sale_before_write`'s
+  platform-default fill (and the pre-enable restock branch's `v_loc` lookup
+  in `inv_sale_after_write`) skips a platform default whose
+  `stock_locations.is_active` is false and falls back to
+  `inventory_settings.default_location_id` instead — the UI-side blocker
+  above still applies regardless, this just closes the gap if a row somehow
+  bypasses it.
 - **Location delete uses `.select('id')` so an RLS no-op (0 rows, no error)
   is reported as a failure, not a success.**
 - **`FulfillmentDefaultsCard`'s local draft is deliberately not stored in
@@ -437,14 +465,16 @@ since modal dropdowns use a different state key than the table.
   closed (false) when settings are missing/disabled, `enabled_at` is null,
   or either timestamp doesn't parse. Add modals are unaffected (a new row is
   always created after `enabled_at`).
-- **The RPC isn't live on any tenant schema yet (migration 049 pending).**
-  An active Business tenant today gets `fetchStockByLocation`'s mapped
+- **The stock-by-location RPCs (migration `049_advanced_inventory_phase3.sql`)
+  are applied and verified live on all 5 tenant schemas (2026-09-26).** An
+  active Business tenant shows per-location columns + Other/Total/Avg. cost,
+  a shortfall renders a red negative number in its cell, and a Starter/Pro
+  tenant (or a Business tenant that hasn't enabled advanced inventory) still
+  sees the plain "Current Stock" column. `fetchStockByLocation`'s mapped
   `inventoryErrorMessage` text in the red `stockError` line under the count
-  row — this is the intended fallback, not a bug, until 049 is applied.
-  Manual check once it is live: an active tenant shows per-location columns
-  + Other/Total/Avg. cost, a shortfall renders a red negative number in its
-  cell, and a Starter/Pro tenant (or a Business tenant that hasn't enabled
-  advanced inventory) still sees the plain "Current Stock" column.
+  row is still the fallback for a genuine RPC/network/RLS failure — not
+  something to "fix" when it appears, but no longer the expected steady
+  state now that 049 is applied.
 - **`ProductLotsModal` lists open batches PLUS every opening-balance batch**
   (`.or("qty_remaining.neq.0,kind.eq.opening")` in `fetchOpenLots`,
   final-review I4, 2026-09-26, user-approved) — a fully-consumed purchase or
@@ -501,3 +531,45 @@ since modal dropdowns use a different state key than the table.
   helper, and the `handleClose` reset — rather than reintroducing a
   synchronous effect-body reset or delegating the effect's fetch to a
   `useCallback`.
+- **The transfer preview in `_lib/transfers.ts` mirrors 047's
+  `inv_transfer_after_insert` (Phase 4 Task 1, 2026-09-26).** Both FIFO
+  over non-shortfall lots (received_at → created_at → id), both exclude
+  empty lots, both round the per-unit cost add-on to 4 decimals as
+  `round(transfer_cost / quantity, 4)`, and both compute destination
+  unit cost as `sourceUnitCost + addon`, rounded to 4 decimals. Any
+  change to the FIFO order, shortfall handling, rounding behavior, or
+  cost allocation formula must stay in sync between `fifoPreview` and the
+  DB trigger — changes to one without the other will silently diverge
+  the preview from the actual transfer behavior.
+- **Stock caches on other tabs are keyed by `stockVersion`; bump it after any
+  mutation that moves stock between locations (Phase 4 Task 4, 2026-09-26).**
+  `page.tsx` owns a `stockVersion` counter (`bumpStock`), passed to both
+  `<ProductsTab stockVersion>` and `<LocationsTab stockVersion>`, which fold
+  it into their own request keys (`ProductsTab`'s `stockRequestKey`,
+  `LocationsTab`'s `onHandKey`) so a stale per-location snapshot re-fetches
+  immediately when `stockVersion` bumps — all three tabs stay mounted at all
+  times (see `page.tsx`'s entry above), so this fires right away even while
+  the tab's own panel is hidden, not deferred until the user switches back to
+  it. Neither tab's own request key (page ids / locations list) changes just
+  because a transfer moved stock, so without `stockVersion` they'd keep
+  showing pre-transfer numbers until an unrelated change (a page turn, a
+  location edit) happened to bust their cache. `TransfersTab`'s
+  `onStockChanged` prop is what triggers the bump — call it after both a
+  successful transfer (`onSaved`) and a successful delete, not just one.
+  Any future mutation that moves stock between locations should call the
+  same prop rather than inventing a second refresh mechanism.
+- **`TransferStockModal` is mounted only while open, not
+  always-mounted-behind-a-remount-key (Phase 4 Task 4, 2026-09-26 — a
+  deliberate deviation from this feature's usual `key={... ?? "closed"}`
+  remount pattern used by `LocationModal`/`EditProductModal`).** The modal
+  seeds its draft (default source location, today's date) in a lazy
+  `useState` initializer, which runs once per mount. Keeping it mounted
+  while closed (as a remount-on-close `key` bump would) means that
+  initializer runs at tab-mount time or right after the previous close —
+  long before the user actually opens it again — so a changed default
+  location or a date rollover past midnight would go stale. `TransfersTab`
+  instead renders `{isAdmin && addOpen && <TransferStockModal open
+  onClose={onAddClose} onSaved={handleSaved} />}`: the component (and its
+  `useState` initializer) only exists while `addOpen` is true, so every open
+  is a fresh mount with a fresh draft. Don't "fix" this back to the
+  remount-key pattern without re-solving the staleness this avoids.
