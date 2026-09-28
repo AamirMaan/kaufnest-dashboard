@@ -13,7 +13,7 @@ const METRICS: { value: TrendMetric; label: string }[] = [
   { value: "profit", label: "Profit" },
 ];
 
-/** Home's single chart: last 12 months, switchable metric (Apex "Performance" card). */
+/** Analytics' headline chart: last 12 months, switchable metric (Apex "Performance" card). */
 export function OverviewTrendCard({
   trailing,
   currency,

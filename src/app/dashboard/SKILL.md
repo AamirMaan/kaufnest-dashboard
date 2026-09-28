@@ -47,14 +47,15 @@ own `useState` (NOT Redux — see `dashboard/CLAUDE.md` for why). Both
 `dashboard/page.tsx` (Home) and `analytics/page.tsx` call this same hook,
 each with its own `useDateRangePicker()` instance.
 
-Home renders 4 `KpiTile`s + `OverviewTrendCard` + `PlatformDonutCard` +
-`RecentOrdersCard` + Quick Start. Analytics renders 4 KPI tiles + a
-`grid-cols-1 lg:grid-cols-2` grid of the detail cards. Minimal file set per
-change:
+**Rule of the split (2026-09-28, user's call): Home = numbers, Analytics =
+charts.** Home renders 6 `KpiTile`s + "By Platform" `PlatformStatsCard`s +
+`RecentOrdersCard` + Quick Start. Analytics renders `OverviewTrendCard` +
+`PlatformDonutCard` + a `grid-cols-1 lg:grid-cols-2` grid of the detail chart
+cards, and no KPI tiles. Don't put a chart on Home or a stat-tile row on
+Analytics. Minimal file set per change:
 
 - **Add a KPI tile** → add the field to `KpiSet` in `_lib/kpiTiles.ts`
-  (`buildKpis`) plus a test, then render a `KpiTile` on the page (Home or
-  Analytics). The sparkline/tile color comes from `useChartKit().colors`.
+  (`buildKpis`) plus a test, then render a `KpiTile` on Home. The sparkline/tile color comes from `useChartKit().colors`.
 - **Move a card between Home and Analytics** → both pages read the same
   `useOverviewData()` result, so moving a card is just moving its JSX (and,
   for a `KpiTile`, its `buildKpis()` field) between the two `page.tsx` files —
@@ -65,6 +66,9 @@ change:
 - **New figure per month** → `supabase/migrations/05x_*.sql` replacing
   `get_overview_timeseries` (+ the `005_tenant_provisioning.sql` mirror),
   `OverviewMonth` in `_lib/overviewTypes.ts`, the integration test.
+- **New per-platform figure on Home** → `_lib/platformStats.ts` (+ test) and
+  `_components/PlatformStatsCard.tsx`'s `rows`. If it needs a platform other
+  than eBay/Amazon in `platformBalance`, that's a 045 RPC change first.
 - **Colors** → `_lib/chartPalette.ts` only.
 
 ### Gotcha: pass `resolveDateBounds`, not `resolveDateRange`, to the RPCs

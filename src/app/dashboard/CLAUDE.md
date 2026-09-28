@@ -34,14 +34,17 @@ broadly when working on a specific feature.**
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
   **If you add a new feature with its own collection, hydrate it here.**
-- `page.tsx` — **Home** (`/dashboard`), Apex-style (2026-09-27, replaced the
-  8-card detail grid — those cards moved to `/dashboard/analytics`, see
-  below). Renders exactly: 4 `KpiTile`s (Revenue, Net Profit, Orders,
-  Expenses — value, Δ% vs the previous equal-length period, trailing-12-month
-  sparkline), `OverviewTrendCard` (one big chart, switchable
-  Revenue/Orders/Profit, last 12 months), `PlatformDonutCard` (revenue by
-  platform, donut + legend with per-platform %), `RecentOrdersCard` (latest
-  orders table), then the Quick Start card.
+- `page.tsx` — **Home** (`/dashboard`) = **the numbers; every chart lives on
+  `/dashboard/analytics`** (split settled 2026-09-28 — Home had briefly held
+  the trend chart + donut, and the per-platform balance figures had moved to
+  Analytics; users missed those per-platform numbers on Home). Renders
+  exactly: 6 `KpiTile`s in a `xl:grid-cols-3` grid (Revenue, Net Profit,
+  Orders, Expenses, Purchases, VAT payable/refundable — value, Δ% vs the
+  previous equal-length period, trailing-12-month sparkline), a "By Platform"
+  section of `PlatformStatsCard`s (one per platform with sales in the range,
+  built by `_lib/platformStats.ts`; admins get "Record Transfer" on the
+  eBay/Amazon cards, which opens `RecordTransferModal`),
+  `RecentOrdersCard` (latest orders table), then the Quick Start card.
 
   **Does NOT read `sales`/`expenses`/`purchases`/`platform_payouts` from
   Redux** — those slices hold only one paginated page (50 rows,
@@ -85,10 +88,11 @@ broadly when working on a specific feature.**
   `messages/_lib/avatarColor.ts` for its row avatars — that helper's second
   consumer, see `messages/CLAUDE.md`.
 
-  The detail cards that used to live here (Revenue/Net Profit/Expenses/
-  Purchases/Orders/VAT Position/eBay+Amazon Balance/Top Products) now live on
-  `/dashboard/analytics` — see `analytics/CLAUDE.md`. They're still built from
-  components in this folder's `_components/`, listed below.
+  All charts (`OverviewTrendCard`, `PlatformDonutCard` and the detail cards
+  Revenue/Net Profit/Expenses/Purchases/Orders/VAT Position/eBay+Amazon
+  Balance/Top Products) live on `/dashboard/analytics` — see
+  `analytics/CLAUDE.md`. They're still built from components in this folder's
+  `_components/`, listed below.
 
   Shared deps: `formatCurrency`/`calculateNetProfit`, `resolveDateRange`/
   `resolveDateBounds`, `periodRange`/`describePeriod`, `useTheme`, `recharts`,
@@ -97,6 +101,12 @@ broadly when working on a specific feature.**
 ## `_components/` — Overview family (shared by Home and Analytics)
 
 Home-only:
+- `PlatformStatsCard.tsx` (2026-09-28) — numbers-only per-platform card:
+  revenue + share %, and for eBay/Amazon (`stat.balance` non-null) orders,
+  avg. order, ad fees, shipping, platform expenses, balance earned,
+  transferred and "Still in <platform> account" (warning/danger tone), plus
+  an optional admin "Record Transfer" button. Chart counterpart on Analytics
+  is `PlatformBalanceCard`.
 - `KpiTile.tsx` — Apex-style stat tile: label/value/icon chip, ▲/▼ delta vs
   the previous equal-length period (hidden when `delta` is null, e.g. "All
   Time"), edge-to-edge sparkline (`recharts` `AreaChart`, always fed the
@@ -105,7 +115,9 @@ Home-only:
   read CSS custom properties). Gradient id is `useId()`-derived and sanitised
   (`.replace(/[^a-zA-Z0-9_-]/g, "")`) before use in a `url(#…)` reference —
   see `SKILL.md`'s gotcha.
-- `OverviewTrendCard.tsx` — Home's single big chart, heading "Performance"
+
+Analytics-only (headline charts, moved off Home 2026-09-28):
+- `OverviewTrendCard.tsx` — Analytics' headline chart, heading "Performance"
   (not "Overview" — that's the page title): last 12 months, switchable
   Revenue/Orders/Profit via a segmented control; always reads `trailing`,
   never the picked-range `timeseries`. Takes a `loading` prop
@@ -114,9 +126,13 @@ Home-only:
 - `PlatformDonutCard.tsx` — revenue-by-platform donut (`_lib/platformShare.ts`)
   + legend with per-platform %; platforms with negative net revenue are
   excluded (a donut can't draw them).
+
+Home-only (continued):
 - `RecentOrdersCard.tsx` — latest `RECENT_ORDERS_LIMIT` (5) orders, own
   Supabase query (bypasses the `sales` slice — see `SKILL.md`'s gotcha),
   each row links to `/dashboard/sales/[id]`.
+- `RecordTransferModal.tsx` — records a platform payout (admin only; opened
+  from a `PlatformStatsCard`'s "Record Transfer" on Home).
 
 Shared by Home and Analytics:
 - `useDateRangePicker.ts` / `DateRangePicker.tsx` — the date-range picker
@@ -144,8 +160,6 @@ Analytics-only (moved off Home 2026-09-27; still live here since
 - `TopProductsCard.tsx` — **ranked table, not a bar chart** (changed
   2026-09-27): rank / product / share bar / units / revenue per row, top 5
   (`get_sales_overview` already groups, sorts and limits).
-- `RecordTransferModal.tsx` — records a platform payout (admin only; opened
-  from a `PlatformBalanceCard`'s "Record Transfer" action on Analytics).
 
 ## `_lib/` — pure helpers for the Overview page
 
@@ -167,9 +181,9 @@ extracting it is what makes it testable without rendering the page.
   → number`. Subtracts a transferred-amount total from a **pre-computed**
   balance; both are now the corresponding platform's fields read out of
   `get_sales_overview`/`get_payouts_overview`'s results (via
-  `computePlatformBalance()`, called from `analytics/page.tsx` — the
-  `PlatformBalanceCard`s live there, not on Home) rather than reduced from
-  raw payout rows.
+  `computePlatformBalance()`, called from `analytics/page.tsx` for the
+  `PlatformBalanceCard` charts and from `platformStats.ts` for Home's stat
+  cards) rather than reduced from raw payout rows.
 - `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) is **no longer used by
   Home or Analytics** as of the 2026-09-17 RPC rewire — `_components/useOverviewData.ts`
   fetches pre-aggregated JSON via `supabase.rpc(...)` calls instead of paging
@@ -195,6 +209,13 @@ extracting it is what makes it testable without rendering the page.
   `trailingRange(today) → { from, to }` (first day of the month 11 months
   back, through `today` — the window `useOverviewData`'s second RPC call
   uses). Colocated test.
+- `platformStats.ts` (2026-09-28) — `buildPlatformStats(sales, expenses,
+  payouts) → PlatformStat[]` for Home's `PlatformStatsCard`s: one entry per
+  `revenueByPlatform` row, sorted by revenue desc, with `sharePct` of the
+  positive total (a net-negative platform gets 0%) and `balance` from
+  `computePlatformBalance()` for eBay/Amazon only (045's `platformBalance`
+  only buckets those two, so other platforms show revenue + share only).
+  Colocated test.
 - `platformShare.ts` (2026-09-27) — `platformShares(rows) → { total, shares }`
   for `PlatformDonutCard`: filters to positive-value rows only (a
   refund-heavy platform can net negative; a donut can't draw that), sorted
@@ -204,7 +225,8 @@ extracting it is what makes it testable without rendering the page.
   (buyer name when captured, else the platform label), `initials()` — all for
   `RecentOrdersCard`'s row avatar/name. Colocated test.
 - `platformBalance.ts` now also exports `computePlatformBalance()` (moved
-  out of `page.tsx` originally, now called from `analytics/page.tsx`).
+  out of `page.tsx` originally, now called from `analytics/page.tsx` and
+  `platformStats.ts`).
 - `overviewTimeseries.integration.test.ts` (2026-09-27) — live test of 051's
   `get_overview_timeseries`, same setup as the one below; run after 051 is
   applied.
@@ -224,7 +246,7 @@ extracting it is what makes it testable without rendering the page.
 
 | Folder | Route | What it owns |
 | --- | --- | --- |
-| `analytics/` | `/dashboard/analytics` | detailed chart cards + KPI tiles (components shared with Home in `_components/` above) |
+| `analytics/` | `/dashboard/analytics` | every chart — trend, platform donut, detail chart cards (components shared with Home in `_components/` above) |
 | `sales/` | `/dashboard/sales` | sales records ("Orders" in UI), `salesSlice` |
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |

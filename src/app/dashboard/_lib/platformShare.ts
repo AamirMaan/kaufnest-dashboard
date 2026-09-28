@@ -1,4 +1,4 @@
-/** Donut data for Home's "Revenue by Platform": positive shares, largest first. */
+/** Donut data for Analytics' "Revenue by Platform": positive shares, largest first. */
 export interface PlatformShare {
   platform: string;
   value: number;

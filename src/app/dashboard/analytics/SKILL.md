@@ -1,6 +1,6 @@
 ---
 name: dashboard-analytics
-description: Work on the /dashboard/analytics detail page — the ranked chart cards, KPI tiles, and Record Transfer admin gate. Use when adding or changing a detail card or its data; for Home's 4-tile summary go to dashboard/SKILL.md instead.
+description: Work on the /dashboard/analytics charts page — trend chart, platform donut and the detail chart cards. Use when adding or changing a chart; for Home's stat tiles and per-platform numbers go to dashboard/SKILL.md instead.
 ---
 
 # Working on Analytics
@@ -23,10 +23,9 @@ etc.) — they apply here identically, since this page and Home share the same
 2. Add a grid slot for it in this folder's `page.tsx`, inside the
    `grid-cols-1 lg:grid-cols-2` grid.
 
-Don't add it to `dashboard/page.tsx` (Home) unless the design explicitly
-wants it promoted there — Home is deliberately capped at 4 KPI tiles + trend
-+ donut + recent orders; see `dashboard/SKILL.md`'s "Move a card between Home
-and Analytics" entry if you do want to move one.
+Don't add it to `dashboard/page.tsx` (Home) — Home is numbers only (KPI
+tiles, per-platform stat cards, recent orders); charts belong here. Likewise
+don't add KPI tiles here. See `dashboard/SKILL.md`'s "Rule of the split".
 
 ## Gotcha: the picker isn't shared with Home
 
