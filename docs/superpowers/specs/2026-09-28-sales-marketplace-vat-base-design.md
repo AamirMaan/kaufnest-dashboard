@@ -15,8 +15,12 @@ Date: 2026-09-28 · Branch: `feat/sales-marketplace-vat-base`
 
 ## Decisions (agreed 2026-09-28)
 
-- VAT base = **net taxable base**: `sum(total_amount − vat_amount)` over
-  orders with `vat_amount > 0`. Derived in SQL, **not stored**.
+- VAT base = **net taxable base**: `sum(total_amount + shipping_charged −
+  vat_amount)` over orders with `vat_amount > 0`. Derived in SQL, **not
+  stored**. (Corrected during planning: a SALE's `total_amount` is the ITEM
+  total — shipping lives in `shipping_charged` — while Amazon's
+  `vat_amount` is item + shipping VAT, so `total_amount − vat_amount`
+  understated the base.)
 - Marketplace is **stored** per sale, shown in the Orders table, filterable,
   and broken down on Analytics.
 - Existing orders get their marketplace by **re-importing** the original
@@ -38,7 +42,8 @@ Plus the same column/index in `provision_tenant_schema()` (the "2 places"
 rule, `supabase/SKILL.md`). Nullable — null means "unknown" (manual entries,
 pre-052 imports not yet re-imported).
 
-`Sale.marketplace: string | null` in `src/types/index.ts`.
+`Sale.marketplace?: string | null` in `src/types/index.ts` — optional, like
+`fulfillment_location_id?`, so existing `Sale` literals stay valid.
 
 **Stored form:** lower-case domain, e.g. `amazon.de`, `amazon.co.uk`,
 `ebay.de`. Free text beyond normalisation (no enum) — Amazon/eBay add
@@ -52,9 +57,10 @@ every writer, including the Amazon REFUND path (which reduces both —
 backfill and a third field to keep in sync.
 
 Correctness per source:
-- **Amazon**: `total_amount` = `TOTAL_ACTIVITY_VALUE_AMT_VAT_INCL` (items +
-  shipping), `vat_amount` = combined item + shipping VAT → base includes
-  shipping, which is what is declared.
+- **Amazon**: `total_amount` = item total, `shipping_charged` = shipping,
+  `vat_amount` = combined item + shipping VAT → `total + shipping − VAT` is
+  the full net base including shipping, which is what is declared. Same
+  gross the Overview already uses for revenue.
 - **Generic/eBay**: `vat_amount` either comes from the sheet or is derived by
   `vatAmountFromGross(total_amount, vat_rate)` → base = `total_amount` net of
   that VAT, consistent.
@@ -93,8 +99,8 @@ the country code: `EBAY_GB`→`ebay.co.uk`, `EBAY_US`→`ebay.com`,
 ### Import formats
 
 - `importAliases.ts`: new `marketplace` canonical key, aliases
-  `marketplace`, `sales_channel`, `sales channel`, `marktplatz`,
-  `verkaufskanal`.
+  `marketplace`, `marktplatz`, `marketplace_name`. **Not** `sales_channel`:
+  in Amazon's VAT report that column is `AFN`/`MFN` (fulfilment channel).
 - Amazon + eBay formats (`RICH_COLUMNS`/`RICH_HEADERS`): add optional
   `marketplace` column; template examples gain `amazon.de` / `ebay.de`.
 - Generic format: keep `platform` normalisation to `amazon`/`ebay` as today,
@@ -123,11 +129,14 @@ In `ImportSalesModal.tsx`'s existing duplicate pre-check (the `IN_CHUNK`
 `.in()` read over `(platform, external_order_id)`):
 
 - Also select `id, marketplace` for matched rows.
-- A pure helper `marketplaceBackfills(parsedRows, existingRows) →
-  { id, marketplace }[]` (new file `sales/_components/marketplaceBackfill.ts`,
-  colocated test) returns matches where the existing row's `marketplace` is
-  null and the parsed row's is non-null. Existing non-null values are never
-  changed.
+- Pure helpers in `sales/_components/marketplaceBackfill.ts` (colocated
+  test): `markExistingOrders(rows, existing)` marks matches "order already
+  exists" and sets `ParsedRow.backfill = { saleId, marketplace }` when the
+  stored marketplace is null and the file's is not; `groupBackfills(rows)`
+  groups sale ids by marketplace. Existing non-null values are never
+  changed (the UPDATE also carries `.is("marketplace", null)`).
+- Backfill rows count toward `canImport`, so a re-import that is all
+  duplicates can still be run.
 - Apply as one `.update({ marketplace })` per distinct marketplace value,
   `.in("id", ids)` chunked by `IN_CHUNK` — a handful of calls, not one per
   row.
@@ -150,18 +159,18 @@ Migration `052` also redefines (via `run_on_all_tenant_schemas` +
        OR (p_marketplace = '__unknown__' AND s.marketplace IS NULL)
        OR s.marketplace = p_marketplace)
   …
-  coalesce(sum(f.total_amount - f.vat_amount)
+  coalesce(sum(f.total_amount + coalesce(f.shipping_charged, 0) - f.vat_amount)
            FILTER (WHERE f.counts AND coalesce(f.vat_amount, 0) > 0), 0)
   ```
   The signature changes, so `DROP FUNCTION IF EXISTS … (old signature)`
   first — `CREATE OR REPLACE` cannot change a parameter list or return
   type. Re-apply the existing grants.
-- **New `get_sales_by_marketplace(p_from date, p_to date)`** returning
-  `(marketplace text, platform text, currency text, order_count int, gross
-  numeric, vat numeric, vat_base numeric)`, grouped by `coalesce(marketplace,
-  '')`, platform, currency, same `counts` rule (returned/cancelled
-  excluded). `SECURITY INVOKER`, `SET search_path = {{schema}}`, `STABLE`,
-  same grants as 051's functions.
+- **New `get_sales_by_marketplace(p_from date, p_to date, p_currency text)`**
+  returning `(marketplace text, order_count int, revenue numeric, vat
+  numeric, vat_base numeric)`, filtered to `p_currency` like the 045
+  overview functions, revenue = `total_amount + shipping_charged`,
+  returned/cancelled excluded, grouped by marketplace (null = unknown).
+  Not SECURITY DEFINER, `SET search_path = {{schema}}`, `STABLE`.
 - **New `get_sales_marketplaces()`** returning `setof text` — distinct
   non-null marketplaces, for the filter dropdown. Structurally bounded by
   the number of marketplaces a seller trades on (tens at most).
@@ -190,9 +199,9 @@ Migration `052` also redefines (via `run_on_all_tenant_schemas` +
 
 - New `MarketplaceCard.tsx` in `dashboard/_components/` (the Analytics card
   family lives there): a **ranked table** in the `TopProductsCard` style —
-  marketplace (or "Unknown"), orders, gross, VAT, VAT base, share bar of
-  gross — for the page's picked date range, base currency only (rows in
-  other currencies are listed with their currency code, not converted).
+  marketplace (or "Unknown"), orders, revenue, VAT, VAT base, share bar of
+  revenue — for the page's picked date range, in the profile currency only
+  (like every other Analytics card; other currencies aren't converted).
   Uses `ChartCard` shell, "No data in this period" empty state.
 - Data: `useOverviewData` gains a `get_sales_by_marketplace` call scoped to
   the picked range (not the trailing window). Pure shaping in
