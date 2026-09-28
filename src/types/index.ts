@@ -183,6 +183,13 @@ export interface Sale {
    */
   refunded_amount: number | null;
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
+  /**
+   * Regional storefront, e.g. "amazon.de", "ebay.co.uk" (migration 052).
+   * Lower-case domain via `normalizeMarketplace` (lib/utils/marketplace.ts);
+   * null/absent = unknown. Optional like `fulfillment_location_id` so
+   * existing Sale literals stay valid.
+   */
+  marketplace?: string | null;
   // ─── Buyer shipping address (migration 041) ──────────────────────────────
   // Captured automatically on eBay sync (ebay.ts's fetchOrders), or entered/
   // corrected by hand via AddSaleModal/EditSaleModal's "Shipping Address
