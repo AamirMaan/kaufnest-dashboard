@@ -33,3 +33,8 @@ don't add KPI tiles here. See `dashboard/SKILL.md`'s "Rule of the split".
 `dashboard/page.tsx`'s. Picking "Last Month" on Analytics does not change
 what Home shows, and vice versa. This is deliberate (each page's date filter
 is independent), not a bug to fix if you notice it.
+
+## Gotcha: MarketplaceCard is currency-filtered, not converted
+
+MarketplaceCard is filtered to the profile currency like every other card
+(`p_currency`) — orders in other currencies aren't shown or converted.

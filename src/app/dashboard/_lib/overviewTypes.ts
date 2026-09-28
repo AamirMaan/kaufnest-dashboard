@@ -1,8 +1,9 @@
 /**
  * Response shapes of the Overview page's RPCs — the four 045 aggregates
  * (get_sales_overview / get_expenses_overview / get_purchases_overview /
- * get_payouts_overview) and 051's get_overview_timeseries. Page-only data,
- * so these live with the page rather than in src/types.
+ * get_payouts_overview), 051's get_overview_timeseries, and 052's
+ * get_sales_by_marketplace. Page-only data, so these live with the page
+ * rather than in src/types.
  */
 import type { ExpenseCategory } from "@/types";
 
@@ -91,4 +92,13 @@ export interface PlatformBalance {
   transferred: number;
   pending: number;
   count: number;
+}
+
+/** One row per marketplace from get_sales_by_marketplace (052). marketplace null = unknown. */
+export interface MarketplaceRow {
+  marketplace: string | null;
+  order_count: number;
+  revenue: number;
+  vat: number;
+  vat_base: number;
 }
