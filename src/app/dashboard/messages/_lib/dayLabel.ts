@@ -35,3 +35,22 @@ export function isNewDay(isoDate: string, previousIsoDate: string | null): boole
     a.getDate() !== b.getDate()
   );
 }
+
+/** Bubble timestamp, e.g. "11:05 AM" — the day is already shown by the day separator. */
+export function timeLabelFor(isoDate: string): string {
+  return new Date(isoDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+/**
+ * Conversation-list date: time for today ("2:00 PM"), "Feb 22" within the
+ * current year, "Feb 22, 2025" for older threads.
+ */
+export function threadDateLabel(isoDate: string, now: Date = new Date()): string {
+  const date = new Date(isoDate);
+  if (!isNewDay(isoDate, now.toISOString())) return timeLabelFor(isoDate);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
+}

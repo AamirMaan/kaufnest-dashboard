@@ -85,9 +85,25 @@ Trading API mechanics this reuses.
   `.toISOString()` rather than hardcoded UTC literals, specifically so it
   isn't timezone-flaky — `process.env.TZ` reassignment mid-test-file does
   **not** reliably work, Node caches timezone data at process start.
-- `_components/ThreadList.tsx` — left pane, one row per thread: avatar
-  circle (`avatarColor.ts`) + buyer name (bold when the thread has any
-  unanswered inbound message) + the existing unread-count `Badge`. Owns its
+  Also (2026-09-28) `timeLabelFor(iso)` ("11:05 AM", under each bubble) and
+  `threadDateLabel(iso, now?)` (conversation-list date: time today, "Feb 22"
+  this year, "Dec 30, 2025" older) — same en-US/local-day rules.
+- `_lib/messageBody.ts` (2026-09-28) — pure `cleanMessageBody(body)` /
+  `messagePreview(body)`. eBay bodies arrive with XML character references
+  left in — every line of a seller-template message ended in a literal
+  `&#xd;` in the UI. Decodes numeric/named references, normalises CR/CRLF,
+  trims lines, collapses blank-line runs; `messagePreview` also flattens to
+  one line for the list. **Display-only** — `ebay_messages.body` is stored
+  raw, so existing rows are fixed without a backfill. Colocated test.
+- `_components/ThreadList.tsx` — left pane, one rounded row per thread
+  (chat-app redesign 2026-09-28, no dividers, selected row gets
+  `--color-surface-subtle`): 44px avatar circle (`avatarColor.ts`), buyer name
+  (bold when unread) + `threadDateLabel` date on the right, last-message
+  `messagePreview` ("You: " prefix for outbound) + a small solid-primary
+  unread-count pill (one indicator only — an extra amber avatar dot was
+  dropped as noise, since most synced threads are unanswered), and a faint
+  item-title line (threads are per buyer+item, so two rows for one buyer
+  must stay distinguishable). Owns its
   own scroll container (2026-08-27, was previously owned by `page.tsx`) so
   it can drive infinite scroll: an `onScroll` handler fires the optional
   `onLoadMore` prop once the user scrolls within `150px` of the bottom,
@@ -97,27 +113,36 @@ Trading API mechanics this reuses.
   match your search" instead of the default "sync to pull in messages"
   copy when a search is active).
 - `_components/ThreadView.tsx` — right pane: a header bar (avatar + bold
-  name + item **title**, linking to the live eBay listing when
-  `item_url` is present, plus price — falls back to the bare "Item
+  name + item **title** · price, and an icon-only "View listing on eBay"
+  `ExternalLink` button on the right when `item_url` is present — the chat
+  design's call/video icon slot; eBay messaging has no calls or presence — falls back to the bare "Item
   `<id>`" for rows synced before migration `034` added these columns, or
   if a response ever lacks them; this pane had no header at all before
   2026-08-27) above chat-bubble rendering of the selected thread's
-  messages. Outbound (your replies) render right-aligned in
-  `--color-primary-muted`/`--color-primary-text` (the same soft "brand
-  chip" pairing already used elsewhere, e.g. `dashboard/page.tsx` —
-  deliberately NOT the saturated `--color-primary` + white text used for
-  buttons, so a sent bubble doesn't read as a clickable action). Inbound
+  messages. **Chat-app redesign (2026-09-28, user-requested from a reference
+  screenshot):** pill bubbles (`rounded-3xl`), timestamp (`timeLabelFor`)
+  *below* each bubble rather than inside it, outbound gets a `CheckCheck`
+  "sent" tick, and the day separator is an uppercase label between two
+  hairlines instead of a pill. Outbound (your replies) render right-aligned
+  in solid `--color-primary` + white — this **reverses** the earlier
+  "soft primary-muted so it doesn't look like a button" choice, on the
+  user's explicit request to match the reference design. Inbound
   renders left-aligned; still-unanswered inbound (`!is_read`) gets an amber
   left-border/tint (`--color-warning`/`--color-warning-bg`) so it's visually
   obvious which questions still need a reply, even partway down a long
   thread — see the `is_read` gotcha in `dashboard/messages/SKILL.md` for
   what that flag actually tracks (answered-on-eBay, not seen-by-you).
-  Answered inbound bubbles use `bg-(--color-surface)` +
-  `boxShadow: var(--shadow-card)` (fixed 2026-08-27 — `--color-surface-subtle`,
-  the prior choice, is this page's own `--background` token, so the bubble
-  was invisible against it; see the SKILL.md gotcha). Both directions get
-  one rounded corner squared off (`rounded-br-none`/`rounded-bl-none`) for a
-  WhatsApp-style bubble "tail." A day-separator pill (`dayLabel.ts`) is
+  **All** inbound bubbles (answered or not) are soft gray; unanswered ones
+  are flagged by a small amber "Needs reply" pill beside the timestamp — the
+  earlier amber tint + thick left border turned long seller-template
+  messages into a wall of amber. Bodies render through `cleanMessageBody`.
+  The message pane auto-scrolls to the newest message on thread switch and
+  whenever the message count changes. Inbound bubbles use
+  `bg-(--color-surface-subtle)` — valid again
+  as of 2026-09-28 because the whole chat card now has an explicit
+  `bg-(--color-surface)` in `page.tsx`; before that the pane sat on the
+  page background, which *is* `--color-surface-subtle`, and the bubble was
+  invisible (see the SKILL.md gotcha). A day separator (`dayLabel.ts`) is
   inserted before the first message of each new local calendar day, via a
   **`Fragment`** per message (not a wrapper `div`, and deliberately not
   `display:contents` either — that technically achieves the same flex-child
@@ -130,7 +155,13 @@ Trading API mechanics this reuses.
   ("`<buyer>` hat eine Nachricht gesendet zu `<item title>` #`<item id>`"),
   identical across every message in a thread, confirmed live 2026-08-27 —
   pure repeated noise once the header already names the buyer and item.
-- `_components/ReplyBox.tsx` — controlled textarea + Send button. Disabled
+- `_components/ReplyBox.tsx` — a real `<form id="message-reply-form">`
+  (form conventions): auto-growing 1-row textarea (`field-sizing-content`,
+  capped `max-h-40`, `required`) + square icon-only submit button
+  (`SendHorizontal`, swaps to a spinning `Loader2` while sending, disabled
+  while sending or empty). Enter submits via `form.requestSubmit()`,
+  Shift+Enter inserts a newline, IME composition is ignored. No
+  attachment/emoji buttons — eBay's reply call is plain text. Disabled
   when the selected thread has no inbound message to reply to (Trading API's
   `AddMemberMessageRTQ` requires a `ParentMessageID`) — see the "v1 scope"
   gotcha below. `onSend` returns `Promise<boolean>` (fixed 2026-08-27, was a

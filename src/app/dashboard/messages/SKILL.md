@@ -123,6 +123,22 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   `globals.css` before assuming the Tailwind class or theme logic is
   wrong** — Tailwind will happily emit a rule for `bg-(--anything)` whether
   or not that variable is ever defined.
+- **Render message bodies through `cleanMessageBody`/`messagePreview`
+  (`_lib/messageBody.ts`), never `message.body` directly.** eBay leaves XML
+  character references in bodies (`&#xd;` on every line of template
+  messages); raw rendering showed them literally (reported 2026-09-28).
+- **Chat card layout: `minmax(0,1fr)` + `min-h-0`/`min-w-0` are
+  load-bearing (2026-09-28).** A plain `1fr` grid column (and flex children
+  without `min-w-0`) grow to fit a long unbreakable item title, pushing the
+  card and the send button off-screen. The card's height is
+  `md:h-[calc(100dvh-15rem)]` with `md:grid-rows-[minmax(0,1fr)]` so both
+  panes scroll internally instead of the page.
+- **Inbound bubble background depends on the card behind it (2026-09-28).**
+  `page.tsx`'s chat card sets `bg-(--color-surface)`, which is what lets
+  answered inbound bubbles use `--color-surface-subtle` (a soft gray). If
+  that card background is ever removed, the pane falls back to the page
+  background — which is `--color-surface-subtle` itself — and inbound
+  bubbles vanish again (the bug described in the next entry).
 - **A subtler variant of the same class of bug: answered inbound bubbles
   used `bg-(--color-surface-subtle)`, a token that DOES exist, but is the
   exact same value as the page's own `--background`
