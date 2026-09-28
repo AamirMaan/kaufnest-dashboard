@@ -190,30 +190,42 @@ export default function MessagesPage() {
       )}
       {isFetching && <div className="mb-4 text-sm text-(--color-text-muted)">Loading…</div>}
 
-      <div className="grid grid-cols-1 overflow-hidden rounded-(--radius-card) border border-(--color-border) md:grid-cols-[280px_1fr]">
-        <div className="flex h-[600px] flex-col border-b border-(--color-border) md:border-b-0 md:border-r">
-          <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-2">
-            <Search size={14} className="shrink-0 text-(--color-text-muted)" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search messages or sender…"
-              aria-label="Search messages or sender"
-              className="w-full bg-transparent text-sm text-(--color-text-strong) placeholder:text-(--color-text-muted) focus:outline-none"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput("")}
-                aria-label="Clear search"
-                className="shrink-0 text-(--color-text-muted) hover:text-(--color-text-strong)"
-              >
-                <X size={14} />
-              </button>
-            )}
+      <div
+        // minmax(0,1fr), not 1fr: a plain 1fr column grows to fit a long
+        // unbreakable item title and pushes the card past the viewport.
+        // Height tracks the viewport (minus shell header + page title).
+        className="grid grid-cols-1 overflow-hidden rounded-[var(--radius-card)] border border-(--color-border) bg-(--color-surface) md:h-[calc(100dvh-15rem)] md:min-h-[520px] md:grid-cols-[340px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
+        style={{ boxShadow: "var(--shadow-card)" }}
+      >
+        <div className="flex h-[480px] min-h-0 flex-col border-b border-(--color-border) md:h-auto md:border-b-0 md:border-r">
+          <div className="border-b border-(--color-border) p-4">
+            <div className="relative">
+              <Search
+                size={16}
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--color-text-muted)"
+              />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search conversations…"
+                aria-label="Search messages or sender"
+                className="h-11 w-full rounded-[var(--radius-btn)] border border-(--color-border) bg-(--color-surface) pl-9 pr-9 text-sm text-(--color-text-strong) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => setSearchInput("")}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-(--color-text-muted) hover:text-(--color-text-strong)"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <ThreadList
               threads={threads}
               selectedKey={selectedThread?.key ?? null}
@@ -225,8 +237,8 @@ export default function MessagesPage() {
             />
           </div>
         </div>
-        <div className="flex h-[600px] flex-col">
-          <div className="flex-1 overflow-hidden">
+        <div className="flex h-[600px] min-h-0 min-w-0 flex-col md:h-auto">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <ThreadView thread={selectedThread} />
           </div>
           {selectedThread && canManage && (

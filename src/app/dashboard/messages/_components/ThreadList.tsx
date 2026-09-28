@@ -1,7 +1,7 @@
 import type { UIEvent } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { formatDateTime } from "@/lib/utils/date";
 import { avatarClassesFor, avatarInitial } from "../_lib/avatarColor";
+import { threadDateLabel } from "../_lib/dayLabel";
+import { messagePreview } from "../_lib/messageBody";
 import type { MessageThread } from "../_lib/groupThreads";
 
 // How close to the bottom (px) before the next page loads. Large enough that
@@ -45,37 +45,53 @@ export function ThreadList({
 
   return (
     <div className="h-full overflow-y-auto" onScroll={handleScroll}>
-      <ul className="divide-y divide-(--color-border)">
+      <ul className="space-y-1 p-2">
         {threads.map((thread) => {
           const last = thread.messages[thread.messages.length - 1];
           const hasUnread = thread.unreadCount > 0;
+          const selected = selectedKey === thread.key;
           return (
             <li key={thread.key}>
               <button
                 type="button"
                 onClick={() => onSelect(thread.key)}
-                className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-(--color-surface-subtle) ${
-                  selectedKey === thread.key ? "bg-(--color-surface-subtle)" : ""
+                aria-current={selected ? "true" : undefined}
+                className={`flex w-full items-center gap-3 rounded-[var(--radius-card)] px-3 py-3 text-left transition-colors cursor-pointer ${
+                  selected ? "bg-(--color-surface-subtle)" : "hover:bg-(--color-surface-subtle)"
                 }`}
               >
                 <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${avatarClassesFor(thread.buyerUsername)}`}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${avatarClassesFor(thread.buyerUsername)}`}
                 >
                   {avatarInitial(thread.buyerUsername)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-baseline justify-between gap-2">
                     <span
-                      className={`truncate text-sm text-(--color-text-strong) ${hasUnread ? "font-bold" : "font-medium"}`}
+                      className={`truncate text-sm text-(--color-text-strong) ${hasUnread ? "font-bold" : "font-semibold"}`}
                     >
                       {thread.buyerUsername}
                     </span>
-                    {hasUnread && <Badge label={String(thread.unreadCount)} variant="warning" />}
+                    <span className="shrink-0 text-xs text-(--color-text-muted)">
+                      {threadDateLabel(thread.lastMessageAt)}
+                    </span>
                   </div>
-                  <p className="mt-1 truncate text-xs text-(--color-text-muted)">Item {thread.itemId}</p>
-                  <p className="mt-1 truncate text-xs text-(--color-text-muted)">{last.body}</p>
-                  <p className="mt-1 text-xs text-(--color-text-muted)">
-                    {formatDateTime(thread.lastMessageAt)}
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <p className={`truncate text-sm ${hasUnread ? "text-(--color-text-strong)" : "text-(--color-text-muted)"}`}>
+                      {last.direction === "outbound" ? "You: " : ""}
+                      {messagePreview(last.body)}
+                    </p>
+                    {hasUnread && (
+                      <span
+                        aria-label={`${thread.unreadCount} awaiting reply`}
+                        className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-(--color-primary) px-1.5 text-[11px] font-semibold text-white tabular-nums"
+                      >
+                        {thread.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-(--color-text-faint)" title={thread.itemTitle ?? undefined}>
+                    {thread.itemTitle ?? `Item ${thread.itemId}`}
                   </p>
                 </div>
               </button>

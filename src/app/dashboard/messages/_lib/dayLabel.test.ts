@@ -1,4 +1,4 @@
-import { dayLabelFor, isNewDay } from "./dayLabel";
+import { dayLabelFor, isNewDay, threadDateLabel, timeLabelFor } from "./dayLabel";
 
 // Both functions deliberately operate on the viewer's LOCAL calendar day
 // (correct for a chat UI). Build fixtures from local date/time components,
@@ -49,5 +49,28 @@ describe("isNewDay", () => {
 
   it("is true across a calendar-day boundary, even if less than 24h apart", () => {
     expect(isNewDay(local(2026, 8, 28, 0, 1), local(2026, 8, 27, 23, 59))).toBe(true);
+  });
+});
+
+describe("timeLabelFor", () => {
+  it("formats a local time as h:mm AM/PM", () => {
+    expect(timeLabelFor(new Date(2026, 1, 22, 11, 5).toISOString())).toBe("11:05 AM");
+    expect(timeLabelFor(new Date(2026, 1, 22, 14, 0).toISOString())).toBe("2:00 PM");
+  });
+});
+
+describe("threadDateLabel", () => {
+  const now = new Date(2026, 1, 22, 18, 0);
+
+  it("shows the time for a message from today", () => {
+    expect(threadDateLabel(new Date(2026, 1, 22, 14, 0).toISOString(), now)).toBe("2:00 PM");
+  });
+
+  it("shows month + day earlier in the same year", () => {
+    expect(threadDateLabel(new Date(2026, 1, 21, 9, 0).toISOString(), now)).toBe("Feb 21");
+  });
+
+  it("adds the year for an older year", () => {
+    expect(threadDateLabel(new Date(2025, 11, 30, 9, 0).toISOString(), now)).toBe("Dec 30, 2025");
   });
 });

@@ -168,6 +168,24 @@ relies on the old replace behavior.
   across the app. `DeleteConfirmModal` and `InvoiceModal` (in `src/components/modals/`)
   are built on top of it.
 
+## Pagination.tsx
+
+Shared table footer used by every server-paginated list (Sales, Expenses,
+Purchases, Inventory products/transfers, Audit Logs, Listings, Dropshipping).
+Redesigned 2026-09-28: "Showing X–Y of Z results" on the left; on the right a
+"Rows" select (25/50/100, only when `onPageSizeChange` is passed) and
+**Previous · numbered page buttons · Next** — active page is solid
+`--color-primary` + white, disabled Previous/Next go muted.
+
+- `pageNumbers(page, totalPages)` (pure, tested) — every page when ≤ 7,
+  otherwise first/last/current±1 with `"…"` gaps, always 7 slots so the
+  footer width doesn't jump while paging.
+- `pageRangeLabel()` is unchanged (no " results" suffix) because
+  `dashboard/users/_store/usersSlice.test.ts` asserts its exact output — the
+  component appends " results" itself.
+- Props are unchanged, so callers need no edits. Test:
+  `npx jest src/components/ui/Pagination`.
+
 ## StatCard.tsx
 
 `export function StatCard({ label, value, subtext?, trend? })` —
