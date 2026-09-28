@@ -164,6 +164,11 @@ describe("isDefaultFilters with search", () => {
   it("returns false when search is non-empty", () => {
     expect(isDefaultFilters({ ...DEFAULT_PURCHASE_FILTERS, search: "widget" })).toBe(false);
   });
+
+  it("a non-default sales marketplace is an active filter", () => {
+    expect(isDefaultFilters({ ...DEFAULT_SALES_FILTERS, marketplace: "amazon.de" })).toBe(false);
+    expect(isDefaultFilters(DEFAULT_SALES_FILTERS)).toBe(true);
+  });
 });
 
 describe("isEbayIntegrationSyncedSale", () => {

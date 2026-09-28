@@ -10,15 +10,23 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `page.tsx` — list view: server-side pagination (`fetchSalesPage` thunk),
   `FilterBar` (date preset — incl. "Specific period", any month/quarter/year,
   see `components/ui/SKILL.md`'s FilterBar entry — currency, platform,
-  status, general keyword search across product name/order ID/description),
+  **marketplace** (Task 6, 2026-09-28 — options loaded from
+  `fetchSalesMarketplaces()`, a plain async wrapper around the
+  `get_sales_marketplaces` RPC (052), refreshed on `summaryVersion` like the
+  tiles and also after an import's marketplace backfill; an "Unknown" option
+  maps to `UNKNOWN_MARKETPLACE`, which `fetchSalesPage`/`handleExport` both
+  turn into `.is("marketplace", null)` rather than `.eq(...)`), status,
+  general keyword search across product name/order ID/description),
   row selection, invoice
-  trigger, filtered summary tiles (Orders/Gross/VAT/Net/Fees/Shipping
-  charged/Excluded — covers ALL matching rows, not just the current page,
-  see "Summary thunk" below), **Export CSV** button
+  trigger, filtered summary tiles (Orders/Gross/VAT/Net/**VAT base
+  (net)**/Fees/Shipping charged/Excluded — covers ALL matching rows, not just
+  the current page, see "Summary thunk" below), **Export CSV** button
   (server-side query, paginated via `@/lib/utils/fetchAllRows` up to a
   5 000-row cap — see "CSV import/export" below and `dashboard/SKILL.md`'s
   Max Rows gotcha), **Import CSV** button, wires up the modals below.
-  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`.
+  Product-name cells are `<Link>`s to `/dashboard/sales/[id]`. The Platform
+  column cell also renders the order's `marketplace` (e.g. `amazon.de`) as a
+  small muted line under the `PlatformBadge` when set.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -47,27 +55,38 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `_components/orderMath.ts`.
 - `_store/salesFilterParams.ts` (+ colocated `.test.ts`) — pure mapper from
   `SalesFilters` to the RPC/query param shape (`p_from`/`p_to`/`p_platform`/
-  `p_currency`/`p_status`/`p_pattern`), shared by `fetchSalesPage` and
-  `fetchSalesSummary` so the table and the summary tiles can never disagree
-  about which filter predicates apply.
+  `p_currency`/`p_status`/`p_pattern`/`p_marketplace`), shared by
+  `fetchSalesPage` and `fetchSalesSummary` so the table and the summary tiles
+  can never disagree about which filter predicates apply. `p_marketplace` is
+  `null` for `"all"`, the marketplace string otherwise, or the
+  `UNKNOWN_MARKETPLACE` sentinel (`__unknown__`) — see `lib/utils/marketplace.ts`.
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.
-  Builds Orders/Gross/VAT/Net/Fees/Shipping charged/Excluded tiles via the
-  shared `moneyTile`/`countTile`/`compactTiles` helpers
-  (`@/components/ui/summaryTileHelpers` — renamed from `summaryTiles.ts`
-  during this task, see `components/ui/SKILL.md`'s gotcha for why); VAT and
-  Net are omitted together when VAT is all-zero.
+  Builds Orders/Gross/VAT/Net/**VAT base (net)**/Fees/Shipping
+  charged/Excluded tiles via the shared `moneyTile`/`countTile`/`compactTiles`
+  helpers (`@/components/ui/summaryTileHelpers` — renamed from
+  `summaryTiles.ts` during this task, see `components/ui/SKILL.md`'s gotcha
+  for why); VAT, Net, and VAT base are omitted together when VAT is all-zero.
+  VAT base reads `get_sales_summary`'s `vat_base` column directly (052) — the
+  net taxable amount to declare (total + shipping − VAT over VAT-bearing
+  orders), not simply `Net` (which excludes shipping).
 - `_store/salesSlice.ts` — Redux slice for `state.sales` (`items`, `loaded`,
   `page`, `pageSize`, `total`, `isFetching`, plus the summary fields below).
   Actions: `hydratePage` (also exported as `hydrateSales` for `StoreProvider`),
   `addSale`, `updateSale`, `removeSale`, `setFetching`.
   Thunk: `fetchSalesPage({ page, pageSize, filters })` — builds a Supabase query
-  with filter pushdown (date range, platform, currency, status, and a keyword
-  `search` matched via `.or()`/`ilike` across `product_name`/
+  with filter pushdown (date range, platform, **marketplace** — `.is
+  ("marketplace", null)` for the `UNKNOWN_MARKETPLACE` sentinel, else
+  `.eq("marketplace", …)`, Task 6, 2026-09-28 —, currency, status, and a
+  keyword `search` matched via `.or()`/`ilike` across `product_name`/
   `external_order_id`/`description`, sanitized with `sanitizeIlikeSearchTerm`),
   `.select("*", { count: "exact" })`, `.order("date")`, and `.range(from, to)`
-  from `rangeFor()`. Dispatches `hydratePage` on success.
+  from `rangeFor()`. Dispatches `hydratePage` on success. Also exports
+  `fetchSalesMarketplaces()` (Task 6) — a plain async function (not a thunk;
+  the list is page-local UI state, not persisted Redux state), reading
+  `get_sales_marketplaces()` (052) for the Marketplace filter dropdown;
+  returns `[]` on error.
   **Summary thunk** (2026-09-26): `fetchSalesSummary(filters: SalesFilters)`
   calls the `get_sales_summary` RPC (migration 050) via `salesFilterParams` —
   the same mapper `fetchSalesPage` uses, so the filtered-summary tiles and the
@@ -683,9 +702,10 @@ drift from the table or the summary tiles; it previously hand-rolled its own
 filter block, including an invalid `"0000-00-00"`/`"9999-99-99"` custom-range
 fallback), fetches ALL matching rows via `fetchAllRows`, and calls
 `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
-Exported columns: `date, product_name, platform, quantity, unit_price, total_amount,
+Exported columns: `date, product_name, platform, marketplace, quantity, unit_price, total_amount,
 currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
-advertising_fee`. Export button is disabled when no rows match the filter.
+advertising_fee, platform_fee` (`marketplace` added Task 6, 2026-09-28 — blank
+when unset). Export button is disabled when no rows match the filter.
 
 **Import** (`ImportSalesModal` + `importFormats.ts`): the modal has a
 **format dropdown** with three formats defined in the pure registry

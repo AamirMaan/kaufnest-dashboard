@@ -3,6 +3,7 @@ import type { Sale, SalesSummaryRow } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type { SalesFilters } from "@/lib/utils/filters";
+import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { salesFilterParams } from "./salesFilterParams";
 
 interface SalesState {
@@ -52,6 +53,8 @@ export const fetchSalesPage = createAsyncThunk(
     if (p.p_from) query = query.gte("date", p.p_from);
     if (p.p_to) query = query.lte("date", p.p_to);
     if (p.p_platform) query = query.eq("platform", p.p_platform);
+    if (p.p_marketplace === UNKNOWN_MARKETPLACE) query = query.is("marketplace", null);
+    else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
     if (p.p_currency) query = query.eq("currency", p.p_currency);
     if (p.p_status) query = query.eq("status", p.p_status);
     if (p.p_pattern) {
@@ -188,3 +191,15 @@ export const { setFetching, hydratePage, addSale, updateSale, removeSale } =
 
 /** Legacy alias kept so StoreProvider can call `hydrateSales` by name. */
 export const hydrateSales = hydratePage;
+
+/**
+ * Distinct marketplaces for the Orders filter dropdown (get_sales_marketplaces,
+ * 052). Structurally bounded by the storefronts a seller trades on. Returns []
+ * on error — the filter then only offers "All" / "Unknown".
+ */
+export async function fetchSalesMarketplaces(): Promise<string[]> {
+  const supabase = await createTenantClient();
+  const { data, error } = await supabase.rpc("get_sales_marketplaces");
+  if (error) return [];
+  return ((data ?? []) as { marketplace: string }[]).map((r) => r.marketplace);
+}

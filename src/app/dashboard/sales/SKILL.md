@@ -852,3 +852,9 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   applies the identical `p.p_pattern`-based `.or()` string from the same
   `salesFilterParams` call, so the column set can't drift between table and
   export without both call sites failing their tests.
+- **VAT base includes shipping.** `get_sales_summary.vat_base` =
+  `total_amount + shipping_charged − vat_amount` over VAT-bearing rows.
+  Amazon's `total_amount` is items only and its `vat_amount` is item +
+  shipping VAT — `total_amount − vat_amount` would understate the base.
+  Marketplace filtering lives in two query builders (`fetchSalesPage` and
+  `page.tsx`'s `handleExport`) plus the RPC — change all three together.

@@ -8,6 +8,8 @@ export interface SalesSummaryParams {
   p_currency: string | null;
   p_status: string | null;
   p_pattern: string | null;
+  /** Arg name matches get_sales_summary in 052. */
+  p_marketplace: string | null;
 }
 
 /**
@@ -24,5 +26,6 @@ export function salesFilterParams(f: SalesFilters): SalesSummaryParams {
     p_currency: f.currency === "all" ? null : f.currency,
     p_status: f.status === "all" ? null : f.status,
     p_pattern: ilikePattern(f.search),
+    p_marketplace: f.marketplace === "all" ? null : f.marketplace,
   };
 }
