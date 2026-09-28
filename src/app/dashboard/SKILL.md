@@ -1,6 +1,6 @@
 ---
 name: dashboard-shell
-description: Work on the dashboard shell, layout-level data hydration, or the Overview/home page at src/app/dashboard — use when the task spans multiple dashboard features, touches the auth guard/data-fetch in layout.tsx, or is about the Overview stats page (not a single feature like sales/expenses/etc).
+description: Work on the dashboard shell, layout-level data hydration, or the Overview/home page at src/app/dashboard — use when the task spans multiple dashboard features, touches the auth guard/data-fetch in layout.tsx, or is about the Overview stats page (not a single feature like sales/expenses/etc). This folder's `_components/`/`_lib/` also back `/dashboard/analytics` (see `analytics/`).
 ---
 
 # Working on the Dashboard shell / Overview
@@ -15,6 +15,10 @@ Use this folder when the task is about:
 - Something that spans multiple features (e.g. "add a new collection that
   every page needs hydrated")
 
+This folder's `_components/` and `_lib/` are also where `/dashboard/analytics`
+(`analytics/page.tsx`) gets its data hook, chart cards, and pure helpers from —
+see `analytics/CLAUDE.md`/`SKILL.md` for that page's own layout and gotchas.
+
 ## Adding a new feature with its own Supabase collection
 
 1. Fetch it in `layout.tsx`'s `Promise.all` and pass it to `<StoreProvider>`.
@@ -25,24 +29,46 @@ Use this folder when the task is about:
 4. Write that feature's `CLAUDE.md`/`SKILL.md` and add a row to the table in
    `dashboard/CLAUDE.md`.
 
-## Overview page changes
+## Home + Analytics changes
 
-`page.tsx` fetches five RPCs via `createTenantClient()` in one `Promise.all`:
-the four 045 aggregates (`get_sales_overview` / `get_expenses_overview` /
-`get_purchases_overview` / `get_payouts_overview`) for headline totals, and
-051's `get_overview_timeseries` for monthly chart series, previous-period
-totals and the top vendor. All take `{ p_from, p_to, p_currency }`; results
-live in local `useState` (NOT Redux — see `dashboard/CLAUDE.md` for why).
+`_components/useOverviewData.ts` fetches five RPCs via `createTenantClient()`
+in one `Promise.all` scoped to the picked date range: the four 045 aggregates
+(`get_sales_overview` / `get_expenses_overview` / `get_purchases_overview` /
+`get_payouts_overview`) for headline totals, and 051's
+`get_overview_timeseries` for monthly chart series, previous-period totals
+and the top vendor. All take `{ p_from, p_to, p_currency }`. A **second,
+independent** call to `get_overview_timeseries` fetches a fixed
+trailing-12-month window (`trailingRange()` in `_lib/kpiTiles.ts`) and reruns
+only when `profileCurrency` changes — this is what feeds every KPI sparkline
+and `OverviewTrendCard` (see the gotcha below). That second call has its own
+`trailingLoading` flag, separate from the hook's overall `isLoading` (see the
+`trailingLoading` gotcha below). Results live in the hook's
+own `useState` (NOT Redux — see `dashboard/CLAUDE.md` for why). Both
+`dashboard/page.tsx` (Home) and `analytics/page.tsx` call this same hook,
+each with its own `useDateRangePicker()` instance.
 
-The page renders chart cards from `_components/` in a
-`grid-cols-1 lg:grid-cols-2` grid. Minimal file set per change:
+**Rule of the split (2026-09-28, user's call): Home = numbers, Analytics =
+charts.** Home renders 6 `KpiTile`s + "By Platform" `PlatformStatsCard`s +
+`RecentOrdersCard` + Quick Start. Analytics renders `OverviewTrendCard` +
+`PlatformDonutCard` + a `grid-cols-1 lg:grid-cols-2` grid of the detail chart
+cards, and no KPI tiles. Don't put a chart on Home or a stat-tile row on
+Analytics. Minimal file set per change:
 
-- **New/changed card** → `_components/<Name>Card.tsx` (built on
-  `ChartCard.tsx` + `useChartKit.ts`), any series shaping in
-  `_lib/overviewCharts.ts` + its test, wiring in `page.tsx`.
+- **Add a KPI tile** → add the field to `KpiSet` in `_lib/kpiTiles.ts`
+  (`buildKpis`) plus a test, then render a `KpiTile` on Home. The sparkline/tile color comes from `useChartKit().colors`.
+- **Move a card between Home and Analytics** → both pages read the same
+  `useOverviewData()` result, so moving a card is just moving its JSX (and,
+  for a `KpiTile`, its `buildKpis()` field) between the two `page.tsx` files —
+  no data-layer change needed.
+- **New/changed detail card** (Analytics) → `_components/<Name>Card.tsx`
+  (built on `ChartCard.tsx` + `useChartKit.ts`), any series shaping in
+  `_lib/overviewCharts.ts` + its test, wiring in `analytics/page.tsx`.
 - **New figure per month** → `supabase/migrations/05x_*.sql` replacing
   `get_overview_timeseries` (+ the `005_tenant_provisioning.sql` mirror),
   `OverviewMonth` in `_lib/overviewTypes.ts`, the integration test.
+- **New per-platform figure on Home** → `_lib/platformStats.ts` (+ test) and
+  `_components/PlatformStatsCard.tsx`'s `rows`. If it needs a platform other
+  than eBay/Amazon in `platformBalance`, that's a 045 RPC change first.
 - **Colors** → `_lib/chartPalette.ts` only.
 
 ### Gotcha: pass `resolveDateBounds`, not `resolveDateRange`, to the RPCs
@@ -78,6 +104,51 @@ English names, not `toLocaleString`, so tests and SSR are deterministic.
 badges then hide (`pctChange` → null). A previous value of 0 also hides the
 badge rather than showing an infinite change.
 
+### Gotcha: sparklines and Home's trend chart use the trailing window, never the picked range
+
+`KpiTile.spark` and `OverviewTrendCard` both read `trailing`
+(`useOverviewData`'s second, currency-only-dependent RPC call), not
+`timeseries` (the picked-range one). A one-month range would otherwise give
+a single-point sparkline/chart with nothing to draw a trend from. If you're
+adding a new sparkline-bearing tile, wire it to `trailing.months`, not
+`timeseries.months`.
+
+### Gotcha: `trailingLoading` is a separate flag from `isLoading` (2026-09-27)
+
+The trailing call runs in its own effect with no loading flag of its own
+until 2026-09-27 — before that fix, `OverviewTrendCard` had no way to tell
+"still fetching" apart from "fetched, genuinely empty," so it rendered "No
+data in this period" for the entire time the trailing RPC was in flight (and
+permanently if it errored). `useOverviewData` now exposes `trailingLoading`:
+true on mount, flips false once the trailing call resolves (success OR
+error), and flips true again for the duration of a currency-triggered
+refetch. `OverviewTrendCard` takes this as its `loading` prop and shows a
+pulse skeleton (`h-full rounded-[var(--radius-btn)]
+bg-(--color-border-subtle) animate-pulse`) in the 300px chart slot while
+true; "No data in this period" only renders once `loading` is false. This is
+independent of the page-level `isLoading` (which gates the range-scoped RPCs
+and drives the "opacity-60 pointer-events-none" overlay) — don't conflate
+the two when adding new loading-dependent UI here.
+
+### Gotcha: `useId()` output must be sanitised before it's used in `url(#…)`
+
+React's `useId()` returns ids containing `:` (e.g. `:r0:`), which is not
+valid inside an SVG `url(#…)` gradient reference — a gradient-fill chart
+silently renders unfilled if you pass the raw id straight through. Both
+`KpiTile.tsx` and `OverviewTrendCard.tsx` strip everything but
+`[a-zA-Z0-9_-]` before building the gradient id
+(`` `kpi-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}` ``) — copy this pattern
+for any new chart with its own `<linearGradient>`.
+
+### Gotcha: `RecentOrdersCard` deliberately bypasses the Redux `sales` slice
+
+It runs its own `.limit(RECENT_ORDERS_LIMIT)` query via `createTenantClient()`
+instead of reading `state.sales.items`. The `sales` slice holds whichever
+page the Sales list last fetched (any sort/filter), not "the 5 most recent
+orders" — reading it here would show stale or wrong rows depending on what a
+user last did on the Sales page. Don't "simplify" this by wiring it to the
+slice.
+
 ### Gotcha: Supabase's PostgREST "Max Rows" setting silently truncates below your `.limit()`
 
 Full explanation, the decision framework for which fetch pattern to use, and
@@ -86,25 +157,29 @@ the current audit of other places this bites: `BACKEND_ARCHITECTURE_PRINCIPLES.m
 API setting (default 1000) caps every REST request's response at that many
 rows regardless of the `.limit()`/`.range()` width requested, no error — use
 `@/lib/utils/fetchAllRows`, not a bare `.limit(N)`, for "fetch everything
-matching a filter." **The Overview page (`page.tsx`) no longer exercises this
-gotcha at all** — as of the 2026-09-17 RPC rewire it fetches pre-aggregated
-JSON via `supabase.rpc(...)` instead of paging through raw rows, so don't be
-confused if you don't see a `fetchAllRows` call in `page.tsx` anymore. The
-Sales/Expenses/Purchases CSV export queries still go through it.
+matching a filter." **Home and Analytics no longer exercise this gotcha at
+all** — as of the 2026-09-17 RPC rewire `useOverviewData.ts` fetches
+pre-aggregated JSON via `supabase.rpc(...)` instead of paging through raw
+rows, so don't be confused if you don't see a `fetchAllRows` call in either
+`page.tsx`. The Sales/Expenses/Purchases CSV export queries still go
+through it.
 
-### Gotcha: "Specific period" filter — Overview does NOT use `FilterBar`
+### Gotcha: "Specific period" filter — Home/Analytics do NOT use `FilterBar`
 
-Overview's date filter supports "Specific period" (any month/quarter/full
-year) same as Sales/Expenses/Purchases/Audit Logs, but `page.tsx` has its own
-bespoke inline date-range UI rather than importing the shared `FilterBar`
-component — see `components/ui/SKILL.md`'s FilterBar entry for the shared
-version other features use. If you change the period-picking logic, check
-both places.
+Home and Analytics's date filter supports "Specific period" (any
+month/quarter/full year) same as Sales/Expenses/Purchases/Audit Logs, but
+`_components/useDateRangePicker.ts` + `DateRangePicker.tsx` (extracted
+2026-09-27 from what used to be `page.tsx`'s own inline UI) is its own
+bespoke component rather than the shared `FilterBar` — see
+`components/ui/SKILL.md`'s FilterBar entry for the shared version other
+features use. If you change the period-picking logic, check both places.
 
 ## Test command
 
-`npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`, `overviewCharts`, `chartPalette`)
-+ `npx jest lib/utils/fetchAllRows` for the shared helper itself.
+`npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`,
+`overviewCharts`, `chartPalette`, `kpiTiles`, `platformShare`,
+`recentOrderDisplay`) + `npx jest lib/utils/fetchAllRows` for the shared
+helper itself.
 
 `overviewRpc.integration.test.ts` in the same folder is NOT part of that
 run — it's excluded from the default `jest.config.ts` `testMatch` and

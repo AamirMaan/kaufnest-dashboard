@@ -379,7 +379,8 @@ you left off instead of re-deriving everything from scratch.
 | Folder | Route | Owns |
 | --- | --- | --- |
 | `src/app/(auth)/` | `/login`, `/forgot-password`, `/set-password` | auth pages (+ related `app/auth/callback`, `app/api/users/invite` routes) |
-| `src/app/dashboard/` | `/dashboard` (Overview) | shell-level layout/data-hydration + overview stats — see its `CLAUDE.md` for the full feature table |
+| `src/app/dashboard/` | `/dashboard` (Home) | shell-level layout/data-hydration + Home = numbers only (KPI tiles, per-platform stat cards, recent orders) — see its `CLAUDE.md` for the full feature table |
+| `src/app/dashboard/analytics/` | `/dashboard/analytics` | every chart — trend, platform donut, detail chart cards (Home keeps the stat tiles + per-platform numbers; components shared in `dashboard/_components/`) |
 | `src/app/dashboard/sales/` | `/dashboard/sales`, `/dashboard/sales/[id]` | sales records ("Orders" in UI) + `salesSlice`; [id] is order-detail page |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
