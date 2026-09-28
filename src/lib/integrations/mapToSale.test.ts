@@ -80,6 +80,7 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_country: null,
       buyer_phone: null,
       buyer_email: null,
+      marketplace: null,
     });
   });
 
@@ -125,6 +126,7 @@ describe("normalizedOrderToSaleRow", () => {
       shipping_country: null,
       buyer_phone: null,
       buyer_email: null,
+      marketplace: null,
     });
   });
 
@@ -208,5 +210,10 @@ describe("normalizedOrderToSaleRow", () => {
 
     expect(row.buyer_name).toBeNull();
     expect(row.shipping_address_line1).toBeNull();
+  });
+
+  it("carries order.marketplace onto the sale row, null when absent", () => {
+    expect(normalizedOrderToSaleRow({ ...ebayOrder, marketplace: "ebay.de" }, "ebay", "u").marketplace).toBe("ebay.de");
+    expect(normalizedOrderToSaleRow(ebayOrder, "ebay", "u").marketplace).toBeNull();
   });
 });

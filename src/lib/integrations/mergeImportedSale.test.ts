@@ -202,4 +202,14 @@ describe("mergeImportedSale", () => {
     expect(result.shipping_city).toBe(existingSale.shipping_city);
     expect(result.buyer_email).toBe(existingSale.buyer_email);
   });
+
+  // Test 8: marketplace is fill-only — set from incoming when existing has
+  // none, but a populated existing value (including a manual correction)
+  // always wins.
+  it("fills marketplace from incoming only when existing has none", () => {
+    const incoming = { ...existingSale, marketplace: "ebay.de" };
+    expect(mergeImportedSale({ ...existingSale, marketplace: null }, incoming).marketplace).toBe("ebay.de");
+    expect(mergeImportedSale({ ...existingSale, marketplace: undefined }, incoming).marketplace).toBe("ebay.de");
+    expect(mergeImportedSale({ ...existingSale, marketplace: "ebay.fr" }, incoming).marketplace).toBe("ebay.fr");
+  });
 });

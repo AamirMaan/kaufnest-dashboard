@@ -9,6 +9,8 @@ import type { Sale } from "@/types";
  * `shipping_country`, `buyer_phone`, `buyer_email`): a seller's manual
  * correction to a wrong or incomplete auto-captured address must survive a
  * later re-sync of the same order.
+ *
+ * `marketplace` is neither: it is fill-only (see the merge below).
  */
 const PLATFORM_OWNED: (keyof Sale)[] = [
   "status",
@@ -37,5 +39,8 @@ export function mergeImportedSale(
     ...Object.fromEntries(
       PLATFORM_OWNED.map((k) => [k, incoming[k]])
     ),
+    // Fill-only: a sync may supply a marketplace the row never had (pre-052
+    // rows), but never overwrites one — a manual correction wins.
+    marketplace: existing.marketplace ?? incoming.marketplace ?? null,
   } as Sale;
 }

@@ -1,4 +1,5 @@
 import type { NormalizedOrder, PlatformAdapter, TokenSet } from "./types";
+import { normalizeMarketplace } from "@/lib/utils/marketplace";
 
 const LWA_AUTH_URL = "https://sellercentral.amazon.com/apps/authorize/consent";
 const LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token";
@@ -24,6 +25,7 @@ interface AmazonOrder {
   OrderStatus: string;
   PurchaseDate?: string;
   OrderTotal?: AmazonMoney;
+  SalesChannel?: string;
 }
 
 interface AmazonOrdersResponse {
@@ -162,6 +164,7 @@ export const amazonAdapter: PlatformAdapter = {
           date,
           status,
           description: `Amazon order ${order.AmazonOrderId}`,
+          marketplace: normalizeMarketplace(order.SalesChannel),
         });
       }
     }

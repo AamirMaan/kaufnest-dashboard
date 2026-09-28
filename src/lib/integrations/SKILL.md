@@ -426,3 +426,8 @@ lookup against existing `sales` rows.
   cookie (`maxAge: 600`) containing a random UUID; `callback` verifies the
   `state` query param matches before calling `exchangeCode`, and deletes the
   cookie either way.
+- **Marketplace (2026-09-28, migration 052).** Amazon reads
+  `order.SalesChannel` ("Amazon.de"), eBay reads each line item's
+  `purchaseMarketplaceId` ("EBAY_DE"), both via `normalizeMarketplace`
+  (`lib/utils/marketplace.ts`). In `mergeImportedSale` it is **fill-only**:
+  written when the stored row has none, never overwritten.
