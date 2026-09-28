@@ -225,6 +225,12 @@ fixed — don't reintroduce them:
 
 ## Gotchas — CSV import formats (German support)
 
+- **Marketplace (2026-09-28, migration 052).** `normalizeMarketplace`
+  (`lib/utils/marketplace.ts`) is the only way a marketplace is written.
+  Amazon's VAT report column is `MARKETPLACE`; do **not** alias
+  `SALES_CHANNEL` — it holds `AFN`/`MFN`. The generic format keeps folding
+  `platform: amazon.de` → `amazon` but now ALSO stores `amazon.de` as the
+  marketplace; an explicit `marketplace` column wins.
 - **`Versandkosten` maps to `shipping_charged`** (what the buyer paid — I6), NOT
   `shipping_cost`. Seller-side shipping needs an explicit `shipping_cost` /
   `versandkosten_bezahlt` header. Don't "fix" this mapping without reading

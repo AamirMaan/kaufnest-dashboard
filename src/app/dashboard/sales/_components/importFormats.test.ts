@@ -904,6 +904,61 @@ describe("normalizeStatus with SALE mapping", () => {
   });
 });
 
+describe("marketplace", () => {
+  it("amazon format reads the MARKETPLACE column", () => {
+    const { mapping } = resolveHeaders(["ORDER_ID", "MARKETPLACE"].map((h) => h.toLowerCase()), AMAZON.columns);
+    expect(mapping.get("marketplace")).toBe("marketplace");
+    const r = validateRowForFormat(AMAZON, { ...AMAZON_BASE, marketplace: "amazon.fr" }, 2);
+    expect(r.error).toBeNull();
+    expect(r.data?.marketplace).toBe("amazon.fr");
+    expect(r.data?.platform).toBe("amazon");
+  });
+
+  it("does not map SALES_CHANNEL (AFN/MFN fulfilment channel) to marketplace", () => {
+    const { mapping } = resolveHeaders(["sales_channel"], AMAZON.columns);
+    expect(mapping.get("sales_channel")).toBeUndefined();
+  });
+
+  it("ebay format reads a marketplace column", () => {
+    const r = validateRowForFormat(EBAY, { ...AMAZON_BASE, order_id: "12-34567-89012", marketplace: "EBAY_GB" }, 2);
+    expect(r.data?.marketplace).toBe("ebay.co.uk");
+  });
+
+  it("missing column → null", () => {
+    const r = validateRowForFormat(AMAZON, AMAZON_BASE, 2);
+    expect(r.data?.marketplace).toBeNull();
+  });
+
+  it("generic: platform 'amazon.de' keeps platform amazon AND marketplace amazon.de", () => {
+    const r = validateRowForFormat(
+      GENERIC,
+      { date: "2024-01-15", product_name: "Mug", quantity: "1", unit_price: "10", platform: "amazon.de" },
+      2,
+    );
+    expect(r.error).toBeNull();
+    expect(r.data?.platform).toBe("amazon");
+    expect(r.data?.marketplace).toBe("amazon.de");
+  });
+
+  it("generic: explicit marketplace column wins over platform", () => {
+    const r = validateRowForFormat(
+      GENERIC,
+      { date: "2024-01-15", product_name: "Mug", quantity: "1", unit_price: "10", platform: "amazon.de", marketplace: "amazon.it" },
+      2,
+    );
+    expect(r.data?.marketplace).toBe("amazon.it");
+  });
+
+  it("generic: bare platform 'amazon' → marketplace null", () => {
+    const r = validateRowForFormat(
+      GENERIC,
+      { date: "2024-01-15", product_name: "Mug", quantity: "1", unit_price: "10", platform: "amazon" },
+      2,
+    );
+    expect(r.data?.marketplace).toBeNull();
+  });
+});
+
 describe("validateRowForFormat honours the date order", () => {
   const amazonRow = {
     order_id: "028-5781430-5293162",

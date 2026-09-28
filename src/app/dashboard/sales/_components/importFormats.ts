@@ -18,6 +18,7 @@
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
+import { normalizeMarketplace } from "@/lib/utils/marketplace";
 import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
 import {
   ALIASES,
@@ -130,9 +131,10 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("status", false),
   col("description", false),
   col("sku", false),
+  col("marketplace", false),
 ];
 
-const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "vat_amount", "shipping_charged", "shipping_cost", "advertising_fee", "platform_fee", "status", "description", "sku"];
+const RICH_HEADERS = ["order_id", "date", "product_name", "quantity", "total", "unit_price", "currency", "vat_rate", "vat_amount", "shipping_charged", "shipping_cost", "advertising_fee", "platform_fee", "status", "description", "sku", "marketplace"];
 
 export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
   generic: {
@@ -143,6 +145,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
       col("date", true),
       col("product_name", true),
       col("platform", false),
+      col("marketplace", false),
       col("quantity", true),
       col("unit_price", true),
       col("total", false),
@@ -157,8 +160,8 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
       col("order_id", false),
       col("sku", false),
     ],
-    templateHeaders: ["date", "product_name", "platform", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee", "sku"],
-    templateExample: ["2024-01-15", "Blue Widget", "amazon", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", "", "", ""],
+    templateHeaders: ["date", "product_name", "platform", "marketplace", "quantity", "unit_price", "currency", "vat_rate", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee", "sku"],
+    templateExample: ["2024-01-15", "Blue Widget", "amazon", "amazon.de", "10", "9.99", "EUR", "19", "pending", "Sample sale", "", "", "", "", ""],
   },
   amazon: {
     id: "amazon",
@@ -167,7 +170,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
-    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "0,60", "shipped", "", "WIDGET-BLU"],
+    templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "0,60", "shipped", "", "WIDGET-BLU", "amazon.de"],
     vatRateIsFraction: true,
     priceColumnsAreLineTotals: true,
   },
@@ -177,7 +180,7 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     forcedPlatform: "ebay",
     columns: RICH_COLUMNS,
     templateHeaders: RICH_HEADERS,
-    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "4,75", "5,99", "4,10", "0,80", "1,25", "shipped", "Promoted Listings fee in advertising_fee, final value fee in platform_fee", "WIDGET-BLU"],
+    templateExample: ["12-34567-89012", "15.01.2024", "Blue Widget", "1", "24,99", "", "EUR", "19", "4,75", "5,99", "4,10", "0,80", "1,25", "shipped", "Promoted Listings fee in advertising_fee, final value fee in platform_fee", "WIDGET-BLU", "ebay.de"],
   },
 };
 
@@ -559,6 +562,13 @@ export function validateRowForFormat(
     return fail(`missing "order_id"`);
   }
 
+  // Explicit marketplace column wins; otherwise a generic-format platform
+  // value like "amazon.de" (which normalizePlatform folds to "amazon")
+  // still carries the market. Forced-platform formats have no platform column.
+  const marketplace = normalizeMarketplace(
+    raw.marketplace?.trim() || (format.forcedPlatform ? null : raw.platform),
+  );
+
   return {
     rowNum,
     data: {
@@ -579,6 +589,7 @@ export function validateRowForFormat(
       status: normalizeStatus(raw.status),
       restock: false,
       external_order_id: externalOrderId,
+      marketplace,
       tracking_number: null,
       shipping_carrier: null,
       ebay_fulfillment_id: null,

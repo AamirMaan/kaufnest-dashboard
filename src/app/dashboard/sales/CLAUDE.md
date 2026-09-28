@@ -155,7 +155,13 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   format sets two optional `ImportFormat` flags no other format uses:
   `vatRateIsFraction` (Amazon writes `0.19`, not `19`) and
   `priceColumnsAreLineTotals` (Amazon's `unit_price` column is the item LINE
-  total, not a per-unit price — see "Amazon price/VAT semantics" below).
+  total, not a per-unit price — see "Amazon price/VAT semantics" below). All
+  three formats also accept an optional `marketplace` column (2026-09-28,
+  migration 052) — the regional storefront (`amazon.de`, `ebay.co.uk`, …),
+  finer-grained than `platform`; parsed via `normalizeMarketplace`
+  (`lib/utils/marketplace.ts`). On the generic format an explicit
+  `marketplace` column wins, otherwise a `platform` value like `amazon.de`
+  (which still folds to `platform: amazon`) is reused as the marketplace.
   **All import-format/validation changes go here**, not in the modal.
   Header-alias resolution (`resolveHeaders`/`canonicalizeRow`) does **not**
   live in this file — it moved to the shared `src/lib/utils/importAliases.ts`

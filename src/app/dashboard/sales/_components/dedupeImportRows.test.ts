@@ -149,4 +149,14 @@ describe("dedupeImportRows", () => {
     expect(result[0].skipped).toBeUndefined();
     expect(result[1].skipped).toBe("duplicate in file");
   });
+
+  it("keeps the first line's marketplace when merging same order+sku lines", () => {
+    const out = dedupeImportRows([
+      row({ sku: "A", data: { marketplace: "amazon.de", quantity: 1, total_amount: 10 } }),
+      row({ rowNum: 2, sku: "A", data: { marketplace: "amazon.de", quantity: 2, total_amount: 20 } }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].data?.marketplace).toBe("amazon.de");
+    expect(out[0].data?.quantity).toBe(3);
+  });
 });
