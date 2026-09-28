@@ -16,6 +16,9 @@ const EBAY_SITE_DOMAINS: Record<string, string> = {
   US: "ebay.com",
   MOTORS_US: "ebay.com",
   AU: "ebay.com.au",
+  HK: "ebay.com.hk",
+  SG: "ebay.com.sg",
+  MY: "ebay.com.my",
 };
 
 /** Bare platform names say nothing about the market. */

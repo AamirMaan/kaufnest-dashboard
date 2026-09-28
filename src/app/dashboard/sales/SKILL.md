@@ -858,3 +858,21 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   shipping VAT — `total_amount − vat_amount` would understate the base.
   Marketplace filtering lives in two query builders (`fetchSalesPage` and
   `page.tsx`'s `handleExport`) plus the RPC — change all three together.
+  - **Known limitation — the base overstates for a non-Amazon row that has
+    `shipping_charged` (final review, 2026-09-28).** For manual Add/Edit,
+    generic imports, and eBay imports, `vat_amount` is derived via
+    `vatAmountFromGross(total_amount, rate)` — VAT on the ITEMS only, since
+    those sources have no separate shipping-VAT figure. But `vat_base` still
+    adds `shipping_charged` unconditionally (`total_amount + shipping_charged
+    − vat_amount`), so on such a row the base ends up including shipping's
+    gross without ever having had shipping's VAT subtracted out of it — e.g.
+    a row with €4.99 shipping at 19% overstates the base by ≈€0.80
+    (`4.99 × 19/119`). Amazon rows are exact: Amazon's `vat_amount` genuinely
+    is the combined item+shipping VAT, so the same formula nets it out
+    correctly there. This is **not** fixed in SQL because a row doesn't
+    record whether its stored `vat_amount` covered shipping or not — there's
+    no column to branch on — and changing the derivation (e.g. computing
+    `vat_amount` from `total_amount + shipping_charged` for non-Amazon rows
+    too) would change the VAT figures themselves, not just the base, which is
+    a product decision pending with the user, not a bug fix to make
+    unilaterally.

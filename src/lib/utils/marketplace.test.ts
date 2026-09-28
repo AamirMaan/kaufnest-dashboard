@@ -12,6 +12,9 @@ describe("normalizeMarketplace", () => {
     ["EBAY_US", "ebay.com"],
     ["EBAY_AU", "ebay.com.au"],
     ["EBAY_MOTORS_US", "ebay.com"],
+    ["EBAY_HK", "ebay.com.hk"],
+    ["EBAY_SG", "ebay.com.sg"],
+    ["EBAY_MY", "ebay.com.my"],
     ["ebay.de", "ebay.de"],
     ["Etsy.com", "etsy.com"],
   ])("%s → %s", (raw, expected) => {

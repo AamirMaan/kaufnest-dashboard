@@ -90,7 +90,8 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `get_sales_marketplaces()` (052) for the Marketplace filter dropdown;
   returns `[]` on error.
   **Summary thunk** (2026-09-26): `fetchSalesSummary(filters: SalesFilters)`
-  calls the `get_sales_summary` RPC (migration 050) via `salesFilterParams` —
+  calls the `get_sales_summary` RPC (migration 050, extended by 052 with the
+  trailing `p_marketplace` arg and `vat_base` output column) via `salesFilterParams` —
   the same mapper `fetchSalesPage` uses, so the filtered-summary tiles and the
   table can never disagree — and returns one `SalesSummaryRow` per currency
   (`src/types/index.ts`). State: `summary: SalesSummaryRow[]`,

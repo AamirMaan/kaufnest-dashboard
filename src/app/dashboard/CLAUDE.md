@@ -56,7 +56,12 @@ broadly when working on a specific feature.**
   6 range-scoped RPCs (`get_sales_overview`/`get_expenses_overview`/
   `get_purchases_overview`/`get_payouts_overview`/`get_overview_timeseries`/
   `get_sales_by_marketplace`, see `supabase/CLAUDE.md`'s migration 045/051/052
-  entries) scoped to the picked date range, **plus a second, independent
+  entries) scoped to the picked date range. Home doesn't render anything from
+  `get_sales_by_marketplace` (only Analytics' `MarketplaceCard` does) but pays
+  for the call anyway since both pages share this one hook — accepted as
+  cheap (server-side grouped, same cost class as the other five); make it
+  opt-in (e.g. a `withMarketplace` flag on the hook) if Home's load time ever
+  becomes a concern. **Plus a second, independent
   `get_overview_timeseries` call for
   a fixed trailing-12-month window** (`trailingRange()` in `_lib/kpiTiles.ts`)
   that reruns only when `profileCurrency` changes, not on every date-range

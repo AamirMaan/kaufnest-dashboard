@@ -62,8 +62,16 @@ Correctness per source:
   the full net base including shipping, which is what is declared. Same
   gross the Overview already uses for revenue.
 - **Generic/eBay**: `vat_amount` either comes from the sheet or is derived by
-  `vatAmountFromGross(total_amount, vat_rate)` → base = `total_amount` net of
-  that VAT, consistent.
+  `vatAmountFromGross(total_amount, vat_rate)` — VAT on the item total only,
+  since these sources carry no separate shipping-VAT figure. `vat_base` still
+  adds `shipping_charged` unconditionally (same formula as Amazon), so on a
+  row with `shipping_charged` set, the base includes shipping's gross without
+  shipping's VAT ever having been subtracted — e.g. ≈€0.80 overstated on
+  €4.99 of shipping at 19% (`4.99 × 19/119`). Not corrected in SQL: a row
+  doesn't record whether its `vat_amount` covered shipping, and changing the
+  derivation would change the VAT figures themselves, not just the base — a
+  product decision pending with the user (see `sales/SKILL.md`'s VAT-base
+  gotcha).
 - Orders with `vat_amount` null or 0 (non-VAT sales, e.g. exports/reverse
   charge) are **excluded** from the base — they are declared separately, if
   at all.

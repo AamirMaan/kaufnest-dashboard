@@ -78,7 +78,11 @@ export interface Expense {
   receipts: ExpenseReceipt[];
 }
 
-/** One row per currency from get_sales_summary (050). Money excludes returned/cancelled unless a status filter is set. */
+/**
+ * One row per currency from get_sales_summary (050, extended by 052 with
+ * `p_marketplace`/`vat_base` — see the `vat_base` field below). Money
+ * excludes returned/cancelled unless a status filter is set.
+ */
 export interface SalesSummaryRow {
   currency: Currency;
   order_count: number;

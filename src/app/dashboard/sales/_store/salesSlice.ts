@@ -74,8 +74,9 @@ export const fetchSalesPage = createAsyncThunk(
 
 /**
  * Filtered totals across ALL matching sales (not just the loaded page) —
- * one row per currency from get_sales_summary (050). Uses the same
- * `salesFilterParams` as `fetchSalesPage`, so tiles and table can't disagree.
+ * one row per currency from get_sales_summary (050, extended by 052 with
+ * `p_marketplace`/`vat_base`). Uses the same `salesFilterParams` as
+ * `fetchSalesPage`, so tiles and table can't disagree.
  */
 export const fetchSalesSummary = createAsyncThunk(
   "sales/fetchSummary",

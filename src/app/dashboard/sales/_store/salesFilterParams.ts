@@ -1,6 +1,10 @@
 import { ilikePattern, resolveDateBounds, type SalesFilters } from "@/lib/utils/filters";
 
-/** Arg names match `get_sales_summary` in 050_table_summary_functions.sql exactly. */
+/**
+ * Arg names match `get_sales_summary` in 050_table_summary_functions.sql,
+ * extended by 052_sales_marketplace.sql (trailing `p_marketplace`, plus the
+ * `vat_base` output column that param feeds — see below).
+ */
 export interface SalesSummaryParams {
   p_from: string | null;
   p_to: string | null;
