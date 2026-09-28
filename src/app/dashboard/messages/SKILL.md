@@ -53,6 +53,14 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
   **Changing search** (scope, result cap, debounce): `messagesSlice.ts`'s
   `searchMessages` thunk (`SEARCH_RESULT_LIMIT`, the `.or(...)` filter
   columns) and `page.tsx`'s `SEARCH_DEBOUNCE_MS`.
+- **Changing how message bodies render** (entity decoding, whitespace,
+  preview length): `_lib/messageBody.ts` — `cleanMessageBody` (full bubble
+  text) and `messagePreview` (thread-list snippet), with a colocated
+  `messageBody.test.ts`. It runs at render time only; the stored
+  `ebay_messages.body` is never rewritten, so a fix here also repairs
+  already-synced rows. Any new pure display/formatting helper follows the
+  same shape: a `_lib/*.ts` module plus its colocated test, not inline in a
+  component.
 
 ## Gotchas
 
