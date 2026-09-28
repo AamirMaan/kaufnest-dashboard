@@ -3,7 +3,7 @@ import { formatCurrency } from "@/lib/utils/currency";
 import type { SalesSummaryRow } from "@/types";
 
 const row = (o: Partial<SalesSummaryRow> = {}): SalesSummaryRow => ({
-  currency: "EUR", order_count: 3, gross: 119, vat: 19, fees: 12, shipping_charged: 4.99, excluded_count: 1, ...o,
+  currency: "EUR", order_count: 3, gross: 119, vat: 19, fees: 12, shipping_charged: 4.99, excluded_count: 1, vat_base: 104.99, ...o,
 });
 
 const labels = (rows: SalesSummaryRow[]) => buildSalesTiles(rows).map((t) => t.label);

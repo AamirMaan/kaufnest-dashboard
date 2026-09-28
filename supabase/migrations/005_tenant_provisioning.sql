@@ -157,6 +157,8 @@ BEGIN
       status       text NOT NULL DEFAULT 'pending',
       restock      boolean NOT NULL DEFAULT false,
       external_order_id text,
+      -- Regional storefront (amazon.de …) — see 052_sales_marketplace.sql.
+      marketplace text,
       -- Fee columns — see 010_order_fees.sql / 035_sales_platform_fee.sql.
       -- Baked into this CREATE TABLE now (previously missing here despite
       -- being live on every tenant since 027_reconcile_tenant_drift.sql —
@@ -896,6 +898,7 @@ BEGIN
   -- unaffected, while platform-synced rows can be upserted idempotently via
   -- .upsert(rows, { onConflict: "platform,external_order_id" }).
   EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_platform_external_order_id ON %1$I.sales (platform, external_order_id)', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_marketplace ON %1$I.sales (marketplace)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_products_name ON %1$I.products (name)', schema_name);
 
@@ -1046,13 +1049,16 @@ BEGIN
   -- Table summary functions — see 050_table_summary_functions.sql for the
   -- full header comment. Not SECURITY DEFINER. No literal percent signs in
   -- these bodies on purpose: format() would treat them as placeholders.
+  EXECUTE format('DROP FUNCTION IF EXISTS %1$I.get_sales_summary(date, date, text, text, text, text)', schema_name);
+
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.get_sales_summary(
-      p_from date, p_to date, p_platform text, p_currency text, p_status text, p_pattern text
+      p_from date, p_to date, p_platform text, p_currency text, p_status text, p_pattern text,
+      p_marketplace text DEFAULT NULL
     )
     RETURNS TABLE (
       currency text, order_count int, gross numeric, vat numeric,
-      fees numeric, shipping_charged numeric, excluded_count int
+      fees numeric, shipping_charged numeric, excluded_count int, vat_base numeric
     )
     LANGUAGE sql STABLE
     SET search_path = %1$I
@@ -1066,6 +1072,9 @@ BEGIN
           AND (p_platform IS NULL OR s.platform = p_platform)
           AND (p_currency IS NULL OR s.currency = p_currency)
           AND (p_status IS NULL OR s.status = p_status)
+          AND (p_marketplace IS NULL
+               OR (p_marketplace = '__unknown__' AND s.marketplace IS NULL)
+               OR s.marketplace = p_marketplace)
           AND (p_pattern IS NULL
                OR s.product_name ILIKE p_pattern
                OR s.external_order_id ILIKE p_pattern
@@ -1079,14 +1088,54 @@ BEGIN
         coalesce(sum(coalesce(f.platform_fee, 0) + coalesce(f.advertising_fee, 0) + coalesce(f.shipping_cost, 0))
                  FILTER (WHERE f.counts), 0),
         coalesce(sum(coalesce(f.shipping_charged, 0)) FILTER (WHERE f.counts), 0),
-        (count(*) FILTER (WHERE NOT f.counts))::int
+        (count(*) FILTER (WHERE NOT f.counts))::int,
+        coalesce(sum(f.total_amount + coalesce(f.shipping_charged, 0) - f.vat_amount)
+                 FILTER (WHERE f.counts AND coalesce(f.vat_amount, 0) > 0), 0)
       FROM filtered f
       GROUP BY f.currency
       ORDER BY f.currency;
     $func$;
   $sql$, schema_name);
 
-  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_summary(date, date, text, text, text, text) TO authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_summary(date, date, text, text, text, text, text) TO authenticated', schema_name);
+
+  -- Marketplace breakdown + filter options — see 052_sales_marketplace.sql.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_sales_by_marketplace(p_from date, p_to date, p_currency text)
+    RETURNS TABLE (marketplace text, order_count int, revenue numeric, vat numeric, vat_base numeric)
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      SELECT
+        s.marketplace,
+        count(*)::int,
+        coalesce(sum(s.total_amount + coalesce(s.shipping_charged, 0)), 0),
+        coalesce(sum(coalesce(s.vat_amount, 0)), 0),
+        coalesce(sum(s.total_amount + coalesce(s.shipping_charged, 0) - s.vat_amount)
+                 FILTER (WHERE coalesce(s.vat_amount, 0) > 0), 0)
+      FROM sales s
+      WHERE s.currency = p_currency
+        AND s.status NOT IN ('returned', 'cancelled')
+        AND (p_from IS NULL OR s.date >= p_from)
+        AND (p_to IS NULL OR s.date <= p_to)
+      GROUP BY s.marketplace
+      ORDER BY 3 DESC, 1;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_by_marketplace(date, date, text) TO authenticated', schema_name);
+
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_sales_marketplaces()
+    RETURNS TABLE (marketplace text)
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      SELECT DISTINCT s.marketplace FROM sales s WHERE s.marketplace IS NOT NULL ORDER BY 1;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_marketplaces() TO authenticated', schema_name);
 
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.get_purchases_summary(

@@ -87,6 +87,8 @@ export interface SalesSummaryRow {
   fees: number;
   shipping_charged: number;
   excluded_count: number;
+  /** Net taxable base: total + shipping_charged − VAT over VAT-bearing orders (052). */
+  vat_base: number;
 }
 
 /** One row per currency from get_purchases_summary (050). */
