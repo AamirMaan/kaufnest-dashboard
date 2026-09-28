@@ -404,6 +404,7 @@ export default function SaleDetailPage({ params }: PageProps) {
       <div className="flex flex-wrap items-center gap-2 -mt-4">
         <StatusBadge status={sale.status} />
         {sale.platform && <PlatformBadge platform={sale.platform} />}
+        {sale.marketplace && <span className="text-sm text-(--color-text-muted)">{sale.marketplace}</span>}
         <span className="text-sm text-(--color-text-muted)">{formatDate(sale.date)}</span>
       </div>
 

@@ -43,6 +43,9 @@ export const ALIASES: Record<string, string[]> = {
   // — sales —
   product_name: ["product_name", "product", "artikel", "artikelname", "artikelbezeichnung", "titel", "produktname", "produkt"],
   platform: ["platform", "plattform"],
+  // Regional storefront. NOT "sales_channel": in Amazon's VAT report that
+  // column is AFN/MFN (fulfilment channel), not the marketplace.
+  marketplace: ["marketplace", "marktplatz", "marketplace_name"],
   quantity: ["quantity", "qty", "menge", "anzahl", "stück", "stueck", "stk"],
   unit_price: ["unit_price", "price", "preis", "stückpreis", "stueckpreis", "einzelpreis"],
   // "Versandkosten" on an order sheet means what the buyer paid → shipping_charged (I6).

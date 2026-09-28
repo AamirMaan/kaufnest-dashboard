@@ -423,6 +423,23 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   (`src/app/dashboard/_components/*Card.tsx`). Not `SECURITY DEFINER`; no
   literal percent signs in the body (the 005 copy runs through `format()`).
   See `SKILL.md`'s file map for apply-status.
+- `migrations/052_sales_marketplace.sql` — adds nullable `sales.marketplace
+  text` + `idx_sales_marketplace` to every tenant schema via
+  `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`
+  in the same commit. Redefines `get_sales_summary` to take a trailing
+  `p_marketplace text DEFAULT NULL` and return a trailing `vat_base numeric`
+  column (net taxable base: `total_amount + shipping_charged − vat_amount`
+  over VAT-bearing rows — for Amazon `total_amount` is the item total only,
+  so dropping `shipping_charged` would understate the base) — the old 6-arg
+  signature is `DROP FUNCTION`ed first since `CREATE OR REPLACE` cannot
+  change a parameter list. Also adds `get_sales_by_marketplace(p_from, p_to,
+  p_currency)` (one row per marketplace, ordered by revenue desc) and
+  `get_sales_marketplaces()` (distinct non-null marketplaces, for filter
+  dropdowns). `'__unknown__'` is the client's `UNKNOWN_MARKETPLACE` sentinel
+  (`src/lib/utils/marketplace.ts`) — matches `p_marketplace = '__unknown__'`
+  to `marketplace IS NULL`. Not `SECURITY DEFINER`. See
+  `docs/superpowers/specs/2026-09-28-sales-marketplace-vat-base-design.md`
+  and `SKILL.md`'s file map for apply-status.
 
 ## Related code
 

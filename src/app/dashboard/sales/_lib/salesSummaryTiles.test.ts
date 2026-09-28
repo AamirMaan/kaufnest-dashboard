@@ -3,19 +3,28 @@ import { formatCurrency } from "@/lib/utils/currency";
 import type { SalesSummaryRow } from "@/types";
 
 const row = (o: Partial<SalesSummaryRow> = {}): SalesSummaryRow => ({
-  currency: "EUR", order_count: 3, gross: 119, vat: 19, fees: 12, shipping_charged: 4.99, excluded_count: 1, ...o,
+  currency: "EUR", order_count: 3, gross: 119, vat: 19, fees: 12, shipping_charged: 4.99, excluded_count: 1, vat_base: 104.99, ...o,
 });
 
 const labels = (rows: SalesSummaryRow[]) => buildSalesTiles(rows).map((t) => t.label);
 
 describe("buildSalesTiles", () => {
   it("shows every tile when all values are present", () => {
-    expect(labels([row()])).toEqual(["Orders", "Gross", "VAT", "Net", "Fees", "Shipping charged", "Excluded"]);
+    expect(labels([row()])).toEqual(["Orders", "Gross", "VAT", "Net", "VAT base (net)", "Fees", "Shipping charged", "Excluded"]);
   });
 
   it("computes Net as gross minus VAT per currency", () => {
     const net = buildSalesTiles([row()]).find((t) => t.label === "Net");
     expect(net?.lines).toEqual([formatCurrency(100, "EUR")]);
+  });
+
+  it("shows VAT base from the RPC's vat_base (includes shipping, excludes zero-VAT orders)", () => {
+    const tile = buildSalesTiles([row({ vat_base: 104.99 })]).find((t) => t.label === "VAT base (net)");
+    expect(tile?.lines).toEqual([formatCurrency(104.99, "EUR")]);
+  });
+
+  it("hides VAT base when there is no VAT", () => {
+    expect(labels([row({ vat: 0, vat_base: 0 })])).not.toContain("VAT base (net)");
   });
 
   it("hides VAT and Net when there is no VAT, and zero fees/shipping", () => {

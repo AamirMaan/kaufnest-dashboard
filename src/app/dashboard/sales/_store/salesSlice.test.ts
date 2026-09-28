@@ -173,7 +173,7 @@ describe("salesSlice", () => {
 describe("summary state", () => {
   const reducer = salesSlice.reducer;
   const init = () => reducer(undefined, { type: "@@init" });
-  const row = { currency: "EUR" as const, order_count: 2, gross: 100, vat: 19, fees: 5, shipping_charged: 0, excluded_count: 1 };
+  const row = { currency: "EUR" as const, order_count: 2, gross: 100, vat: 19, fees: 5, shipping_charged: 0, excluded_count: 1, vat_base: 0 };
 
   it("stores rows from the latest request only", () => {
     let s = reducer(init(), fetchSalesSummary.pending("req-1", DEFAULT_SALES_FILTERS));

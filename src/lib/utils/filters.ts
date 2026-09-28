@@ -145,6 +145,7 @@ export interface SalesFilters {
   dateFrom: string;
   dateTo: string;
   platform: string;
+  marketplace: string;
   currency: string;
   status: string;
   search: string;
@@ -172,6 +173,7 @@ export const DEFAULT_SALES_FILTERS: SalesFilters = {
   dateFrom: "",
   dateTo: "",
   platform: "all",
+  marketplace: "all",
   currency: "all",
   status: "all",
   search: "",
@@ -346,6 +348,7 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     f.currency === "all" &&
     f.search === "" &&
     ("platform" in f ? f.platform === "all" : true) &&
+    ("marketplace" in f ? f.marketplace === "all" : true) &&
     ("status" in f ? f.status === "all" : true) &&
     ("category" in f ? f.category === "all" : true)
   );

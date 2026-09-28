@@ -173,4 +173,93 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     if (payErr) throw payErr;
     expect(payouts).toEqual({ transferred: [] });
   });
+
+  // Requires migration 052 applied (sales.marketplace, get_sales_summary's
+  // trailing p_marketplace/vat_base, get_sales_by_marketplace) — NOT yet
+  // applied to any tenant schema as of 2026-09-28 (see supabase/SKILL.md's
+  // file map). Written per the final-review fix wave (Task 9 Step 1 of
+  // docs/superpowers/plans/2026-09-28-sales-marketplace-vat-base.md); do not
+  // run until 052 lands on tenant_boughtopia — `npm run test:integration --
+  // overviewRpc` will fail against the old 6-arg get_sales_summary until then.
+  it("computes vat_base, p_marketplace filtering, and get_sales_by_marketplace revenue (052)", async () => {
+    const client = createServiceClientForTenant(SCHEMA);
+    const FROM = "2020-04-01";
+    const TO = "2020-04-30";
+
+    const { data: saleA, error: errA } = await client
+      .from("sales")
+      .insert({
+        platform: "amazon",
+        product_name: `${TEST_MARKER}-marketplace-a`,
+        quantity: 1,
+        unit_price: 100,
+        total_amount: 100,
+        shipping_charged: 10,
+        vat_amount: 17.56,
+        currency: "EUR",
+        date: "2020-04-15",
+        status: "delivered",
+        marketplace: "amazon.de",
+        created_by: testCreatedBy,
+      })
+      .select("id")
+      .single();
+    if (errA) throw errA;
+    insertedSaleIds.push(saleA.id);
+
+    const { data: saleB, error: errB } = await client
+      .from("sales")
+      .insert({
+        platform: "amazon",
+        product_name: `${TEST_MARKER}-marketplace-b`,
+        quantity: 1,
+        unit_price: 50,
+        total_amount: 50,
+        vat_amount: 0,
+        currency: "EUR",
+        date: "2020-04-16",
+        status: "delivered",
+        marketplace: null,
+        created_by: testCreatedBy,
+      })
+      .select("id")
+      .single();
+    if (errB) throw errB;
+    insertedSaleIds.push(saleB.id);
+
+    const { data: summary, error: summaryErr } = await client.rpc("get_sales_summary", {
+      p_from: FROM,
+      p_to: TO,
+      p_platform: null,
+      p_currency: "EUR",
+      p_status: null,
+      p_pattern: null,
+      p_marketplace: null,
+    });
+    if (summaryErr) throw summaryErr;
+    // 100 + 10 − 17.56 = 92.44; B is excluded (vat_amount 0, not VAT-bearing).
+    expect(Number(summary[0].vat_base)).toBeCloseTo(92.44, 2);
+
+    const { data: unknown, error: unknownErr } = await client.rpc("get_sales_summary", {
+      p_from: FROM,
+      p_to: TO,
+      p_platform: null,
+      p_currency: "EUR",
+      p_status: null,
+      p_pattern: null,
+      p_marketplace: "__unknown__",
+    });
+    if (unknownErr) throw unknownErr;
+    expect(unknown[0].order_count).toBe(1);
+
+    const { data: byMarket, error: byMarketErr } = await client.rpc("get_sales_by_marketplace", {
+      p_from: FROM,
+      p_to: TO,
+      p_currency: "EUR",
+    });
+    if (byMarketErr) throw byMarketErr;
+    expect(
+      byMarket.find((r: { marketplace: string | null }) => r.marketplace === "amazon.de")?.revenue
+    ).toBeCloseTo(110, 2);
+  });
 });

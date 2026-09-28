@@ -1,6 +1,10 @@
 import { ilikePattern, resolveDateBounds, type SalesFilters } from "@/lib/utils/filters";
 
-/** Arg names match `get_sales_summary` in 050_table_summary_functions.sql exactly. */
+/**
+ * Arg names match `get_sales_summary` in 050_table_summary_functions.sql,
+ * extended by 052_sales_marketplace.sql (trailing `p_marketplace`, plus the
+ * `vat_base` output column that param feeds — see below).
+ */
 export interface SalesSummaryParams {
   p_from: string | null;
   p_to: string | null;
@@ -8,6 +12,8 @@ export interface SalesSummaryParams {
   p_currency: string | null;
   p_status: string | null;
   p_pattern: string | null;
+  /** Arg name matches get_sales_summary in 052. */
+  p_marketplace: string | null;
 }
 
 /**
@@ -24,5 +30,6 @@ export function salesFilterParams(f: SalesFilters): SalesSummaryParams {
     p_currency: f.currency === "all" ? null : f.currency,
     p_status: f.status === "all" ? null : f.status,
     p_pattern: ilikePattern(f.search),
+    p_marketplace: f.marketplace === "all" ? null : f.marketplace,
   };
 }

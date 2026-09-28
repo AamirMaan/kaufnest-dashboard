@@ -1,4 +1,5 @@
 import type { NormalizedOrder, PlatformAdapter, ShippingAddress, TokenSet } from "./types";
+import { normalizeMarketplace } from "@/lib/utils/marketplace";
 
 const SANDBOX = process.env.EBAY_SANDBOX === "true";
 const EBAY_BASE = SANDBOX ? "https://api.sandbox.ebay.com" : "https://api.ebay.com";
@@ -39,6 +40,7 @@ interface EbayLineItem {
   title: string;
   quantity: string | number;
   total?: EbayMoney;
+  purchaseMarketplaceId?: string;
 }
 
 interface EbayContactAddress {
@@ -212,6 +214,7 @@ export const ebayAdapter: PlatformAdapter = {
           status,
           description: `eBay order ${order.orderId}`,
           shipping,
+          marketplace: normalizeMarketplace(item.purchaseMarketplaceId),
         });
       }
     }

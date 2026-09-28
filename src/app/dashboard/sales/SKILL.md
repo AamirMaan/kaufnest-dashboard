@@ -225,6 +225,19 @@ fixed — don't reintroduce them:
 
 ## Gotchas — CSV import formats (German support)
 
+- **Marketplace (2026-09-28, migration 052).** `normalizeMarketplace`
+  (`lib/utils/marketplace.ts`) is the only way a marketplace is written.
+  Amazon's VAT report column is `MARKETPLACE`; do **not** alias
+  `SALES_CHANNEL` — it holds `AFN`/`MFN`. The generic format keeps folding
+  `platform: amazon.de` → `amazon` but now ALSO stores `amazon.de` as the
+  marketplace; an explicit `marketplace` column wins.
+- **Re-import backfills marketplace (2026-09-28).** The duplicate
+  pre-check now reads `id, marketplace` and `markExistingOrders`
+  (`_components/marketplaceBackfill.ts`) plans a `backfill` for matched
+  sales whose marketplace is null. Those rows stay "order already exists"
+  but count toward `canImport`, so an all-duplicates re-import is still
+  importable. The UPDATE carries `.is("marketplace", null)` — a stored
+  value is never overwritten.
 - **`Versandkosten` maps to `shipping_charged`** (what the buyer paid — I6), NOT
   `shipping_cost`. Seller-side shipping needs an explicit `shipping_cost` /
   `versandkosten_bezahlt` header. Don't "fix" this mapping without reading
@@ -839,3 +852,27 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   applies the identical `p.p_pattern`-based `.or()` string from the same
   `salesFilterParams` call, so the column set can't drift between table and
   export without both call sites failing their tests.
+- **VAT base includes shipping.** `get_sales_summary.vat_base` =
+  `total_amount + shipping_charged − vat_amount` over VAT-bearing rows.
+  Amazon's `total_amount` is items only and its `vat_amount` is item +
+  shipping VAT — `total_amount − vat_amount` would understate the base.
+  Marketplace filtering lives in two query builders (`fetchSalesPage` and
+  `page.tsx`'s `handleExport`) plus the RPC — change all three together.
+  - **Known limitation — the base overstates for a non-Amazon row that has
+    `shipping_charged` (final review, 2026-09-28).** For manual Add/Edit,
+    generic imports, and eBay imports, `vat_amount` is derived via
+    `vatAmountFromGross(total_amount, rate)` — VAT on the ITEMS only, since
+    those sources have no separate shipping-VAT figure. But `vat_base` still
+    adds `shipping_charged` unconditionally (`total_amount + shipping_charged
+    − vat_amount`), so on such a row the base ends up including shipping's
+    gross without ever having had shipping's VAT subtracted out of it — e.g.
+    a row with €4.99 shipping at 19% overstates the base by ≈€0.80
+    (`4.99 × 19/119`). Amazon rows are exact: Amazon's `vat_amount` genuinely
+    is the combined item+shipping VAT, so the same formula nets it out
+    correctly there. This is **not** fixed in SQL because a row doesn't
+    record whether its stored `vat_amount` covered shipping or not — there's
+    no column to branch on — and changing the derivation (e.g. computing
+    `vat_amount` from `total_amount + shipping_charged` for non-Amazon rows
+    too) would change the VAT figures themselves, not just the base, which is
+    a product decision pending with the user, not a bug fix to make
+    unilaterally.

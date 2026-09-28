@@ -19,6 +19,7 @@ import { OrdersCard } from "../_components/OrdersCard";
 import { VatCard } from "../_components/VatCard";
 import { PlatformBalanceCard } from "../_components/PlatformBalanceCard";
 import { TopProductsCard } from "../_components/TopProductsCard";
+import { MarketplaceCard } from "../_components/MarketplaceCard";
 
 /** Analytics = every chart. The headline numbers (KPI tiles, per-platform stats) live on Home. */
 export default function AnalyticsPage() {
@@ -76,6 +77,7 @@ export default function AnalyticsPage() {
           {ebayBalance !== null && <PlatformBalanceCard platform="ebay" balance={ebayBalance} currency={currency} />}
           {amazonBalance !== null && <PlatformBalanceCard platform="amazon" balance={amazonBalance} currency={currency} />}
           <TopProductsCard sales={data.sales} currency={currency} />
+          <MarketplaceCard rows={data.marketplaces} currency={currency} />
         </div>
       </div>
     </div>

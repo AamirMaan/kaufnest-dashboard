@@ -450,6 +450,11 @@ owns it. Current shared locations:
   `FxRateReview.tsx` (the shared rate-review UI shown mid-import when a
   file has non-base-currency rows). The 3rd+ consumer (Sales, Expenses,
   Purchases) that crossed this section's "3+ features" promotion threshold.
+- `src/lib/utils/marketplace.ts` (2026-09-28) — `normalizeMarketplace`
+  (Amazon `Amazon.de`/eBay `EBAY_GB` → `amazon.de`/`ebay.co.uk`; bare
+  platform names → null), `marketplaceLabel`, `UNKNOWN_MARKETPLACE`
+  sentinel. Used by the Sales importer, the eBay/Amazon adapters and the
+  Add/Edit Sale modals — see `sales/SKILL.md`.
 
 Two routes are conceptually part of a feature but **cannot** be colocated
 because Next.js pins them to fixed URL paths: `app/api/users/invite/route.ts`

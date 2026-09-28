@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { removeSale, fetchSalesPage, fetchSalesSummary } from "./_store/salesSlice";
+import { removeSale, fetchSalesPage, fetchSalesSummary, fetchSalesMarketplaces } from "./_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -33,6 +33,7 @@ import {
   type DatePreset,
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
+import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
 import { salesFilterParams } from "./_store/salesFilterParams";
@@ -75,6 +76,13 @@ export default function SalesPage() {
   useEffect(() => {
     if (summaryError) toastError("Couldn't load order totals");
   }, [summaryError, toastError]);
+
+  // Marketplace filter dropdown options — refreshes after add/edit/delete
+  // like the summary tiles (same summaryVersion signal).
+  const [marketplaces, setMarketplaces] = useState<string[]>([]);
+  useEffect(() => {
+    fetchSalesMarketplaces().then(setMarketplaces);
+  }, [summaryVersion]);
 
   const [earliestYear, setEarliestYear] = useState(new Date().getFullYear());
 
@@ -171,6 +179,8 @@ export default function SalesPage() {
       if (p.p_from) query = query.gte("date", p.p_from);
       if (p.p_to) query = query.lte("date", p.p_to);
       if (p.p_platform) query = query.eq("platform", p.p_platform);
+      if (p.p_marketplace === UNKNOWN_MARKETPLACE) query = query.is("marketplace", null);
+      else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
       if (p.p_currency) query = query.eq("currency", p.p_currency);
       if (p.p_status) query = query.eq("status", p.p_status);
       if (p.p_pattern) {
@@ -184,9 +194,9 @@ export default function SalesPage() {
 
     if (allRows.length === 0) return;
 
-    const headers = ["date", "product_name", "platform", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
+    const headers = ["date", "product_name", "platform", "marketplace", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
     const rows = allRows.map((s) => [
-      s.date, s.product_name, s.platform, s.quantity, s.unit_price, s.total_amount,
+      s.date, s.product_name, s.platform, s.marketplace ?? "", s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
       s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "", s.platform_fee ?? "",
     ]);
@@ -246,7 +256,12 @@ export default function SalesPage() {
     {
       header: "Platform",
       sortValue: (s: Sale) => s.platform,
-      render: (s: Sale) => <PlatformBadge platform={s.platform} />,
+      render: (s: Sale) => (
+        <div className="flex flex-col items-start gap-0.5">
+          <PlatformBadge platform={s.platform} />
+          {s.marketplace && <span className="text-xs text-[var(--color-text-muted)]">{s.marketplace}</span>}
+        </div>
+      ),
     },
     {
       header: "Status",
@@ -384,6 +399,20 @@ export default function SalesPage() {
           </select>
         </div>
         <div>
+          <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Marketplace</span>
+          <select
+            value={filters.marketplace}
+            onChange={(e) => setFilter("marketplace", e.target.value)}
+            className={filterInputCls}
+          >
+            <option value="all">All Marketplaces</option>
+            {marketplaces.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+            <option value={UNKNOWN_MARKETPLACE}>Unknown</option>
+          </select>
+        </div>
+        <div>
           <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Status</span>
           <select
             value={filters.status}
@@ -448,20 +477,29 @@ export default function SalesPage() {
       <ImportSalesModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onSuccess={({ inserted, skippedRows, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied }) => {
+        onSuccess={({ inserted, skippedRows, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied, marketplacesAdded, marketplaceBackfillFailed }) => {
+          if (marketplacesAdded > 0) {
+            // Backfilled rows were UPDATEd server-side — refetch so the table and tiles show them.
+            dispatch(fetchSalesPage({ page, pageSize, filters }));
+            dispatch(fetchSalesSummary(filters));
+            // A backfill doesn't bump summaryVersion, so refresh the dropdown here too.
+            fetchSalesMarketplaces().then(setMarketplaces);
+          }
           const parts: string[] = [];
           if (inserted > 0) parts.push(`${inserted} order${inserted !== 1 ? "s" : ""} imported successfully.`);
           if (refundsApplied > 0) parts.push(`${refundsApplied} refund${refundsApplied !== 1 ? "s" : ""} applied.`);
           if (refundsSkipped > 0) parts.push(`${refundsSkipped} refund${refundsSkipped !== 1 ? "s" : ""} skipped — no matching order found.`);
           if (refundsExceeded > 0) parts.push(`${refundsExceeded} refund${refundsExceeded !== 1 ? "s" : ""} skipped — larger than the matched order, which was left unchanged.`);
           if (refundsAlreadyApplied > 0) parts.push(`${refundsAlreadyApplied} refund${refundsAlreadyApplied !== 1 ? "s" : ""} already applied — no change.`);
+          if (marketplacesAdded > 0) parts.push(`Marketplace added to ${marketplacesAdded} existing order${marketplacesAdded !== 1 ? "s" : ""}.`);
           if (skippedRows > 0) parts.push(`${skippedRows} row${skippedRows !== 1 ? "s" : ""} skipped.`);
           const description = parts.length > 0 ? parts.join(" ") : "Nothing to import.";
-          if (inserted === 0 && refundsApplied === 0) {
+          if (inserted === 0 && refundsApplied === 0 && marketplacesAdded === 0) {
             warning("No orders imported", description);
           } else {
             success("Import complete", description);
           }
+          if (marketplaceBackfillFailed) toastError("Some marketplaces weren't saved", "Re-import the file to retry — nothing else was affected.");
         }}
       />
     </div>

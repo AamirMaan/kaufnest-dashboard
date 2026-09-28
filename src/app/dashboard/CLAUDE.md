@@ -53,10 +53,16 @@ broadly when working on a specific feature.**
   date-ranged aggregates would silently go wrong once a tenant had more than
   one page of records (see the 2026-07-27 fix). Instead all data comes from
   `_components/useOverviewData.ts`, a hook shared with `analytics/page.tsx`:
-  the same 5 RPCs as before (`get_sales_overview`/`get_expenses_overview`/
-  `get_purchases_overview`/`get_payouts_overview`/`get_overview_timeseries`,
-  see `supabase/CLAUDE.md`'s migration 045/051 entries) scoped to the picked
-  date range, **plus a second, independent `get_overview_timeseries` call for
+  6 range-scoped RPCs (`get_sales_overview`/`get_expenses_overview`/
+  `get_purchases_overview`/`get_payouts_overview`/`get_overview_timeseries`/
+  `get_sales_by_marketplace`, see `supabase/CLAUDE.md`'s migration 045/051/052
+  entries) scoped to the picked date range. Home doesn't render anything from
+  `get_sales_by_marketplace` (only Analytics' `MarketplaceCard` does) but pays
+  for the call anyway since both pages share this one hook — accepted as
+  cheap (server-side grouped, same cost class as the other five); make it
+  opt-in (e.g. a `withMarketplace` flag on the hook) if Home's load time ever
+  becomes a concern. **Plus a second, independent
+  `get_overview_timeseries` call for
   a fixed trailing-12-month window** (`trailingRange()` in `_lib/kpiTiles.ts`)
   that reruns only when `profileCurrency` changes, not on every date-range
   pick. That trailing series is what feeds every KPI sparkline and
@@ -160,6 +166,11 @@ Analytics-only (moved off Home 2026-09-27; still live here since
 - `TopProductsCard.tsx` — **ranked table, not a bar chart** (changed
   2026-09-27): rank / product / share bar / units / revenue per row, top 5
   (`get_sales_overview` already groups, sorts and limits).
+- `MarketplaceCard.tsx` (2026-09-28) — ranked table (`TopProductsCard`
+  style): marketplace / share bar / orders / revenue / VAT / VAT base per
+  row, from `get_sales_by_marketplace` (052) via `_lib/marketplaceRows.ts`'s
+  `marketplaceShares()`. Null `marketplace` rows show as "Unknown"
+  (`marketplaceLabel`, `lib/utils/marketplace.ts`).
 
 ## `_lib/` — pure helpers for the Overview page
 
@@ -191,8 +202,12 @@ extracting it is what makes it testable without rendering the page.
   "Max Rows" gotcha below no longer applies here. It's still used by the
   Sales/Expenses/Purchases CSV-export queries — see its bullet in the repo
   root `AGENTS.md`'s shared `src/lib/*` list.
-- `overviewTypes.ts` — response types of the five RPCs plus
-  `PlatformBalance`.
+- `overviewTypes.ts` — response types of the six RPCs plus `PlatformBalance`
+  (`MarketplaceRow` added 2026-09-28 for `get_sales_by_marketplace`).
+- `marketplaceRows.ts` (2026-09-28) — `marketplaceShares(rows: MarketplaceRow[])
+  → { total, rows: MarketplaceShare[] }` for `MarketplaceCard`: revenue desc,
+  Unknown (null marketplace) last on ties, `sharePct` of the **positive**
+  revenue total only (same rule as `platformShare.ts`). Colocated test.
 - `overviewCharts.ts` — pure series shaping for the cards: `pctChange`,
   `changeTone`, `formatPct`, `margin`, `monthLabel`, `sumMonths`,
   `stackedSeries`, `netProfitSeries`, `bestWorstMonth`, `topCategoryShare`,

@@ -55,6 +55,7 @@ export function normalizedOrderToSaleRow(
     restock: false,
     refunded_amount: null,
     external_order_id: order.external_order_id,
+    marketplace: order.marketplace ?? null,
     tracking_number: null,
     shipping_carrier: null,
     ebay_fulfillment_id: null,

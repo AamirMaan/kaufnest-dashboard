@@ -287,4 +287,22 @@ describe("ebayAdapter.fetchOrders — shipping address extraction", () => {
       email: null,
     });
   });
+
+  it("maps each line item's purchaseMarketplaceId to a normalised marketplace", async () => {
+    mockJsonResponse({
+      orders: [
+        {
+          orderId: "12-1",
+          creationDate: "2026-06-01T10:00:00.000Z",
+          lineItems: [
+            { lineItemId: "001", title: "A", quantity: "1", total: { value: "5", currency: "GBP" }, purchaseMarketplaceId: "EBAY_GB" },
+            { lineItemId: "002", title: "B", quantity: "1", total: { value: "5", currency: "EUR" } },
+          ],
+        },
+      ],
+    });
+    const orders = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+    expect(orders[0].marketplace).toBe("ebay.co.uk");
+    expect(orders[1].marketplace).toBeNull();
+  });
 });

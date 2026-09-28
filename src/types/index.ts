@@ -78,7 +78,11 @@ export interface Expense {
   receipts: ExpenseReceipt[];
 }
 
-/** One row per currency from get_sales_summary (050). Money excludes returned/cancelled unless a status filter is set. */
+/**
+ * One row per currency from get_sales_summary (050, extended by 052 with
+ * `p_marketplace`/`vat_base` — see the `vat_base` field below). Money
+ * excludes returned/cancelled unless a status filter is set.
+ */
 export interface SalesSummaryRow {
   currency: Currency;
   order_count: number;
@@ -87,6 +91,8 @@ export interface SalesSummaryRow {
   fees: number;
   shipping_charged: number;
   excluded_count: number;
+  /** Net taxable base: total + shipping_charged − VAT over VAT-bearing orders (052). */
+  vat_base: number;
 }
 
 /** One row per currency from get_purchases_summary (050). */
@@ -183,6 +189,13 @@ export interface Sale {
    */
   refunded_amount: number | null;
   external_order_id: string | null; // set for orders synced from a platform integration; dedup key with `platform`
+  /**
+   * Regional storefront, e.g. "amazon.de", "ebay.co.uk" (migration 052).
+   * Lower-case domain via `normalizeMarketplace` (lib/utils/marketplace.ts);
+   * null/absent = unknown. Optional like `fulfillment_location_id` so
+   * existing Sale literals stay valid.
+   */
+  marketplace?: string | null;
   // ─── Buyer shipping address (migration 041) ──────────────────────────────
   // Captured automatically on eBay sync (ebay.ts's fetchOrders), or entered/
   // corrected by hand via AddSaleModal/EditSaleModal's "Shipping Address

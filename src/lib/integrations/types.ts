@@ -40,6 +40,8 @@ export interface NormalizedOrder {
   date: string; // ISO date (YYYY-MM-DD)
   status: string;
   description: string | null;
+  /** Regional storefront via normalizeMarketplace — "amazon.de", "ebay.co.uk"; null when the API didn't say. */
+  marketplace?: string | null;
   /**
    * Buyer shipping address, when the platform's order API returns one.
    * `undefined` (not set) when the adapter doesn't support it (Amazon) —
