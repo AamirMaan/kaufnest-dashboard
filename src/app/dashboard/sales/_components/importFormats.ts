@@ -47,6 +47,12 @@ export interface ParsedRow {
   error: string | null;
   /** Set by the modal's duplicate pre-check (I3) — row is valid but not imported. */
   skipped?: string | null;
+  /**
+   * Set on an "order already exists" row whose stored sale has no
+   * marketplace but this file row does — the modal writes ONLY
+   * `marketplace` onto that sale (marketplaceBackfill.ts).
+   */
+  backfill?: { saleId: string; marketplace: string } | null;
   /** Raw SKU from the CSV — modal resolves this to product_id at insert time. */
   sku?: string | null;
   /**

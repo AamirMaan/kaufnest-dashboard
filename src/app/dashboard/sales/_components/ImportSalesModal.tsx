@@ -32,6 +32,7 @@ import {
   type ParsedRow,
 } from "./importFormats";
 import { dedupeImportRows } from "./dedupeImportRows";
+import { markExistingOrders, groupBackfills, type ExistingSaleRef } from "./marketplaceBackfill";
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
@@ -111,6 +112,10 @@ export interface ImportSummary {
   /** Refund larger than the matched order — that order was left unchanged. */
   refundsExceeded: number;
   refundsAlreadyApplied: number;
+  /** Existing orders that got a marketplace from this re-import (052). */
+  marketplacesAdded: number;
+  /** The backfill UPDATE failed; the rest of the import is committed. */
+  marketplaceBackfillFailed: boolean;
 }
 
 interface Props {
@@ -189,11 +194,14 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   // is still real work (it deducts from an existing sale). Count it separately
   // or a refunds-only file reads as "Import 0 rows" and cannot be imported.
   const refundCount = parsed.filter((r) => r.isRefund && !r.skipped).length;
-  const actionableCount = importable.length + refundCount;
+  // A re-import of an old report can be ALL duplicates yet still have work:
+  // filling in the marketplace on existing orders (marketplaceBackfill.ts).
+  const backfillCount = parsed.filter((r) => r.backfill).length;
+  const actionableCount = importable.length + refundCount + backfillCount;
   const canImport =
     parsed.length > 0 &&
     errors.length === 0 &&
-    (importable.length > 0 || refundCount > 0) &&
+    (importable.length > 0 || refundCount > 0 || backfillCount > 0) &&
     !checking;
 
   // Group skipped rows by reason (duplicate, blank row, summary row, not a
@@ -301,30 +309,27 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     if (requestId === requestIdRef.current) setChecking(true);
     try {
       const supabase = await createTenantClient();
-      const existing = new Set<string>();
+      const existing = new Map<string, ExistingSaleRef>();
       for (const [platform, ids] of byPlatform) {
         for (let i = 0; i < ids.length; i += IN_CHUNK) {
           const chunk = ids.slice(i, i + IN_CHUNK);
           const { data, error } = await supabase
             .from("sales") // verifier:allow unpaginated-collection-read — chunked via IN_CHUNK above, each call is bounded to <=200 ids
-            .select("external_order_id")
+            .select("id, external_order_id, marketplace")
             .eq("platform", platform)
             .in("external_order_id", chunk);
           if (error) throw new Error(error.message);
           for (const row of data ?? []) {
-            if (row.external_order_id) existing.add(`${platform}:${row.external_order_id}`);
+            if (row.external_order_id) {
+              existing.set(`${platform}:${row.external_order_id}`, { id: row.id, marketplace: row.marketplace ?? null });
+            }
           }
         }
       }
-      return withFileDupes.map((r) => {
-        // REFUND rows are not new orders. They carry the external_order_id of an
-        // EXISTING sale by definition, so the dedup passes would mark every one
-        // "order already exists" and drop it before matching could run.
-        if (r.isRefund) return r;
-        return r.data?.external_order_id && !r.skipped && existing.has(`${r.data.platform}:${r.data.external_order_id}`)
-          ? { ...r, skipped: "order already exists" }
-          : r;
-      });
+      // REFUND rows are not new orders. They carry the external_order_id of an
+      // EXISTING sale by definition, so the dedup passes would mark every one
+      // "order already exists" and drop it before matching could run.
+      return markExistingOrders(withFileDupes, existing);
     } finally {
       // Only the CURRENT request may clear `checking` — a stale one clearing
       // it would unblock the Import button while a newer check is in flight.
@@ -634,6 +639,37 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       if (log) dispatch(addAuditLog(log));
     }
 
+    // Marketplace backfill — only fills sales whose marketplace is still
+    // null (the `.is` guard makes a concurrent edit win). A failure here
+    // leaves the insert committed and is reported in the summary toast.
+    let marketplacesAdded = 0;
+    let marketplaceBackfillFailed = false;
+    for (const [marketplace, ids] of groupBackfills(parsed)) {
+      for (let i = 0; i < ids.length; i += IN_CHUNK) {
+        const { data: updated, error: backfillError } = await supabase
+          .from("sales")
+          .update({ marketplace })
+          .in("id", ids.slice(i, i + IN_CHUNK))
+          .is("marketplace", null)
+          .select("id");
+        if (backfillError) {
+          marketplaceBackfillFailed = true;
+          continue;
+        }
+        marketplacesAdded += updated?.length ?? 0;
+      }
+    }
+    if (marketplacesAdded > 0) {
+      const log = await writeAuditLog(supabase, {
+        userId: user.id,
+        userEmail: user.email ?? "",
+        action: "update",
+        entityType: "sale",
+        metadata: { bulk_import: true, marketplace_backfill: marketplacesAdded, format: formatId },
+      });
+      if (log) dispatch(addAuditLog(log));
+    }
+
     // Match each refund on platform + external_order_id + the product resolved
     // from SKU. Order ids are unique only within a platform (an eBay sale could
     // share an id with an unrelated Amazon one), and NOT unique within an
@@ -848,6 +884,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       refundsSkipped: unmatchedRefunds.length,
       refundsExceeded: exceededRefunds.length,
       refundsAlreadyApplied: alreadyRefunded.length,
+      marketplacesAdded,
+      marketplaceBackfillFailed,
     };
     setLoading(false);
     // 30 REFUND rows on a real May 2026 sheet; 8 matched no sale in the
@@ -1014,6 +1052,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
                 ✓ {actionableCount} row{actionableCount !== 1 ? "s" : ""} ready to import
                 {skuMatchCount > 0 && (
                   <span className="text-[var(--color-text-muted)]"> · {skuMatchCount} linked to inventory via SKU</span>
+                )}
+                {backfillCount > 0 && (
+                  <span className="text-[var(--color-text-muted)]"> · {backfillCount} existing order{backfillCount !== 1 ? "s" : ""} will get a marketplace</span>
                 )}
                 {skipped.length > 0 && (
                   <span className="text-[var(--color-text-muted)]">

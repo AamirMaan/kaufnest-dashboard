@@ -231,6 +231,13 @@ fixed — don't reintroduce them:
   `SALES_CHANNEL` — it holds `AFN`/`MFN`. The generic format keeps folding
   `platform: amazon.de` → `amazon` but now ALSO stores `amazon.de` as the
   marketplace; an explicit `marketplace` column wins.
+- **Re-import backfills marketplace (2026-09-28).** The duplicate
+  pre-check now reads `id, marketplace` and `markExistingOrders`
+  (`_components/marketplaceBackfill.ts`) plans a `backfill` for matched
+  sales whose marketplace is null. Those rows stay "order already exists"
+  but count toward `canImport`, so an all-duplicates re-import is still
+  importable. The UPDATE carries `.is("marketplace", null)` — a stored
+  value is never overwritten.
 - **`Versandkosten` maps to `shipping_charged`** (what the buyer paid — I6), NOT
   `shipping_cost`. Seller-side shipping needs an explicit `shipping_cost` /
   `versandkosten_bezahlt` header. Don't "fix" this mapping without reading

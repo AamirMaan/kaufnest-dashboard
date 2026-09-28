@@ -139,7 +139,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   and reports the outcome via an `ImportSummary` passed to `onSuccess` —
   `page.tsx` turns that into a single toast (`inserted` / `skippedRows` /
   `refundsApplied` / `refundsSkipped` / `refundsExceeded` /
-  `refundsAlreadyApplied` counts). `skippedRows` is the file-level skip count
+  `refundsAlreadyApplied` / `marketplacesAdded` counts, plus a separate
+  `marketplaceBackfillFailed` warning toast — see `marketplaceBackfill.ts`
+  below). `skippedRows` is the file-level skip count
   and matters more than it looks: on a real Amazon report most of the file is
   RETURN/FC_TRANSFER/INBOUND/blank/summary noise, so a toast without it reads as
   though the import quietly lost hundreds of rows. One clause only — the
@@ -176,6 +178,16 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   otherwise let the net column normalise to `total`, claim the key, and get the
   real `Total` column dropped by the first-wins guard. Pinned by a test in
   `lib/utils/importAliases.test.ts`.
+- `_components/marketplaceBackfill.ts` (+ colocated `.test.ts`, 2026-09-28) —
+  pure half of the duplicate pre-check's marketplace backfill:
+  `markExistingOrders(rows, existing: Map<string, ExistingSaleRef>)` marks a
+  matched row "order already exists" and, only when the stored sale's
+  marketplace is null and the file row has one, attaches a
+  `ParsedRow.backfill = { saleId, marketplace }`; `groupBackfills(rows)`
+  groups those by marketplace → sale ids so the modal issues one UPDATE per
+  distinct value. Called from `ImportSalesModal.tsx`'s `markDuplicates`
+  (plans the backfill) and `handleImport` (issues the UPDATEs, `.is
+  ("marketplace", null)`-guarded so a stored value is never overwritten).
 - `_components/dedupeImportRows.ts` (+ colocated `.test.ts`, 2026-09-17) —
   pure in-file dedupe for a parsed import batch: merges genuine duplicate
   lines (same order id + sku) and composes `external_order_id` as
