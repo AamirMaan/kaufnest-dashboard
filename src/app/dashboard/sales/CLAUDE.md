@@ -35,6 +35,8 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   of goods)" below for the FIFO-vs-linked-purchase precedence, Phase 3 Task 6)
   and Details card (description/linked product/**Fulfilled from** location
   (Phase 3 Task 6, advanced-inventory tenants only)/restock flag/audit fields).
+  The header row shows the order's **marketplace** (e.g. `amazon.de`) under the
+  PlatformBadge when set (Task 7, 2026-09-28).
   Linked purchase is resolved from `state.purchases.items` (fast path) or a
   second Supabase effect that queries `purchases` with `.maybeSingle()` and
   dispatches `addPurchase` on hit. Cost of goods resolved via
@@ -122,7 +124,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   precedence rule. `computeGrossProfit(netProceeds, linkedPurchase)` is kept
   for existing callers/tests but is no longer called by `[id]/page.tsx`. Used
   by `[id]/page.tsx`.
-- `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms.
+- `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms. Both modals render an optional **Marketplace** field after Platform/Date (AddSaleModal) or Platform select (EditSaleModal), accepting a free-text regional storefront name (`amazon.de`, `ebay.co.uk`, …) which is normalized on save via `normalizeMarketplace` (`lib/utils/marketplace.ts`). Marketplace is included in the edit audit-log diff (EditSaleModal).
 - `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
   plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
   onSuccess(shipment: Shipment) }`, `sale` non-null means open. Step 1

@@ -13,6 +13,7 @@ import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
+import { normalizeMarketplace } from "@/lib/utils/marketplace";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
@@ -33,6 +34,7 @@ interface Props {
 
 interface FormState {
   platform: Platform;
+  marketplace: string;
   product_name: string;
   product_id: string;
   quantity: string;
@@ -65,6 +67,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 function makeDefaults(defaultVatRate: number): FormState {
   return {
     platform: "amazon",
+    marketplace: "",
     product_name: "",
     product_id: "",
     quantity: "1",
@@ -172,6 +175,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         .from("sales")
         .insert({
           platform: form.platform,
+          marketplace: normalizeMarketplace(form.marketplace),
           product_name: form.product_name.trim(),
           product_id: form.product_id || null,
           quantity: qty,
@@ -382,6 +386,14 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             />
           </Field>
         </Row>
+
+        <Field label="Marketplace">
+          <Input
+            value={form.marketplace}
+            onChange={(e) => set("marketplace", e.target.value)}
+            placeholder="e.g. amazon.de, ebay.co.uk"
+          />
+        </Field>
 
         {tracksStock && (
           <FulfillmentLocationField
