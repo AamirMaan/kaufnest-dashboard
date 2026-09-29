@@ -21,8 +21,9 @@ export function computePending(balance: number, transferred: number): number {
 }
 
 /**
- * eBay/Amazon balance card figures: gross sales minus ad fees, outbound
- * shipping and the platform-tagged expense subtotal (045's
+ * eBay/Amazon balance card figures: gross sales (items + buyer-paid
+ * shipping) minus ad fees, outbound shipping, per-order platform fees
+ * (`sales.platform_fee`, migration 053) and the platform-tagged expense subtotal (045's
  * get_expenses_overview matches "ebay"/"amazon" in vendor/title), plus
  * recorded payouts. Null when the platform had no sales in the period —
  * the card is hidden then.
@@ -36,13 +37,16 @@ export function computePlatformBalance(
   const bucket = salesOverview?.platformBalance.find((p) => p.platform === platform);
   if (!bucket) return null;
   const expenses = expensesOverview?.platformSubtotal.find((p) => p.platform === platform)?.amount ?? 0;
-  const balance = bucket.sales - bucket.adFees - bucket.shippingFees - expenses;
+  // `?? 0`: a tenant whose RPC predates migration 053 doesn't return it yet.
+  const platformFees = bucket.platformFees ?? 0;
+  const balance = bucket.sales - bucket.adFees - bucket.shippingFees - platformFees - expenses;
   const transferred = payoutsOverview?.transferred.find((p) => p.platform === platform)?.amount ?? 0;
   return {
     balance,
     sales: bucket.sales,
     adFees: bucket.adFees,
     shippingFees: bucket.shippingFees,
+    platformFees,
     expenses,
     transferred,
     pending: computePending(balance, transferred),

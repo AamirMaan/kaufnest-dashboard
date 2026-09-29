@@ -423,6 +423,13 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   (`src/app/dashboard/_components/*Card.tsx`). Not `SECURITY DEFINER`; no
   literal percent signs in the body (the 005 copy runs through `format()`).
   See `SKILL.md`'s file map for apply-status.
+- `migrations/053_platform_balance_fees.sql` — `CREATE OR REPLACE`s 045's
+  `get_sales_overview` (same signature) on every tenant schema and in
+  `provision_tenant_schema()`: its `by_platform` bucket now also sums the
+  per-order `platform_fee` (`platformBalance[].platformFees`) and includes
+  `shipping_charged` in per-platform `sales`/`revenueByPlatform` (same
+  formula as `revenue`; `topProducts` stays items-only). See `SKILL.md`'s
+  file map for apply-status.
 - `migrations/052_sales_marketplace.sql` — adds nullable `sales.marketplace
   text` + `idx_sales_marketplace` to every tenant schema via
   `run_on_all_tenant_schemas`; also mirrored into `provision_tenant_schema()`

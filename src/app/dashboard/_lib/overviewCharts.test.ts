@@ -191,18 +191,18 @@ describe("returnRate", () => {
 });
 
 describe("balanceBars", () => {
-  it("lists sales, fees, expenses, transferred and pending", () => {
+  it("lists sales, fees (ad + shipping + platform), expenses, transferred and pending", () => {
     expect(
       balanceBars({
-        balance: 70, sales: 100, adFees: 10, shippingFees: 5, expenses: 15,
-        transferred: 50, pending: 20, count: 4,
+        balance: 65, sales: 100, adFees: 10, shippingFees: 5, platformFees: 5, expenses: 15,
+        transferred: 50, pending: 15, count: 4,
       })
     ).toEqual([
       { name: "Sales", value: 100, tone: "positive" },
-      { name: "Fees", value: 15, tone: "negative" },
+      { name: "Fees", value: 20, tone: "negative" },
       { name: "Expenses", value: 15, tone: "negative" },
       { name: "Transferred", value: 50, tone: "neutral" },
-      { name: "Pending", value: 20, tone: "pending" },
+      { name: "Pending", value: 15, tone: "pending" },
     ]);
   });
 });

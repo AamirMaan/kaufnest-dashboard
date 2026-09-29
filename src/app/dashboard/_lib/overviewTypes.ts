@@ -25,9 +25,12 @@ export interface SalesOverview {
   monthlyRevenue: MonthlyBucket[];
   platformBalance: {
     platform: string;
+    /** Items + buyer-paid shipping (053; items only before). */
     sales: number;
     adFees: number;
     shippingFees: number;
+    /** Sum of per-order `platform_fee` (053). Absent from a pre-053 RPC — read with `?? 0`. */
+    platformFees?: number;
     count: number;
   }[];
 }
@@ -88,6 +91,9 @@ export interface PlatformBalance {
   sales: number;
   adFees: number;
   shippingFees: number;
+  /** Per-order platform fees (`sales.platform_fee`) — distinct from `expenses`. */
+  platformFees: number;
+  /** Expense records whose vendor/title names the platform (045's platformSubtotal). */
   expenses: number;
   transferred: number;
   pending: number;

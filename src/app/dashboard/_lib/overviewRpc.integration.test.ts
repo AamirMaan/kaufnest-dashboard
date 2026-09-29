@@ -60,7 +60,10 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     }
   });
 
-  it("distinguishes Formula A (revenue) from Formula B (revenueByPlatform/topProducts) when shipping_charged is set", async () => {
+  // 053 retired Formula B for revenueByPlatform/platformBalance (they now
+  // include buyer-paid shipping, like `revenue`); topProducts stays items-only.
+  // Requires 053 applied to tenant_boughtopia.
+  it("counts shipping_charged in revenue and per-platform sales but not topProducts, and sums platform_fee per platform", async () => {
     const client = createServiceClientForTenant(SCHEMA);
     // Need a real created_by (profiles.id) and product_name — insert with
     // a distinctive product_name/date so this test's rows are unambiguous
@@ -74,6 +77,7 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
         unit_price: 100,
         total_amount: 100,
         shipping_charged: 10,
+        platform_fee: 2.25,
         currency: "EUR",
         date: "2020-01-15", // fixed past date, outside any real data's range
         status: "delivered",
@@ -91,11 +95,12 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     });
     if (rpcError) throw rpcError;
 
-    // Formula A: total_amount + shipping_charged = 110
+    // total_amount + shipping_charged = 110, everywhere except topProducts
     expect(result.revenue).toBe(110);
-    // Formula B: total_amount alone = 100 — proves the two formulas were
-    // NOT accidentally unified.
-    expect(result.revenueByPlatform.find((p: { platform: string }) => p.platform === "ebay").value).toBe(100);
+    expect(result.revenueByPlatform.find((p: { platform: string }) => p.platform === "ebay").value).toBe(110);
+    const ebay = result.platformBalance.find((p: { platform: string }) => p.platform === "ebay");
+    expect(ebay.sales).toBe(110);
+    expect(ebay.platformFees).toBe(2.25);
     expect(result.topProducts.find((p: { name: string }) => p.name === `${TEST_MARKER}-widget`).revenue).toBe(100);
   });
 
