@@ -7,6 +7,7 @@
  * NEXT_PUBLIC_SUPABASE_URL in the environment (already present in
  * .env.local for local runs).
  */
+// Totals RPCs are guarded wrappers since 055; tests call <name>__impl (service role, no auth.uid()).
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseEnv } from "util";
@@ -88,7 +89,7 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     if (error) throw error;
     insertedSaleIds.push(data.id);
 
-    const { data: result, error: rpcError } = await client.rpc("get_sales_overview", {
+    const { data: result, error: rpcError } = await client.rpc("get_sales_overview__impl", {
       p_from: "2020-01-01",
       p_to: "2020-01-31",
       p_currency: "EUR",
@@ -124,7 +125,7 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     if (error) throw error;
     insertedSaleIds.push(data.id);
 
-    const { data: result, error: rpcError } = await client.rpc("get_sales_overview", {
+    const { data: result, error: rpcError } = await client.rpc("get_sales_overview__impl", {
       p_from: "2020-02-01",
       p_to: "2020-02-28",
       p_currency: "EUR",
@@ -155,7 +156,7 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     if (error) throw error;
     insertedExpenseIds.push(data.id);
 
-    const { data: result, error: rpcError } = await client.rpc("get_expenses_overview", {
+    const { data: result, error: rpcError } = await client.rpc("get_expenses_overview__impl", {
       p_from: "2020-03-01",
       p_to: "2020-03-31",
       p_currency: "EUR",
@@ -170,11 +171,11 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     const client = createServiceClientForTenant(SCHEMA);
     const params = { p_from: "1999-01-01", p_to: "1999-01-02", p_currency: "EUR" };
 
-    const { data: purchases, error: pErr } = await client.rpc("get_purchases_overview", params);
+    const { data: purchases, error: pErr } = await client.rpc("get_purchases_overview__impl", params);
     if (pErr) throw pErr;
     expect(purchases).toEqual({ total: 0, vatPaid: 0, monthlyPurchases: [] });
 
-    const { data: payouts, error: payErr } = await client.rpc("get_payouts_overview", params);
+    const { data: payouts, error: payErr } = await client.rpc("get_payouts_overview__impl", params);
     if (payErr) throw payErr;
     expect(payouts).toEqual({ transferred: [] });
   });
@@ -257,7 +258,7 @@ describe("Overview RPC functions (tenant_boughtopia)", () => {
     if (unknownErr) throw unknownErr;
     expect(unknown[0].order_count).toBe(1);
 
-    const { data: byMarket, error: byMarketErr } = await client.rpc("get_sales_by_marketplace", {
+    const { data: byMarket, error: byMarketErr } = await client.rpc("get_sales_by_marketplace__impl", {
       p_from: FROM,
       p_to: TO,
       p_currency: "EUR",

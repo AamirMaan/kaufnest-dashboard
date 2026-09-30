@@ -433,6 +433,30 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   platform-tagged `expenses` (`strpos(lower(...))`, no literal percent sign
   for the 005 `format()` copy) and `transferred` payouts, all through
   `p_to`. Mirrored in `provision_tenant_schema()`. See `SKILL.md`'s file map.
+- `migrations/055_section_permissions.sql` — defines
+  `public.install_section_permissions(schema_name)` and runs it on every
+  tenant schema (also hooked into `install_advanced_inventory()`, 047, and
+  `provision_tenant_schema()`, 005, both guarded by `to_regprocedure` so
+  apply order — 055 before a re-apply of 047/005 — can't break either):
+  creates `user_section_access` (per-user section × level EXCEPTIONS only,
+  role defaults are computed, not stored) plus
+  `role_section_default`/`section_level_allowed`/`section_max_level`/
+  `current_user_access`/`get_my_access`/`notification_section`; drops and
+  recreates every policy on the governed tables (sales, shipments, expenses,
+  purchases, products, platform_payouts, audit_logs, company_profile,
+  platform_connections, ebay_listing_drafts, ebay_messages, stock_locations,
+  platform_location_defaults, inventory_settings, stock_lots,
+  stock_movements, stock_transfers, notifications) so no stale permissive
+  policy survives; and wraps the 7 Home/Analytics totals RPCs
+  (`get_sales_overview`, `get_expenses_overview`, `get_purchases_overview`,
+  `get_payouts_overview`, `get_overview_timeseries`,
+  `get_sales_by_marketplace`, `get_platform_running_balance`) as
+  `<name>__impl` (SECURITY DEFINER, EXECUTE revoked from everyone but
+  `service_role`) behind a same-signature guarded wrapper commented
+  `'section-permissions guard'`. Idempotent; skips tables a tenant doesn't
+  have (`to_regclass`). Defaults reproduce pre-055 behaviour exactly. See
+  `SKILL.md`'s file map for apply-status and its Gotchas section for the
+  `<name>__impl` editing rule.
 - `migrations/053_platform_balance_fees.sql` — `CREATE OR REPLACE`s 045's
   `get_sales_overview` (same signature) on every tenant schema and in
   `provision_tenant_schema()`: its `by_platform` bucket now also sums the

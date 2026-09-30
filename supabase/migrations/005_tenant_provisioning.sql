@@ -1407,5 +1407,12 @@ BEGIN
     PERFORM public.install_advanced_inventory(schema_name);
   END IF;
 
+  -- ── 10. Section permissions (055) ─────────────────────────
+  -- Must run after every table/function above exists: it rewrites their
+  -- RLS policies and wraps the totals RPCs. Guarded like the call above.
+  IF to_regprocedure('public.install_section_permissions(text)') IS NOT NULL THEN
+    PERFORM public.install_section_permissions(schema_name);
+  END IF;
+
 END;
 $$;

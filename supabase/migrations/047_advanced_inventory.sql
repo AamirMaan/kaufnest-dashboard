@@ -1183,6 +1183,13 @@ BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION %I.inventory_stock_by_location_totals() FROM PUBLIC, anon', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location(uuid[]) TO authenticated', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location_totals() TO authenticated', schema_name);
+
+  -- Section permissions (055) own the stock_* RLS policies; this installer
+  -- re-creates its own policies above every time it runs, so re-apply the
+  -- section rules last or they would be silently reverted.
+  IF to_regprocedure('public.install_section_permissions(text)') IS NOT NULL THEN
+    PERFORM public.install_section_permissions(schema_name);
+  END IF;
 END;
 $inst$;
 

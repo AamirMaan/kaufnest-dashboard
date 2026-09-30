@@ -5,6 +5,7 @@
  * env-loading approach as overviewRpc.integration.test.ts (see the long
  * comment there).
  */
+// Totals RPCs are guarded wrappers since 055; tests call <name>__impl (service role, no auth.uid()).
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseEnv } from "util";
@@ -66,7 +67,7 @@ describe("get_overview_timeseries (tenant_boughtopia)", () => {
     if (purchases.error) throw purchases.error;
     purchaseIds.push(...purchases.data.map((r: { id: string }) => r.id));
 
-    const { data, error } = await client.rpc("get_overview_timeseries", {
+    const { data, error } = await client.rpc("get_overview_timeseries__impl", {
       p_from: "2001-01-01", p_to: "2001-03-31", p_currency: "EUR",
     });
     if (error) throw error;
@@ -87,7 +88,7 @@ describe("get_overview_timeseries (tenant_boughtopia)", () => {
     }));
     expect(ts.top_vendor).toEqual({ name: MARKER, amount: 40 });
 
-    const { data: allTime } = await client.rpc("get_overview_timeseries", {
+    const { data: allTime } = await client.rpc("get_overview_timeseries__impl", {
       p_from: null, p_to: null, p_currency: "EUR",
     });
     expect((allTime as OverviewTimeseries).previous).toBeNull();
@@ -109,7 +110,7 @@ describe("get_overview_timeseries (tenant_boughtopia)", () => {
     if (res.error) throw res.error;
     saleIds.push(...res.data.map((r: { id: string }) => r.id));
 
-    const { data, error } = await client.rpc("get_overview_timeseries", {
+    const { data, error } = await client.rpc("get_overview_timeseries__impl", {
       p_from: "2002-02-01", p_to: "2002-02-28", p_currency: "EUR",
     });
     if (error) throw error;
@@ -137,7 +138,7 @@ describe("get_overview_timeseries (tenant_boughtopia)", () => {
     const payoutIds = payouts.data.map((r: { id: string }) => r.id);
 
     try {
-      const { data, error } = await client.rpc("get_platform_running_balance", {
+      const { data, error } = await client.rpc("get_platform_running_balance__impl", {
         p_to: "2003-01-31", p_currency: "EUR",
       });
       if (error) throw error;
