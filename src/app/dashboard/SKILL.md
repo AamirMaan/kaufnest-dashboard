@@ -71,6 +71,21 @@ Analytics. Minimal file set per change:
   than eBay/Amazon in `platformBalance`, that's a 045 RPC change first.
 - **Colors** → `_lib/chartPalette.ts` only.
 
+### Gotcha: per-platform balance must use the same fee set as Net Profit
+
+Home's Net Profit tile subtracts `get_sales_overview.fees` =
+`shipping_cost + advertising_fee + platform_fee`. The per-platform balance
+(`computePlatformBalance`, Home's `PlatformStatsCard` + Analytics'
+`PlatformBalanceCard`) is built from the RPC's `platformBalance` bucket,
+which until migration 053 (2026-09-29) summed only ad fees and shipping —
+045 predates 035's `platform_fee`, so a recorded platform fee lowered Net
+Profit but not "Balance earned" (tenant_kaufnest, Sept 2026: 235.37 shown
+vs 233.12 correct). **When a new per-order cost column is added to
+`sales`, add it to BOTH the headline `fees` and the `by_platform` bucket.**
+053 also made per-platform `sales`/`revenueByPlatform` include buyer-paid
+`shipping_charged` (same formula as `revenue`), retiring 045's items-only
+"Formula B" there; `topProducts` stays items-only.
+
 ### Gotcha: pass `resolveDateBounds`, not `resolveDateRange`, to the RPCs
 
 `resolveDateRange` fills an open side of a custom range with the

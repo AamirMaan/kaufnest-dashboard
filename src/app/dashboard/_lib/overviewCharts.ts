@@ -128,7 +128,7 @@ export type BalanceTone = "positive" | "negative" | "neutral" | "pending";
 export function balanceBars(b: PlatformBalance): { name: string; value: number; tone: BalanceTone }[] {
   return [
     { name: "Sales", value: b.sales, tone: "positive" },
-    { name: "Fees", value: b.adFees + b.shippingFees, tone: "negative" },
+    { name: "Fees", value: b.adFees + b.shippingFees + b.platformFees, tone: "negative" },
     { name: "Expenses", value: b.expenses, tone: "negative" },
     { name: "Transferred", value: b.transferred, tone: "neutral" },
     { name: "Pending", value: b.pending, tone: "pending" },

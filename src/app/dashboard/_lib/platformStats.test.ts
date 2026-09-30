@@ -26,13 +26,13 @@ describe("buildPlatformStats", () => {
         { platform: "etsy", value: 100 },
         { platform: "ebay", value: 300 },
       ],
-      platformBalance: [{ platform: "ebay", sales: 300, adFees: 20, shippingFees: 30, count: 4 }],
+      platformBalance: [{ platform: "ebay", sales: 300, adFees: 20, shippingFees: 30, platformFees: 10, count: 4 }],
     });
     const stats = buildPlatformStats(s, expenses, payouts);
     expect(stats.map((p) => p.platform)).toEqual(["ebay", "etsy"]);
     expect(stats[0].sharePct).toBeCloseTo(75);
     expect(stats[1].sharePct).toBeCloseTo(25);
-    expect(stats[0].balance).toMatchObject({ balance: 240, transferred: 50, pending: 190, count: 4 });
+    expect(stats[0].balance).toMatchObject({ balance: 230, transferred: 50, pending: 180, count: 4 });
     expect(stats[1].balance).toBeNull();
   });
 

@@ -514,12 +514,15 @@ BEGIN
         FROM filtered
         WHERE status NOT IN ('returned', 'cancelled')
       ),
+      -- 053: sales includes buyer-paid shipping (same revenue formula as the
+      -- headline 'revenue') and platform_fees sums the per-order platform_fee.
       by_platform AS (
         SELECT
           platform,
-          sum(total_amount) AS sales,
+          sum(total_amount + coalesce(shipping_charged, 0)) AS sales,
           sum(coalesce(advertising_fee, 0)) AS ad_fees,
           sum(coalesce(shipping_cost, 0)) AS shipping_fees,
+          sum(coalesce(platform_fee, 0)) AS platform_fees,
           count(*) AS cnt
         FROM effective
         GROUP BY platform
@@ -558,7 +561,8 @@ BEGIN
         ),
         'platformBalance', (
           SELECT coalesce(jsonb_agg(jsonb_build_object(
-            'platform', platform, 'sales', sales, 'adFees', ad_fees, 'shippingFees', shipping_fees, 'count', cnt
+            'platform', platform, 'sales', sales, 'adFees', ad_fees, 'shippingFees', shipping_fees,
+            'platformFees', platform_fees, 'count', cnt
           )), '[]'::jsonb)
           FROM by_platform
           WHERE platform IN ('ebay', 'amazon')

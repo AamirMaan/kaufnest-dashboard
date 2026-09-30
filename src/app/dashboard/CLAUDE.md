@@ -109,7 +109,11 @@ broadly when working on a specific feature.**
 Home-only:
 - `PlatformStatsCard.tsx` (2026-09-28) — numbers-only per-platform card:
   revenue + share %, and for eBay/Amazon (`stat.balance` non-null) orders,
-  avg. order, ad fees, shipping, platform expenses, balance earned,
+  avg. order, ad fees, shipping, **platform fees** (per-order
+  `sales.platform_fee`, 053), **"Expenses tagged <platform>"** (expense
+  records whose vendor/title names the platform — 045's `platformSubtotal`;
+  labelled "Platform expenses" before 2026-09-29, which read as if it held
+  the per-order fees), balance earned,
   transferred and "Still in <platform> account" (warning/danger tone), plus
   an optional admin "Record Transfer" button. Chart counterpart on Analytics
   is `PlatformBalanceCard`.
@@ -194,7 +198,10 @@ extracting it is what makes it testable without rendering the page.
   `get_sales_overview`/`get_payouts_overview`'s results (via
   `computePlatformBalance()`, called from `analytics/page.tsx` for the
   `PlatformBalanceCard` charts and from `platformStats.ts` for Home's stat
-  cards) rather than reduced from raw payout rows.
+  cards) rather than reduced from raw payout rows. `computePlatformBalance`
+  = sales (items + buyer-paid shipping, 053) − ad fees − shipping cost −
+  per-order platform fees − platform-tagged expenses; `platformFees` is
+  read `?? 0` so a tenant not yet on 053 still renders.
 - `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) is **no longer used by
   Home or Analytics** as of the 2026-09-17 RPC rewire — `_components/useOverviewData.ts`
   fetches pre-aggregated JSON via `supabase.rpc(...)` calls instead of paging

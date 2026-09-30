@@ -36,7 +36,9 @@ export function PlatformStatsCard({
         { label: "Avg. order", value: b.count > 0 ? kit.money(b.sales / b.count) : "—" },
         { label: "Ad fees", value: kit.money(-b.adFees), tone: "text-(--color-danger)" },
         { label: "Shipping", value: kit.money(-b.shippingFees), tone: "text-(--color-danger)" },
-        { label: "Platform expenses", value: kit.money(-b.expenses), tone: "text-(--color-danger)" },
+        { label: "Platform fees", value: kit.money(-b.platformFees), tone: "text-(--color-danger)" },
+        // Expense records whose vendor/title names the platform — not per-order fees.
+        { label: `Expenses tagged ${name}`, value: kit.money(-b.expenses), tone: "text-(--color-danger)" },
         { label: "Balance earned", value: kit.money(b.balance) },
         { label: "Transferred", value: kit.money(b.transferred) },
       ]
