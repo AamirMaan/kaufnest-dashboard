@@ -35,8 +35,8 @@ export default function DashboardPage() {
   const rangeLabel = describeRange(picker.range);
 
   const platformStats = useMemo(
-    () => buildPlatformStats(data.sales, data.expenses, data.payouts),
-    [data.sales, data.expenses, data.payouts]
+    () => buildPlatformStats(data.sales, data.expenses, data.payouts, data.running),
+    [data.sales, data.expenses, data.payouts, data.running]
   );
   const pendingFor = (p: "ebay" | "amazon") =>
     platformStats.find((s) => s.platform === p)?.balance?.pending ?? 0;
@@ -85,6 +85,7 @@ export default function DashboardPage() {
                 const target = p === "ebay" || p === "amazon" ? p : null;
                 return (
                   <PlatformStatsCard key={p} stat={stat} index={i} currency={profileCurrency}
+                    asOf={data.runningAsOf}
                     onRecordTransfer={canRecordTransfer && target && stat.balance
                       ? () => setTransferModal(target) : undefined} />
                 );

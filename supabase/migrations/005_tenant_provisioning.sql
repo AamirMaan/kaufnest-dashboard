@@ -1289,8 +1289,19 @@ BEGIN
         FROM p
         GROUP BY 1
       ),
+      -- 054: a range of whole calendar months (every preset: month, quarter,
+      -- year, "Specific period") compares against the same number of
+      -- preceding calendar months; any other range keeps the equal-length
+      -- window. Sept 1–30 → Aug 1–31 (was Aug 2–31).
       prev AS (
-        SELECT p_from - (p_to - p_from + 1) AS pf, p_from - 1 AS pt
+        SELECT CASE
+                 WHEN p_from = date_trunc('month', p_from)::date
+                  AND p_to = (date_trunc('month', p_to) + interval '1 month' - interval '1 day')::date
+                 THEN (p_from - make_interval(months => ((extract(year FROM p_to) - extract(year FROM p_from)) * 12
+                                                        + extract(month FROM p_to) - extract(month FROM p_from) + 1)::int))::date
+                 ELSE p_from - (p_to - p_from + 1)
+               END AS pf,
+               p_from - 1 AS pt
         WHERE p_from IS NOT NULL AND p_to IS NOT NULL
       )
       SELECT jsonb_build_object(
@@ -1327,6 +1338,9 @@ BEGIN
                        AND status NOT IN ('returned', 'cancelled')),
             'orders', (SELECT count(*) FROM sales
                        WHERE currency = p_currency AND date BETWEEN prev.pf AND prev.pt),
+            'effective_orders', (SELECT count(*) FROM sales
+                                 WHERE currency = p_currency AND date BETWEEN prev.pf AND prev.pt
+                                   AND status NOT IN ('returned', 'cancelled')),
             'expenses', (SELECT coalesce(sum(amount), 0) FROM expenses
                          WHERE currency = p_currency AND date BETWEEN prev.pf AND prev.pt),
             'purchases', (SELECT coalesce(sum(total_amount), 0) FROM purchases
@@ -1350,6 +1364,38 @@ BEGIN
   $sql$, schema_name);
 
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_overview_timeseries(date, date, text) TO authenticated', schema_name);
+
+  -- Running eBay/Amazon balance — see 054_home_tiles_period_running_balance.sql.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_platform_running_balance(p_to date, p_currency text)
+    RETURNS TABLE (platform text, earned numeric, expenses numeric, transferred numeric)
+    LANGUAGE sql STABLE
+    SET search_path = %1$I
+    AS $func$
+      SELECT
+        pl.platform,
+        coalesce((SELECT sum(s.total_amount + coalesce(s.shipping_charged, 0) - coalesce(s.advertising_fee, 0)
+                             - coalesce(s.shipping_cost, 0) - coalesce(s.platform_fee, 0))
+                  FROM sales s
+                  WHERE s.platform = pl.platform AND s.currency = p_currency
+                    AND s.status NOT IN ('returned', 'cancelled')
+                    AND (p_to IS NULL OR s.date <= p_to)), 0),
+        coalesce((SELECT sum(e.amount)
+                  FROM expenses e
+                  WHERE e.currency = p_currency
+                    AND (strpos(lower(coalesce(e.vendor, '')), pl.platform) > 0
+                         OR strpos(lower(coalesce(e.title, '')), pl.platform) > 0)
+                    AND (p_to IS NULL OR e.date <= p_to)), 0),
+        coalesce((SELECT sum(pp.amount)
+                  FROM platform_payouts pp
+                  WHERE pp.platform = pl.platform AND pp.currency = p_currency
+                    AND (p_to IS NULL OR pp.date <= p_to)), 0)
+      FROM (VALUES ('ebay'), ('amazon')) AS pl(platform)
+      WHERE EXISTS (SELECT 1 FROM sales s WHERE s.platform = pl.platform AND s.currency = p_currency);
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_platform_running_balance(date, text) TO authenticated', schema_name);
 
   -- ── 9. Advanced inventory (batches, locations, FIFO) ──────
   -- One shared installer instead of duplicating its SQL here — see

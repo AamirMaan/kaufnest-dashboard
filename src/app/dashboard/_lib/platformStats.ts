@@ -6,7 +6,7 @@
  */
 import { computePlatformBalance } from "./platformBalance";
 import type {
-  ExpensesOverview, PayoutsOverview, PlatformBalance, SalesOverview,
+  ExpensesOverview, PayoutsOverview, PlatformBalance, RunningPlatformBalance, SalesOverview,
 } from "./overviewTypes";
 
 export interface PlatformStat {
@@ -22,7 +22,8 @@ export interface PlatformStat {
 export function buildPlatformStats(
   sales: SalesOverview | null,
   expenses: ExpensesOverview | null,
-  payouts: PayoutsOverview | null
+  payouts: PayoutsOverview | null,
+  running?: RunningPlatformBalance[] | null
 ): PlatformStat[] {
   const rows = sales?.revenueByPlatform ?? [];
   const positiveTotal = rows.reduce((a, r) => a + Math.max(r.value, 0), 0);
@@ -33,7 +34,7 @@ export function buildPlatformStats(
       sharePct: positiveTotal > 0 && r.value > 0 ? (r.value / positiveTotal) * 100 : 0,
       balance:
         r.platform === "ebay" || r.platform === "amazon"
-          ? computePlatformBalance(r.platform, sales, expenses, payouts)
+          ? computePlatformBalance(r.platform, sales, expenses, payouts, running)
           : null,
     }))
     .sort((a, b) => b.revenue - a.revenue || a.platform.localeCompare(b.platform));

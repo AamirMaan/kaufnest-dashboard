@@ -195,7 +195,7 @@ describe("balanceBars", () => {
     expect(
       balanceBars({
         balance: 65, sales: 100, adFees: 10, shippingFees: 5, platformFees: 5, expenses: 15,
-        transferred: 50, pending: 15, count: 4,
+        transferred: 50, pending: 15, pendingIsRunning: false, count: 4,
       })
     ).toEqual([
       { name: "Sales", value: 100, tone: "positive" },

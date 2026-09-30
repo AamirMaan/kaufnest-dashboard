@@ -5,12 +5,14 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { resolveDateBounds, type DatePreset } from "@/lib/utils/filters";
 import type { Currency } from "@/types";
 import { trailingRange } from "../_lib/kpiTiles";
+import { runningBalanceAsOf } from "../_lib/platformBalance";
 import type {
   ExpensesOverview,
   MarketplaceRow,
   OverviewTimeseries,
   PayoutsOverview,
   PurchasesOverview,
+  RunningPlatformBalance,
   SalesOverview,
 } from "../_lib/overviewTypes";
 
@@ -21,6 +23,10 @@ export interface OverviewData {
   payouts: PayoutsOverview | null;
   timeseries: OverviewTimeseries | null;
   marketplaces: MarketplaceRow[] | null;
+  /** eBay/Amazon totals from the first record through `runningAsOf` (054) — "still in account". */
+  running: RunningPlatformBalance[] | null;
+  /** ISO date the running balance is computed up to: range end capped at today. */
+  runningAsOf: string;
   /** Trailing 12 months, independent of the picked range — feeds sparklines + Home's trend chart. */
   trailing: OverviewTimeseries | null;
   /** True until the trailing call first resolves (success or error), and true again while it refetches on a currency change. */
@@ -29,7 +35,7 @@ export interface OverviewData {
 }
 
 /**
- * Range-scoped aggregates for Home and Analytics. Comes from 6 Postgres RPCs,
+ * Range-scoped aggregates for Home and Analytics. Comes from 7 Postgres RPCs,
  * NOT from state.sales.items etc. Those Redux slices hold only ONE paginated
  * page (50 rows) and get replaced whenever the Sales/Expenses/Purchases pages
  * fetch a different page, so deriving date-ranged aggregates from them
@@ -37,7 +43,9 @@ export interface OverviewData {
  * headline totals; get_overview_timeseries (051) gives the monthly chart
  * series, the previous-period totals for the change badges, and the top
  * vendor; get_sales_by_marketplace (052) gives the per-marketplace revenue/
- * VAT/VAT-base breakdown for Analytics' MarketplaceCard.
+ * VAT/VAT-base breakdown for Analytics' MarketplaceCard;
+ * get_platform_running_balance (054) gives eBay/Amazon totals up to the
+ * range end, so "still in account" is a running balance, not one period's.
  */
 export function useOverviewData(
   filter: { preset: DatePreset; dateFrom: string; dateTo: string },
@@ -50,6 +58,8 @@ export function useOverviewData(
   const [payouts, setPayouts] = useState<PayoutsOverview | null>(null);
   const [timeseries, setTimeseries] = useState<OverviewTimeseries | null>(null);
   const [marketplaces, setMarketplaces] = useState<MarketplaceRow[] | null>(null);
+  const [running, setRunning] = useState<RunningPlatformBalance[] | null>(null);
+  const runningAsOf = runningBalanceAsOf(resolveDateBounds({ preset, dateFrom, dateTo }).to, new Date());
   const [trailing, setTrailing] = useState<OverviewTimeseries | null>(null);
   const [trailingLoading, setTrailingLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,13 +80,14 @@ export function useOverviewData(
         p_currency: currency,
       };
 
-      const [salesRes, expensesRes, purchasesRes, payoutsRes, timeseriesRes, marketplacesRes] = await Promise.all([
+      const [salesRes, expensesRes, purchasesRes, payoutsRes, timeseriesRes, marketplacesRes, runningRes] = await Promise.all([
         supabase.rpc("get_sales_overview", rpcParams),
         supabase.rpc("get_expenses_overview", rpcParams),
         supabase.rpc("get_purchases_overview", rpcParams),
         supabase.rpc("get_payouts_overview", rpcParams),
         supabase.rpc("get_overview_timeseries", rpcParams),
         supabase.rpc("get_sales_by_marketplace", rpcParams),
+        supabase.rpc("get_platform_running_balance", { p_to: runningAsOf, p_currency: currency }),
       ]);
 
       if (cancelled) return;
@@ -86,6 +97,9 @@ export function useOverviewData(
       if (payoutsRes.error) console.error("get_payouts_overview failed", payoutsRes.error);
       if (timeseriesRes.error) console.error("get_overview_timeseries failed", timeseriesRes.error);
       if (marketplacesRes.error) console.error("get_sales_by_marketplace failed", marketplacesRes.error);
+      // A failure (e.g. 054 not applied) only nulls `running`; the cards then
+      // fall back to the period's balance − transferred.
+      if (runningRes.error) console.error("get_platform_running_balance failed", runningRes.error);
 
       setSales(salesRes.error ? null : (salesRes.data as SalesOverview));
       setExpenses(expensesRes.error ? null : (expensesRes.data as ExpensesOverview));
@@ -93,6 +107,7 @@ export function useOverviewData(
       setPayouts(payoutsRes.error ? null : (payoutsRes.data as PayoutsOverview));
       setTimeseries(timeseriesRes.error ? null : (timeseriesRes.data as OverviewTimeseries));
       setMarketplaces(marketplacesRes.error ? null : (marketplacesRes.data as MarketplaceRow[]));
+      setRunning(runningRes.error ? null : (runningRes.data as RunningPlatformBalance[]));
       setIsLoading(false);
     }
 
@@ -100,7 +115,7 @@ export function useOverviewData(
     return () => {
       cancelled = true;
     };
-  }, [preset, dateFrom, dateTo, currency]);
+  }, [preset, dateFrom, dateTo, currency, runningAsOf]);
 
   // Trailing window: refetched only when the currency changes, not on every range pick.
   useEffect(() => {
@@ -124,5 +139,5 @@ export function useOverviewData(
     };
   }, [currency]);
 
-  return { sales, expenses, purchases, payouts, timeseries, marketplaces, trailing, trailingLoading, isLoading };
+  return { sales, expenses, purchases, payouts, timeseries, marketplaces, running, runningAsOf, trailing, trailingLoading, isLoading };
 }

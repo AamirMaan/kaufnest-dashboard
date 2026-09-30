@@ -71,6 +71,19 @@ Analytics. Minimal file set per change:
   than eBay/Amazon in `platformBalance`, that's a 045 RPC change first.
 - **Colors** → `_lib/chartPalette.ts` only.
 
+### Gotcha: "still in account" is a running balance, not a period figure
+
+Money stays in the eBay/Amazon account across periods, so `pending` must
+come from `get_platform_running_balance` (054: everything earned minus
+everything transferred up to the range end), never from the picked
+period's `balance − transferred` — that hid earlier payouts (tenant_kaufnest:
+July/August transfers invisible under "This month") and earlier unpaid
+earnings. "Balance earned"/"Transferred" rows stay period-scoped and are
+labelled "(period)". The same goes for the previous-period comparison:
+every preset is a whole-calendar-month range, and 054 compares those
+against the previous calendar months — the old equal-length day window
+dropped 1 Aug from September's comparison.
+
 ### Gotcha: per-platform balance must use the same fee set as Net Profit
 
 Home's Net Profit tile subtracts `get_sales_overview.fees` =

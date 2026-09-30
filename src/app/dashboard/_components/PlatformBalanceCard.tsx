@@ -43,6 +43,7 @@ export function PlatformBalanceCard({
           {balance.count} order{balance.count !== 1 ? "s" : ""} · Balance earned = sales − fees − expenses ·{" "}
           <span className={balance.pending >= 0 ? "text-(--color-warning)" : "text-(--color-danger)"}>
             {kit.money(balance.pending)} still in {ACCOUNT[platform]} account
+            {balance.pendingIsRunning ? " to date" : " (this period)"}
           </span>
         </>
       }

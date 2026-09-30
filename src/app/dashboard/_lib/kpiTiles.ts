@@ -43,7 +43,9 @@ export function buildKpis({ sales, expenses, purchases, timeseries, trailing }: 
   const fees = sales?.fees ?? 0;
   const expenseTotal = expenses?.total ?? 0;
   const purchaseTotal = purchases?.total ?? 0;
-  const orders = sales?.orderCount ?? 0;
+  // Revenue-eligible orders only (returned/cancelled excluded) — the same
+  // population as Revenue and the per-platform cards' Orders.
+  const orders = sales?.effectiveOrderCount ?? 0;
   const netProfit = calculateNetProfit(revenue, expenseTotal + fees, purchaseTotal);
   const vatPosition = (sales?.vatCollected ?? 0) - ((purchases?.vatPaid ?? 0) + (expenses?.vatPaid ?? 0));
 
@@ -59,7 +61,11 @@ export function buildKpis({ sales, expenses, purchases, timeseries, trailing }: 
       delta: pctChange(netProfit, prevNet),
       spark: netProfitSeries(months).map((p) => p.value),
     },
-    orders: { value: orders, delta: pctChange(orders, prev?.orders), spark: months.map((m) => m.orders) },
+    orders: {
+      value: orders,
+      delta: pctChange(orders, prev?.effective_orders),
+      spark: months.map((m) => m.orders - m.returned_cancelled),
+    },
     expenses: { value: expenseTotal, delta: pctChange(expenseTotal, prev?.expenses), spark: months.map((m) => m.expenses) },
     purchases: { value: purchaseTotal, delta: pctChange(purchaseTotal, prev?.purchases), spark: months.map((m) => m.purchases) },
     vatPosition: { value: vatPosition, delta: null, spark: months.map((m) => m.vat_collected - m.vat_paid) },

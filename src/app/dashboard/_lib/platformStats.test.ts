@@ -47,4 +47,15 @@ describe("buildPlatformStats", () => {
     expect(stats[0]).toMatchObject({ platform: "shopify", sharePct: 100 });
     expect(stats[1]).toMatchObject({ platform: "amazon", sharePct: 0, balance: null });
   });
+
+  it("passes running balances through so pending is the account balance to date", () => {
+    const s = sales({
+      revenueByPlatform: [{ platform: "ebay", value: 300 }],
+      platformBalance: [{ platform: "ebay", sales: 300, adFees: 20, shippingFees: 30, platformFees: 10, count: 4 }],
+    });
+    const [ebay] = buildPlatformStats(s, expenses, payouts, [
+      { platform: "ebay", earned: 1000, expenses: 0, transferred: 400 },
+    ]);
+    expect(ebay.balance).toMatchObject({ pending: 600, pendingIsRunning: true });
+  });
 });

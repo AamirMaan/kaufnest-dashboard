@@ -75,15 +75,37 @@ export interface OverviewMonth {
 
 export interface OverviewTimeseries {
   months: OverviewMonth[];
-  /** Equal-length window right before the selected range; null for open ranges. */
+  /**
+   * The period right before the selected range; null for open ranges. Since
+   * 054 a range of whole calendar months (every preset) compares against the
+   * same number of preceding months; other ranges use the equal-length window.
+   */
   previous: {
     revenue: number;
     expenses: number;
     purchases: number;
+    /** All orders, incl. returned/cancelled. */
     orders: number;
+    /** Orders excluding returned/cancelled (054; absent before). */
+    effective_orders?: number;
     fees: number;
   } | null;
   top_vendor: { name: string; amount: number } | null;
+}
+
+/**
+ * One row per eBay/Amazon from get_platform_running_balance (054): totals
+ * from the first record through the range end (all time when open), so
+ * "still in account" is a real running balance, not a single period's.
+ */
+export interface RunningPlatformBalance {
+  platform: string;
+  /** Sales + buyer-paid shipping − ad fees − shipping cost − platform fees. */
+  earned: number;
+  /** Expense records whose vendor/title names the platform. */
+  expenses: number;
+  /** Recorded payouts. */
+  transferred: number;
 }
 
 export interface PlatformBalance {
@@ -96,7 +118,10 @@ export interface PlatformBalance {
   /** Expense records whose vendor/title names the platform (045's platformSubtotal). */
   expenses: number;
   transferred: number;
+  /** Still in the platform account: the running balance to the range end when available, else balance − transferred for the period. */
   pending: number;
+  /** True when `pending` is the running balance (get_platform_running_balance succeeded). */
+  pendingIsRunning: boolean;
   count: number;
 }
 

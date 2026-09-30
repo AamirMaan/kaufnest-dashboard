@@ -42,12 +42,12 @@ export default function AnalyticsPage() {
   const vatPaid = (data.purchases?.vatPaid ?? 0) + (data.expenses?.vatPaid ?? 0);
 
   const ebayBalance = useMemo(
-    () => computePlatformBalance("ebay", data.sales, data.expenses, data.payouts),
-    [data.sales, data.expenses, data.payouts]
+    () => computePlatformBalance("ebay", data.sales, data.expenses, data.payouts, data.running),
+    [data.sales, data.expenses, data.payouts, data.running]
   );
   const amazonBalance = useMemo(
-    () => computePlatformBalance("amazon", data.sales, data.expenses, data.payouts),
-    [data.sales, data.expenses, data.payouts]
+    () => computePlatformBalance("amazon", data.sales, data.expenses, data.payouts, data.running),
+    [data.sales, data.expenses, data.payouts, data.running]
   );
 
   return (
