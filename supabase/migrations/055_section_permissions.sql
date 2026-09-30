@@ -100,7 +100,7 @@ BEGIN
             (SELECT a.level FROM user_section_access a WHERE a.user_id = p.id AND a.section = p_section),
             role_section_default(p.role, p_section))
         END
-        FROM profiles p WHERE p.id = auth.uid()
+        FROM profiles p WHERE p.id = auth.uid() AND %1$I.is_tenant_member()
       ), 0::smallint)
     $f$$q$, s);
 
@@ -124,8 +124,10 @@ BEGIN
 
   EXECUTE format('REVOKE ALL ON FUNCTION %1$I.current_user_access(text) FROM PUBLIC, anon', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access(text) TO authenticated', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access(text) TO service_role', s);
   EXECUTE format('REVOKE ALL ON FUNCTION %1$I.get_my_access() FROM PUBLIC, anon', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_my_access() TO authenticated', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_my_access() TO service_role', s);
 
   -- Validity trigger: allowed level for the section; never an exception for a super_admin.
   EXECUTE format($q$
@@ -199,17 +201,17 @@ BEGIN
   LOOP
     IF to_regclass(format('%I.%I', s, fn.tbl)) IS NULL THEN CONTINUE; END IF;
     EXECUTE format($q$CREATE POLICY %2$I ON %1$I.%3$I FOR SELECT
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access(%4$L) >= %5$s)$q$,
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access(%4$L)) >= %5$s)$q$,
       s, fn.tbl || '_select', fn.tbl, fn.sec, fn.lsel);
     EXECUTE format($q$CREATE POLICY %2$I ON %1$I.%3$I FOR INSERT
-      WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access(%4$L) >= %5$s)$q$,
+      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access(%4$L)) >= %5$s)$q$,
       s, fn.tbl || '_insert', fn.tbl, fn.sec, fn.lins);
     EXECUTE format($q$CREATE POLICY %2$I ON %1$I.%3$I FOR UPDATE
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access(%4$L) >= %5$s)
-      WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access(%4$L) >= %5$s)$q$,
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access(%4$L)) >= %5$s)
+      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access(%4$L)) >= %5$s)$q$,
       s, fn.tbl || '_update', fn.tbl, fn.sec, fn.lupd);
     EXECUTE format($q$CREATE POLICY %2$I ON %1$I.%3$I FOR DELETE
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access(%4$L) >= %5$s)$q$,
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access(%4$L)) >= %5$s)$q$,
       s, fn.tbl || '_delete', fn.tbl, fn.sec, fn.ldel);
   END LOOP;
 
@@ -217,44 +219,44 @@ BEGIN
   FOREACH t IN ARRAY ARRAY['inventory_settings','stock_lots','stock_movements'] LOOP
     IF to_regclass(format('%I.%I', s, t)) IS NULL THEN CONTINUE; END IF;
     EXECUTE format($q$CREATE POLICY %2$I ON %1$I.%3$I FOR SELECT
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access('inventory') >= 1)$q$, s, t || '_select', t);
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 1)$q$, s, t || '_select', t);
   END LOOP;
 
   IF to_regclass(format('%I.stock_transfers', s)) IS NOT NULL THEN
     EXECUTE format($q$CREATE POLICY stock_transfers_select ON %1$I.stock_transfers FOR SELECT
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access('inventory') >= 1)$q$, s);
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 1)$q$, s);
     EXECUTE format($q$CREATE POLICY stock_transfers_insert ON %1$I.stock_transfers FOR INSERT
-      WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access('inventory') >= 2 AND created_by = auth.uid())$q$, s);
+      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 2 AND created_by = auth.uid())$q$, s);
     EXECUTE format($q$CREATE POLICY stock_transfers_delete ON %1$I.stock_transfers FOR DELETE
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access('inventory') >= 2)$q$, s);
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 2)$q$, s);
   END IF;
 
   IF to_regclass(format('%I.shipments', s)) IS NOT NULL THEN
     EXECUTE format($q$CREATE POLICY shipments_select ON %1$I.shipments FOR SELECT
-      USING (%1$I.is_tenant_member() AND %1$I.current_user_access('orders') >= 1)$q$, s);
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('orders')) >= 1)$q$, s);
     EXECUTE format($q$CREATE POLICY shipments_insert ON %1$I.shipments FOR INSERT
-      WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access('orders') >= 3)$q$, s);
+      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('orders')) >= 3)$q$, s);
   END IF;
 
   EXECUTE format($q$CREATE POLICY platform_payouts_select ON %1$I.platform_payouts FOR SELECT
-    USING (%1$I.is_tenant_member() AND %1$I.current_user_access('payouts') >= 1)$q$, s);
+    USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('payouts')) >= 1)$q$, s);
   EXECUTE format($q$CREATE POLICY platform_payouts_insert ON %1$I.platform_payouts FOR INSERT
-    WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access('payouts') >= 2)$q$, s);
+    WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('payouts')) >= 2)$q$, s);
   EXECUTE format($q$CREATE POLICY platform_payouts_delete ON %1$I.platform_payouts FOR DELETE
-    USING (%1$I.is_tenant_member() AND %1$I.current_user_access('payouts') >= 3)$q$, s);
+    USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('payouts')) >= 3)$q$, s);
 
   EXECUTE format($q$CREATE POLICY audit_logs_select ON %1$I.audit_logs FOR SELECT
-    USING (%1$I.is_tenant_member() AND %1$I.current_user_access('audit_logs') >= 1)$q$, s);
+    USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('audit_logs')) >= 1)$q$, s);
   EXECUTE format($q$CREATE POLICY audit_logs_insert ON %1$I.audit_logs FOR INSERT
     WITH CHECK (%1$I.is_tenant_member() AND auth.role() = 'authenticated')$q$, s);
 
   EXECUTE format($q$CREATE POLICY company_profile_select ON %1$I.company_profile FOR SELECT
     USING (%1$I.is_tenant_member() AND auth.role() = 'authenticated')$q$, s);
   EXECUTE format($q$CREATE POLICY company_profile_insert ON %1$I.company_profile FOR INSERT
-    WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access('settings') >= 2)$q$, s);
+    WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('settings')) >= 2)$q$, s);
   EXECUTE format($q$CREATE POLICY company_profile_update ON %1$I.company_profile FOR UPDATE
-    USING (%1$I.is_tenant_member() AND %1$I.current_user_access('settings') >= 2)
-    WITH CHECK (%1$I.is_tenant_member() AND %1$I.current_user_access('settings') >= 2)$q$, s);
+    USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('settings')) >= 2)
+    WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('settings')) >= 2)$q$, s);
 
   IF to_regclass(format('%I.notifications', s)) IS NOT NULL THEN
     EXECUTE format($q$CREATE POLICY notifications_select ON %1$I.notifications FOR SELECT
@@ -285,7 +287,7 @@ BEGIN
 
     EXECUTE format('DROP FUNCTION IF EXISTS %I.%I(%s)', s, fn.name || '__impl', fn.types);
     EXECUTE format('ALTER FUNCTION %I.%I(%s) RENAME TO %I', s, fn.name, fn.types, fn.name || '__impl');
-    EXECUTE format('ALTER FUNCTION %I.%I(%s) SECURITY DEFINER', s, fn.name || '__impl', fn.types);
+    EXECUTE format('ALTER FUNCTION %I.%I(%s) SECURITY DEFINER SET search_path TO %I', s, fn.name || '__impl', fn.types, s);
     EXECUTE format('REVOKE ALL ON FUNCTION %I.%I(%s) FROM PUBLIC, anon, authenticated', s, fn.name || '__impl', fn.types);
     -- Integration tests call <name>__impl with the service role (no auth.uid()).
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO service_role', s, fn.name || '__impl', fn.types);
@@ -308,6 +310,9 @@ BEGIN
     EXECUTE format('COMMENT ON FUNCTION %I.%I(%s) IS %L', s, fn.name, fn.types, 'section-permissions guard');
     EXECUTE format('REVOKE ALL ON FUNCTION %I.%I(%s) FROM PUBLIC, anon', s, fn.name, fn.types);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO authenticated', s, fn.name, fn.types);
+    -- Integration tests call the guarded wrapper too (Task 2): service role
+    -- gets NULL/empty from the guard, not a permission-denied error.
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %I.%I(%s) TO service_role', s, fn.name, fn.types);
   END LOOP;
 END
 $install$;
