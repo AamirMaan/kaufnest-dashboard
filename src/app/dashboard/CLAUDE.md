@@ -40,7 +40,13 @@ broadly when working on a specific feature.**
   Analytics; users missed those per-platform numbers on Home). Renders
   exactly: 6 `KpiTile`s in a `xl:grid-cols-3` grid (Revenue, Net Profit,
   Orders, Expenses, Purchases, VAT payable/refundable — value, Δ% vs the
-  previous equal-length period, trailing-12-month sparkline), a "By Platform"
+  previous period (since 054: the previous calendar month/quarter/year for
+  whole-month ranges, i.e. every preset; the equal-length window for other
+  custom ranges), trailing-12-month sparkline). **Orders counts
+  revenue-eligible orders only** (returned/cancelled excluded, 2026-09-30 —
+  `effectiveOrderCount`, `previous.effective_orders`, spark = `orders −
+  returned_cancelled`), the same population as Revenue and the platform
+  cards; Analytics' `OrdersCard` still shows all orders + return rate. A "By Platform"
   section of `PlatformStatsCard`s (one per platform with sales in the range,
   built by `_lib/platformStats.ts`; admins get "Record Transfer" on the
   eBay/Amazon cards, which opens `RecordTransferModal`),
@@ -56,7 +62,11 @@ broadly when working on a specific feature.**
   6 range-scoped RPCs (`get_sales_overview`/`get_expenses_overview`/
   `get_purchases_overview`/`get_payouts_overview`/`get_overview_timeseries`/
   `get_sales_by_marketplace`, see `supabase/CLAUDE.md`'s migration 045/051/052
-  entries) scoped to the picked date range. Home doesn't render anything from
+  entries) scoped to the picked date range, plus
+  `get_platform_running_balance(p_to: runningAsOf)` (054) — eBay/Amazon
+  totals from the first record through the range end capped at today
+  (`runningBalanceAsOf` in `_lib/platformBalance.ts`), exposed as
+  `running`/`runningAsOf`. Home doesn't render anything from
   `get_sales_by_marketplace` (only Analytics' `MarketplaceCard` does) but pays
   for the call anyway since both pages share this one hook — accepted as
   cheap (server-side grouped, same cost class as the other five); make it
@@ -113,12 +123,15 @@ Home-only:
   `sales.platform_fee`, 053), **"Expenses tagged <platform>"** (expense
   records whose vendor/title names the platform — 045's `platformSubtotal`;
   labelled "Platform expenses" before 2026-09-29, which read as if it held
-  the per-order fees), balance earned,
-  transferred and "Still in <platform> account" (warning/danger tone), plus
+  the per-order fees), "Balance earned (period)", "Transferred (period)"
+  and "Still in <platform> account" (warning/danger tone) — the last is a
+  **running balance as of `asOf`** (everything earned minus everything
+  transferred up to the range end, 2026-09-30), with "this period only"
+  shown instead of the date if the running RPC failed; plus
   an optional admin "Record Transfer" button. Chart counterpart on Analytics
   is `PlatformBalanceCard`.
 - `KpiTile.tsx` — Apex-style stat tile: label/value/icon chip, ▲/▼ delta vs
-  the previous equal-length period (hidden when `delta` is null, e.g. "All
+  the previous period (calendar-aligned for presets since 054; hidden when `delta` is null, e.g. "All
   Time"), edge-to-edge sparkline (`recharts` `AreaChart`, always fed the
   trailing-12-month series regardless of the picked range). Sparkline color
   is a hex value from `useChartKit().colors` (SVG `fill`/`stroke` attrs can't
@@ -201,7 +214,12 @@ extracting it is what makes it testable without rendering the page.
   cards) rather than reduced from raw payout rows. `computePlatformBalance`
   = sales (items + buyer-paid shipping, 053) − ad fees − shipping cost −
   per-order platform fees − platform-tagged expenses; `platformFees` is
-  read `?? 0` so a tenant not yet on 053 still renders.
+  read `?? 0` so a tenant not yet on 053 still renders. Its optional 5th arg
+  `running` (from `get_platform_running_balance`) makes `pending` the
+  running balance (`earned − expenses − transferred` to date,
+  `pendingIsRunning: true`); without a row it falls back to the period's
+  `balance − transferred`. `runningBalanceAsOf(to, today)` = range end
+  capped at today (today for an open range).
 - `fetchAllRows` (`src/lib/utils/fetchAllRows.ts`) is **no longer used by
   Home or Analytics** as of the 2026-09-17 RPC rewire — `_components/useOverviewData.ts`
   fetches pre-aggregated JSON via `supabase.rpc(...)` calls instead of paging

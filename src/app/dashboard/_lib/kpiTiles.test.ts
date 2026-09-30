@@ -20,13 +20,13 @@ const purchases = { total: 300, vatPaid: 50, monthlyPurchases: [] } as Purchases
 
 const timeseries: OverviewTimeseries = {
   months: [],
-  previous: { revenue: 800, expenses: 250, purchases: 300, orders: 10, fees: 50 },
+  previous: { revenue: 800, expenses: 250, purchases: 300, orders: 10, effective_orders: 8, fees: 50 },
   top_vendor: null,
 };
 
 const trailing: OverviewTimeseries = {
   months: [
-    month({ month: "2026-08", revenue_by_platform: { ebay: 100, amazon: 50 }, orders: 3, fees: 10, expenses: 20, purchases: 30, vat_collected: 9, vat_paid: 4 }),
+    month({ month: "2026-08", revenue_by_platform: { ebay: 100, amazon: 50 }, orders: 3, returned_cancelled: 1, fees: 10, expenses: 20, purchases: 30, vat_collected: 9, vat_paid: 4 }),
     month({ month: "2026-09", revenue_by_platform: { ebay: 200 }, orders: 5, fees: 20, expenses: 40, purchases: 0, vat_collected: 12, vat_paid: 2 }),
   ],
   previous: null,
@@ -38,7 +38,8 @@ describe("buildKpis", () => {
 
   it("takes headline values from the range overviews", () => {
     expect(k.revenue.value).toBe(1000);
-    expect(k.orders.value).toBe(12);
+    // Orders counts revenue-eligible orders only, like Revenue and the platform cards.
+    expect(k.orders.value).toBe(10);
     expect(k.expenses.value).toBe(200);
     expect(k.purchases.value).toBe(300);
     expect(k.netProfit.value).toBe(1000 - 100 - 200 - 300); // 400
@@ -47,7 +48,7 @@ describe("buildKpis", () => {
 
   it("computes deltas against timeseries.previous", () => {
     expect(k.revenue.delta).toBeCloseTo(25); // 1000 vs 800
-    expect(k.orders.delta).toBeCloseTo(20); // 12 vs 10
+    expect(k.orders.delta).toBeCloseTo(25); // 10 vs 8 effective
     expect(k.expenses.delta).toBeCloseTo(-20); // 200 vs 250
     expect(k.purchases.delta).toBeCloseTo(0);
     // previous net = 800 - 50 - 250 - 300 = 200 → 400 vs 200 = +100%
@@ -57,11 +58,17 @@ describe("buildKpis", () => {
 
   it("builds spark series from the trailing months", () => {
     expect(k.revenue.spark).toEqual([150, 200]);
-    expect(k.orders.spark).toEqual([3, 5]);
+    expect(k.orders.spark).toEqual([2, 5]); // orders − returned/cancelled
     expect(k.expenses.spark).toEqual([20, 40]);
     expect(k.purchases.spark).toEqual([30, 0]);
     expect(k.netProfit.spark).toEqual([150 - 10 - 20 - 30, 200 - 20 - 40 - 0]);
     expect(k.vatPosition.spark).toEqual([5, 10]);
+  });
+
+  it("hides the orders delta when previous lacks effective_orders (RPC before 054)", () => {
+    const pre054 = { ...timeseries.previous!, effective_orders: undefined };
+    const k2 = buildKpis({ sales, expenses, purchases, timeseries: { ...timeseries, previous: pre054 }, trailing });
+    expect(k2.orders.delta).toBeNull();
   });
 
   it("hides deltas for open ranges (previous is null)", () => {

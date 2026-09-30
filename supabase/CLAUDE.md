@@ -423,6 +423,16 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   (`src/app/dashboard/_components/*Card.tsx`). Not `SECURITY DEFINER`; no
   literal percent signs in the body (the 005 copy runs through `format()`).
   See `SKILL.md`'s file map for apply-status.
+- `migrations/054_home_tiles_period_running_balance.sql` — `CREATE OR
+  REPLACE`s 051's `get_overview_timeseries` (same signature): its `prev`
+  window is the previous N calendar months when `[p_from, p_to]` is whole
+  months (every preset), else the equal-length window; `previous` gains
+  `effective_orders`. Adds `get_platform_running_balance(p_to date,
+  p_currency text)` returning eBay/Amazon `earned` (sales + shipping charged
+  − ad − shipping cost − platform fees, returned/cancelled excluded),
+  platform-tagged `expenses` (`strpos(lower(...))`, no literal percent sign
+  for the 005 `format()` copy) and `transferred` payouts, all through
+  `p_to`. Mirrored in `provision_tenant_schema()`. See `SKILL.md`'s file map.
 - `migrations/053_platform_balance_fees.sql` — `CREATE OR REPLACE`s 045's
   `get_sales_overview` (same signature) on every tenant schema and in
   `provision_tenant_schema()`: its `by_platform` bucket now also sums the

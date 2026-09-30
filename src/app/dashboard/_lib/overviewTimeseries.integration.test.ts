@@ -92,4 +92,63 @@ describe("get_overview_timeseries (tenant_boughtopia)", () => {
     });
     expect((allTime as OverviewTimeseries).previous).toBeNull();
   });
+
+  // Requires 054 applied to the test tenant.
+  it("compares a whole-month range with the previous calendar month and counts effective orders (054)", async () => {
+    const client = createServiceClientForTenant(SCHEMA);
+    const sale = {
+      platform: "other", product_name: MARKER, quantity: 1, unit_price: 10,
+      currency: "EUR", created_by: createdBy, description: MARKER,
+    };
+    // 2 and 3 Jan 2002 fall in "previous" for Feb 2002 only under the calendar
+    // rule (Jan 1–31); the old 28-day window was Jan 4–31 and missed them.
+    const res = await client.from("sales").insert([
+      { ...sale, total_amount: 100, status: "shipped", date: "2002-01-02" },
+      { ...sale, total_amount: 50, status: "returned", date: "2002-01-03" },
+    ]).select("id");
+    if (res.error) throw res.error;
+    saleIds.push(...res.data.map((r: { id: string }) => r.id));
+
+    const { data, error } = await client.rpc("get_overview_timeseries", {
+      p_from: "2002-02-01", p_to: "2002-02-28", p_currency: "EUR",
+    });
+    if (error) throw error;
+    expect((data as OverviewTimeseries).previous).toEqual(expect.objectContaining({
+      revenue: 100, orders: 2, effective_orders: 1,
+    }));
+  });
+
+  // Requires 054 applied to the test tenant.
+  it("get_platform_running_balance sums everything up to p_to, including earlier payouts (054)", async () => {
+    const client = createServiceClientForTenant(SCHEMA);
+    const res = await client.from("sales").insert({
+      platform: "ebay", product_name: MARKER, quantity: 1, unit_price: 100, total_amount: 100,
+      shipping_charged: 10, advertising_fee: 5, shipping_cost: 3, platform_fee: 2,
+      currency: "EUR", date: "2003-01-10", status: "shipped", created_by: createdBy, description: MARKER,
+    }).select("id").single();
+    if (res.error) throw res.error;
+    saleIds.push(res.data.id);
+
+    const payouts = await client.from("platform_payouts").insert([
+      { platform: "ebay", amount: 40, currency: "EUR", date: "2003-01-20", notes: MARKER, created_by: createdBy },
+      { platform: "ebay", amount: 30, currency: "EUR", date: "2003-02-05", notes: MARKER, created_by: createdBy },
+    ]).select("id");
+    if (payouts.error) throw payouts.error;
+    const payoutIds = payouts.data.map((r: { id: string }) => r.id);
+
+    try {
+      const { data, error } = await client.rpc("get_platform_running_balance", {
+        p_to: "2003-01-31", p_currency: "EUR",
+      });
+      if (error) throw error;
+      const ebay = (data as { platform: string; earned: number; expenses: number; transferred: number }[])
+        .find((r) => r.platform === "ebay");
+      // 100 + 10 shipping charged − 5 ad − 3 shipping cost − 2 platform fee
+      expect(Number(ebay?.earned)).toBeCloseTo(100, 2);
+      // the 5 Feb payout is after p_to
+      expect(Number(ebay?.transferred)).toBeCloseTo(40, 2);
+    } finally {
+      await client.from("platform_payouts").delete().in("id", payoutIds);
+    }
+  });
 });

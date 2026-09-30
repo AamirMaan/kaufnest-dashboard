@@ -2,6 +2,7 @@
 
 import type { Currency } from "@/types";
 import { Button } from "@/components/ui/Button";
+import { formatDate } from "@/lib/utils/date";
 import { seriesColor } from "../_lib/chartPalette";
 import type { PlatformStat } from "../_lib/platformStats";
 import { platformLabel } from "../_lib/recentOrderDisplay";
@@ -17,12 +18,15 @@ export function PlatformStatsCard({
   stat,
   index,
   currency,
+  asOf,
   onRecordTransfer,
 }: {
   stat: PlatformStat;
   /** Position in the list — picks a fallback dot colour for unknown platforms. */
   index: number;
   currency: Currency;
+  /** ISO date the running "still in account" balance runs up to. */
+  asOf: string;
   /** Admin-only, eBay/Amazon only; the button is hidden when omitted. */
   onRecordTransfer?: () => void;
 }) {
@@ -39,8 +43,8 @@ export function PlatformStatsCard({
         { label: "Platform fees", value: kit.money(-b.platformFees), tone: "text-(--color-danger)" },
         // Expense records whose vendor/title names the platform — not per-order fees.
         { label: `Expenses tagged ${name}`, value: kit.money(-b.expenses), tone: "text-(--color-danger)" },
-        { label: "Balance earned", value: kit.money(b.balance) },
-        { label: "Transferred", value: kit.money(b.transferred) },
+        { label: "Balance earned (period)", value: kit.money(b.balance) },
+        { label: "Transferred (period)", value: kit.money(b.transferred) },
       ]
     : [];
 
@@ -75,6 +79,10 @@ export function PlatformStatsCard({
           <div className="mt-4 pt-4 border-t border-(--color-border) flex items-end justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs text-(--color-text-muted)">Still in {name} account</p>
+              {/* Running balance to date; falls back to this period's figure if 054's RPC failed. */}
+              <p className="text-[11px] text-(--color-text-faint)">
+                {b.pendingIsRunning ? `as of ${formatDate(asOf)}` : "this period only"}
+              </p>
               <p className={`text-lg font-bold tabular-nums ${b.pending >= 0 ? "text-(--color-warning)" : "text-(--color-danger)"}`}>
                 {kit.money(b.pending)}
               </p>
