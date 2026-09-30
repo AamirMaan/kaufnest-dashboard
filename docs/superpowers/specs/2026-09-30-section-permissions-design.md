@@ -7,7 +7,7 @@ Sub-project 1 of 2 from the request "a permission section to manage permission a
 ## Problem
 
 - Access is role-based (`accountant` / `admin` / `super_admin`) with additive per-user `permission_overrides` (`src/lib/utils/permissions.ts`, Users → Permissions modal). Overrides can only **add**; nothing can be taken away from a role.
-- Most data has **no read restriction at all**: `sales`, `expenses`, `purchases`, `products`, `platform_payouts`, `dropship_listings`, `shipments`, `company_profile`, the `stock_*` tables are readable by every tenant member (RLS checks only `is_tenant_member()`); Home, Analytics, Inventory and Settings are reachable by every role.
+- Most data has **no read restriction at all**: `sales`, `expenses`, `purchases`, `products`, `platform_payouts`, `shipments`, `company_profile`, the `stock_*` tables are readable by every tenant member (RLS checks only `is_tenant_member()`); Home, Analytics, Inventory and Settings are reachable by every role.
 - The tenant owner cannot, for example, hide Analytics from a bookkeeper or make Purchases read-only for one user.
 
 ## Decisions (agreed 2026-09-30)
@@ -39,13 +39,14 @@ Defaults reproduce **today's effective behaviour exactly**, so shipping the data
 | `integrations` | Integrations | `/dashboard/integrations`, Review Orders | `platform_connections` | 0, 2 | 0 | 2 |
 | `listings` | Listings | `/dashboard/listings` | `ebay_listing_drafts` | 0, 2 | 0 | 2 |
 | `messages` | Messages | `/dashboard/messages` | `ebay_messages` | 0, 2 | 0 | 2 |
-| `dropshipping` | Dropshipping | `/dashboard/dropshipping` (refresh = Edit) | `dropship_listings` | 0, 1, 2 | 1 | 2 |
 | `audit_logs` | Audit logs | `/dashboard/audit-logs` | `audit_logs` (SELECT; INSERT stays open to members — every mutation writes a row) | 0, 1 | 0 | 1 |
 | `settings` | Settings | `/dashboard/settings` (company, invoice, billing) | `company_profile` | 0, 1, 2 | 1 | 2 |
 
-Current-behaviour notes behind the defaults: accountants today can create/update sales/expenses/purchases/products but not delete them; payouts insert/delete are admin-only; company profile update is admin-only; integrations/listings/messages are admin-only; dropshipping is readable by all, refresh is admin-only; the Analytics route is open to all roles today (the unused `view_analytics` permission is dropped).
+Current-behaviour notes behind the defaults: accountants today can create/update sales/expenses/purchases/products but not delete them; payouts insert/delete are admin-only; company profile update is admin-only; integrations/listings/messages are admin-only; the Analytics route is open to all roles today (the unused `view_analytics` permission is dropped).
 
-**Outside the grid:** Support (all users, unchanged); Notifications (follow sections, §4); Users & Permissions pages and `profiles` management (super_admin only — today's grantable `manage_users`/`invite_user`/`change_user_role` overrides are retired; none are in use).
+**Dropshipping is not a tenant section:** `proxy.ts` restricts `/dashboard/dropshipping` to platform admins (Boughtopia staff) and `dropship_listings` exists only in `tenant_kaufnest` (verified live 2026-09-30). Its gate and policies are left unchanged.
+
+**Outside the grid:** Support (all users, unchanged); Planner (a calculator — reads no tenant data); Dropshipping (platform staff only, above); Notifications (follow sections, §4); Users & Permissions pages and `profiles` management (super_admin only — today's grantable `manage_users`/`invite_user`/`change_user_role` overrides are retired; none are in use).
 
 **Plan ceiling:** plan gates (`src/lib/utils/planGating.ts`) are applied on top — an exception can never unlock a feature the tenant's plan lacks (Integrations: Pro+Business; Listings/Messages: Business; advanced-inventory UI: Business).
 
@@ -53,17 +54,28 @@ Current-behaviour notes behind the defaults: accountants today can create/update
 
 ## 2. Database — migration `055_section_permissions.sql`
 
-All via `run_on_all_tenant_schemas` **and** mirrored in `provision_tenant_schema()` (005; `format()` copy → no literal percent signs).
+**Shape: one reusable installer.** 055 defines `public.install_section_permissions(schema_name text)` (plpgsql, `REVOKE ALL … FROM PUBLIC, anon, authenticated`, like `install_advanced_inventory`) holding everything below, then runs it for every tenant schema. It is idempotent (`CREATE OR REPLACE`, `DROP POLICY IF EXISTS`), skips tables a tenant lacks (`to_regclass`), and is also called:
+- at the end of `provision_tenant_schema()` (005), after `install_advanced_inventory`, guarded by `to_regprocedure` like that call — so new tenants get it;
+- at the end of `install_advanced_inventory()` (047) — that installer re-creates its own `stock_*` policies every time it runs and would otherwise silently revert them.
+
+This replaces "mirror every statement into 005's `format()` copy": the rule set lives in one function.
 
 - **Table** `{{schema}}.user_section_access`:
-  `user_id uuid REFERENCES {{schema}}.profiles(id) ON DELETE CASCADE`, `section text NOT NULL CHECK (section IN (…13 keys…))`, `level smallint NOT NULL CHECK (level BETWEEN 0 AND 3)`, `updated_at timestamptz DEFAULT now()`, `updated_by uuid`, `PRIMARY KEY (user_id, section)`. RLS: SELECT own rows or super_admin; INSERT/UPDATE/DELETE super_admin only. A trigger rejects a row for a super_admin user and a level not allowed for the section (§1 "Allowed levels").
+  `user_id uuid REFERENCES {{schema}}.profiles(id) ON DELETE CASCADE`, `section text NOT NULL CHECK (section IN (…12 keys…))`, `level smallint NOT NULL CHECK (level BETWEEN 0 AND 3)`, `updated_at timestamptz DEFAULT now()`, `updated_by uuid`, `PRIMARY KEY (user_id, section)`. RLS: SELECT own rows or super_admin; INSERT/UPDATE/DELETE super_admin only. A trigger rejects a row for a super_admin user and a level not allowed for the section (§1 "Allowed levels").
 - **`{{schema}}.role_section_default(p_role text, p_section text) RETURNS smallint`** — `IMMUTABLE`, a `CASE` over §1's table; unknown → 0. The single SQL source of defaults.
 - **`{{schema}}.current_user_access(p_section text) RETURNS smallint`** — `STABLE SECURITY DEFINER SET search_path = {{schema}}`: super_admin → 3; `profiles.status = 'deactivated'` → 0; else `coalesce(exception, role_section_default(role, section))`. Built on the existing `current_user_role()`.
-- **`{{schema}}.get_my_access() RETURNS jsonb`** — `{section: level}` for all 13 sections for the caller (client hydration).
-- **RLS rewrite** (DROP + CREATE each policy, idempotent): per table in §1, `SELECT` → `current_user_access(s) >= 1`, `INSERT`/`UPDATE` → `>= 2`, `DELETE` → `>= 3`, each still `AND is_tenant_member()`. Tables currently using `FOR ALL` admin policies (`platform_connections`, `ebay_listing_drafts`, `ebay_messages`, `stock_locations_write_admin`, `platform_location_defaults_write_admin`) are split per command. `shipments` follows `orders`. `profiles` policies unchanged.
-- **Totals RPCs become definer-with-guard:** `get_sales_overview`, `get_expenses_overview`, `get_purchases_overview`, `get_payouts_overview`, `get_overview_timeseries`, `get_sales_by_marketplace`, `get_platform_running_balance` are redefined `SECURITY DEFINER SET search_path = {{schema}}` and return `NULL` unless `greatest(current_user_access('overview'), current_user_access('analytics')) >= 1`. Bodies otherwise unchanged (same signatures). `REVOKE EXECUTE … FROM PUBLIC, anon`; `GRANT … TO authenticated`.
+- **`{{schema}}.get_my_access() RETURNS jsonb`** — `{section: level}` for all 12 sections for the caller (client hydration).
+- **RLS rewrite** (idempotent): for each governed table the installer **drops every existing policy** (looping `pg_policies`, so no stale permissive policy can survive and widen access) and recreates the set: `SELECT` → `current_user_access(s) >= 1`, `INSERT`/`UPDATE` → `>= 2`, `DELETE` → `>= 3`, each still `AND is_tenant_member()`. `FOR ALL` admin policies are split per command. Exceptions that keep today's behaviour exactly:
+  - `shipments` INSERT (buying a label spends money; admin-only today) → `orders >= 3`.
+  - `stock_locations`, `platform_location_defaults` writes (admin config today) → `inventory >= 3`.
+  - `stock_transfers` INSERT → `inventory >= 2 AND created_by = auth.uid()`; DELETE (undo) → `inventory >= 2` (any member today).
+  - `company_profile` SELECT stays open to every member (invoices on the Orders page read it); INSERT/UPDATE → `settings >= 2`.
+  - `audit_logs` INSERT stays open to every member.
+  - `profiles` policies unchanged; `dropship_listings` untouched.
+- **Totals RPCs become definer-with-guard, without copying their bodies:** for each of `get_sales_overview`, `get_expenses_overview`, `get_purchases_overview`, `get_payouts_overview`, `get_overview_timeseries`, `get_sales_by_marketplace`, `get_platform_running_balance` the installer renames the existing function to `<name>__impl`, marks it `SECURITY DEFINER SET search_path = <schema>` and revokes EXECUTE from `PUBLIC, anon, authenticated`; then creates `<name>` with the **same signature** as a `SECURITY DEFINER` SQL wrapper that returns `<name>__impl(args)` only when `greatest(current_user_access('overview'), current_user_access('analytics')) >= 1` (jsonb functions → `NULL`, table functions → no rows). The wrapper carries `COMMENT … IS 'section-permissions guard'`; on re-run the installer skips wrapped functions and re-wraps any that a later `CREATE OR REPLACE` migration replaced (dropping the stale `__impl` first). **Future edits to a totals function go into `<name>__impl`** — recorded as a gotcha in `dashboard/SKILL.md` and `supabase/SKILL.md`.
 - **Page totals stay invoker** (`get_sales_summary`, `get_purchases_summary`, `get_expenses_summary`, `get_sales_marketplaces`) → follow the page's RLS.
-- **Notifications:** add `required_section text` to `notifications`, backfill from `type` (`sale.created`→`orders`, `purchase.created`→`purchases`, `message.received`→`messages`), set it in the three `notify_*` triggers; `notifications_select` becomes `required_section IS NULL OR current_user_access(required_section) >= 1`. `visible_to_roles` / `required_permission` are kept but no longer read.
+- **Notifications:** `{{schema}}.notification_section(p_type text) RETURNS text` (`IMMUTABLE`; `sale.created`→`orders`, `purchase.created`→`purchases`, `message.received`→`messages`, else NULL); `notifications_select` becomes `current_user_role() = ANY(visible_to_roles) AND (notification_section(type) IS NULL OR current_user_access(notification_section(type)) >= 1)` — today's role list still applies, the section check narrows it. No column or trigger change; `visible_to_roles` / `required_permission` stay but are no longer read.
+- **Role change cleanup:** an `AFTER UPDATE OF role ON profiles` trigger deletes that user's exceptions whose level now equals the new role's default (and all of them when the new role is super_admin) — covers every path that changes a role (Users page inline select, Edit User modal).
 - **Legacy:** `current_user_has_override()` and `profiles.permission_overrides` stay (unused) for one release; removed in a later cleanup migration.
 
 ## 3. App
@@ -71,8 +83,8 @@ All via `run_on_all_tenant_schemas` **and** mirrored in `provision_tenant_schema
 - **`src/lib/permissions/sections.ts`** (pure, client-safe, colocated test): `SECTIONS` (key, label, allowed levels, route prefixes, plan gate), `LEVELS`, `ROLE_DEFAULTS` (mirror of SQL), `effectiveAccess(role, exceptions, plan) → Record<Section, Level>` (super_admin → max; plan ceiling), `sectionForPath(pathname)`, `can(access, section, level)`.
 - **`currentUserSlice.access`**: hydrated in `dashboard/layout.tsx` from `get_my_access()` (plan ceiling applied client-side with the already-hydrated `tenantPlan`); `useAccess()` hook returns `{ level(section), can(section, level) }`.
 - **`src/proxy.ts`**: for `/dashboard/*`, resolve `sectionForPath`; if access < 1 → redirect to `/dashboard?denied=<section>` (Home shows a toast), or to the first viewable section when `overview` itself is 0. `/dashboard/users*` → super_admin only.
-- **Sidebar** hides level-0 sections. **Buttons**: Add/Import need ≥ 2, Edit ≥ 2, Delete ≥ 3, Record Transfer `payouts` ≥ 2, Generate label `orders` ≥ 2, Refresh (dropshipping) ≥ 2; Home's Recent Orders card needs `orders` ≥ 1; the order form's Inventory product picker needs `inventory` ≥ 1 (otherwise free-text product name only).
-- **Server guards** (`src/lib/integrations/authGuard.ts`, `src/lib/ai/authGuard.ts`, listings/messages routes, shipping guard): replace `hasPermission(role, …)` with a `current_user_access(section)` RPC call through the tenant client (integrations/listings/messages ≥ 2; AI: `listings` ≥ 2; shipping: `orders` ≥ 2).
+- **Sidebar** hides level-0 sections. **Buttons**: Add/Import need ≥ 2, Edit ≥ 2, Delete ≥ 3, Record Transfer `payouts` ≥ 2, Generate/buy label `orders` ≥ 3 (the free plain PDF label needs `orders` ≥ 1); Home's Recent Orders card needs `orders` ≥ 1; the order form's Inventory product picker needs `inventory` ≥ 1 (otherwise free-text product name only).
+- **Server guards:** new `src/lib/permissions/requireSectionAccess.ts` — `requireSectionAccess(section, minLevel)` returns the same `{ context: { client, userId, tenantSchema } } | { error }` shape as `requireIntegrationAdmin()`, deciding via the `current_user_access` RPC. `requireIntegrationAdmin()` becomes `requireSectionAccess("integrations", 2)`; the 8 listings/messages routes replace their `requireIntegrationAdmin()` + inline `hasPermission` pair with `requireSectionAccess("listings" | "messages", 2)`; `requireAiAccess()` uses `listings` ≥ 2; `/api/shipping/{rates,buy}` use `orders` ≥ 3 (matches the `shipments` INSERT rule; plus the existing `requireShippingLabelAccess`).
 - **Retire** `PERMISSIONS`/`hasPermission`/`canAccessRoute` and `PermissionsModal.tsx` once no caller remains (`hasMinimumRole` stays if still used).
 
 ## 4. Permissions screen
@@ -81,7 +93,7 @@ All via `run_on_all_tenant_schemas` **and** mirrored in `provision_tenant_schema
 - Header: back link (`<ChevronLeft/> Users`), name · role, `Reset to role defaults` (secondary; confirm modal).
 - Grid: one radio row per section, disallowed levels rendered "─"; cells differing from the role default marked **custom · role default: X**; plan-gated sections disabled with "Not in your plan".
 - Save: real `<form>`, submit disabled until dirty, "Saving…" busy state, toast on success/failure. Writes only differences: upsert changed exceptions, delete rows whose level equals the role default. Audit log entry (`action: "update"`, entity `user_access`, before/after grids).
-- Super_admin rows cannot be opened. Role change keeps exceptions; any that now equal the new role default are deleted in the same operation (Edit User modal).
+- Super_admin rows cannot be opened. Role change keeps exceptions; any that now equal the new role default are deleted by the database trigger (§2).
 - Pure helper `diffAccess(roleDefaults, current, edited) → { upserts, deletes }` in `users/_lib/` with a colocated test.
 
 ## 5. Rollout
