@@ -66,7 +66,7 @@ describe("buildKpis", () => {
   });
 
   it("hides the orders delta when previous lacks effective_orders (RPC before 054)", () => {
-    const { effective_orders: _omit, ...pre054 } = timeseries.previous!;
+    const pre054 = { ...timeseries.previous!, effective_orders: undefined };
     const k2 = buildKpis({ sales, expenses, purchases, timeseries: { ...timeseries, previous: pre054 }, trailing });
     expect(k2.orders.delta).toBeNull();
   });
