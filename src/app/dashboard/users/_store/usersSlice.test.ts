@@ -69,7 +69,7 @@ describe("usersSlice", () => {
     expect(state.items[0].role).toBe("accountant");
   });
 
-  it("updates a user's permission_overrides via updateUser (used by the Permissions modal)", () => {
+  it("updates a user's permission_overrides via updateUser (legacy field, column still exists but unused)", () => {
     const initial = reducer(
       undefined,
       hydrateUsers([makeProfile({ id: "u1", role: "accountant", permission_overrides: [] })])

@@ -17,8 +17,9 @@ config point at).
 - **Set-password / accept-invite flow**: `set-password/page.tsx` AND
   `src/app/auth/confirm/route.ts` (the redirect that lands users here)
 - **Invite email content**: `email-templates/` (project root) — NOT this folder
-- **Who can access what after login**: `src/lib/utils/permissions.ts` and
-  `src/proxy.ts` — NOT this folder (these pages are intentionally public)
+- **Who can access what after login**: `src/lib/permissions/sections.ts`,
+  `src/proxy.ts`, and `src/store/useAccess.ts` — NOT this folder (these
+  pages are intentionally public)
 
 ## Test command
 
