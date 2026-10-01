@@ -23,3 +23,23 @@ export function diffAccess(role: UserRole, saved: AccessMap, edited: AccessMap) 
 export function customSections(role: UserRole, grid: AccessMap): Section[] {
   return SECTION_KEYS.filter((k) => grid[k] !== ROLE_DEFAULTS[role][k]);
 }
+
+/** Sections whose Edit level requires Integrations: Edit (055's current_user_access dependency rule). */
+const NEEDS_INTEGRATIONS: Section[] = ["listings", "messages"];
+
+/**
+ * Set one cell. Lowering Integrations below Edit also zeroes Listings and
+ * Messages, so the editor never shows a grant the DB would ignore.
+ */
+export function withLevel(grid: AccessMap, section: Section, level: AccessLevel): AccessMap {
+  const next = { ...grid, [section]: level };
+  if (section === "integrations" && level < 2) {
+    for (const k of NEEDS_INTEGRATIONS) next[k] = 0;
+  }
+  return next;
+}
+
+/** True when this radio is locked because Integrations is below Edit. */
+export function needsIntegrations(grid: AccessMap, section: Section, level: AccessLevel): boolean {
+  return NEEDS_INTEGRATIONS.includes(section) && level >= 2 && grid.integrations < 2;
+}

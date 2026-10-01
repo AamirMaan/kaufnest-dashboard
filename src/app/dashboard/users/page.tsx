@@ -19,8 +19,9 @@ import { Pencil, RefreshCw, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
+import { fetchAllRows } from "@/lib/utils/fetchAllRows";
 import { formatDateTime } from "@/lib/utils/date";
-import type { AccessLevel, Section } from "@/lib/permissions/sections";
+import { SECTION_KEYS, type AccessLevel, type Section } from "@/lib/permissions/sections";
 import type { Profile, UserRole } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -48,20 +49,31 @@ export default function UsersPage() {
 
   // Which users have a per-user section-access exception (shown as a "Custom
   // access" badge in the Role column). Bounded: at most 12 rows per user (one
-  // per section) × users.length — never a growth-unbounded read.
+  // per section) × users.length — never a growth-unbounded read, but that
+  // product can still exceed PostgREST's Max Rows (silent truncation), so
+  // it is paged with fetchAllRows.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       const supabase = await createTenantClient();
-      const { data } = await supabase
-        .from("user_section_access")
-        .select("user_id, section, level");
+      type Row = { user_id: string; section: Section; level: AccessLevel };
+      const data = await fetchAllRows<Row>(
+        async (from, to) =>
+          await supabase
+            .from("user_section_access")
+            .select("user_id, section, level", { count: "exact" })
+            .order("user_id", { ascending: true })
+            .order("section", { ascending: true })
+            .range(from, to)
+            .returns<Row[]>(),
+        Math.max(users.length, 1) * SECTION_KEYS.length
+      );
 
-      if (cancelled || !data) return;
+      if (cancelled) return;
 
       const rowsByUser = new Map<string, { section: Section; level: AccessLevel }[]>();
-      for (const row of data as { user_id: string; section: Section; level: AccessLevel }[]) {
+      for (const row of data) {
         const list = rowsByUser.get(row.user_id) ?? [];
         list.push({ section: row.section, level: row.level });
         rowsByUser.set(row.user_id, list);

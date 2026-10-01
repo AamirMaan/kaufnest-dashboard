@@ -14,6 +14,7 @@ deactivate/reactivate a user's dashboard access.
   `page`/`pageSize` state (default 25 rows/page) slicing `state.users.items`;
   renders `<Pagination>` (`@/components/ui/Pagination`) below the
   `DataTable`. Also loads **every** `user_section_access` row once on mount
+  (via `fetchAllRows`, `@/lib/utils/fetchAllRows`)
   (`user_id, section, level` — bounded: ≤ 12 rows per user × `users.length`,
   never a growth-unbounded read) and, for each user, overlays it onto their
   role defaults via `exceptionsToGrid`/`customSections` to compute which
@@ -46,7 +47,10 @@ deactivate/reactivate a user's dashboard access.
   write on save (a cell back at the role default is a delete, not a zero-level
   upsert), `customSections(role, grid)` lists sections differing from the
   role default (drives both the list page's badge and the editor's per-row
-  "custom" badge).
+  "custom" badge), `withLevel(grid, section, level)` sets one cell and zeroes
+  Listings/Messages when Integrations drops below Edit, and
+  `needsIntegrations(grid, section, level)` says whether a Listings/Messages
+  radio is locked by that dependency.
 - `_components/InviteUserModal.tsx` — sends an invite (calls the API route below),
   then dispatches `addUser`.
 - `_components/EditUserModal.tsx` — edits profile fields and/or role, dispatches `updateUser`.
@@ -64,7 +68,11 @@ deactivate/reactivate a user's dashboard access.
   Otherwise: fetches this user's stored exceptions
   (`user_section_access.select("section, level").eq("user_id", id)` —
   bounded ≤ 12 rows, one per `Section`), builds `saved = exceptionsToGrid
-  (role, rows)`, and seeds `edited` from it. Renders a table: rows =
+  (role, rows)`, and seeds `edited` from it. A load error shows
+  "Couldn't load this user's permissions." + Retry — no grid, no Save, never
+  a role-defaults fallback; a failed save re-fetches the rows. Listings/
+  Messages' Edit radios are disabled with a "Needs Integrations: Edit" note
+  while `edited.integrations < 2`. Renders a table: rows =
   `SECTIONS` (`@/lib/permissions/sections`), columns = None/View/Edit/Delete
   radios (only for levels in that section's `levels`, else "─"). A section
   not allowed on the tenant's plan (`!planAllows(key, tenantPlan)`) is

@@ -131,3 +131,45 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   inserting a second `profiles` row and re-stamping `tenant_schema` to this
   tenant (which would silently move that user out of their original tenant).
   `usersSlice.addUser` also dedupes by `id` as a second line of defense.
+- **Permission-change audit entries are `entityType: "user"`** with
+  `metadata.user_access: { before, after }` (full grids) — deliberate: the
+  change is about a user, and the Audit Logs viewer already filters/links by
+  user. Don't invent a new entity type for it.
+- **Granting Audit logs: View exposes other sections' data.** Audit entries
+  carry before/after payloads of the records they describe, so a user with
+  Audit logs: View but Orders: None can still read order values through the
+  trail. Warn the account owner before granting it on its own.
+- **Listings/Messages depend on Integrations: Edit** (055's
+  `current_user_access` wraps `current_user_access_base`; TS mirror
+  `applyDependencies()` in `src/lib/permissions/sections.ts`). The editor
+  disables their Edit radios below Integrations: Edit
+  (`needsIntegrations()`), and lowering Integrations zeroes both in `edited`
+  (`withLevel()`, `_lib/accessDiff.ts`). Stored rows that become ineffective
+  are left alone — the DB ignores them.
+- **The Permissions screen never shows role defaults on a load error** — it
+  renders "Couldn't load…" + Retry (no grid, no Save), since saving over a
+  defaults grid would wipe real exceptions. A failed save also re-fetches
+  (`reloadKey`), because the delete can succeed before the upsert fails.
+- **The list page's `user_section_access` read goes through `fetchAllRows`**
+  (≤ 12 × users rows can still exceed PostgREST Max Rows; ordered by
+  `user_id, section` for stable paging).
+- **Only the super_admin (or the server) can change `profiles.role`/
+  `status`/`permission_overrides`** — the `profiles_guard_privileged_fields`
+  trigger (055) raises `PROFILE_PRIVILEGED_FIELDS` otherwise. Every app path
+  that writes those fields is either on this super_admin-only page/
+  `EditUserModal` or a service-role insert (invite/provision).
+
+## Manual acceptance checklist (section permissions)
+
+Run against a real tenant after 055/047/048 are re-applied:
+
+- A non-super_admin cannot write `user_section_access` (insert/update/
+  delete from their session) — expect an RLS error.
+- An exception row for a super_admin user is rejected — expect
+  `SECTION_ACCESS_SUPER_ADMIN`.
+- A user cannot change their own role (e.g. an admin `update profiles set
+  role = 'super_admin' where id = auth.uid()`) — expect
+  `PROFILE_PRIVILEGED_FIELDS`. Same for `status` and
+  `permission_overrides`; editing their own `full_name` still works.
+- An accountant with Listings: Edit but Integrations: None gets 0 for
+  Listings from `get_my_access()` and can't reach `/dashboard/listings`.

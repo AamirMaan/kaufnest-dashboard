@@ -72,6 +72,16 @@ export function applyPlanCeiling(access: AccessMap, plan: TenantPlan | null): Ac
   ) as AccessMap;
 }
 
+/**
+ * Cross-section dependency rule (user ruling 2026-09-30): Listings and
+ * Messages need Integrations: Edit — below it they are 0 whatever is stored.
+ * Mirrors current_user_access() wrapping current_user_access_base() (055).
+ */
+export function applyDependencies(access: AccessMap): AccessMap {
+  if (access.integrations >= 2) return access;
+  return { ...access, listings: 0, messages: 0 };
+}
+
 const isAllowed = (section: Section, v: unknown): v is AccessLevel =>
   typeof v === "number" && (SECTIONS.find((s) => s.key === section)!.levels as number[]).includes(v);
 
@@ -84,16 +94,16 @@ export function effectiveAccess(role: UserRole, exceptions: Partial<AccessMap>, 
       return [k, isAllowed(k, e) ? e : base[k]];
     })
   ) as AccessMap;
-  return applyPlanCeiling(merged, plan);
+  return applyPlanCeiling(applyDependencies(merged), plan);
 }
 
 /** Validate get_my_access() JSON; any missing/invalid key falls back to the role default. */
 export function parseAccessMap(raw: unknown, fallbackRole: UserRole): AccessMap {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const base = ROLE_DEFAULTS[fallbackRole] ?? ROLE_DEFAULTS.accountant;
-  return Object.fromEntries(
+  return applyDependencies(Object.fromEntries(
     SECTION_KEYS.map((k) => [k, isAllowed(k, obj[k]) ? obj[k] : base[k]])
-  ) as AccessMap;
+  ) as AccessMap);
 }
 
 export function sectionForPath(pathname: string): Section | "users" | null {

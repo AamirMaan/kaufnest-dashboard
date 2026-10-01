@@ -50,7 +50,9 @@ Current-behaviour notes behind the defaults: accountants today can create/update
 
 **Plan ceiling:** plan gates (`src/lib/utils/planGating.ts`) are applied on top — an exception can never unlock a feature the tenant's plan lacks (Integrations: Pro+Business; Listings/Messages: Business; advanced-inventory UI: Business).
 
-**Billing** stays additionally gated to admin/super_admin roles by `requireBillingAdmin()` (Stripe checkout/plan change is not a grid permission).
+**Billing** stays additionally gated to admin/super_admin roles by `requireBillingAdmin()` (Stripe checkout/plan change is not a grid permission), and also requires Settings: Edit (`current_user_access('settings') >= 2`) — the same rule drives `/api/billing/status`'s `canManageBilling`.
+
+**Dependency rule (user ruling, final review 2026-10-01):** Listings and Messages require Integrations: Edit. `current_user_access(p_section)` returns 0 for `listings`/`messages` whenever `current_user_access_base('integrations') < 2`, whatever is stored — so a stored row can never make it otherwise. The TS mirror is `applyDependencies()` in `src/lib/permissions/sections.ts` (applied by `effectiveAccess` and `parseAccessMap`). The Permissions screen disables Listings/Messages Edit below Integrations: Edit ("Needs Integrations: Edit") and zeroes them when Integrations is lowered.
 
 ## 2. Database — migration `055_section_permissions.sql`
 

@@ -1,5 +1,5 @@
 import {
-  SECTIONS, SECTION_KEYS, ROLE_DEFAULTS, maxLevel, planAllows, applyPlanCeiling,
+  SECTIONS, SECTION_KEYS, ROLE_DEFAULTS, maxLevel, planAllows, applyPlanCeiling, applyDependencies,
   effectiveAccess, parseAccessMap, sectionForPath, can, canSeeSection, firstAccessiblePath, deniedRedirect, type AccessMap,
 } from "./sections";
 
@@ -56,6 +56,26 @@ describe("sections model", () => {
     expect(parseAccessMap({ ...ROLE_DEFAULTS.accountant, orders: 0 }, "accountant").orders).toBe(0);
     expect(parseAccessMap({ orders: 7, analytics: "x" }, "accountant")).toMatchObject({ orders: 2, analytics: 1 });
     expect(parseAccessMap(null, "admin")).toEqual(ROLE_DEFAULTS.admin);
+  });
+
+  it("applyDependencies: Listings/Messages need Integrations: Edit", () => {
+    const full = { ...ROLE_DEFAULTS.admin };
+    expect(applyDependencies(full)).toEqual(full);
+    const noInt = applyDependencies({ ...full, integrations: 0 });
+    expect(noInt).toMatchObject({ integrations: 0, listings: 0, messages: 0, orders: 3 });
+    // Pure: input untouched.
+    const input = { ...full, integrations: 0 as const };
+    applyDependencies(input);
+    expect(input.listings).toBe(2);
+  });
+
+  it("effectiveAccess and parseAccessMap apply the Integrations dependency", () => {
+    expect(effectiveAccess("accountant", { listings: 2, messages: 2 }, "business")).toMatchObject({ listings: 0, messages: 0 });
+    expect(effectiveAccess("accountant", { integrations: 2, listings: 2 }, "business")).toMatchObject({ integrations: 2, listings: 2, messages: 0 });
+    expect(effectiveAccess("admin", { integrations: 0 }, "business")).toMatchObject({ listings: 0, messages: 0 });
+    expect(parseAccessMap({ ...ROLE_DEFAULTS.admin, integrations: 0 }, "admin")).toMatchObject({ listings: 0, messages: 0 });
+    // Fallback values are subject to the rule too (integrations invalid → accountant default 0).
+    expect(parseAccessMap({ integrations: "x", listings: 2 }, "accountant")).toMatchObject({ integrations: 0, listings: 0 });
   });
 
   it("maps paths to sections", () => {

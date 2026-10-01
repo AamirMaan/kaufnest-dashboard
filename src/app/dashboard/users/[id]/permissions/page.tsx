@@ -20,8 +20,8 @@ import {
   type AccessMap,
   type Section,
 } from "@/lib/permissions/sections";
-import { exceptionsToGrid, diffAccess, customSections } from "../../_lib/accessDiff";
-import { ChevronLeft } from "lucide-react";
+import { exceptionsToGrid, diffAccess, customSections, withLevel, needsIntegrations } from "../../_lib/accessDiff";
+import { ChevronLeft, RefreshCw } from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -42,6 +42,10 @@ export default function UserPermissionsPage({ params }: PageProps) {
   const [saved, setSaved] = useState<AccessMap | null>(null);
   const [edited, setEdited] = useState<AccessMap | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  // Bumped to (re)fetch the stored rows: Retry after a load error, and after
+  // a failed save so saved/edited reflect what actually reached the DB.
+  const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
 
@@ -57,13 +61,24 @@ export default function UserPermissionsPage({ params }: PageProps) {
       }
 
       setLoading(true);
+      setLoadError(false);
       const supabase = await createTenantClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("user_section_access")
         .select("section, level")
         .eq("user_id", id);
 
       if (cancelled) return;
+
+      // Never fall back to role defaults on error — that would show (and let
+      // the user save over) a grid that isn't what's stored.
+      if (error) {
+        setSaved(null);
+        setEdited(null);
+        setLoadError(true);
+        setLoading(false);
+        return;
+      }
 
       const rows = (data ?? []) as { section: Section; level: AccessLevel }[];
       const grid = exceptionsToGrid(target.role, rows);
@@ -76,7 +91,7 @@ export default function UserPermissionsPage({ params }: PageProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, target?.role]);
+  }, [id, target?.role, reloadKey]);
   // ^ intentionally omit `target` itself — only the id/role identify what to
   //   (re)fetch; re-running on every Redux update to `target` would refetch
   //   on our own optimistic updates.
@@ -185,6 +200,9 @@ export default function UserPermissionsPage({ params }: PageProps) {
       success("Permissions saved", `${target.full_name || target.email}'s access has been updated.`);
     } catch {
       toastError("Couldn't save permissions", "Please try again.");
+      // A delete may have succeeded before the upsert failed — re-read so
+      // the grid shows what is actually stored.
+      setReloadKey((k) => k + 1);
     } finally {
       setSaving(false);
     }
@@ -205,13 +223,23 @@ export default function UserPermissionsPage({ params }: PageProps) {
           variant="secondary"
           type="button"
           onClick={() => setResetOpen(true)}
-          disabled={loading || !edited}
+          disabled={loading || loadError || !edited}
         >
           Reset to role defaults
         </Button>
       </div>
 
-      {loading || !edited ? (
+      {loadError ? (
+        <div className="space-y-3">
+          <p className="text-sm text-(--color-text-muted)">
+            Couldn&apos;t load this user&apos;s permissions.
+          </p>
+          <Button variant="secondary" type="button" onClick={() => setReloadKey((k) => k + 1)}>
+            <RefreshCw size={14} />
+            Retry
+          </Button>
+        </div>
+      ) : loading || !edited ? (
         <p className="text-sm text-(--color-text-muted)">Loading…</p>
       ) : (
         <form id="permissions-form" onSubmit={handleSave}>
@@ -251,6 +279,11 @@ export default function UserPermissionsPage({ params }: PageProps) {
                       <p className="text-xs text-(--color-text-faint) mt-0.5">
                         {section.description}
                       </p>
+                      {planOk && needsIntegrations(edited, section.key, 2) && (
+                        <p className="text-xs text-(--color-text-muted) mt-0.5">
+                          Needs Integrations: Edit
+                        </p>
+                      )}
                     </td>
                     {LEVELS.map((level) => (
                       <td key={level} className="text-center py-3 px-2 align-top">
@@ -260,9 +293,9 @@ export default function UserPermissionsPage({ params }: PageProps) {
                             name={section.key}
                             aria-label={`${section.label}: ${LEVEL_LABELS[level]}`}
                             checked={edited[section.key] === level}
-                            disabled={!planOk}
+                            disabled={!planOk || needsIntegrations(edited, section.key, level)}
                             onChange={() =>
-                              setEdited((prev) => (prev ? { ...prev, [section.key]: level } : prev))
+                              setEdited((prev) => (prev ? withLevel(prev, section.key, level) : prev))
                             }
                             className="h-4 w-4 text-(--color-primary) focus:outline-none focus:ring-2 focus:ring-(--color-primary) disabled:opacity-50"
                           />
@@ -279,7 +312,7 @@ export default function UserPermissionsPage({ params }: PageProps) {
         </form>
       )}
 
-      {!loading && edited && (
+      {!loading && !loadError && edited && (
         <div className="flex items-center gap-3 pt-2">
           <Button variant="secondary" type="button" onClick={() => router.push("/dashboard/users")}>
             Cancel
