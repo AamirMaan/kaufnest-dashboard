@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import Link from "next/link";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { updateUserRole, updateUser } from "./_store/usersSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -8,17 +9,18 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { Pagination } from "@/components/ui/Pagination";
-import { RoleBadge, StatusBadge } from "@/components/ui/Badge";
+import { Badge, RoleBadge, StatusBadge } from "@/components/ui/Badge";
 import { InviteUserModal } from "./_components/InviteUserModal";
 import { EditUserModal } from "./_components/EditUserModal";
-import { PermissionsModal } from "./_components/PermissionsModal";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { canDeactivateUser } from "./_lib/userStatusGuards";
+import { exceptionsToGrid, customSections } from "./_lib/accessDiff";
 import { Pencil, RefreshCw, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDateTime } from "@/lib/utils/date";
+import type { AccessLevel, Section } from "@/lib/permissions/sections";
 import type { Profile, UserRole } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -38,11 +40,47 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
-  const [permissionsTarget, setPermissionsTarget] = useState<Profile | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Profile | null>(null);
   const [changingRole, setChangingRole] = useState<string | null>(null);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
   const [reactivating, setReactivating] = useState<string | null>(null);
+  const [customAccessIds, setCustomAccessIds] = useState<Set<string>>(new Set());
+
+  // Which users have a per-user section-access exception (shown as a "Custom
+  // access" badge in the Role column). Bounded: at most 12 rows per user (one
+  // per section) × users.length — never a growth-unbounded read.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const supabase = await createTenantClient();
+      const { data } = await supabase
+        .from("user_section_access")
+        .select("user_id, section, level");
+
+      if (cancelled || !data) return;
+
+      const rowsByUser = new Map<string, { section: Section; level: AccessLevel }[]>();
+      for (const row of data as { user_id: string; section: Section; level: AccessLevel }[]) {
+        const list = rowsByUser.get(row.user_id) ?? [];
+        list.push({ section: row.section, level: row.level });
+        rowsByUser.set(row.user_id, list);
+      }
+
+      const custom = new Set<string>();
+      for (const u of users) {
+        const rows = rowsByUser.get(u.id);
+        if (!rows || rows.length === 0) continue;
+        const grid = exceptionsToGrid(u.role, rows);
+        if (customSections(u.role, grid).length > 0) custom.add(u.id);
+      }
+      setCustomAccessIds(custom);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [users]);
 
   const pagedUsers = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -167,7 +205,12 @@ export default function UsersPage() {
     },
     {
       header: "Role",
-      render: (p: Profile) => <RoleBadge role={p.role} />,
+      render: (p: Profile) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <RoleBadge role={p.role} />
+          {customAccessIds.has(p.id) && <Badge label="Custom access" variant="info" />}
+        </div>
+      ),
     },
     {
       header: "Status",
@@ -207,14 +250,15 @@ export default function UsersPage() {
             <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit user">
               <Pencil size={15} className="text-blue-500" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setPermissionsTarget(p)}
-              title="Manage permissions"
-            >
-              <ShieldCheck size={15} className="text-emerald-500" />
-            </Button>
+            {p.role !== "super_admin" && (
+              <Link
+                href={`/dashboard/users/${p.id}/permissions`}
+                title="Manage permissions"
+                className="inline-flex items-center justify-center gap-1.5 rounded-(--radius-btn) p-1.5 text-xs font-semibold transition-colors cursor-pointer text-(--color-text-muted) hover:text-(--color-text-base) hover:bg-(--color-surface-subtle)"
+              >
+                <ShieldCheck size={15} className="text-emerald-500" />
+              </Link>
+            )}
             <Button
               size="icon"
               variant="ghost"
@@ -275,11 +319,6 @@ export default function UsersPage() {
       />
       <InviteUserModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
       <EditUserModal key={editTarget?.id ?? "edit-user"} user={editTarget} onClose={() => setEditTarget(null)} />
-      <PermissionsModal
-        key={permissionsTarget?.id ?? "permissions"}
-        user={permissionsTarget}
-        onClose={() => setPermissionsTarget(null)}
-      />
       <DeleteConfirmModal
         open={!!deactivateTarget}
         title="Deactivate User"

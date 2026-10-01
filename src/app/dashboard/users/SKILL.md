@@ -15,24 +15,23 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
 - **Invite flow / invite form fields**: `_components/InviteUserModal.tsx` AND
   `src/app/api/users/invite/route.ts` (the server-side half of the flow).
 - **Edit profile / change role UI**: `_components/EditUserModal.tsx`.
-- **Per-user permission overrides / Permissions modal**:
-  `_components/PermissionsModal.tsx` (grouping/labels come from
-  `ALL_PERMISSIONS`/`PERMISSION_LABELS` in `lib/utils/permissions.ts`, don't
-  hardcode a second list here). If you add a new `Permission` key to
-  `PERMISSIONS` in `permissions.ts`, also add it to `PERMISSION_LABELS`
-  (TS enforces this via `Record<Permission, string>`) and to one of the
-  `PERMISSION_GROUPS` in `PermissionsModal.tsx` (NOT type-enforced — an
-  unlisted permission just won't show up in the modal, silently).
+- **Per-user section permissions / Permissions screen**:
+  `[id]/permissions/page.tsx` (the editor) + `_lib/accessDiff.ts` (the pure
+  overlay/diff helpers it and `page.tsx`'s "Custom access" badge both use).
+  The section list/labels/levels/role-defaults/plan-gating come from
+  `src/lib/permissions/sections.ts` — don't hardcode a second copy of
+  `SECTIONS`/`LEVEL_LABELS`/`ROLE_DEFAULTS` here. If you add a new `Section`
+  key there, it automatically appears as a row in this screen (the table
+  body is `SECTIONS.map(...)`) — nothing in this folder needs a matching
+  update unless the new section needs bespoke display text.
 - **Add a field to a user profile**: `src/types/index.ts` (`Profile`), both
   modals above, `_store/usersSlice.ts` only if the Redux shape changes, and
   `page.tsx` if it should render in the table.
-- **Role/permission rules**: `src/lib/utils/permissions.ts` (shared — also
-  drives route access in `src/proxy.ts`), not this folder. Adding a new
-  overridable capability to an EXISTING permission that's checked in RLS
-  (currently only `delete_sale`/`delete_expense`/`delete_purchase`) also
-  needs a matching RLS policy change — see `supabase/SKILL.md`'s "2 places"
-  rule and `023_user_permission_overrides.sql`. Permissions checked only in
-  application code need no DB change at all.
+- **Section/role access rules**: `src/lib/permissions/sections.ts` (shared —
+  also drives `src/proxy.ts`'s route guard and `useAccess()`'s button-level
+  gates everywhere else in the app), not this folder. A new section needs a
+  live DB counterpart too — see `supabase/SKILL.md`'s "2 places" rule and
+  migration `055_section_permissions.sql`'s `section_level_allowed` check.
 - **Pagination (client-side)**: `page.tsx` only — `page`/`pageSize` local state,
   `pagedUsers` useMemo slice, `<Pagination>` component. No slice changes needed.
 - **Deactivate/reactivate**: `page.tsx` (button + `writeStatusChange`),
@@ -51,14 +50,16 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
 - `usersSlice` is registered centrally in `src/store/store.ts` and hydrated in
   `src/store/StoreProvider.tsx` via the `@/app/dashboard/users/_store/usersSlice`
   alias — update those if you rename the slice file.
-- This page is gated to `super_admin` — check `lib/utils/permissions.ts` and
-  `s.currentUser.profile?.role` checks before changing access logic.
+- This page is gated to `super_admin` — check `src/proxy.ts`'s section guard
+  and `s.currentUser.profile?.role` checks before changing access logic.
 - Role changes must go through `writeAuditLog` with action `role_change` —
   this is the audit trail super-admins rely on to review who changed what.
-  Permission-override changes use action `permission_change`, status changes
-  (deactivate/reactivate) use `status_change` (also add to `ACTION_VARIANTS`
-  in `components/ui/Badge.tsx` if you add a new `AuditAction` — it's a
-  `Record<AuditAction, BadgeVariant>`, TS errors if you forget).
+  Section-permission changes use action `update` (`entityType: "user"`,
+  metadata key `user_access: { before, after }` — both full `AccessMap`s, not
+  a diff), status changes (deactivate/reactivate) use `status_change` (also
+  add to `ACTION_VARIANTS` in `components/ui/Badge.tsx` if you add a new
+  `AuditAction` — it's a `Record<AuditAction, BadgeVariant>`, TS errors if
+  you forget).
 - **Deactivating never deletes anything** — `sales`/`expenses`/`purchases`/
   `ebay_listing_drafts` all have `created_by uuid NOT NULL REFERENCES
   profiles(id)` with no `ON DELETE` action, so a hard delete of any profile
@@ -73,18 +74,36 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   or "can't deactivate yourself". If you're worried about a race (two
   super_admins deactivating different people simultaneously), that's a real
   gap, but matches this codebase's existing pattern of trusting the client
-  for role-adjacent guards (e.g. permission overrides) rather than
-  duplicating every check in RLS.
-- `PermissionsModal` reuses `usersSlice`'s generic `updateUser` action (full
-  profile replace) rather than a dedicated `updatePermissions` action — same
-  pattern as `EditUserModal`. Don't add a new slice action for this unless
-  the write shape actually diverges from "replace the whole profile row".
-- Overrides are **additive only**: the modal always renders a permission as
-  checked+disabled (not editable) when `hasPermission(user.role, permission)`
-  is already `true` from the role alone — there's no way to use this UI to
-  take a permission away from what the role grants. If a future ask is "let
-  a super_admin restrict what an admin can do below their role default",
-  that's a different (breaking) model change, not an extension of this one.
+  for role-adjacent guards rather than duplicating every check in RLS.
+- **Section permissions store exceptions only** — `user_section_access`
+  never holds a full copy of the grid, only cells that differ from
+  `ROLE_DEFAULTS[role]`. `diffAccess` is what turns "the user clicked a
+  radio back to the role default" into a `delete`, not a redundant upsert —
+  don't bypass it with a naive "upsert everything in `edited`" write, or
+  every user ends up with 12 stored rows instead of however many they
+  actually customized.
+- **Role-change cleanup of now-redundant exceptions is a DB trigger**
+  (migration 055), not application code — if you change a user's role on
+  this page or anywhere else, don't add client-side logic to prune their
+  `user_section_access` rows; the trigger already does it.
+- **`user_section_access` rows for a `super_admin` user are rejected by a DB
+  trigger** (`SECTION_ACCESS_SUPER_ADMIN`) — the Permissions screen mirrors
+  this by not rendering a grid at all for a super_admin target, and the list
+  page hides the "Manage permissions" link for super_admin rows for the same
+  reason. Don't remove either client-side guard thinking the DB will just
+  silently accept the write — it 403s.
+- **The plan ceiling on the Permissions screen is display-only** — a row for
+  a section the tenant's plan doesn't include (`!planAllows(...)`) is shown
+  disabled with a "Not in your plan" badge so a super_admin can still see
+  and set the role/exception value (it takes effect automatically if the
+  tenant upgrades), but nothing here enforces the ceiling at save time — the
+  same `applyPlanCeiling` that `useAccess()` applies elsewhere is what
+  actually blocks a plan-gated action.
+- `DeleteConfirmModal`'s new `requireReason` prop (Task 7) defaults `true` —
+  every pre-existing caller (this folder's Deactivate confirmation, Sales'
+  Delete Order, etc.) is unaffected. Only pass `requireReason={false}` for a
+  genuinely reversible, not-yet-committed confirmation like "Reset to role
+  defaults" where there's nothing yet to audit-log a reason against.
 - `src/app/api/users/invite/route.ts` invites users into the **caller's own**
   tenant (`user.app_metadata.tenant_schema`) — it 400s with a friendly message
   if that's missing (stale JWT from before Phase 2.3 stamping; user needs to
