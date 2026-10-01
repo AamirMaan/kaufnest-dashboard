@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
-import { hasPermission } from "@/lib/utils/permissions";
+import { requireSectionAccess } from "@/lib/permissions/requireSectionAccess";
 import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { replyToMessage } from "@/lib/integrations/ebay/messages";
@@ -8,18 +7,18 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import type { EbayMessage, Profile } from "@/types";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireIntegrationAdmin();
+  const auth = await requireSectionAccess("messages", 2);
   if (auth.error) return auth.error;
   const { client, userId } = auth.context;
 
+  // Still needed for the audit log's userEmail below — requireSectionAccess
+  // doesn't carry the profile, only role/permission_overrides did double
+  // duty here (gate + email source) before 055.
   const { data: profile } = await client
     .from("profiles")
-    .select("role, permission_overrides, email")
+    .select("email")
     .eq("id", userId)
-    .single<Pick<Profile, "role" | "permission_overrides" | "email">>();
-  if (!profile?.role || !hasPermission(profile.role, "manage_messages", profile.permission_overrides)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+    .single<Pick<Profile, "email">>();
 
   const { id } = await params;
   const { text } = (await req.json()) as { text?: string };
@@ -106,7 +105,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     await writeAuditLog(client, {
       userId,
-      userEmail: profile.email ?? "",
+      userEmail: profile?.email ?? "",
       action: "create",
       entityType: "message",
       entityId: sent.id,

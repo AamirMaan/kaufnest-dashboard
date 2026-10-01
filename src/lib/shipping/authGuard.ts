@@ -10,10 +10,11 @@ export interface ShippingLabelAccessResult {
  * `control.tenants.shipping_labels_enabled` — the platform-admin per-tenant
  * switch for EasyPost purchasing (no plan tie, control-plane migration 010).
  *
- * Called AFTER `requireIntegrationAdmin()` in both routes, which already
- * confirms the caller is signed in, belongs to a tenant, and holds
- * admin/super_admin. This guard only adds the tenant-visibility check on
- * top — it does not re-check auth.
+ * Called AFTER `requireSectionAccess("orders", 3)` in both routes, which
+ * already confirms the caller is signed in, belongs to a tenant, and holds
+ * section `orders` at Delete (055 — buying a label spends money, matching
+ * the `shipments` INSERT rule). This guard only adds the tenant-visibility
+ * check on top — it does not re-check auth.
  *
  * The order-detail page hides the "Generate Shipping Label" (EasyPost)
  * button when the flag is off and shows a free plain PDF label instead,

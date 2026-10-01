@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
+import { requireSectionAccess } from "@/lib/permissions/requireSectionAccess";
 import { requireShippingLabelAccess } from "@/lib/shipping/authGuard";
 import { getRates } from "@/lib/shipping/easypost";
 import { addressFromCompanyProfile, addressFromSale } from "@/lib/shipping/addressMappers";
@@ -14,7 +14,7 @@ interface RatesRequestBody {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireIntegrationAdmin();
+  const auth = await requireSectionAccess("orders", 3);
   if (auth.error) return auth.error;
   const { client, tenantSchema } = auth.context;
 
