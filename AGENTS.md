@@ -110,6 +110,11 @@ New shared code from the migration:
   `src/app/api/inventory/enable-advanced/` flips the per-tenant switch via the
   service-role RPC `enable_advanced_inventory`. The ledger itself is Postgres
   triggers — see `supabase/migrations/047_advanced_inventory.sql`.
+- `src/lib/permissions/` (2026-09-30) — section permissions. `sections.ts`
+  (pure: 12 sections, levels 0–3, `ROLE_DEFAULTS` mirroring migration 055,
+  `effectiveAccess`, `sectionForPath`, plan ceiling), `requireSectionAccess.ts`
+  (server-only route guard via the `current_user_access` RPC). The database
+  (055's `install_section_permissions`) is the enforcement.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
