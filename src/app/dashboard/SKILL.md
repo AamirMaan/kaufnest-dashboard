@@ -196,7 +196,14 @@ through it.
 
 Access = `get_my_access()` + plan ceiling, loaded per request in both
 `layout.tsx` and `proxy.ts`; both fail open to role defaults so the app
-keeps working before 055 is applied.
+keeps working before 055 is applied. `proxy.ts` picks the redirect target
+via the pure `deniedRedirect(pathname, section, access, deniedParam)`
+helper in `@/lib/permissions/sections` (colocated tests in
+`sections.test.ts`) — one hop to an already-accessible page, never a
+second redirect. The "No access" toast itself does **not** live on this
+page — it's `<DeniedAccessToast>` in `src/components/layout/`, rendered
+once by `DashboardShell` (so it fires on whichever dashboard page the
+redirect lands on, not just Home) — see that folder's note below.
 
 ### Gotcha: Totals RPCs are guarded wrappers since 055
 

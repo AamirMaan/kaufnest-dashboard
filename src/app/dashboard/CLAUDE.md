@@ -329,6 +329,17 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 (`src/lib/utils/notifications.ts`) computes them at read time from the
 `products` table and merges them into the feed client-side — see
 `inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
+`DeniedAccessToast` (2026-09-30 — rendered once by `DashboardShell`, right
+inside its own `<Suspense fallback={null}>`, so it sits inside the
+`<ToastProvider>` `layout.tsx` already wraps `DashboardShell` in): reads
+`useSearchParams().get("denied")` — set by `proxy.ts`'s section guard
+(`deniedRedirect`, `@/lib/permissions/sections`) when it bounces a request
+away from a section the user can't access — shows a "No access" toast
+naming the denied `Section`'s label, then `router.replace(pathname)` (the
+*current* pathname, not a hard-coded `/dashboard`) to strip the query.
+Rendered at the shell level rather than on `dashboard/page.tsx` specifically
+so the toast still fires when `deniedRedirect` lands the user on some other
+accessible page (e.g. `/dashboard/expenses`) instead of Home.
 
 ## Cross-cutting state & infra
 

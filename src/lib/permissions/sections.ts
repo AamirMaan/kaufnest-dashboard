@@ -116,3 +116,35 @@ export function firstAccessiblePath(access: AccessMap): string {
   const s = SECTIONS.find((d) => d.routes.length > 0 && access[d.key] >= 1);
   return s ? s.routes[0] : "/dashboard/support";
 }
+
+/**
+ * Where to send a request denied access to `section`, or null if no
+ * redirect is needed (section is allowed, or the computed destination is
+ * where the request already is — the loop guard).
+ *
+ * `section === "overview"` means Home itself is hidden: that's not a denial
+ * of the page the user asked for, so no `denied` param is added — an
+ * incoming one (`deniedParam`, e.g. from a prior hop) is preserved instead
+ * of being dropped. Any other denied section redirects to Home (if visible)
+ * or the first accessible page, carrying `?denied=<section>` so the caller
+ * can toast it — one hop, since the destination is chosen to already be
+ * accessible.
+ */
+export function deniedRedirect(
+  pathname: string,
+  section: Section,
+  access: AccessMap,
+  deniedParam?: Section | null,
+): string | null {
+  if (can(access, section, 1)) return null;
+
+  if (section === "overview") {
+    const dest = firstAccessiblePath(access);
+    if (dest === pathname) return null;
+    return deniedParam ? `${dest}?denied=${deniedParam}` : dest;
+  }
+
+  const dest = can(access, "overview", 1) ? "/dashboard" : firstAccessiblePath(access);
+  if (dest === pathname) return null;
+  return `${dest}?denied=${section}`;
+}

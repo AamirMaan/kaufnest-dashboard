@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { isTrialExpired } from "@/lib/utils/trial";
-import { sectionForPath, parseAccessMap, applyPlanCeiling, can, firstAccessiblePath } from "@/lib/permissions/sections";
+import { sectionForPath, parseAccessMap, applyPlanCeiling, deniedRedirect, type Section } from "@/lib/permissions/sections";
 import type { UserRole, TenantPlan } from "@/types";
 
 export async function proxy(request: NextRequest) {
@@ -136,11 +136,14 @@ export async function proxy(request: NextRequest) {
         parseAccessMap(accessError ? null : rawAccess, role),
         tenantRow?.plan ?? null,
       );
-      if (!can(access, section, 1)) {
+      const incomingDenied = request.nextUrl.searchParams.get("denied") as Section | null;
+      const redirectTo = deniedRedirect(pathname, section, access, incomingDenied);
+      if (redirectTo) {
+        const [redirectPath, redirectQuery] = redirectTo.split("?");
         const url = request.nextUrl.clone();
-        url.pathname = section === "overview" ? firstAccessiblePath(access) : "/dashboard";
-        url.search = section === "overview" ? "" : `?denied=${section}`;
-        if (url.pathname !== pathname) return NextResponse.redirect(url);
+        url.pathname = redirectPath;
+        url.search = redirectQuery ? `?${redirectQuery}` : "";
+        return NextResponse.redirect(url);
       }
     }
 

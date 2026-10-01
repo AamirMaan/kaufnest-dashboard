@@ -1,6 +1,6 @@
 import {
   SECTIONS, SECTION_KEYS, ROLE_DEFAULTS, maxLevel, planAllows, applyPlanCeiling,
-  effectiveAccess, parseAccessMap, sectionForPath, can, firstAccessiblePath, type AccessMap,
+  effectiveAccess, parseAccessMap, sectionForPath, can, firstAccessiblePath, deniedRedirect, type AccessMap,
 } from "./sections";
 
 const NONE: AccessMap = Object.fromEntries(SECTION_KEYS.map((k) => [k, 0])) as AccessMap;
@@ -75,5 +75,34 @@ describe("sections model", () => {
     expect(can(ROLE_DEFAULTS.accountant, "orders", 2)).toBe(true);
     expect(firstAccessiblePath({ ...NONE, expenses: 1 })).toBe("/dashboard/expenses");
     expect(firstAccessiblePath(NONE)).toBe("/dashboard/support");
+  });
+
+  it("deniedRedirect: one hop to the first accessible page, carrying ?denied for a non-overview section", () => {
+    // overview=0, orders=0, expenses=1 — Home hidden too, so fall through to the first accessible route.
+    expect(deniedRedirect("/dashboard/sales", "orders", { ...NONE, expenses: 1 })).toBe("/dashboard/expenses?denied=orders");
+  });
+
+  it("deniedRedirect: Home visible — denied section bounces to /dashboard", () => {
+    expect(deniedRedirect("/dashboard/sales", "orders", { ...NONE, overview: 1 })).toBe("/dashboard?denied=orders");
+  });
+
+  it("deniedRedirect: everything denied falls back to /dashboard/support", () => {
+    expect(deniedRedirect("/dashboard/sales", "orders", NONE)).toBe("/dashboard/support?denied=orders");
+  });
+
+  it("deniedRedirect: overview itself denied is not an error — no denied param added", () => {
+    expect(deniedRedirect("/dashboard", "overview", { ...NONE, expenses: 1 })).toBe("/dashboard/expenses");
+  });
+
+  it("deniedRedirect: overview denied preserves an incoming denied param", () => {
+    expect(deniedRedirect("/dashboard", "overview", { ...NONE, expenses: 1 }, "orders")).toBe("/dashboard/expenses?denied=orders");
+  });
+
+  it("deniedRedirect: allowed section needs no redirect", () => {
+    expect(deniedRedirect("/dashboard/sales", "orders", { ...NONE, orders: 1 })).toBeNull();
+  });
+
+  it("deniedRedirect: destination equal to current path needs no redirect (loop guard)", () => {
+    expect(deniedRedirect("/dashboard/expenses", "orders", { ...NONE, expenses: 1 })).toBeNull();
   });
 });
