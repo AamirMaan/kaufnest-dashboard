@@ -159,7 +159,8 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   that check (those three DELETE policies were role-only, not
   app-code-gated). Also baked into `provision_tenant_schema()`. Backs the
   Users feature's Permissions modal
-  (`src/app/dashboard/users/_components/PermissionsModal.tsx`).
+  (`src/app/dashboard/users/_components/PermissionsModal.tsx`) (superseded
+  by 055 — the modal is retired; see the 055 entry).
 - `migrations/024_dropship_listings_rls_tighten.sql` — tightens
   `tenant_kaufnest.dropship_listings` SELECT/INSERT/UPDATE RLS from "any
   authenticated tenant member" to tenant role admin/super_admin (direct
@@ -378,7 +379,8 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   override (the override branch was added in a final-review pass,
   2026-09-06, same `OR current_user_has_override(...)` shape as
   `030_ebay_messages_override.sql` — needed to match
-  `requireIntegrationAdmin()`'s `hasPermission()` check on the two
+  `requireIntegrationAdmin()`'s `hasPermission()` check (superseded by 055)
+  on the two
   `/api/shipping/*` routes; without it an override-holder's real EasyPost
   purchase would succeed and then be rejected at the `shipments` insert), no
   UPDATE/DELETE policy (v1 has no edit/void/refund flow). Backs the
@@ -454,7 +456,14 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `<name>__impl` (SECURITY DEFINER, EXECUTE revoked from everyone but
   `service_role`) behind a same-signature guarded wrapper commented
   `'section-permissions guard'`. Idempotent; skips tables a tenant doesn't
-  have (`to_regclass`). Defaults reproduce pre-055 behaviour exactly. See
+  have (`to_regclass`). Defaults reproduce pre-055 behaviour exactly,
+  except: stock transfers are admin-only (inventory ≥ 3); deactivated users
+  get 0 in RLS; the unused `manage_*` per-user overrides are dropped (none
+  were set); accountants no longer see the Integrations/Listings/Messages
+  nav entries (they had no access to them); profile role/status can only be
+  changed by the super_admin or the server (`profiles_guard_privileged_fields`
+  trigger). Listings/Messages are 0 unless Integrations ≥ 2
+  (`current_user_access` wraps `current_user_access_base`). See
   `SKILL.md`'s file map for apply-status and its Gotchas section for the
   `<name>__impl` editing rule.
 - `migrations/053_platform_balance_fees.sql` — `CREATE OR REPLACE`s 045's

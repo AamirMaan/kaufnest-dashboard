@@ -1060,7 +1060,10 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      -- Section check (055): Inventory full access, not a role. current_user_access
+      -- is created by install_section_permissions, which runs at the end of
+      -- install_advanced_inventory, so it always exists by the time this is called.
+      IF NOT is_tenant_member() OR (SELECT current_user_access('inventory')) < 3 THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF NOT EXISTS (SELECT 1 FROM stock_locations WHERE id = p_location_id AND is_active AND type <> 'dropship') THEN
@@ -1077,7 +1080,10 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      -- Section check (055): Inventory full access, not a role. current_user_access
+      -- is created by install_section_permissions, which runs at the end of
+      -- install_advanced_inventory, so it always exists by the time this is called.
+      IF NOT is_tenant_member() OR (SELECT current_user_access('inventory')) < 3 THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF p_unit_cost IS NULL OR p_unit_cost < 0 THEN

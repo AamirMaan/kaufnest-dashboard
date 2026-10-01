@@ -66,13 +66,11 @@ export function ProductsTab({ addOpen, onAddClose, stockVersion }: Props) {
   const pageSize = useAppSelector((s) => s.inventory.pageSize);
   const total = useAppSelector((s) => s.inventory.total);
   const isFetching = useAppSelector((s) => s.inventory.isFetching);
-  const isAdmin = useAppSelector((s) => {
-    const role = s.currentUser.profile?.role;
-    return role === "admin" || role === "super_admin";
-  });
   const { can } = useAccess();
   const canEdit = can("inventory", 2);
   const canDelete = can("inventory", 3);
+  // Opening-lot cost edits — set_opening_lot_cost (047) checks inventory ≥ 3.
+  const canManage = can("inventory", 3);
 
   const [search, setSearch] = useState("");
   const [editTarget, setEditTarget] = useState<Product | null>(null);
@@ -316,7 +314,7 @@ export function ProductsTab({ addOpen, onAddClose, stockVersion }: Props) {
       />
       <ProductLotsModal
         product={lotsProduct}
-        isAdmin={isAdmin}
+        canManage={canManage}
         onClose={() => setLotsProduct(null)}
         onChanged={() => setStockRefresh((n) => n + 1)}
       />

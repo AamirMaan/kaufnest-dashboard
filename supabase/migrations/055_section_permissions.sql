@@ -15,7 +15,14 @@
 --      wrapper commented 'section-permissions guard'. Edit totals logic in
 --      <name>__impl from now on; a later CREATE OR REPLACE of <name> is
 --      re-wrapped the next time this installer runs.
--- Defaults reproduce the behaviour before this migration exactly.
+-- Defaults reproduce the behaviour before this migration exactly, except:
+-- stock transfers are admin-only (inventory >= 3); deactivated users get 0
+-- in RLS; the unused manage_* per-user overrides are dropped (none were
+-- set); accountants no longer see the Integrations/Listings/Messages nav
+-- entries (they had no access to them); profile role/status can only be
+-- changed by the super_admin or the server.
+-- Cross-section rule: Listings/Messages are 0 unless Integrations >= 2
+-- (current_user_access wraps current_user_access_base).
 -- Idempotent. Skips tables a tenant does not have (to_regclass).
 -- Called by: this migration (all tenants), provision_tenant_schema() (005)
 -- and install_advanced_inventory() (047), both guarded by to_regprocedure.
@@ -98,8 +105,11 @@ BEGIN
       END)::smallint
     $f$$q$, s);
 
+  -- Raw per-section level (exception row, else role default). Internal —
+  -- read current_user_access(), which layers the cross-section dependency
+  -- rule on top of this.
   EXECUTE format($q$
-    CREATE OR REPLACE FUNCTION %1$I.current_user_access(p_section text)
+    CREATE OR REPLACE FUNCTION %1$I.current_user_access_base(p_section text)
     RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
       SELECT COALESCE((
         SELECT CASE
@@ -111,6 +121,19 @@ BEGIN
         END
         FROM profiles p WHERE p.id = auth.uid() AND %1$I.is_tenant_member()
       ), 0::smallint)
+    $f$$q$, s);
+
+  -- Effective level. Dependency rule (user ruling 2026-09-30): Listings and
+  -- Messages need Integrations: Edit — below it they are 0 whatever is
+  -- stored. Mirrored by applyDependencies() in src/lib/permissions/sections.ts.
+  EXECUTE format($q$
+    CREATE OR REPLACE FUNCTION %1$I.current_user_access(p_section text)
+    RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
+      SELECT CASE
+        WHEN p_section IN ('listings', 'messages') AND current_user_access_base('integrations') < 2
+          THEN 0::smallint
+        ELSE current_user_access_base(p_section)
+      END
     $f$$q$, s);
 
   EXECUTE format($q$
@@ -131,6 +154,9 @@ BEGIN
         ELSE NULL END
     $f$$q$, s);
 
+  EXECUTE format('REVOKE ALL ON FUNCTION %1$I.current_user_access_base(text) FROM PUBLIC, anon', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO authenticated', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO service_role', s);
   EXECUTE format('REVOKE ALL ON FUNCTION %1$I.current_user_access(text) FROM PUBLIC, anon', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access(text) TO authenticated', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access(text) TO service_role', s);
@@ -170,6 +196,31 @@ BEGIN
     $f$$q$, s);
   EXECUTE format('DROP TRIGGER IF EXISTS section_access_cleanup_on_role_change ON %1$I.profiles', s);
   EXECUTE format('CREATE TRIGGER section_access_cleanup_on_role_change AFTER UPDATE OF role ON %1$I.profiles FOR EACH ROW WHEN (OLD.role IS DISTINCT FROM NEW.role) EXECUTE FUNCTION %1$I.section_access_cleanup_on_role_change()', s);
+
+  -- Privileged profile fields (2026-10-01 final review — confirmed live):
+  -- authenticated has UPDATE on every profiles column and profiles_update_self
+  -- lets a member update their own row, so without this any member could set
+  -- their own role/status/permission_overrides. Only the tenant's super_admin
+  -- (via RLS profiles_manage_super_admin) or the server (service role, no
+  -- auth.uid()) may change them.
+  EXECUTE format($q$
+    CREATE OR REPLACE FUNCTION %1$I.profiles_guard_privileged_fields()
+    RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = %1$I AS $f$
+    BEGIN
+      -- Service role / server (no JWT user) is trusted; so is the tenant's super_admin.
+      IF auth.uid() IS NULL OR current_user_role() = 'super_admin' THEN
+        RETURN NEW;
+      END IF;
+      IF NEW.role IS DISTINCT FROM OLD.role
+         OR NEW.status IS DISTINCT FROM OLD.status
+         OR NEW.permission_overrides IS DISTINCT FROM OLD.permission_overrides THEN
+        RAISE EXCEPTION 'PROFILE_PRIVILEGED_FIELDS';
+      END IF;
+      RETURN NEW;
+    END
+    $f$$q$, s);
+  EXECUTE format('DROP TRIGGER IF EXISTS profiles_guard_privileged_fields ON %1$I.profiles', s);
+  EXECUTE format('CREATE TRIGGER profiles_guard_privileged_fields BEFORE UPDATE ON %1$I.profiles FOR EACH ROW EXECUTE FUNCTION %1$I.profiles_guard_privileged_fields()', s);
 
   -- ── 3. policies ─────────────────────────────────────────────────────
   -- Drop EVERY existing policy on the governed tables, then recreate.

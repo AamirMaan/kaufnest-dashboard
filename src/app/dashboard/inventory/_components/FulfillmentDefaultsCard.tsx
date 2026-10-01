@@ -28,10 +28,10 @@ const FORM_ID = "fulfillment-defaults-form";
 const CONNECTION_ERROR = "Please check your connection and try again.";
 
 interface Props {
-  isAdmin: boolean;
+  canManage: boolean;
 }
 
-export function FulfillmentDefaultsCard({ isAdmin }: Props) {
+export function FulfillmentDefaultsCard({ canManage }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const settings = useAppSelector((s) => s.advancedInventory.settings);
@@ -143,7 +143,7 @@ export function FulfillmentDefaultsCard({ isAdmin }: Props) {
           <Select
             value={draft.defaultLocationId}
             onChange={(e) => setDraft((d) => ({ ...d, defaultLocationId: e.target.value }))}
-            disabled={!isAdmin || saving}
+            disabled={!canManage || saving}
             required
           >
             <option value="" disabled>Choose a location</option>
@@ -159,7 +159,7 @@ export function FulfillmentDefaultsCard({ isAdmin }: Props) {
               <Select
                 value={draft.platforms[platform]}
                 onChange={(e) => setPlatform(platform, e.target.value)}
-                disabled={!isAdmin || saving}
+                disabled={!canManage || saving}
                 required
               >
                 <option value="" disabled>Choose a location</option>
@@ -171,7 +171,7 @@ export function FulfillmentDefaultsCard({ isAdmin }: Props) {
           ))}
         </Row>
 
-        {isAdmin && (
+        {canManage && (
           <div className="flex justify-end">
             <Button type="submit" form={FORM_ID} variant="secondary" disabled={saving || !isFormValid || !isDirty}>
               {saving ? "Saving…" : "Save defaults"}

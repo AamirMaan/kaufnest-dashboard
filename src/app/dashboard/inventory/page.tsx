@@ -95,7 +95,7 @@ export default function InventoryPage() {
 
       {view === "active" && (
         <LocationsTab
-          isAdmin={canManageLocations}
+          canManage={canManageLocations}
           addOpen={addLocationOpen}
           onAddClose={() => setAddLocationOpen(false)}
           hidden={tab !== "locations"}
@@ -105,7 +105,7 @@ export default function InventoryPage() {
 
       {view === "active" && (
         <TransfersTab
-          isAdmin={canManageTransfers}
+          canManage={canManageTransfers}
           addOpen={transferOpen}
           onAddClose={() => setTransferOpen(false)}
           hidden={tab !== "transfers"}
