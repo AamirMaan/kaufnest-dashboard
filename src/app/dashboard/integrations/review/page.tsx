@@ -101,20 +101,17 @@ export default function ReviewPage() {
     });
   }
 
-  useEffect(() => {
-    if (
-      !tenantPlan ||
-      !hasPlatformIntegrations(tenantPlan) ||
-      !can("integrations", 2)
-    ) {
-      router.replace("/dashboard/integrations");
-    }
-  }, [can, tenantPlan, router]);
-
+  // Computed once per render as a plain boolean — `can` is a fresh function
+  // reference every render (useAccess() isn't memoized), so depending on it
+  // directly in the effect below re-ran it on every render.
   const isEligible =
     !!tenantPlan &&
     hasPlatformIntegrations(tenantPlan) &&
     can("integrations", 2);
+
+  useEffect(() => {
+    if (!isEligible) router.replace("/dashboard/integrations");
+  }, [isEligible, router]);
 
   useEffect(() => {
     if (!isEligible) return;

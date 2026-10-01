@@ -657,6 +657,17 @@ A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The
 - **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
 - **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
 
+**Gated on purchases access (Task 5 review, fix round 1, 2026-09-30):** both
+`AddSaleModal`'s "Purchase cost (optional)" section and `EditSaleModal`'s
+"Linked Purchase" block (the read-only chip AND the add-form) render only
+when `can("purchases", 2)` — a user who can't edit Purchases shouldn't be
+offered a side door to create one from inside a sale. `handleSubmit` in both
+modals also re-checks `can("purchases", 2)` before writing the purchase row
+(defense in depth against a stale form). A purchase-insert failure in either
+modal shows a clean `toastError` ("…the linked purchase could not be
+created — add it manually from the Purchases page."), never the raw
+Postgres message.
+
 **Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux).
 
 **Cost of goods precedence (Phase 3 Task 6, 2026-09-26):** `resolveOrderCogs(sale,

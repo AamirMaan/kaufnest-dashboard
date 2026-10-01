@@ -141,7 +141,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
 
   return (
     <div id="inventory-panel-transfers" role="tabpanel" aria-labelledby="inventory-tab-transfers" hidden={hidden} className="space-y-4">
-      {!isAdmin && <p className="text-sm text-(--color-text-muted)">Only admins can record or delete transfers.</p>}
+      {!isAdmin && <p className="text-sm text-(--color-text-muted)">You don&apos;t have permission to record or delete transfers.</p>}
 
       {error && (
         <div className="flex items-center justify-between gap-3 rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-4">

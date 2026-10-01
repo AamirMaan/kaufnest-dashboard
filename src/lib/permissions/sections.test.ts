@@ -1,6 +1,6 @@
 import {
   SECTIONS, SECTION_KEYS, ROLE_DEFAULTS, maxLevel, planAllows, applyPlanCeiling,
-  effectiveAccess, parseAccessMap, sectionForPath, can, firstAccessiblePath, deniedRedirect, type AccessMap,
+  effectiveAccess, parseAccessMap, sectionForPath, can, canSeeSection, firstAccessiblePath, deniedRedirect, type AccessMap,
 } from "./sections";
 
 const NONE: AccessMap = Object.fromEntries(SECTION_KEYS.map((k) => [k, 0])) as AccessMap;
@@ -75,6 +75,19 @@ describe("sections model", () => {
     expect(can(ROLE_DEFAULTS.accountant, "orders", 2)).toBe(true);
     expect(firstAccessiblePath({ ...NONE, expenses: 1 })).toBe("/dashboard/expenses");
     expect(firstAccessiblePath(NONE)).toBe("/dashboard/support");
+  });
+
+  it("canSeeSection: nav visibility uses the UNCAPPED map — a role/exception grant survives the plan ceiling", () => {
+    // An admin's uncapped default includes integrations (level 2), but a
+    // starter-plan ceiling would zero it out for button-level `can()`.
+    const uncapped = ROLE_DEFAULTS.admin;
+    const capped = applyPlanCeiling(uncapped, "starter");
+    expect(canSeeSection(uncapped, "integrations")).toBe(true);
+    expect(can(capped, "integrations", 1)).toBe(false);
+  });
+
+  it("canSeeSection: a role/exception that grants nothing stays invisible regardless of plan", () => {
+    expect(canSeeSection({ ...NONE, integrations: 0 }, "integrations")).toBe(false);
   });
 
   it("deniedRedirect: one hop to the first accessible page, carrying ?denied for a non-overview section", () => {

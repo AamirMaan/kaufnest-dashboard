@@ -230,7 +230,7 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersio
   return (
     <div id="inventory-panel-locations" role="tabpanel" aria-labelledby="inventory-tab-locations" hidden={hidden} className="space-y-6">
       {!isAdmin && (
-        <p className="text-sm text-(--color-text-muted)">Only admins can add or change locations.</p>
+        <p className="text-sm text-(--color-text-muted)">You don&apos;t have permission to add or change locations.</p>
       )}
       <DataTable
         columns={columns}

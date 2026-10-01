@@ -6,7 +6,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
-import { applyPlanCeiling, parseAccessMap } from "@/lib/permissions/sections";
+import { parseAccessMap } from "@/lib/permissions/sections";
 import type {
   Profile,
   Sale,
@@ -190,11 +190,15 @@ export default async function DashboardLayout({
   }
 
   // Section access (055). get_my_access() applies role defaults + the
-  // user's exceptions; the plan ceiling is applied here. Falls back to role
-  // defaults if the RPC fails (e.g. 055 not applied yet).
+  // user's exceptions — stored UNCAPPED by plan (Task 5 review, fix round
+  // 1, 2026-09-30: the plan ceiling used to be applied here; it now lives
+  // only in useAccess()'s `can()`/`access`, so route visibility (Sidebar's
+  // canSee(), proxy.ts's route guard) can still see a role/exception grant
+  // to a plan-gated section — the page itself renders its upgrade screen).
+  // Falls back to role defaults if the RPC fails (e.g. 055 not applied yet).
   const { data: rawAccess, error: accessError } = await supabase.rpc("get_my_access");
   if (accessError) console.error("[dashboard/layout] get_my_access failed", accessError);
-  const access = applyPlanCeiling(parseAccessMap(accessError ? null : rawAccess, profile.role), tenantPlan);
+  const access = parseAccessMap(accessError ? null : rawAccess, profile.role);
 
   return (
     <StoreProvider

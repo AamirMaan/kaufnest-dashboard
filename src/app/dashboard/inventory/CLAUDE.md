@@ -20,15 +20,18 @@ pagination is active.
   (`admin`/`super_admin`) and renders `<EnableAdvancedCard isAdmin={isAdmin}
   />` when `view === "enable"` (Task 4) — enabling advanced inventory itself
   stays role-gated, it isn't one of the grid actions below. **Section
-  gating (Task 5, 2026-09-30):** `const { can } = useAccess()` backs
+  gating (Task 5, 2026-09-30; transfers raised to `>= 3` in fix round 1,
+  2026-09-30 — stock transfers are admin-only, same bar as locations, a
+  user ruling):** `const { can } = useAccess()` backs
   `canManageProducts = can("inventory", 2)` ("+ Add Product"),
-  `canManageTransfers = can("inventory", 2)` ("+ Transfer Stock", passed
+  `canManageTransfers = can("inventory", 3)` ("+ Transfer Stock", passed
   as `TransfersTab`'s `isAdmin` prop), and `canManageLocations =
   can("inventory", 3)` ("+ Add Location" and `platform_location_defaults`
   writes, passed as `LocationsTab`'s `isAdmin` prop — RLS requires
-  `inventory >= 3` for `stock_locations`/`platform_location_defaults`
-  writes, `>= 2` for `stock_transfers`, migration
-  `055_section_permissions.sql`). **When `view === "active"` (Task 6,
+  `inventory >= 3` for `stock_locations`/`platform_location_defaults` AND
+  `stock_transfers` writes, migration `055_section_permissions.sql` —
+  `055` must be re-applied per tenant for the transfers change, see
+  `supabase/SKILL.md`'s row). **When `view === "active"` (Task 6,
   2026-09-26; three tabs as of Task 4, Phase 4)** it renders
   `<InventoryTabs>` (Products/Locations/Transfers) above the active panels;
   `tab` state (`InventoryTabId`) plus `showLocations = view === "active" &&
@@ -424,10 +427,13 @@ preview, paginated transfer history, and delete-to-undo — see this file's
 `TransfersTab.tsx`/`TransferStockModal.tsx` entries above and SKILL.md's
 gotchas for the details.
 Transfer creation and deletion in the UI are **admin-only** (the header's
-"+ Transfer Stock" button and each row's delete icon are hidden for
-non-admins, who see read-only history); the underlying RLS on
-`stock_transfers` allows any tenant member, so this is a UI rule, not a
-database one — see `TransfersTab.tsx`'s entry above.
+"+ Transfer Stock" button and each row's delete icon are hidden for anyone
+below `inventory >= 3`, who see read-only history). This used to be a
+UI-only rule — RLS on `stock_transfers` originally allowed any tenant
+member with `inventory >= 2` — but a user ruling (Task 5 review, fix round
+1, 2026-09-30) raised the RLS bar to `inventory >= 3` to match, same as
+`stock_locations`/`platform_location_defaults`; see `TransfersTab.tsx`'s
+entry above and `supabase/SKILL.md`'s 055 row (re-apply needed per tenant).
 
 ## Pagination data flow
 

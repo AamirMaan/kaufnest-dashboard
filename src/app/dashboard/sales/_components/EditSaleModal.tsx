@@ -377,9 +377,11 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         if (fresh) dispatch(updateSale(fresh));
       }
 
-      // Create linked purchase if user filled one in and no purchase is linked yet
+      // Create linked purchase if user filled one in and no purchase is linked
+      // yet — also requires purchases access (defense in depth: the section
+      // is hidden from a user without can("purchases", 2)).
       const rawPrice = parseFloat(purchasePrice);
-      if (!linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+      if (can("purchases", 2) && !linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
         const qtyNum = parseInt(form.quantity, 10) || 1;
         const { data: newPurchase, error: purchaseError } = await supabase
           .from("purchases")
@@ -787,7 +789,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           />
         </Field>
 
-        {/* ── Linked Purchase ── */}
+        {/* ── Linked Purchase — requires purchases access ── */}
+        {can("purchases", 2) && (
         <div className="rounded-(--radius-card) border border-(--color-border)">
           {linkedPurchase ? (
             /* Read-only chip */
@@ -868,6 +871,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+        )}
       </form>
     </Modal>
   );

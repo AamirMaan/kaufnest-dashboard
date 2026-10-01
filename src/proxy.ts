@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { isTrialExpired } from "@/lib/utils/trial";
-import { sectionForPath, parseAccessMap, applyPlanCeiling, deniedRedirect, type Section } from "@/lib/permissions/sections";
+import { sectionForPath, parseAccessMap, deniedRedirect, type Section } from "@/lib/permissions/sections";
 import type { UserRole, TenantPlan } from "@/types";
 
 export async function proxy(request: NextRequest) {
@@ -129,13 +129,14 @@ export async function proxy(request: NextRequest) {
     }
 
     if (section && section !== "users") {
-      // 055: role defaults + per-user exceptions, capped by the plan. Fails
+      // 055: role defaults + per-user exceptions — UNCAPPED by plan (Task 5
+      // review, fix round 1, 2026-09-30 user ruling: route visibility must
+      // survive the plan ceiling so a role/exception grant to a plan-gated
+      // section like Integrations still reaches the page, which renders its
+      // own upgrade screen; plan gates are handled there, not here). Fails
       // open to role defaults if the RPC errors (same posture as above).
       const { data: rawAccess, error: accessError } = await supabase.schema(tenantSchema).rpc("get_my_access");
-      const access = applyPlanCeiling(
-        parseAccessMap(accessError ? null : rawAccess, role),
-        tenantRow?.plan ?? null,
-      );
+      const access = parseAccessMap(accessError ? null : rawAccess, role);
       const incomingDenied = request.nextUrl.searchParams.get("denied") as Section | null;
       const redirectTo = deniedRedirect(pathname, section, access, incomingDenied);
       if (redirectTo) {

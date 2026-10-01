@@ -68,7 +68,7 @@ This replaces "mirror every statement into 005's `format()` copy": the rule set 
 - **RLS rewrite** (idempotent): for each governed table the installer **drops every existing policy** (looping `pg_policies`, so no stale permissive policy can survive and widen access) and recreates the set: `SELECT` → `current_user_access(s) >= 1`, `INSERT`/`UPDATE` → `>= 2`, `DELETE` → `>= 3`, each still `AND is_tenant_member()`. `FOR ALL` admin policies are split per command. Exceptions that keep today's behaviour exactly:
   - `shipments` INSERT (buying a label spends money; admin-only today) → `orders >= 3`.
   - `stock_locations`, `platform_location_defaults` writes (admin config today) → `inventory >= 3`.
-  - `stock_transfers` INSERT → `inventory >= 2 AND created_by = auth.uid()`; DELETE (undo) → `inventory >= 2` (any member today).
+  - `stock_transfers` INSERT → `inventory >= 3 AND created_by = auth.uid()`; DELETE (undo) → `inventory >= 3` (raised from `>= 2` — Task 5 review fix round 1, 2026-09-30 user ruling: transfers are admin-only today, kept that way, same bar as `stock_locations`/`platform_location_defaults`).
   - `company_profile` SELECT stays open to every member (invoices on the Orders page read it); INSERT/UPDATE → `settings >= 2`.
   - `audit_logs` INSERT stays open to every member.
   - `profiles` policies unchanged; `dropship_listings` untouched.

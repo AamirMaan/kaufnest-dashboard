@@ -112,6 +112,19 @@ export function can(access: AccessMap, section: Section, min: AccessLevel): bool
   return access[section] >= min;
 }
 
+/**
+ * Whether a section should be *reachable* (nav link, route) — evaluated
+ * against the UNCAPPED access map (role defaults + per-user exceptions,
+ * before the plan ceiling), so a user whose role/exception grants a
+ * plan-gated section (Integrations/Listings/Messages) still sees the nav
+ * entry and can navigate there; the page itself shows its upgrade screen
+ * when the plan doesn't include the feature. Button-level actions use
+ * `can()` against the plan-capped map instead — see `useAccess()`.
+ */
+export function canSeeSection(uncapped: AccessMap, section: Section): boolean {
+  return can(uncapped, section, 1);
+}
+
 export function firstAccessiblePath(access: AccessMap): string {
   const s = SECTIONS.find((d) => d.routes.length > 0 && access[d.key] >= 1);
   return s ? s.routes[0] : "/dashboard/support";

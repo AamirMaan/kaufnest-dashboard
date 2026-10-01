@@ -216,9 +216,12 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
 
       dispatch(addSale(data));
 
-      // Create linked purchase if price was provided
+      // Create linked purchase if price was provided — also requires
+      // purchases access (defense in depth: the section is hidden from a
+      // user without can("purchases", 2), but a stale form shouldn't act on
+      // data that got there before an access change either).
       const rawPrice = parseFloat(purchasePrice);
-      if (showLinkedPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+      if (can("purchases", 2) && showLinkedPurchase && !isNaN(rawPrice) && rawPrice > 0) {
         const purchaseQty = parseInt(form.quantity, 10) || 1;
         const { data: newPurchase, error: purchaseError } = await supabase
           .from("purchases")
@@ -681,63 +684,65 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
           )}
         </div>
 
-        {/* ── Purchase cost (optional) ── */}
-        <div className="rounded-(--radius-card) border border-(--color-border)">
-          <button
-            type="button"
-            onClick={() => setShowLinkedPurchase((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-(--color-text-strong) hover:bg-(--color-surface-raised) transition-colors rounded-(--radius-card)"
-          >
-            <span>Purchase cost (optional)</span>
-            <ChevronDown
-              size={16}
-              className={`transition-transform text-(--color-text-muted) ${showLinkedPurchase ? "rotate-180" : ""}`}
-            />
-          </button>
+        {/* ── Purchase cost (optional) — requires purchases access ── */}
+        {can("purchases", 2) && (
+          <div className="rounded-(--radius-card) border border-(--color-border)">
+            <button
+              type="button"
+              onClick={() => setShowLinkedPurchase((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-(--color-text-strong) hover:bg-(--color-surface-raised) transition-colors rounded-(--radius-card)"
+            >
+              <span>Purchase cost (optional)</span>
+              <ChevronDown
+                size={16}
+                className={`transition-transform text-(--color-text-muted) ${showLinkedPurchase ? "rotate-180" : ""}`}
+              />
+            </button>
 
-          {showLinkedPurchase && (
-            <div className="px-4 pb-4 space-y-3 border-t border-(--color-border) pt-3">
-              <div>
-                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
-                  Purchase Price (total paid)
-                  <span className="text-(--color-danger-text) ml-0.5">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={purchasePrice}
-                  onChange={(e) => setPurchasePrice(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
-                />
+            {showLinkedPurchase && (
+              <div className="px-4 pb-4 space-y-3 border-t border-(--color-border) pt-3">
+                <div>
+                  <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                    Purchase Price (total paid)
+                    <span className="text-(--color-danger-text) ml-0.5">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={purchasePrice}
+                    onChange={(e) => setPurchasePrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                    Vendor
+                  </label>
+                  <input
+                    type="text"
+                    value={purchaseVendor}
+                    onChange={(e) => setPurchaseVendor(e.target.value)}
+                    placeholder="e.g. Alibaba, wholesaler name"
+                    className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
+                    Purchase Date
+                  </label>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
-                  Vendor
-                </label>
-                <input
-                  type="text"
-                  value={purchaseVendor}
-                  onChange={(e) => setPurchaseVendor(e.target.value)}
-                  placeholder="e.g. Alibaba, wholesaler name"
-                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) placeholder:text-(--color-text-faint) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-(--color-text-muted) mb-1">
-                  Purchase Date
-                </label>
-                <input
-                  type="date"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                  className="w-full rounded-(--radius-btn) border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-base) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </form>
     </Modal>
   );

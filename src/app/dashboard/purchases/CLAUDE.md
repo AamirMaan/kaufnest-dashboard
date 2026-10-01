@@ -101,7 +101,13 @@ backs the delete bar independently via RLS (migration
 `055_section_permissions.sql`, `purchases >= 3`), not just a UI-level gate.
 Both `AddPurchaseModal.tsx`/`EditPurchaseModal.tsx` render the "Inventory
 Product" select only when `can("inventory", 1)` — otherwise the free-text
-product name field is all that's shown.
+product name field is all that's shown. **`AddPurchaseModal`'s "Add `<name>`
+to inventory" checkbox** (shown when the typed product name doesn't match an
+existing one) additionally requires `can("inventory", 2)` (Task 5 review,
+fix round 1, 2026-09-30) — it creates a new `products` row, which is an edit
+action, not just a read; `handleSubmit` re-checks the same level before
+acting on `form.add_to_inventory`, in case a stale form submits after an
+access change.
 
 ## Pagination data flow
 

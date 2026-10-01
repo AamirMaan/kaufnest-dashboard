@@ -20,6 +20,15 @@
 -- Called by: this migration (all tenants), provision_tenant_schema() (005)
 -- and install_advanced_inventory() (047), both guarded by to_regprocedure.
 -- See docs/superpowers/specs/2026-09-30-section-permissions-design.md
+--
+-- 2026-09-30 (Task 5 review, fix round 1): stock_transfers INSERT/DELETE
+-- raised from inventory >= 2 to inventory >= 3 — a user ruling made
+-- transfers admin-only, same bar as stock_locations/platform_location_defaults
+-- writes, not the lower bar purchases/sales edits use. This function is
+-- idempotent (CREATE OR REPLACE + drop-all-policies-then-recreate), so it
+-- must be RE-APPLIED against every live tenant schema for this change to
+-- take effect — a schema that already ran the pre-2026-09-30 version of
+-- this file still has the old >= 2 policies until it's re-run.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.install_section_permissions(schema_name text)
@@ -226,9 +235,9 @@ BEGIN
     EXECUTE format($q$CREATE POLICY stock_transfers_select ON %1$I.stock_transfers FOR SELECT
       USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 1)$q$, s);
     EXECUTE format($q$CREATE POLICY stock_transfers_insert ON %1$I.stock_transfers FOR INSERT
-      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 2 AND created_by = auth.uid())$q$, s);
+      WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 3 AND created_by = auth.uid())$q$, s);
     EXECUTE format($q$CREATE POLICY stock_transfers_delete ON %1$I.stock_transfers FOR DELETE
-      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 2)$q$, s);
+      USING (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('inventory')) >= 3)$q$, s);
   END IF;
 
   IF to_regclass(format('%I.shipments', s)) IS NOT NULL THEN

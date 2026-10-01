@@ -20,10 +20,11 @@ export default function InventoryPage() {
   // Enabling advanced inventory itself stays role-gated (not a grid action).
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const isAdmin = role === "admin" || role === "super_admin";
-  // Stock locations + platform defaults need inventory >= 3 (RLS: 055);
-  // transfers and products only need inventory >= 2.
+  // Stock locations + platform defaults + transfers need inventory >= 3
+  // (RLS: 055, re-applied — transfers are admin-only, like locations);
+  // products only need inventory >= 2.
   const canManageLocations = can("inventory", 3);
-  const canManageTransfers = can("inventory", 2);
+  const canManageTransfers = can("inventory", 3);
   const canManageProducts = can("inventory", 2);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [tab, setTab] = useState<InventoryTabId>("products");

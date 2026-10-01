@@ -145,10 +145,14 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { access } = useAccess();
+  const { canSee } = useAccess();
 
+  // canSee() is uncapped by plan — Integrations/Listings/Messages stay in
+  // the nav for a user whose role/exception grants them even on a plan
+  // that doesn't include the feature; the page itself shows its upgrade
+  // screen (Task 5 review, fix round 1, 2026-09-30 user ruling).
   const visibleItems = NAV_ITEMS.filter((item) =>
-    !item.section ? true : item.section === "users" ? role === "super_admin" : access[item.section] >= 1
+    !item.section ? true : item.section === "users" ? role === "super_admin" : canSee(item.section)
   );
   const showAdminLink = role === "super_admin" && isPlatformAdmin;
   const showDropshippingLink = isPlatformAdmin;

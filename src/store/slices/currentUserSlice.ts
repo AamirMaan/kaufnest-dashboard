@@ -14,7 +14,17 @@ interface CurrentUserState {
    * while this is false, so nothing needs to "flash" here the way AI
    * controls do, but the same fail-closed default is kept for consistency. */
   shippingLabelsEnabled: boolean;
-  /** Section access from get_my_access() (055) with the plan ceiling applied; null until hydrated. */
+  /**
+   * Section access from get_my_access() (055) — role defaults + per-user
+   * exceptions, UNCAPPED by plan (Task 5 review, fix round 1, 2026-09-30:
+   * previously had the plan ceiling applied here; moved to `useAccess()`
+   * instead, which applies it only to the `can()`/button-gating result, not
+   * to the raw stored map). Null until hydrated. Read via `useAccess()`
+   * (`src/store/useAccess.ts`), never this field directly — `useAccess()`
+   * exposes both the plan-capped `access`/`can()` (for actions) and the
+   * uncapped `canSee()` (for nav/route visibility, so a role/exception
+   * grant to a plan-gated section like Integrations still shows the nav
+   * link and lets the page render its own upgrade screen). */
   access: AccessMap | null;
 }
 

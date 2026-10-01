@@ -30,12 +30,18 @@ broadly when working on a specific feature.**
   PDF label fallback — `shipping_labels_enabled` is the platform-admin
   EasyPost visibility switch, control-plane migration 010, defaults false,
   no plan tie). Also calls `get_my_access()` (055) on the tenant-scoped
-  client, merges it with `parseAccessMap`/`applyPlanCeiling`
-  (`@/lib/permissions/sections`) using the tenant's plan, and passes the
+  client and parses it with `parseAccessMap` (`@/lib/permissions/sections`)
+  — **UNCAPPED by plan** (Task 5 review, fix round 1, 2026-09-30: the plan
+  ceiling used to be applied here via `applyPlanCeiling` before storing;
+  moved into `useAccess()` instead, so route/nav visibility can see a
+  role/exception grant to a plan-gated section even when the tenant's plan
+  doesn't include it) — and passes the
   result to `<StoreProvider>` as `access` (hydrated into
   `currentUserSlice.access`, read via `useAccess()` —
-  `src/store/useAccess.ts`); a failed RPC falls back to the signed-in user's
-  role defaults so the app keeps working before 055 is applied. The `platform_connections` select
+  `src/store/useAccess.ts`, which applies the plan ceiling itself for
+  `access`/`can()` while keeping `canSee()` uncapped); a failed RPC falls
+  back to the signed-in user's role defaults so the app keeps working
+  before 055 is applied. The `platform_connections` select
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
@@ -312,9 +318,14 @@ extracting it is what makes it testable without rendering the page.
 forwards `isPlatformAdmin` to `Sidebar`; now takes a `userId` prop, sourced
 from `layout.tsx`'s `profile.id`, that it forwards to `NotificationBell`),
 `Sidebar` (nav items gated by `useAccess()` — section access, not role; each
-`NavItem` carries a `section?: Section | "users"`, filtered via `access[item
-.section] >= 1` (Users stays `role === "super_admin"`, Planner/Support have
-no `section` and always show); collapse; renders an "Admin Panel" link
+`NavItem` carries a `section?: Section | "users"`, filtered via
+`canSee(item.section)` (Users stays `role === "super_admin"`, Planner/
+Support have no `section` and always show) — **`canSee()` is UNCAPPED by
+plan** (Task 5 review, fix round 1, 2026-09-30 user ruling), so
+Integrations/Listings/Messages stay visible for a user whose role/exception
+grants them even on a plan that doesn't include the feature; the page
+itself renders its upgrade screen. Button-level gates inside each page use
+`can()` (plan-capped) instead); collapse; renders an "Admin Panel" link
 to `/admin` when `role === "super_admin" && isPlatformAdmin`), `PageHeader`
 (page title/description/actions row used by every feature page), `BrandMark`
 (2026-08-28 — the Boughtopia bag-icon mark next to the wordmark in
