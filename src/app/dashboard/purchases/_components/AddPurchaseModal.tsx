@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { addPurchase } from "../_store/purchasesSlice";
 import { addProduct, updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -65,6 +66,7 @@ function makeDefaults(defaultVatRate: number): FormState {
 
 export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const { can } = useAccess();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
@@ -238,16 +240,18 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
           />
         </Field>
 
-        <Field label="Inventory Product">
-          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
-            <option value="">— Not tracked —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.sku ? ` (${p.sku})` : ""}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {can("inventory", 1) && (
+          <Field label="Inventory Product">
+            <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
+              <option value="">— Not tracked —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.sku ? ` (${p.sku})` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         {isNewProductName && (
           <div className="space-y-3 rounded-[var(--radius-card)] border border-[var(--color-border)] p-4">

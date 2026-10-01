@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { removeProduct, fetchInventoryPage } from "../_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { Button } from "@/components/ui/Button";
@@ -65,11 +66,13 @@ export function ProductsTab({ addOpen, onAddClose, stockVersion }: Props) {
   const pageSize = useAppSelector((s) => s.inventory.pageSize);
   const total = useAppSelector((s) => s.inventory.total);
   const isFetching = useAppSelector((s) => s.inventory.isFetching);
-  const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
   const isAdmin = useAppSelector((s) => {
     const role = s.currentUser.profile?.role;
     return role === "admin" || role === "super_admin";
   });
+  const { can } = useAccess();
+  const canEdit = can("inventory", 2);
+  const canDelete = can("inventory", 3);
 
   const [search, setSearch] = useState("");
   const [editTarget, setEditTarget] = useState<Product | null>(null);
@@ -226,10 +229,12 @@ export function ProductsTab({ addOpen, onAddClose, stockVersion }: Props) {
       header: "Actions",
       render: (p: Product) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
-            <Pencil size={15} />
-          </Button>
-          {isSuperAdmin && (
+          {canEdit && (
+            <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
+              <Pencil size={15} />
+            </Button>
+          )}
+          {canDelete && (
             <Button
               size="icon"
               variant="danger"

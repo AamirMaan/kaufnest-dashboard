@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { useAdvancedInventory } from "./_store/useAdvancedInventory";
@@ -15,8 +16,15 @@ import { TransfersTab } from "./_components/TransfersTab";
 
 export default function InventoryPage() {
   const advanced = useAdvancedInventory();
+  const { can } = useAccess();
+  // Enabling advanced inventory itself stays role-gated (not a grid action).
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const isAdmin = role === "admin" || role === "super_admin";
+  // Stock locations + platform defaults need inventory >= 3 (RLS: 055);
+  // transfers and products only need inventory >= 2.
+  const canManageLocations = can("inventory", 3);
+  const canManageTransfers = can("inventory", 2);
+  const canManageProducts = can("inventory", 2);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [tab, setTab] = useState<InventoryTabId>("products");
   const [addLocationOpen, setAddLocationOpen] = useState(false);
@@ -35,11 +43,11 @@ export default function InventoryPage() {
         description="Products tracked through linked purchases and sales"
         action={
           showLocations ? (
-            isAdmin ? <Button onClick={() => setAddLocationOpen(true)}>+ Add Location</Button> : undefined
+            canManageLocations ? <Button onClick={() => setAddLocationOpen(true)}>+ Add Location</Button> : undefined
           ) : showTransfers ? (
-            isAdmin ? <Button onClick={() => setTransferOpen(true)}>+ Transfer Stock</Button> : undefined
+            canManageTransfers ? <Button onClick={() => setTransferOpen(true)}>+ Transfer Stock</Button> : undefined
           ) : (
-            <Button onClick={() => setAddProductOpen(true)}>+ Add Product</Button>
+            canManageProducts ? <Button onClick={() => setAddProductOpen(true)}>+ Add Product</Button> : undefined
           )
         }
       />
@@ -86,7 +94,7 @@ export default function InventoryPage() {
 
       {view === "active" && (
         <LocationsTab
-          isAdmin={isAdmin}
+          isAdmin={canManageLocations}
           addOpen={addLocationOpen}
           onAddClose={() => setAddLocationOpen(false)}
           hidden={tab !== "locations"}
@@ -96,7 +104,7 @@ export default function InventoryPage() {
 
       {view === "active" && (
         <TransfersTab
-          isAdmin={isAdmin}
+          isAdmin={canManageTransfers}
           addOpen={transferOpen}
           onAddClose={() => setTransferOpen(false)}
           hidden={tab !== "transfers"}

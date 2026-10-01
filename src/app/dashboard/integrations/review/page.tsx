@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
-import { hasPermission } from "@/lib/utils/permissions";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
@@ -26,8 +26,7 @@ export default function ReviewPage() {
   const router = useRouter();
   const toast = useToast();
   const dispatch = useAppDispatch();
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
+  const { can } = useAccess();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
 
   const [data, setData] = useState<ReviewResponse | null>(null);
@@ -103,22 +102,19 @@ export default function ReviewPage() {
   }
 
   useEffect(() => {
-    if (role === undefined) return;
     if (
-      !role ||
       !tenantPlan ||
       !hasPlatformIntegrations(tenantPlan) ||
-      !hasPermission(role, "manage_integrations", permissionOverrides)
+      !can("integrations", 2)
     ) {
       router.replace("/dashboard/integrations");
     }
-  }, [role, permissionOverrides, tenantPlan, router]);
+  }, [can, tenantPlan, router]);
 
   const isEligible =
-    !!role &&
     !!tenantPlan &&
     hasPlatformIntegrations(tenantPlan) &&
-    hasPermission(role, "manage_integrations", permissionOverrides);
+    can("integrations", 2);
 
   useEffect(() => {
     if (!isEligible) return;

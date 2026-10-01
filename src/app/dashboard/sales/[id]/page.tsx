@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { addSale, removeSale, updateSale, fetchSaleById } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -36,28 +37,18 @@ export default function SaleDetailPage({ params }: PageProps) {
   const router = useRouter();
   const { success, error: toastError, warning } = useToast();
 
-  // Role gating — mirror exactly from sales/page.tsx
-  const isSuperAdmin = useAppSelector(
-    (s) => s.currentUser.profile?.role === "super_admin"
-  );
-  const hasDeleteOverride = useAppSelector(
-    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_sale") ?? false
-  );
-  const canDelete = isSuperAdmin || hasDeleteOverride;
-  // "Generate Shipping Label" role gate — same bar as requireIntegrationAdmin()
-  // on the two API routes this button calls (admin/super_admin, OR a user
-  // granted the manage_integrations override — see hasPermission() in
-  // lib/utils/permissions.ts) and the shipments_insert RLS policy (043_shipments.sql /
-  // 005_tenant_provisioning.sql). Must be selected here (before the
-  // loading/not-found early returns below), not inside the Derived Values
-  // section — calling a new useAppSelector after a conditional return would
-  // change the number of hooks called between renders.
-  const currentRole = useAppSelector((s) => s.currentUser.profile?.role);
-  const isAdmin = currentRole === "admin" || currentRole === "super_admin";
-  const hasManageIntegrationsOverride = useAppSelector(
-    (s) => s.currentUser.profile?.permission_overrides?.includes("manage_integrations") ?? false
-  );
-  const canGenerateLabel = isAdmin || hasManageIntegrationsOverride;
+  // Section gating — orders section access (useAccess()). Must be selected
+  // here (before the loading/not-found early returns below), not inside the
+  // Derived Values section — calling a new useAppSelector/useAccess after a
+  // conditional return would change the number of hooks called between
+  // renders.
+  const { can } = useAccess();
+  const canEdit = can("orders", 2);
+  const canDelete = can("orders", 3);
+  // "Generate Shipping Label" gate — matches requireIntegrationAdmin()'s
+  // orders ≥ 3 bar on the two API routes this button calls and the
+  // shipments_insert RLS policy (043_shipments.sql / 005_tenant_provisioning.sql).
+  const canGenerateLabel = can("orders", 3);
   // Decides which Shipping-card body renders when no shipment exists yet —
   // the real EasyPost flow (gated further by canGenerateLabel above) when
   // true, or the free plain PDF label when false. Same hooks-ordering
@@ -702,10 +693,12 @@ export default function SaleDetailPage({ params }: PageProps) {
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3 pt-2">
-        <Button variant="secondary" onClick={() => setEditOpen(true)}>
-          <Pencil size={15} />
-          Edit Order
-        </Button>
+        {canEdit && (
+          <Button variant="secondary" onClick={() => setEditOpen(true)}>
+            <Pencil size={15} />
+            Edit Order
+          </Button>
+        )}
 
         <Button
           variant="secondary"

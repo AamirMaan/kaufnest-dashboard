@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { addSale } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
@@ -98,6 +99,7 @@ function makeDefaults(defaultVatRate: number): FormState {
 
 export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const { can } = useAccess();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const { error: toastError } = useToast();
@@ -341,24 +343,26 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
           />
         </Field>
 
-        <Field label="Inventory Product">
-          <Select
-            value={form.product_id}
-            onChange={(e) => selectProduct(e.target.value)}
-          >
-            <option value="">— Not tracked —</option>
-            {availableProducts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
-              </option>
-            ))}
-          </Select>
-          {availableProducts.length === 0 && (
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-              No products currently have stock — record a purchase first to make one sellable here.
-            </p>
-          )}
-        </Field>
+        {can("inventory", 1) && (
+          <Field label="Inventory Product">
+            <Select
+              value={form.product_id}
+              onChange={(e) => selectProduct(e.target.value)}
+            >
+              <option value="">— Not tracked —</option>
+              {availableProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
+                </option>
+              ))}
+            </Select>
+            {availableProducts.length === 0 && (
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                No products currently have stock — record a purchase first to make one sellable here.
+              </p>
+            )}
+          </Field>
+        )}
 
         <Row>
           <Field label="Platform" required>

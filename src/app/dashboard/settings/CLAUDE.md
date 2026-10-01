@@ -29,11 +29,12 @@ values.
   - **Invoice Defaults**: `invoice_prefix`, `payment_terms`, `footer_notes`
 
   All fields are `Field`/`Input`/`Select`/`Textarea`/`Row` from
-  `components/ui/FormFields`, `disabled={!canEditCompanyProfile}`. Editable
-  only for `admin`/`super_admin` (`useAppSelector((s) =>
-  s.currentUser.profile?.role)`, matching the `company_profile_update` RLS
-  policy in `005_tenant_provisioning.sql`); `accountant` sees a read-only
-  form (no Save button). Saves via
+  `components/ui/FormFields`, `disabled={!canEditCompanyProfile}`.
+  `canEditCompanyProfile = can("settings", 2)` (`useAccess()`, Task 5,
+  2026-09-30 — replaced the earlier `admin`/`super_admin`-only
+  `COMPANY_PROFILE_ROLES` role check), matching the `company_profile_update`
+  RLS policy's `settings >= 2` bar (migration `055_section_permissions.sql`);
+  a user below that level sees a read-only form (no Save button). Saves via
   `createTenantClient().from("company_profile").upsert(...)` (includes `id` so
   it creates the row on first save if provisioning somehow missed it), then
   dispatches `hydrateCompanyProfile(data)` to sync Redux. The layout fetches
@@ -145,9 +146,10 @@ page's form, and the relevant DB migrations (see this folder's `SKILL.md`).
 - `lib/utils/{generateInvoice,currency,planGating}` — `hasAiFeatures` computes
   the AI usage section's `aiVisible` gate
 - `lib/supabase/client` (`createTenantClient`, Company Profile save)
+- `store/useAccess` — `useAccess().can("settings", 2)` (`canEditCompanyProfile`)
 - `store/slices/companyProfileSlice` (`hydrateCompanyProfile`),
-  `store/slices/currentUserSlice` (role gate, plus `tenantPlan`/`aiEnabled`
-  for the AI usage gate)
+  `store/slices/currentUserSlice` (`tenantPlan`/`aiEnabled` for the AI usage
+  gate)
 - `types` (`Sale`, `CompanyProfile`, `Currency`)
 
 ## Tests

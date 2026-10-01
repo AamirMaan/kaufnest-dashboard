@@ -25,6 +25,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { UserRole } from "@/types";
+import { useAccess } from "@/store/useAccess";
+import type { Section } from "@/lib/permissions/sections";
 
 type LucideIcon = React.ComponentType<{
   size?: number;
@@ -36,7 +38,8 @@ interface NavItem {
   label: string;
   href: string;
   Icon: LucideIcon;
-  roles: UserRole[];
+  /** Section gating this item; omitted for items with no section (Planner, Support). */
+  section?: Section | "users";
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -44,85 +47,83 @@ const NAV_ITEMS: NavItem[] = [
     label: "Overview",
     href: "/dashboard",
     Icon: LayoutDashboard,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "overview",
   },
   {
     label: "Analytics",
     href: "/dashboard/analytics",
     Icon: BarChart3,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "analytics",
   },
   {
     label: "Orders",
     href: "/dashboard/sales",
     Icon: TrendingUp,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "orders",
   },
   {
     label: "Expenses",
     href: "/dashboard/expenses",
     Icon: TrendingDown,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "expenses",
   },
   {
     label: "Purchases",
     href: "/dashboard/purchases",
     Icon: ShoppingCart,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "purchases",
   },
   {
     label: "Inventory",
     href: "/dashboard/inventory",
     Icon: Boxes,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "inventory",
   },
   {
     label: "Audit Logs",
     href: "/dashboard/audit-logs",
     Icon: ClipboardList,
-    roles: ["super_admin", "admin"],
+    section: "audit_logs",
   },
   {
     label: "Users",
     href: "/dashboard/users",
     Icon: Users,
-    roles: ["super_admin"],
+    section: "users",
   },
   {
     label: "Integrations",
     href: "/dashboard/integrations",
     Icon: Plug,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "integrations",
   },
   {
     label: "Listings",
     href: "/dashboard/listings",
     Icon: Tag,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "listings",
   },
   {
     label: "Messages",
     href: "/dashboard/messages",
     Icon: MessageSquare,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "messages",
   },
   {
     label: "Planner",
     href: "/dashboard/planner",
     Icon: Calculator,
-    roles: ["super_admin", "admin", "accountant"],
   },
   {
     label: "Support",
     href: "/dashboard/support",
     Icon: LifeBuoy,
-    roles: ["super_admin", "admin", "accountant"],
   },
   {
     label: "Settings",
     href: "/dashboard/settings",
     Icon: Settings,
-    roles: ["super_admin", "admin", "accountant"],
+    section: "settings",
   },
 ];
 
@@ -144,8 +145,11 @@ export function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
+  const { access } = useAccess();
 
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
+  const visibleItems = NAV_ITEMS.filter((item) =>
+    !item.section ? true : item.section === "users" ? role === "super_admin" : access[item.section] >= 1
+  );
   const showAdminLink = role === "super_admin" && isPlatformAdmin;
   const showDropshippingLink = isPlatformAdmin;
 

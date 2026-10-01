@@ -1,13 +1,15 @@
 # Messages feature
 
-Route: `/dashboard/messages`. Lets an admin/super_admin read and reply to
-eBay buyer messages without leaving the dashboard. Gated on the **Business
-plan** (`hasMessagingAndListings` — not `hasPlatformIntegrations`/Pro+Business,
-changed 2026-08-27 alongside the same change to Listings) **and** a connected
-eBay account, plus a dedicated `manage_messages` permission (admin/super_admin
-only — nav entry is visible to all roles, but the reply box and auto-sync both
-require the permission; RLS on `ebay_messages` is admin/super_admin-only for
-every operation, so other roles simply see an empty thread list).
+Route: `/dashboard/messages`. Lets a user with `messages` section access read
+and reply to eBay buyer messages without leaving the dashboard. Gated on the
+**Business plan** (`hasMessagingAndListings` — not
+`hasPlatformIntegrations`/Pro+Business, changed 2026-08-27 alongside the same
+change to Listings) **and** a connected eBay account, plus `can("messages",
+2)` (`useAccess()`, Task 5, 2026-09-30 — replaced the earlier
+`manage_messages` permission check; accountant's role default is `messages:
+0`, so the Sidebar nav entry is hidden for a default accountant too, not just
+the reply box/auto-sync — a change from the pre-Task-5 behavior where the nav
+entry showed for every role).
 
 There's no push/webhook for eBay buyer messages — sync runs once per page
 visit (2026-08-27: the manual "Sync messages" button was removed; `page.tsx`
@@ -229,11 +231,13 @@ OAuth token.
 - `components/ui/{Badge, Button, Toast}` — **not** `Pagination` (removed
   2026-08-27 in favor of infinite scroll, see `ThreadList.tsx` above)
 - `components/layout/PageHeader`
-- `store/slices/currentUserSlice` (`tenantPlan`, `profile.role`/`permission_overrides`)
+- `store/slices/currentUserSlice` (`tenantPlan`)
+- `store/useAccess` — `useAccess().can("messages", 2)` (Task 5 — replaced
+  `lib/utils/permissions`' `hasPermission`)
 - `store/slices` — `s.integrations.connections` (the eBay-connected check;
   hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
   Dropshipping/Listings use)
-- `lib/utils/{date, permissions, pagedQuery, currency}` — `planGating`'s
+- `lib/utils/{date, pagedQuery, currency}` — `planGating`'s
   `hasMessagingAndListings` specifically, not `hasPlatformIntegrations`
   (`currency`'s `formatCurrency` renders `EbayMessage.item_price` in
   `ThreadView.tsx`'s header; `item_currency` is narrowed to the app's

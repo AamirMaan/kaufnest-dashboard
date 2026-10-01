@@ -18,15 +18,26 @@ pagination is active.
   and wires the error banner's Retry button to `advanced.reload`. Also
   computes `isAdmin` from `state.currentUser.profile?.role`
   (`admin`/`super_admin`) and renders `<EnableAdvancedCard isAdmin={isAdmin}
-  />` when `view === "enable"` (Task 4). **When `view === "active"` (Task 6,
+  />` when `view === "enable"` (Task 4) — enabling advanced inventory itself
+  stays role-gated, it isn't one of the grid actions below. **Section
+  gating (Task 5, 2026-09-30):** `const { can } = useAccess()` backs
+  `canManageProducts = can("inventory", 2)` ("+ Add Product"),
+  `canManageTransfers = can("inventory", 2)` ("+ Transfer Stock", passed
+  as `TransfersTab`'s `isAdmin` prop), and `canManageLocations =
+  can("inventory", 3)` ("+ Add Location" and `platform_location_defaults`
+  writes, passed as `LocationsTab`'s `isAdmin` prop — RLS requires
+  `inventory >= 3` for `stock_locations`/`platform_location_defaults`
+  writes, `>= 2` for `stock_transfers`, migration
+  `055_section_permissions.sql`). **When `view === "active"` (Task 6,
   2026-09-26; three tabs as of Task 4, Phase 4)** it renders
   `<InventoryTabs>` (Products/Locations/Transfers) above the active panels;
   `tab` state (`InventoryTabId`) plus `showLocations = view === "active" &&
   tab === "locations"` / `showTransfers = view === "active" && tab ===
   "transfers"` decide which "+ Add …"/"+ Transfer Stock" button
   `PageHeader`'s `action` shows (Locations' Add button and Transfers'
-  Transfer Stock button are both hidden entirely for non-admins, matching
-  `LocationsTab`/`TransfersTab`'s own read-only row-actions gate). **All
+  Transfer Stock button are both hidden entirely for a user below the
+  relevant access level, matching `LocationsTab`/`TransfersTab`'s own
+  read-only row-actions gate). **All
   three of `<ProductsTab>`, `<LocationsTab>` and `<TransfersTab>` stay
   mounted at all times once `view === "active"`** (fix round 1, 2026-09-26;
   extended to Transfers in Task 4) — only their visibility toggles via the
@@ -128,7 +139,12 @@ pagination is active.
   `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
   Takes `{ addOpen, onAddClose, stockVersion? }` — the "+ Add Product" button
   and its open state live in `page.tsx` (the header), this component only
-  owns the modal. `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by
+  owns the modal. **Row actions gated by `useAccess()` (Task 5):** Edit icon
+  needs `can("inventory", 2)`, Delete icon needs `can("inventory", 3)` —
+  replaced the previous `isSuperAdmin`-only delete gate; `isAdmin` (role
+  `admin`/`super_admin`) is kept separately, only for `ProductLotsModal`'s
+  opening-lot-cost edit, which isn't part of the section grid.
+  `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by
   `page.tsx` after a transfer moves stock between locations, and is folded
   into `stockRequestKey` (below) so the per-location columns re-fetch.
   **(Phase 3 Task 7, 2026-09-26)** When `useAdvancedInventory().active` is

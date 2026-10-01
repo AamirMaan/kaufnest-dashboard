@@ -670,11 +670,11 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   inside the "Derived values" section, which only runs once `sale` is
   guaranteed non-null) changes how many hooks run between a loading render
   and a loaded render and throws "Rendered fewer hooks than expected." This
-  is why `canGenerateLabel`'s `currentRole` selector AND the newer
-  `shippingLabelsEnabled` selector (2026-09-07 — reads
-  `state.currentUser.shippingLabelsEnabled`, decides which Shipping-card body
-  renders when no shipment exists yet) both live right next to
-  `isSuperAdmin`/`hasDeleteOverride` at the top, and why `shipment`/
+  is why the `useAccess()` call (Task 5 — backs `canEdit`/`canDelete`/
+  `canGenerateLabel`) AND the newer `shippingLabelsEnabled` selector
+  (2026-09-07 — reads `state.currentUser.shippingLabelsEnabled`, decides
+  which Shipping-card body renders when no shipment exists yet) both live
+  right next to each other at the top, and why `shipment`/
   `shipmentLoading`/`generateLabelOpen` state + the shipment-fetch
   `useEffect` sit right after the linked-purchase effect, both still above
   the loading/not-found returns — NOT next to `hasSenderAddress`/

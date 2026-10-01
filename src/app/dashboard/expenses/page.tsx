@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { removeExpense, fetchExpensesPage, fetchExpensesSummary } from "./_store/expensesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -55,11 +56,9 @@ export default function ExpensesPage() {
   const summaryLoading = useAppSelector((s) => s.expenses.summaryLoading);
   const summaryError = useAppSelector((s) => s.expenses.summaryError);
   const summaryVersion = useAppSelector((s) => s.expenses.summaryVersion);
-  const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
-  const hasDeleteOverride = useAppSelector(
-    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_expense") ?? false
-  );
-  const canDelete = isSuperAdmin || hasDeleteOverride;
+  const { can } = useAccess();
+  const canEdit = can("expenses", 2);
+  const canDelete = can("expenses", 3);
 
   const [filters, setFilters] = useState<ExpenseFilters>(DEFAULT_EXPENSE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
@@ -270,9 +269,11 @@ export default function ExpensesPage() {
       header: "Actions",
       render: (e: Expense) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditTarget(e)} title="Edit">
-            <Pencil size={15} className="text-blue-500" />
-          </Button>
+          {canEdit && (
+            <Button size="icon" variant="ghost" onClick={() => setEditTarget(e)} title="Edit">
+              <Pencil size={15} className="text-blue-500" />
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -311,11 +312,15 @@ export default function ExpensesPage() {
               <Download size={15} />
               Export
             </Button>
-            <Button variant="import" onClick={() => setImportOpen(true)}>
-              <Upload size={15} />
-              Import
-            </Button>
-            <Button onClick={() => setAddOpen(true)}>+ Add Expense</Button>
+            {can("expenses", 2) && (
+              <>
+                <Button variant="import" onClick={() => setImportOpen(true)}>
+                  <Upload size={15} />
+                  Import
+                </Button>
+                <Button onClick={() => setAddOpen(true)}>+ Add Expense</Button>
+              </>
+            )}
           </div>
         }
       />

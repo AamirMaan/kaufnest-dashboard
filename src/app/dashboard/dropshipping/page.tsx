@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import { hasPermission } from "@/lib/utils/permissions";
 import { upsertListings, updateSupplierPrices } from "./_store/dropshippingSlice";
 import { ListingsTable, canCheckSupplierPrice } from "./_components/ListingsTable";
 import type { DropshipListing } from "@/types";
@@ -18,7 +17,6 @@ export default function DropshippingPage() {
   const { success, error: toastError } = useToast();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
   const connections = useAppSelector((s) => s.integrations.connections);
   const listings = useAppSelector((s) => s.dropshipping.listings);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,7 +76,8 @@ export default function DropshippingPage() {
     );
   }
 
-  const canRefresh = role && hasPermission(role, "manage_integrations", permissionOverrides);
+  // Dropshipping is outside the section-access grid (platform-admin only).
+  const canRefresh = role === "admin" || role === "super_admin";
 
   async function handleRefresh() {
     setRefreshing(true);

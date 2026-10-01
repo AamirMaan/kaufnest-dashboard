@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { hasMessagingAndListings } from "@/lib/utils/planGating";
-import { hasPermission } from "@/lib/utils/permissions";
+import { useAccess } from "@/store/useAccess";
 import { formatDateTime } from "@/lib/utils/date";
 import { fetchMessagesPage, syncMessages, sendReply, searchMessages, clearSearch } from "./_store/messagesSlice";
 import { groupThreads, latestInboundMessage } from "./_lib/groupThreads";
@@ -23,8 +23,7 @@ export default function MessagesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
+  const { can } = useAccess();
   const connections = useAppSelector((s) => s.integrations.connections);
   const {
     items,
@@ -44,7 +43,7 @@ export default function MessagesPage() {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [searchInput, setSearchInput] = useState("");
 
-  const canManage = role && hasPermission(role, "manage_messages", permissionOverrides);
+  const canManage = can("messages", 2);
   const ebayConnection = connections.find((c) => c.platform === "ebay");
   const isEbayConnected = ebayConnection?.status === "connected";
   const isSearchActive = searchQuery.trim().length > 0;

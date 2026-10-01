@@ -4,21 +4,24 @@ Route: `/dashboard/integrations`. Lets a tenant connect their eBay and/or
 Amazon seller accounts via OAuth; orders from connected platforms are reviewed
 and imported manually via `/dashboard/integrations/review` and stored as
 `sales` ("Orders") rows. Available only on the **Pro**/**Business** plans
-(`hasPlatformIntegrations`) and manageable only by `admin`/`super_admin`
-(`manage_integrations` permission).
+(`hasPlatformIntegrations`) and manageable only by a user with
+`can("integrations", 2)` (`useAccess()`, Task 5 — `accountant`'s role
+default is 0, so only admin/super_admin see management controls unless a
+tenant admin grants an exception via the Users feature).
 
 ## Files in this folder
 
 - `page.tsx` — `"use client"`. Default export wraps `IntegrationsContent` in
   `<Suspense fallback={null}>` (required because it reads `useSearchParams()`
   for the `connected=`/`error=` query params set by the OAuth callback route
-  and shows a `Toast` for each). Reads `role`/`tenantPlan` from
-  `state.currentUser` and `connections` from `state.integrations.connections`.
-  Three render branches, in order:
+  and shows a `Toast` for each). Reads `tenantPlan` from `state.currentUser`
+  and `connections` from `state.integrations.connections`. `canManage =
+  can("integrations", 2)` via `useAccess()` (Task 5 — replaced
+  `hasPermission(role, "manage_integrations")`). Three render branches, in
+  order:
   1. `!tenantPlan || !hasPlatformIntegrations(tenantPlan)` → upgrade-prompt
      card linking to `/dashboard/settings`.
-  2. `!hasPermission(role, "manage_integrations")` → "contact your admin"
-     message.
+  2. `!canManage` → "contact your admin" message.
   3. Otherwise → a `sm:grid-cols-2` grid of `<ConnectionCard>`, one per
      `IntegrationPlatform` (`["ebay", "amazon"]`).
 - `_components/ConnectionCard.tsx` — per-platform card: status `Badge`
@@ -37,7 +40,8 @@ and imported manually via `/dashboard/integrations/review` and stored as
   (already-imported rows greyed out with ✓), and an "Import selected (N)" button
   that posts to `POST /api/integrations/review/import`. On success: toasts, flips
   imported rows in local state, calls `router.refresh()` to re-hydrate
-  `salesSlice`. Applies the same plan/role guards as `page.tsx` — redirects to
+  `salesSlice`. Applies the same plan/`can("integrations", 2)` guards as
+  `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
   **"Sync Statuses" button (2026-09-07)**: a second, independent submission
   path to the *same* import route — re-fetches `GET /api/integrations/review`
@@ -124,10 +128,11 @@ upsert them into `sales` and update `last_synced_at` per platform.
   feature above
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
 - `src/lib/utils/currency` — `computeFeeFromPercent` (bulk fee-percent toolbar)
-- `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`
+- `src/store/useAccess` — `useAccess().can("integrations", 2)` (Task 5 —
+  replaced `lib/utils/permissions`' `hasPermission`)
 - `src/lib/utils/date` — `formatDateTime`
 - `components/layout/PageHeader`, `components/ui/{Badge,Button,Toast}`
-- `store/slices/currentUserSlice` — `profile.role`, `tenantPlan`
+- `store/slices/currentUserSlice` — `tenantPlan`
 - `types` — `IntegrationPlatform`, `PlatformConnection`,
   `PlatformConnectionStatus`
 

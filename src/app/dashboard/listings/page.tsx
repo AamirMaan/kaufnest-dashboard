@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/FormFields";
 import { Pagination } from "@/components/ui/Pagination";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { hasPermission } from "@/lib/utils/permissions";
+import { useAccess } from "@/store/useAccess";
 import { fetchListingsPage, type ListingStatusFilter } from "./_store/listingsSlice";
 import { ListingsTable } from "./_components/ListingsTable";
 import { BusinessEbayGate } from "./_components/BusinessEbayGate";
@@ -31,13 +31,12 @@ const STATUS_FILTER_OPTIONS: { value: ListingStatusFilter; label: string }[] = [
 export default function ListingsPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
+  const { can } = useAccess();
   const { items, page, pageSize, total, isFetching } = useAppSelector((s) => s.listings);
   const [syncing, setSyncing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ListingStatusFilter>(DEFAULT_STATUS_FILTER);
 
-  const canManage = role && hasPermission(role, "manage_listings", permissionOverrides);
+  const canManage = can("listings", 2);
 
   // The layout's initial hydration reads page 1 unfiltered (same contract
   // every paginated feature's hydration follows), but this page's default

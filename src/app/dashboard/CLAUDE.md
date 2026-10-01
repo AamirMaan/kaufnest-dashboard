@@ -54,9 +54,10 @@ broadly when working on a specific feature.**
   returned_cancelled`), the same population as Revenue and the platform
   cards; Analytics' `OrdersCard` still shows all orders + return rate. A "By Platform"
   section of `PlatformStatsCard`s (one per platform with sales in the range,
-  built by `_lib/platformStats.ts`; admins get "Record Transfer" on the
-  eBay/Amazon cards, which opens `RecordTransferModal`),
-  `RecentOrdersCard` (latest orders table), then the Quick Start card.
+  built by `_lib/platformStats.ts`; users with `can("payouts", 2)` (via
+  `useAccess()`) get "Record Transfer" on the eBay/Amazon cards, which opens
+  `RecordTransferModal`), `RecentOrdersCard` (rendered only when `can("orders",
+  1)`) (latest orders table), then the Quick Start card.
 
   **Does NOT read `sales`/`expenses`/`purchases`/`platform_payouts` from
   Redux** — those slices hold only one paginated page (50 rows,
@@ -310,7 +311,10 @@ extracting it is what makes it testable without rendering the page.
 `DashboardShell` (header, user menu, theme toggle, impersonation banner —
 forwards `isPlatformAdmin` to `Sidebar`; now takes a `userId` prop, sourced
 from `layout.tsx`'s `profile.id`, that it forwards to `NotificationBell`),
-`Sidebar` (nav + role-based links + collapse; renders an "Admin Panel" link
+`Sidebar` (nav items gated by `useAccess()` — section access, not role; each
+`NavItem` carries a `section?: Section | "users"`, filtered via `access[item
+.section] >= 1` (Users stays `role === "super_admin"`, Planner/Support have
+no `section` and always show); collapse; renders an "Admin Panel" link
 to `/admin` when `role === "super_admin" && isPlatformAdmin`), `PageHeader`
 (page title/description/actions row used by every feature page), `BrandMark`
 (2026-08-28 — the Boughtopia bag-icon mark next to the wordmark in

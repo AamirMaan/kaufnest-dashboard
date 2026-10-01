@@ -89,18 +89,19 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   below for what it gained (German header aliases, flexible dates, decimal
   commas, FX currency resolution) that the modal never had before.
 
-## Delete gating (super_admin + permission overrides)
+## Buttons gated by section access (`useAccess()`)
 
-`page.tsx` computes `canDelete = isSuperAdmin || hasDeleteOverride`, where
-`hasDeleteOverride` reads
-`s.currentUser.profile?.permission_overrides?.includes("delete_purchase")`
-directly (not via `hasPermission()` from `lib/utils/permissions.ts` — see the
-Sales feature's CLAUDE.md for why: it would resurrect the matrix's
-`["super_admin", "admin"]` default, silently giving every admin delete rights
-they've never had in this UI). Overrides are granted per-user via the Users
-feature's Permissions modal and also enforced in Postgres RLS
-(`{{schema}}.current_user_has_override('delete_purchase')` in the
-`purchases_delete` policy, see `supabase/migrations/023_user_permission_overrides.sql`).
+`page.tsx` reads `const { can } = useAccess()` (`src/store/useAccess.ts`)
+and gates the Purchases actions on the `purchases` section: Add/Import and
+the row Edit icon need `can("purchases", 2)`; the row Delete icon needs
+`can("purchases", 3)`. This replaced the previous `isSuperAdmin ||
+hasDeleteOverride` check — the page no longer reads
+`profile.permission_overrides` or imports `lib/utils/permissions.ts`. The DB
+backs the delete bar independently via RLS (migration
+`055_section_permissions.sql`, `purchases >= 3`), not just a UI-level gate.
+Both `AddPurchaseModal.tsx`/`EditPurchaseModal.tsx` render the "Inventory
+Product" select only when `can("inventory", 1)` — otherwise the free-text
+product name field is all that's shown.
 
 ## Pagination data flow
 

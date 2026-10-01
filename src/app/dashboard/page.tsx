@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { DollarSign, Landmark, Receipt, ShoppingBag, ShoppingCart, TrendingUp } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { type Currency } from "@/types";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { buildKpis } from "./_lib/kpiTiles";
@@ -20,8 +21,8 @@ import { RecordTransferModal } from "./_components/RecordTransferModal";
 export default function DashboardPage() {
   const profileCurrency: Currency =
     useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const canRecordTransfer = role === "admin" || role === "super_admin";
+  const { can } = useAccess();
+  const canRecordTransfer = can("payouts", 2);
   const [transferModal, setTransferModal] = useState<"ebay" | "amazon" | null>(null);
 
   const picker = useDateRangePicker();
@@ -95,9 +96,11 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <div className="mt-6">
-        <RecentOrdersCard />
-      </div>
+      {can("orders", 1) && (
+        <div className="mt-6">
+          <RecentOrdersCard />
+        </div>
+      )}
 
       <div className="mt-4 bg-(--color-surface) rounded-[var(--radius-card)] border border-(--color-border) p-6" style={{ boxShadow: "var(--shadow-card)" }}>
         <h2 className="text-base font-semibold text-(--color-text-strong) mb-1">Quick Start</h2>
