@@ -87,7 +87,10 @@ from `CompanyProfile`.
   instead of each caller re-deriving it.** `GET /api/billing/status` itself
   has no role gate (a read, safe for any authenticated tenant member), but
   `POST /api/billing/checkout` / `change-plan` / `cancel` all require
-  `requireBillingAdmin` (`admin`/`super_admin`). Rather than each consumer
+  `requireBillingAdmin` (`admin`/`super_admin` AND Settings: Edit —
+  `current_user_access('settings') >= 2`, final-review fix 2026-10-01; the
+  rule is the pure `canManageBilling()` in `src/lib/billing/billingAccess.ts`,
+  shared by the guard and the status route). Rather than each consumer
   re-computing that role check from Redux, `status` computes
   `canManageBilling: boolean` server-side the same way `requireBillingAdmin`
   does (`src/lib/billing/authGuard.ts`) and returns it in the response.

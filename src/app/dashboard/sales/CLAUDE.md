@@ -442,8 +442,9 @@ editable fields.
   manual creation.
 - **On any sync failure the modal also writes `ebay_sync_error` itself**, via
   the same tenant client it used for the sale update. The route is gated by
-  `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin),
-  but this modal is reachable by anyone with `update_sale`, which includes
+  `requireIntegrationAdmin()` (= `requireSectionAccess("integrations", 2)`;
+  the two `/api/shipping/*` routes use `requireSectionAccess("orders", 3)`),
+  but this modal is reachable by anyone with Orders: Edit, which includes
   **`accountant`**. An accountant's save is 403'd *before* the route touches
   the row, so without this client-side write the order would silently never
   reach eBay and no Retry row would ever appear for an admin to find. The

@@ -88,7 +88,9 @@ alone:
   `change-plan`/`cancel` all require `requireBillingAdmin`, but `GET
   /api/billing/status` itself has no role gate (a read, safe for anyone) —
   it does, however, compute a `canManageBilling: boolean` field server-side
-  (mirroring `requireBillingAdmin`'s `admin`/`super_admin` check) and returns
+  (mirroring `requireBillingAdmin`'s check — `admin`/`super_admin` AND
+  `current_user_access('settings') >= 2`, both via the pure
+  `canManageBilling()` in `src/lib/billing/billingAccess.ts`) and returns
   it alongside `plan`/`hasSubscription`/`cancelAtPeriodEnd`. `BillingSection`
   reads `status.canManageBilling` (no separate Redux role lookup anymore) and
   renders a read-only summary sentence for everyone else instead of live

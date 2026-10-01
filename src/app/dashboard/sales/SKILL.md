@@ -148,9 +148,10 @@ fixed — don't reintroduce them:
   the project verifier BLOCKS `@/lib/integrations/*` imports from `"use
   client"` files (the existing `ebay/carriers` import there only survives via
   a `// verifier:allow server-module-in-client` comment on the line above it).
-- **A 403 writes nothing server-side.** `requireIntegrationAdmin()` runs
-  before the route touches the row, and `manage_integrations` excludes
-  `accountant` while `update_sale` (which opens the modal) includes it. So
+- **A 403 writes nothing server-side.** `requireIntegrationAdmin()`
+  (= `requireSectionAccess("integrations", 2)`, 055) runs before the route
+  touches the row, and an accountant's default Integrations level is 0 while
+  Orders: Edit (which opens the modal) is their default. So
   `EditSaleModal` writes `ebay_sync_error` from the client on *any* sync
   failure — otherwise an accountant's status change silently never reaches
   eBay and leaves no trace for an admin to retry.

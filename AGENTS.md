@@ -59,7 +59,8 @@ New shared code from the migration:
 - `src/components/billing/PlanPicker.tsx` — shared plan-picker cards, used
   by `/trial-expired` and Settings' Billing section
 - `src/lib/billing/authGuard.ts` — `requireBillingAdmin()`, gates the
-  mutating billing routes to `admin`/`super_admin`
+  mutating billing routes to `admin`/`super_admin` with Settings: Edit
+  (rule in `src/lib/billing/billingAccess.ts`, shared with `/api/billing/status`)
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
   (server-only, never imported client-side — see its `SKILL.md`)
 - `src/app/api/integrations/` — connect/callback/disconnect/review/import

@@ -45,8 +45,8 @@ export default function SaleDetailPage({ params }: PageProps) {
   const { can } = useAccess();
   const canEdit = can("orders", 2);
   const canDelete = can("orders", 3);
-  // "Generate Shipping Label" gate — matches requireIntegrationAdmin()'s
-  // orders ≥ 3 bar on the two API routes this button calls and the
+  // "Generate Shipping Label" gate — matches requireSectionAccess("orders", 3)
+  // on the two /api/shipping/* routes this button calls and the
   // shipments_insert RLS policy (043_shipments.sql / 005_tenant_provisioning.sql).
   const canGenerateLabel = can("orders", 3);
   // Decides which Shipping-card body renders when no shipment exists yet —
