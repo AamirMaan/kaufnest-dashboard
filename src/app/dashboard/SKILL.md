@@ -192,6 +192,18 @@ rows, so don't be confused if you don't see a `fetchAllRows` call in either
 `page.tsx`. The Sales/Expenses/Purchases CSV export queries still go
 through it.
 
+### Gotcha: section access is loaded per request in both `layout.tsx` and `proxy.ts`
+
+Access = `get_my_access()` + plan ceiling, loaded per request in both
+`layout.tsx` and `proxy.ts`; both fail open to role defaults so the app
+keeps working before 055 is applied.
+
+### Gotcha: Totals RPCs are guarded wrappers since 055
+
+Edit `<name>__impl`, not `<name>` — a migration that `CREATE OR REPLACE`s
+`<name>` must re-run `public.install_section_permissions` for every tenant
+in the same migration.
+
 ### Gotcha: "Specific period" filter — Home/Analytics do NOT use `FilterBar`
 
 Home and Analytics's date filter supports "Specific period" (any

@@ -29,7 +29,13 @@ broadly when working on a specific feature.**
   page to decide whether EasyPost label purchasing is offered vs. a plain
   PDF label fallback — `shipping_labels_enabled` is the platform-admin
   EasyPost visibility switch, control-plane migration 010, defaults false,
-  no plan tie). The `platform_connections` select
+  no plan tie). Also calls `get_my_access()` (055) on the tenant-scoped
+  client, merges it with `parseAccessMap`/`applyPlanCeiling`
+  (`@/lib/permissions/sections`) using the tenant's plan, and passes the
+  result to `<StoreProvider>` as `access` (hydrated into
+  `currentUserSlice.access`, read via `useAccess()` —
+  `src/store/useAccess.ts`); a failed RPC falls back to the signed-in user's
+  role defaults so the app keeps working before 055 is applied. The `platform_connections` select
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.

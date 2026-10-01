@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DollarSign, Landmark, Receipt, ShoppingBag, ShoppingCart, TrendingUp } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { type Currency } from "@/types";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { useToast } from "@/components/ui/Toast";
+import { SECTIONS, type Section } from "@/lib/permissions/sections";
 import { buildKpis } from "./_lib/kpiTiles";
 import { buildPlatformStats } from "./_lib/platformStats";
 import { useDateRangePicker, describeRange } from "./_components/useDateRangePicker";
@@ -15,6 +18,23 @@ import { KpiTile } from "./_components/KpiTile";
 import { PlatformStatsCard } from "./_components/PlatformStatsCard";
 import { RecentOrdersCard } from "./_components/RecentOrdersCard";
 import { RecordTransferModal } from "./_components/RecordTransferModal";
+
+/** "No access" toast when proxy.ts bounces a denied section back here (?denied=<section>). */
+function DeniedAccessToast() {
+  const { error: toastError } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const denied = searchParams.get("denied") as Section | null;
+    if (!denied) return;
+    const label = SECTIONS.find((s) => s.key === denied)?.label ?? denied;
+    toastError("No access", `You don't have access to ${label}.`);
+    router.replace("/dashboard");
+  }, [searchParams, toastError, router]);
+
+  return null;
+}
 
 /** Home = the numbers (KPI tiles, per-platform stats, recent orders). Charts live on Analytics. */
 export default function DashboardPage() {
@@ -43,6 +63,9 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <DeniedAccessToast />
+      </Suspense>
       <PageHeader title="Overview" description={`Summary for ${rangeLabel}`}
         action={<DateRangePicker picker={picker} />} />
 

@@ -6,6 +6,7 @@ import { DashboardShell } from "@/components/layout/DashboardShell";
 import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
+import { applyPlanCeiling, parseAccessMap } from "@/lib/permissions/sections";
 import type {
   Profile,
   Sale,
@@ -188,6 +189,13 @@ export default async function DashboardLayout({
     shippingLabelsEnabled = (tenant?.shipping_labels_enabled as boolean | undefined) ?? false;
   }
 
+  // Section access (055). get_my_access() applies role defaults + the
+  // user's exceptions; the plan ceiling is applied here. Falls back to role
+  // defaults if the RPC fails (e.g. 055 not applied yet).
+  const { data: rawAccess, error: accessError } = await supabase.rpc("get_my_access");
+  if (accessError) console.error("[dashboard/layout] get_my_access failed", accessError);
+  const access = applyPlanCeiling(parseAccessMap(accessError ? null : rawAccess, profile.role), tenantPlan);
+
   return (
     <StoreProvider
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
@@ -202,6 +210,7 @@ export default async function DashboardLayout({
       tenantPlan={tenantPlan}
       aiEnabled={aiEnabled}
       shippingLabelsEnabled={shippingLabelsEnabled}
+      access={access}
       platformConnections={platformConnections ?? []}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       platformPayouts={platformPayoutsData ?? []}
