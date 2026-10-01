@@ -26,6 +26,11 @@ deactivate/reactivate a user's dashboard access.
   active `super_admin`. `page.tsx` uses this to disable the Deactivate button
   (with the block reason as its `title` tooltip) rather than letting the
   write fail server-side.
+- `_lib/accessDiff.ts` (+ colocated test) — pure helpers for the Permissions
+  screen: `exceptionsToGrid(role, rows)` overlays exception rows on role
+  defaults, `diffAccess(role, saved, edited)` computes upserts + deletes for
+  what to write, `customSections(role, grid)` lists sections differing from
+  the role default.
 - `_components/InviteUserModal.tsx` — sends an invite (calls the API route below),
   then dispatches `addUser`.
 - `_components/EditUserModal.tsx` — edits profile fields and/or role, dispatches `updateUser`.
