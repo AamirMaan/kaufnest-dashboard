@@ -19,10 +19,10 @@ needs. It replaces the old hardcoded `PLAN_LIMITS` table in
 | `resolvePlanKey.ts` | No — pure, client-safe | `resolvePlanKey({ metadataPlan, priceId, paidPlanKeys, priceToPlan })` — which paid plan a Stripe subscription is on, for the billing webhook: `metadata.plan` first, then the price id via `control.plan_prices` (grandfathered prices / dashboard edits). Never resolves to the trial; `null` = unknown, and the webhook then leaves `tenants.plan` untouched (no silent `starter` default) |
 | `resolvePlanKey.test.ts` | — | unit tests for the above |
 | `catalog.integration.test.ts` | — | live parity test against the real control-plane DB; skips cleanly (console note) while 012 is unapplied — see its own header comment |
-
-`stripeSync.ts` is referenced by the verifier's server-only import guard as a
-planned future file (plan↔Stripe price sync) — it does not exist yet; later
-tasks in this plan add it.
+| `validatePlan.ts` | No — pure, client-safe | `PlanInput` (= `Plan` minus the two Stripe id fields), `PlanErrors`, `parsePlanInput` (coerces an API-route/form body into `PlanInput`, never throws), `validatePlan(input, { isCreate, catalog })` (field-level + cross-field rules: key format/reserved/duplicate, paid-price range/decimals, trial length, last-public-plan guard, AI quota vs. `aiFeatures`), `detectReductions` (tenant-facing "this takes something away" warnings for the admin confirm step), `planDiff` (audit-log `metadata.changes`), `planInputToRow` (camelCase → snake_case `control.plans` columns, never includes the Stripe ids — those are written separately once Stripe confirms them) |
+| `validatePlan.test.ts` | — | unit tests for the above |
+| `stripeSync.ts` | **Yes** | `StripePlanApi` (the minimal `products.create/update` + `prices.create/update` shape the route handlers pass in — `Pick<Stripe.ProductResource, …>`/`Pick<Stripe.PriceResource, …>`, see the Gotchas below for the SDK's actual export names), `toCents`, `createStripePlan` (new plan → Stripe product + price), `syncStripePlan` (edit → price replacement / product rename / retire-unretire, only when something Stripe-relevant changed), `PlanSyncError` (thrown when an edit needs Stripe but the plan was never linked to it) |
+| `stripeSync.test.ts` | — | unit tests, fake `StripePlanApi` (`jest.fn()` per method) — no real Stripe SDK involved |
 
 ## Data flow
 
@@ -62,10 +62,25 @@ Client Component calls a server route / thunk that goes through
 - Billing webhook: `getPlanCatalog()` + `getPlanPriceMap()` →
   `resolvePlanKey`; a catalog read failure returns 500 so Stripe retries.
 
+## Consumers (plan-management Task 5 — admin plan API)
+
+- `src/app/api/admin/plans/route.ts` (`GET`, `POST`) and
+  `src/app/api/admin/plans/[key]/route.ts` (`PATCH`) — the `/admin` plan
+  management API. Both call `invalidatePlanCatalog()` then `getPlanCatalog()`
+  at the top of every handler (so a concurrent edit from another request is
+  never validated against a stale catalog), run `validatePlan`/`parsePlanInput`,
+  then `createStripePlan`/`syncStripePlan` (Stripe first) before writing
+  `control.plans` (DB second) and `control.admin_audit_log` (`action:
+  "plan_create"`/`"plan_update"`, `metadata: { key, changes: planDiff(...) }`).
+  Both import `verifyPlatformAdmin` from `../tenants/route` (now returns
+  `{ ok: true; email: string }` — the email is the audit log's `admin_email`).
+
 ## Shared deps
 
 - `src/lib/supabase/control.ts` — `createControlClient()`, the service-role
   client `catalog.ts` reads `control.plans`/`control.plan_prices` through.
+- `src/lib/stripe.ts` — `getStripe()`, passed into `createStripePlan`/
+  `syncStripePlan` by the admin plan API routes.
 
 ## Tests
 

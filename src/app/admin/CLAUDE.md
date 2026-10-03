@@ -263,6 +263,40 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   8h) read by `DashboardShell`'s impersonation banner.
 - **`exit-impersonation/route.ts`** (`POST`) — clears the
   `kaufnest_impersonating` cookie.
+- **`plans/route.ts`** (`GET`, `POST`) / **`plans/[key]/route.ts`** (`PATCH`)
+  (plan-management Task 5, 2026-10-03) — the plan-catalog API behind the
+  (not-yet-built) `/admin` plan management UI. Both guarded by
+  `verifyPlatformAdmin()` imported from `../tenants/route` (now returns
+  `{ ok: true; email: string }` instead of bare `{ ok: true }` — the email
+  is what every write stamps into `control.admin_audit_log.admin_email`).
+  - `GET`: `invalidatePlanCatalog()` + `getPlanCatalog()` (always fresh, not
+    the request-scoped 60 s cache another instance might still be serving),
+    plus one `{ count: "exact", head: true }` tenants lookup per plan key for
+    the "N tenants on this plan" UI. Returns `{ plans, tenantCounts }`; 500
+    `"Could not load plans."` on any read failure.
+  - `POST` (create — paid plans only, `validatePlan`'s `isCreate: true`
+    rejects `kind: "trial"`): `parsePlanInput` → `validatePlan` (400 +
+    `fieldErrors` on failure) → `createStripePlan` (502 if Stripe rejects —
+    **Stripe is called before any DB write**) → insert `control.plans` +
+    `control.plan_prices` → `invalidatePlanCatalog()` → audit log
+    (`action: "plan_create"`, `metadata.changes` from `planDiff(null, input)`)
+    → `201 { plan }`. A `23505` unique-violation on the insert (duplicate key
+    race) surfaces as `409`, everything else as `500`.
+  - `PATCH /plans/[key]` (`{ params }: { params: Promise<{ key: string }> }`,
+    same awaited-params shape as `tenants/[id]/route.ts`): looks up the
+    plan by `key` in a freshly-invalidated catalog (404 if missing), forces
+    `key`/`kind` immutable from the existing row (client can't smuggle a
+    kind/key change through), `validatePlan` (`isCreate: false` — no
+    duplicate-key check, so editing a plan never trips over its own key),
+    then `syncStripePlan` (before DB write): a `PlanSyncError` (edit needs
+    Stripe but the plan was never linked — see `lib/plans/SKILL.md`) → `409`
+    with the error's own message; any other Stripe failure → `502`. DB
+    update sets `stripe_price_id` only when `syncStripePlan` actually
+    rotated the price. `invalidatePlanCatalog()` + audit log
+    (`action: "plan_update"`, `metadata.changes` from
+    `planDiff(before, input)`) → `200 { plan }`.
+  - See `src/lib/plans/CLAUDE.md`/`SKILL.md` for `validatePlan.ts`/
+    `stripeSync.ts` themselves — this section only covers the HTTP layer.
 - **`src/app/api/support/resync/route.ts`** (not in `api/admin/`, but
   platform-admin-only and cross-referenced here) — `POST`, guarded by
   `verifyPlatformAdmin()`. The "Sync with Trello" sweep behind
@@ -283,7 +317,15 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
 - `src/lib/supabase/control.ts` (`createControlClient`, `isPlatformAdmin`,
   `verifyPlatformAdmin`) — Project A, server-only. `isPlatformAdmin(email)` is
   also called from `dashboard/layout.tsx` to decide whether to show the
-  sidebar's "Admin Panel" link (see `src/app/dashboard/CLAUDE.md`).
+  sidebar's "Admin Panel" link (see `src/app/dashboard/CLAUDE.md`). Not to be
+  confused with `tenants/route.ts`'s own locally-defined `verifyPlatformAdmin()`
+  (session-based, `{ ok: true; email } | { ok: false; response }`), which
+  `tenants/[id]/route.ts` and `plans/route.ts`/`plans/[key]/route.ts` import.
+- `src/lib/plans/{catalog,entitlements,validatePlan,stripeSync}.ts`
+  (`getPlanCatalog`, `invalidatePlanCatalog`, `planFromRow`, `validatePlan`,
+  `parsePlanInput`, `planDiff`, `planInputToRow`, `createStripePlan`,
+  `syncStripePlan`, `PlanSyncError`) + `src/lib/stripe.ts` (`getStripe`) —
+  used by `plans/route.ts`/`plans/[key]/route.ts`. See `src/lib/plans/CLAUDE.md`.
 - `src/lib/ai/quota.ts` (`currentPeriod`, `sumCalls`, `callsByUser`) and
   `src/lib/plans/{catalog,entitlements}.ts` (`getPlanCatalog`, `entitlementsOf`,
   `getAiGenerationLimit`) — used by

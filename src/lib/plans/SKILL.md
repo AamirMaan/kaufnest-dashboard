@@ -11,10 +11,19 @@
    `entitlementsOf`, and if it's a simple boolean gate add it to
    `PlanFeature`/`PLAN_FEATURES` so `plansWithFeature`/`planNamesByFeature`/
    `availabilityLine` pick it up for free.
-3. Whatever later task owns `validatePlan.ts` and the `/admin` `PlanForm` —
-   add the field there too (not yet created as of this task).
+3. `validatePlan.ts` — add it to `PlanInput`/`PlanErrors` (if it needs its
+   own validation rule), `INPUT_KEYS` (for `planDiff`), and
+   `planInputToRow`'s snake_case mapping. Add a label to `FEATURE_LABELS` if
+   turning it off should show up in `detectReductions`. The `/admin`
+   `PlanForm` (later task) consumes this file — don't duplicate its rules in
+   the form component.
 4. `src/lib/utils/pricing.ts`'s feature-tick list, if the flag is customer-
    visible on the pricing page.
+
+**Change a plan's price, name, tagline, or visibility from `/admin`**: goes
+through `PATCH /api/admin/plans/[key]`, which calls `syncStripePlan` before
+writing `control.plans`. No file changes needed for this — it's data, not
+code — but see the Gotchas below before touching `stripeSync.ts` itself.
 
 **Add a new gating helper**: put it in `entitlements.ts` next to the
 existing ones (`canAddUser`, `hasPlatformIntegrations`, etc.) — it should
@@ -62,3 +71,31 @@ fail-closed empty-catalog throw live in `catalog.ts`.
   needs every historical price, not just the current one; keeping it
   separate from the 60 s plan cache avoids coupling two different
   invalidation needs.
+- **`stripeSync.ts`: Stripe first, DB second.** `createStripePlan`/
+  `syncStripePlan` are always called before the `control.plans`
+  insert/update. If the DB write then fails, the new Stripe price is an
+  unused orphan (harmless — nothing points at it) and a retry reuses the
+  *same* Stripe object via the idempotency key rather than creating a
+  second one. Idempotency keys: `plan-create-product-<key>`,
+  `plan-create-price-<key>-<cents>`, `plan-price-<key>-<cents>-<oldPriceId>`.
+  Stripe keeps a given key's response for 24 h, so an identical retry
+  within that window returns the original object instead of erroring or
+  duplicating.
+- **Deactivating a Stripe price never touches existing subscriptions** —
+  `prices.update(id, { active: false })` only stops that price from being
+  usable for *new* purchases/plan-changes; tenants already subscribed at
+  the old price keep billing on it (grandfathering), which is why
+  `getPlanPriceMap()` (above) has to resolve every historical price, not
+  just the current one.
+- **Stripe SDK type names, confirmed against `stripe@22.2.0`**: the brief
+  names `Stripe.ProductsResource`/`Stripe.PricesResource`, but this
+  version's actual exports are singular — `Stripe.ProductResource`/
+  `Stripe.PriceResource` (`node_modules/stripe/cjs/resources/{Products,Prices}.d.ts`).
+  `StripePlanApi` in `stripeSync.ts` uses the singular names; if a future
+  Stripe SDK upgrade renames them again, that's the one place to fix.
+- **`syncStripePlan` only touches Stripe for what actually changed** — a
+  `maxUsers`/`sortOrder`/etc.-only edit on a plan with `stripeProductId:
+  null` returns `{}` without error; only a price/name/tagline/retire-unretire
+  change on an unlinked plan throws `PlanSyncError` ("Run npm run
+  plans:seed-stripe first"). A trial-kind plan never reaches Stripe at all
+  (`syncStripePlan` returns `{}` immediately for `kind !== "paid"`).
