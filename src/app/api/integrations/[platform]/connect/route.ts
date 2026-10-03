@@ -17,12 +17,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pla
   const { tenantSchema } = auth.context;
 
   const control = createControlClient();
-  const { data: tenant } = await control
+  const { data: tenant, error: tenantError } = await control
     .schema("control")
     .from("tenants")
     .select("plan")
     .eq("schema_name", tenantSchema)
-    .single();
+    .maybeSingle<{ plan: string }>();
+  if (tenantError) {
+    console.error("[integrations/connect] tenant lookup failed", tenantError.message);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
 
   let ent: PlanEntitlements;
   try {

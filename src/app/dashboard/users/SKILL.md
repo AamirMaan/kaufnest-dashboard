@@ -109,9 +109,12 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   `src/app/api/users/invite/route.ts` counts the tenant's `profiles` rows
   whose `status` isn't `deactivated` and checks `canAddUser(ent, count)`
   (`getEntitlements(tenant.plan)`); at the limit it returns **403** `"Your
-  plan allows up to <maxUsers> users. Upgrade your plan to invite more."`,
+  plan allows up to <maxUsers> user(s). Upgrade your plan to invite more."
+  (singular for 1)`,
   which `InviteUserModal` shows inline (it already prefers `json.error`). A
-  catalog/count failure is a 500 "Could not check your plan". Deactivating a
+  `control.tenants` lookup error, catalog error or count error is a 500
+  "Could not check your plan" — never a misleading 403; only a genuinely
+  missing tenant row (no error, `maybeSingle` data null) fails closed. Deactivating a
   user frees a seat.
 - `src/app/api/users/invite/route.ts` invites users into the **caller's own**
   tenant (`user.app_metadata.tenant_schema`) — it 400s with a friendly message

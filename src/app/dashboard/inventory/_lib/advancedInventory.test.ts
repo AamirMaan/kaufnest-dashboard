@@ -14,12 +14,12 @@ import {
   LOCATION_TYPE_LABELS,
 } from "./advancedInventory";
 import { NO_ENTITLEMENTS, type PlanEntitlements } from "@/lib/plans/entitlements";
+import type { InventorySettings, PlatformLocationDefault, StockLocation } from "@/types";
 
 const ENT = (over: Partial<PlanEntitlements> = {}): PlanEntitlements => ({ ...NO_ENTITLEMENTS, ...over });
 const STARTER = ENT({ maxUsers: 3 });
 const PRO = ENT({ maxUsers: 5, platformIntegrations: true });
 const BUSINESS = ENT({ maxUsers: Infinity, platformIntegrations: true, aiFeatures: true, aiGenerationsPerMonth: 300, messagingAndListings: true, advancedInventory: true });
-import type { InventorySettings, PlatformLocationDefault, StockLocation } from "@/types";
 
 const loc = (id: string, overrides: Partial<StockLocation> = {}): StockLocation => ({
   id,
@@ -64,8 +64,7 @@ describe("advancedInventoryView", () => {
     expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: null })).toBe("enable");
   });
 
-  it("is active once enabled on business or trial", () => {
-    expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: settings() })).toBe("active");
+  it("is active once enabled on a plan with advanced inventory", () => {
     expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: settings() })).toBe("active");
   });
 

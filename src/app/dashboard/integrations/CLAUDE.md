@@ -122,7 +122,8 @@ returns the plan's `platformIntegrations` flag; null (not hydrated) ⇒ not
 entitled. The upgrade copy comes from `availability("platformIntegrations",
 …)` — never hardcode plan names. The API routes (`review`, `review/import`,
 `[platform]/connect`) check `getEntitlements(tenant.plan)` server-side: 500
-"Could not check your plan" if the catalog read fails, 403 "Platform
+"Could not check your plan" if the `control.tenants` lookup (`maybeSingle`)
+or the catalog read fails, 403 "Platform
 integrations are not included in your plan." otherwise (a missing tenant row
 now fails closed — the old `?? "trial"` fallback is gone).
 

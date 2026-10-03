@@ -8,8 +8,9 @@ interface CurrentUserState {
   tenantPlan: TenantPlan | null;
   /** From control.plans via dashboard/layout.tsx; null until hydrated — every gate treats null as 'not entitled'. */
   planEntitlements: PlanEntitlements | null;
-  /** From control.plans via dashboard/layout.tsx; null until hydrated — every gate treats null as 'not entitled'.
-   * Names of the PUBLIC paid plans including each feature, for upgrade copy (`usePlan().availability`). */
+  /** Names of the PUBLIC paid plans that include each feature, from
+   * control.plans via dashboard/layout.tsx — upgrade copy only
+   * (`usePlan().availability`), never a gate. Null until hydrated. */
   planNamesByFeature: Record<PlanFeature, string[]> | null;
   /** Platform-admin AI visibility switch (control.tenants.ai_enabled).
    * False until hydrated, so AI controls never flash before we know. */

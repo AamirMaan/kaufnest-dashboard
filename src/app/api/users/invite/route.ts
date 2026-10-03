@@ -85,12 +85,16 @@ export async function POST(request: Request) {
   }
 
   // 3c. Plan user limit (control.plans.max_users). Deactivated users don't count.
-  const { data: tenantRow } = await createControlClient()
+  const { data: tenantRow, error: tenantError } = await createControlClient()
     .schema("control")
     .from("tenants")
     .select("plan")
     .eq("schema_name", tenantSchema)
     .maybeSingle<{ plan: string }>();
+  if (tenantError) {
+    console.error("[users/invite] tenant lookup failed", tenantError.message);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
   const { count: userCount, error: countError } = await tenantService
     .from("profiles")
     .select("id", { count: "exact", head: true })
@@ -108,7 +112,9 @@ export async function POST(request: Request) {
   }
   if (!canAddUser(ent, userCount ?? 0)) {
     return NextResponse.json(
-      { error: `Your plan allows up to ${ent.maxUsers} users. Upgrade your plan to invite more.` },
+      {
+        error: `Your plan allows up to ${ent.maxUsers} ${ent.maxUsers === 1 ? "user" : "users"}. Upgrade your plan to invite more.`,
+      },
       { status: 403 }
     );
   }

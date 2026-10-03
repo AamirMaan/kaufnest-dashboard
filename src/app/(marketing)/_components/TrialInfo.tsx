@@ -10,7 +10,7 @@ export function TrialInfo({ trialDays }: { trialDays: number }) {
         <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-(--color-text-muted)">
           Your trial is not a stripped-down version. You get every feature — including
           the eBay and Amazon integrations, listings and buyer messages — for the full
-          fourteen days. No credit card, and nothing to cancel if you decide against it.
+          {trialDays} days. No credit card, and nothing to cancel if you decide against it.
         </p>
         <p className="mx-auto mt-3 max-w-xl text-base leading-7 text-(--color-text-muted)">
           When the trial ends your data stays exactly where it is, waiting for you to
