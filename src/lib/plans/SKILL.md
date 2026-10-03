@@ -125,6 +125,11 @@ fail-closed empty-catalog throw live in `catalog.ts`.
   `Stripe.PriceResource` (`node_modules/stripe/cjs/resources/{Products,Prices}.d.ts`).
   `StripePlanApi` in `stripeSync.ts` uses the singular names; if a future
   Stripe SDK upgrade renames them again, that's the one place to fix.
+- **`npm run plans:seed-stripe` refuses a price/amount mismatch.** For each
+  `STRIPE_PRICE_*` env var it compares the Stripe price's `unit_amount / 100`
+  with the row's `monthly_eur`; on a mismatch (or a missing row) it warns,
+  writes nothing for that plan, carries on, and exits non-zero at the end.
+  Fix the env var or the row, then re-run (the script is idempotent).
 - **`syncStripePlan` only touches Stripe for what actually changed** — a
   `maxUsers`/`sortOrder`/etc.-only edit on a plan with `stripeProductId:
   null` returns `{}` without error; only a price/name/tagline/retire-unretire

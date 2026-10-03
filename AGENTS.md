@@ -59,8 +59,9 @@ New shared code from the migration:
   Plans management (`/admin/plans`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — checkout, change-plan, cancel, status, and
-  webhook routes. The webhook is the only writer of `control.tenants.plan`/
-  `status`; the other four only talk to Stripe.
+  webhook routes. The webhook is the only billing writer of `control.tenants.plan`/
+  `status` (platform admins also assign plans from `/admin`); the other four only
+  talk to Stripe.
 - `src/components/billing/PlanPicker.tsx` — shared plan-picker cards, used
   by `/trial-expired` and Settings' Billing section
 - `src/lib/billing/authGuard.ts` — `requireBillingAdmin()`, gates the

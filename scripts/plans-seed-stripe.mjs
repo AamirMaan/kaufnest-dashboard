@@ -28,6 +28,7 @@ async function main() {
     process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST"
   } mode)...\n`);
 
+  const skipped = [];
   for (const [key, priceId] of Object.entries(ENV)) {
     if (!priceId) {
       console.log(`- ${key}: STRIPE_PRICE_${key.toUpperCase()} not set, skipped`);
@@ -36,6 +37,29 @@ async function main() {
     const price = await stripe.prices.retrieve(priceId);
     const productId = typeof price.product === "string" ? price.product : price.product.id;
     const monthlyEur = (price.unit_amount ?? 0) / 100;
+
+    // Never link a Stripe price whose amount disagrees with the catalog row:
+    // checkout would charge one amount while the pricing page shows another.
+    const { data: row, error: rowError } = await control
+      .from("plans")
+      .select("monthly_eur")
+      .eq("key", key)
+      .maybeSingle();
+    if (rowError) throw new Error(`${key}: ${rowError.message}`);
+    if (!row) {
+      console.warn(`! ${key}: no control.plans row with this key — SKIPPED`);
+      skipped.push(key);
+      continue;
+    }
+    const rowEur = row.monthly_eur === null ? null : Number(row.monthly_eur);
+    if (rowEur !== monthlyEur) {
+      console.warn(
+        `! ${key}: Stripe price ${priceId} is €${monthlyEur}/mo but control.plans.monthly_eur is ` +
+          `${rowEur === null ? "null" : `€${rowEur}`} — SKIPPED (nothing written). Fix the env var or the row, then re-run.`
+      );
+      skipped.push(key);
+      continue;
+    }
 
     const { error: planError } = await control
       .from("plans")
@@ -49,6 +73,10 @@ async function main() {
     if (historyError) throw new Error(`${key} history: ${historyError.message}`);
 
     console.log(`- ${key}: price ${priceId} (€${monthlyEur}), product ${productId}`);
+  }
+  if (skipped.length > 0) {
+    console.error(`\nDone with ${skipped.length} plan(s) skipped: ${skipped.join(", ")}.`);
+    process.exit(1);
   }
   console.log("\nDone.");
 }

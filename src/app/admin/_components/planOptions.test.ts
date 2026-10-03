@@ -50,6 +50,12 @@ describe("planOptions", () => {
     ]);
   });
 
+  it("appends the current key as unknown when it is not in the catalog", () => {
+    const opts = planOptions(catalog, "legacy_gold");
+    expect(opts[opts.length - 1]).toEqual({ value: "legacy_gold", label: "legacy_gold (unknown)" });
+    expect(opts.filter((o) => o.value === "legacy_gold")).toHaveLength(1);
+  });
+
   it("excludes retired plans for a new tenant", () => {
     expect(planOptions(catalog, null).map((o) => o.value)).not.toContain("old");
   });

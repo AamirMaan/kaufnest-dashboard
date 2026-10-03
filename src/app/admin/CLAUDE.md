@@ -77,7 +77,8 @@ not tenant roles.
 - `_components/planOptions.ts` (+ test) — pure: tenant plan `<option>`s from
   the catalog — `sortPlans`, keep `isAssignablePlan(p, currentKey)` (retired
   only when current), label "Trial (N days)" / "Name (hidden)" /
-  "Name (retired)" / name.
+  "Name (retired)" / name. A current key that isn't in the catalog at all
+  is appended as "key (unknown)" so the select shows what saving keeps.
 - `_components/usePlanOptions.ts` — fetches `GET /api/admin/plans` when a
   tenant modal opens and maps it through `planOptions`. Until it loads (or if
   it fails) the only option is the current value; `error` drives the modals'

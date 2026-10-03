@@ -115,7 +115,11 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   `control.tenants` lookup error, catalog error or count error is a 500
   "Could not check your plan" — never a misleading 403; only a genuinely
   missing tenant row (no error, `maybeSingle` data null) fails closed. Deactivating a
-  user frees a seat.
+  user frees a seat. **Known, accepted race:** the check is
+  count → compare → invite with no lock, so two concurrent invites at
+  `maxUsers - 1` can both pass and overshoot the limit by one. Closing it
+  needs a DB-side reservation (e.g. an RPC that counts and inserts under a
+  lock); not worth it for a seat cap an admin can correct by deactivating.
 - `src/app/api/users/invite/route.ts` invites users into the **caller's own**
   tenant (`user.app_metadata.tenant_schema`) — it 400s with a friendly message
   if that's missing (stale JWT from before Phase 2.3 stamping; user needs to
