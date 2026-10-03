@@ -35,6 +35,11 @@ from `CompanyProfile`.
   feature's `_components/BillingSection.tsx` is presentation only — the
   actual logic lives in `src/app/api/billing/*` (routes) and
   `src/components/billing/PlanPicker.tsx` (shared with `/trial-expired`).
+  Which plans appear, their prices and copy come from `control.plans` (edit
+  in `/admin`) via `status.plans` — never hardcode a plan key here; plan keys
+  are plain `string`s now (`PaidPlan` was removed). The "on the X plan" copy
+  uses the plan's name from `status.plans`, falling back to the key (a
+  retired plan is not purchasable, so it is not in that list).
   Changing what a plan costs or includes is the plan catalog
   (`control.plans`, `src/lib/plans/`) — gates read it via `usePlan()` —
   plus `src/lib/utils/pricing.ts` for the marketing/picker copy, not this

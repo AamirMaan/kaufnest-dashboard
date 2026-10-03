@@ -47,10 +47,12 @@ New shared code from the migration:
   middleware equivalent — do NOT add `src/middleware.ts`, having both crashes
   the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
-- `src/lib/stripe.ts` (Stripe client + `PLANS` price-ID map) +
-  `src/lib/utils/planGating.ts` (feature gates) +
-  `src/lib/utils/pricing.ts` (the three paid plans' prices/copy, feature
-  ticks derived from `planGating.ts`) — billing helpers
+- `src/lib/stripe.ts` (Stripe client) + `src/lib/plans/` (the plan
+  catalog: `control.plans` reader, entitlements/feature gates,
+  `resolvePlanKey` for the webhook) + `src/lib/utils/pricing.ts`
+  (`pricedPlans(plans)` — pricing cards built from catalog rows, feature
+  ticks derived from `entitlementsOf`) — billing helpers. Plan prices and
+  Stripe price ids live in `control.plans`, not env vars
 - `src/app/admin/` — Boughtopia platform admin panel (`/admin`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — checkout, change-plan, cancel, status, and
@@ -94,7 +96,8 @@ New shared code from the migration:
 - `src/lib/ai/` — Anthropic client, prompt builders, quota metering and the
   AI route guard (server-only, never imported client-side). Quota lives in
   `control.tenant_ai_usage` (Project A); the per-plan allowance is
-  `aiGenerationsPerMonth` in `lib/utils/planGating.ts`. AI visibility is
+  `aiGenerationsPerMonth` on the tenant's `control.plans` row (read via
+  `src/lib/plans/`). AI visibility is
   `control.tenants.ai_enabled`, toggled per tenant from `/admin`.
 - `src/app/api/listings/ai/` — describe, aspects and usage routes.
 - `src/lib/utils/sanitizeListingHtml.ts` — eBay-safe HTML allowlist, applied

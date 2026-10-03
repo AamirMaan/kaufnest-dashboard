@@ -3,6 +3,9 @@ import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
 import { createClient } from "@/lib/supabase/server";
 import { canManageBilling as billingRule } from "@/lib/billing/billingAccess";
+import { getPlanCatalog } from "@/lib/plans/catalog";
+import { canPurchase } from "@/lib/plans/entitlements";
+import { pricedPlans, type PricedPlan } from "@/lib/utils/pricing";
 import type { TenantPlan, UserRole } from "@/types";
 
 export async function GET() {
@@ -39,6 +42,16 @@ export async function GET() {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
+  // The plans this tenant may buy (public plans, plus a hidden custom plan
+  // it is already on). An unreadable catalog degrades to no picker rather
+  // than failing the whole status read.
+  let plans: PricedPlan[] = [];
+  try {
+    plans = pricedPlans((await getPlanCatalog()).filter((p) => canPurchase(p, tenant.plan)));
+  } catch (err) {
+    console.error("[billing/status] plan catalog unavailable", err);
+  }
+
   const hasSubscription = Boolean(tenant.stripe_subscription_id) && tenant.status === "active";
 
   let cancelAtPeriodEnd = false;
@@ -73,5 +86,5 @@ export async function GET() {
   }
   const canManageBilling = billingRule(profile?.role, accessError ? null : (settingsLevel as number | null));
 
-  return NextResponse.json({ plan: tenant.plan, hasSubscription, cancelAtPeriodEnd, canManageBilling });
+  return NextResponse.json({ plan: tenant.plan, hasSubscription, cancelAtPeriodEnd, canManageBilling, plans });
 }

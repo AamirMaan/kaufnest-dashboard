@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
+import { getPlanCatalog, getPlanPriceMap } from "@/lib/plans/catalog";
+import { resolvePlanKey } from "@/lib/plans/resolvePlanKey";
 import type Stripe from "stripe";
 
 // Disable body parsing — Stripe needs the raw body to verify the signature
@@ -25,16 +27,38 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
-      const plan = (sub.metadata?.plan as string) ?? "starter";
+      // Which catalog plan this subscription is on: metadata.plan first
+      // (checkout/change-plan always write it), then the price id via
+      // control.plan_prices (grandfathered prices, subscriptions edited in
+      // the Stripe dashboard). Unknown → leave tenants.plan untouched rather
+      // than guessing; the status/subscription-id update still applies.
+      let plan: string | null;
+      try {
+        const [catalog, priceToPlan] = await Promise.all([getPlanCatalog(), getPlanPriceMap()]);
+        plan = resolvePlanKey({
+          metadataPlan: sub.metadata?.plan,
+          priceId: sub.items?.data?.[0]?.price?.id,
+          paidPlanKeys: new Set(catalog.filter((p) => p.kind === "paid").map((p) => p.key)),
+          priceToPlan,
+        });
+      } catch (err) {
+        // Catalog unreadable: fail the event so Stripe retries it later.
+        console.error("[billing/webhook] plan catalog unavailable", err);
+        writeFailed = true;
+        break;
+      }
+      if (!plan) {
+        console.error("[billing/webhook] unknown plan for subscription", sub.id, sub.items?.data?.[0]?.price?.id);
+      }
 
-      const patch: { stripe_subscription_id: string; plan: string; status?: string } = {
+      const patch: { stripe_subscription_id: string; plan?: string; status?: string } = {
         stripe_subscription_id: sub.id,
-        plan,
+        ...(plan ? { plan } : {}),
       };
 
       // Only touch status for unambiguous outcomes. "incomplete" (payment
       // still processing) and "trialing" (this app never sets
-      // trial_period_days on a subscription — Boughtopia's own 14-day trial
+      // trial_period_days on a subscription — Boughtopia's own free trial
       // is unrelated to Stripe's "trialing" status — so this shouldn't
       // occur, but the mapping stays defensive rather than assuming) are
       // deliberately left alone rather than prematurely deactivating a

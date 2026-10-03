@@ -40,9 +40,14 @@ signed-in state.
 - `_components/Features.tsx` — six feature cards from a local `FEATURES`
   array, each with a `lucide-react` icon in an emerald badge. **Only
   describe things that actually ship.**
-- `_components/Pricing.tsx` — three plan cards, rendered from
-  `src/lib/utils/pricing.ts`. Anchored at `#pricing` (the hero's secondary CTA links
-  to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
+- `_components/Pricing.tsx` — one card per public paid plan in the
+  `control.plans` catalog. Server Component taking `{ plans, trialDays }`
+  props (no data fetching inside): `page.tsx` reads `getPlanCatalog()`,
+  keeps `visibility === "public"` and maps through `pricedPlans()`
+  (`src/lib/utils/pricing.ts`); an unreadable catalog renders "Pricing is
+  temporarily unavailable.". Grid columns adapt to the plan count via a
+  static `COLS` lookup. Anchored at `#pricing` (the hero's secondary CTA
+  links to it). The emerald border/shadow "lift" is a pure-CSS `hover:` state on
   every card equally (not tied to `plan.highlighted`) — only the "Most
   popular" badge and the CTA button's solid-vs-outline styling are still
   keyed off `plan.highlighted`. Don't restore a permanent highlighted
@@ -53,13 +58,14 @@ signed-in state.
 
 ## Pricing is derived, not transcribed
 
-`src/lib/utils/pricing.ts` declares the € amounts, but every ✓/✗ in the table is
-computed from `PLAN_LIMITS` (`lib/utils/planGating.ts`). The page therefore
-**cannot advertise a feature the application gates off** — change the plan
-matrix and the page follows. `pricing.test.ts` pins the two together.
+Prices, names, taglines and user caps come from the `control.plans`
+catalog (edited in `/admin`), and every ✓/✗ in the table is computed by
+`pricedPlans()` from `entitlementsOf(plan)` — the same entitlements the app
+gates on. The page therefore **cannot advertise a feature the application
+gates off**. `src/lib/utils/pricing.test.ts` pins the derivation.
 
-**To change a price:** edit `MONTHLY_EUR` in `src/lib/utils/pricing.ts`, nothing else.
-**To change what a plan includes:** edit `PLAN_LIMITS`, not this folder.
+**To change a price or what a plan includes:** edit the plan in `/admin`, not
+this folder.
 
 ## Accent colour is page-scoped, not the app's `--color-primary` (2026-08-29)
 
@@ -91,7 +97,8 @@ collection, and remittance) — keep that section if the page is ever reworded.
   `shopify-logo2.svg` — real logo assets, used by `IntegrationsBar.tsx` only.
 - `public/brand/Boughtopia-dashboard.png` — the hero's product screenshot.
 - `lib/supabase/server` (`createClient`) — the logged-in redirect.
-- `lib/utils/planGating` (`getPlanLimits`) — via `lib/utils/pricing.ts`.
+- `lib/plans/catalog` (`getPlanCatalog`, `getTrialDays`) and
+  `lib/utils/pricing` (`pricedPlans`) — pricing cards and trial length.
 - `lucide-react` — `ArrowRight` (Hero), `Layers`/`RefreshCw`/`Receipt`/
   `Package`/`MessageSquare`/`Users` (Features), `Check`/`X` (Pricing).
 

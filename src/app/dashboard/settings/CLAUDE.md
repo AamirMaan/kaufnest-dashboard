@@ -91,7 +91,9 @@ alone:
   (mirroring `requireBillingAdmin`'s check — `admin`/`super_admin` AND
   `current_user_access('settings') >= 2`, both via the pure
   `canManageBilling()` in `src/lib/billing/billingAccess.ts`) and returns
-  it alongside `plan`/`hasSubscription`/`cancelAtPeriodEnd`. `BillingSection`
+  it alongside `plan`/`hasSubscription`/`cancelAtPeriodEnd`/`plans` (the
+  `PricedPlan[]` this tenant may buy, built from `control.plans` — see
+  `src/lib/plans/CLAUDE.md`; `PlanPicker` takes it as its `plans` prop). `BillingSection`
   reads `status.canManageBilling` (no separate Redux role lookup anymore) and
   renders a read-only summary sentence for everyone else instead of live
   Subscribe/Switch/Cancel controls — same "read-only, not hidden or broken"

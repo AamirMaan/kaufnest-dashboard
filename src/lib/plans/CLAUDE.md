@@ -16,6 +16,8 @@ needs. It replaces the old hardcoded `PLAN_LIMITS` table in
 | `entitlements.test.ts` | — | unit tests for the above |
 | `catalog.ts` | **Yes** | `getPlanCatalog()` (60 s in-memory cache per server instance), `invalidatePlanCatalog()`, `getPlan(key)`, `getEntitlements(key)`, `getTrialDays()`, `getPlanPriceMap()` — all read `control.plans`/`control.plan_prices` via `createControlClient()` (`src/lib/supabase/control.ts`) |
 | `catalog.test.ts` | — | unit tests, mocks `@/lib/supabase/control` |
+| `resolvePlanKey.ts` | No — pure, client-safe | `resolvePlanKey({ metadataPlan, priceId, paidPlanKeys, priceToPlan })` — which paid plan a Stripe subscription is on, for the billing webhook: `metadata.plan` first, then the price id via `control.plan_prices` (grandfathered prices / dashboard edits). Never resolves to the trial; `null` = unknown, and the webhook then leaves `tenants.plan` untouched (no silent `starter` default) |
+| `resolvePlanKey.test.ts` | — | unit tests for the above |
 | `catalog.integration.test.ts` | — | live parity test against the real control-plane DB; skips cleanly (console note) while 012 is unapplied — see its own header comment |
 
 `stripeSync.ts` is referenced by the verifier's server-only import guard as a
@@ -46,6 +48,19 @@ Client Component calls a server route / thunk that goes through
   `lib/inventory/authGuard.ts`, `api/users/invite` (user limit) call
   `getEntitlements`/`getPlanCatalog`; `api/signup/provision`,
   `api/admin/provision-tenant` and the marketing page call `getTrialDays()`.
+
+## Consumers (plan-management Task 4 — billing)
+
+- Marketing page: `getPlanCatalog()` → public plans → `pricedPlans()` →
+  `<Pricing plans trialDays>`.
+- `GET /api/billing/status`: returns `plans` = `pricedPlans()` of the
+  catalog filtered by `canPurchase(p, tenant.plan)` (`[]` if the catalog is
+  unreadable); `PlanPicker` (Settings, `/trial-expired`) renders only those.
+- `POST /api/billing/checkout` / `change-plan`: `getPlan(key)` +
+  `canPurchase` after the tenant lookup; charge `plan.stripePriceId`;
+  `"Plan not available"` (400) otherwise, 500 if the catalog is unreadable.
+- Billing webhook: `getPlanCatalog()` + `getPlanPriceMap()` →
+  `resolvePlanKey`; a catalog read failure returns 500 so Stripe retries.
 
 ## Shared deps
 
