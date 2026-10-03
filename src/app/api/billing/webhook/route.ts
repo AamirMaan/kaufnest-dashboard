@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
-import { getPlanCatalog, getPlanPriceMap } from "@/lib/plans/catalog";
+import { getPlanCatalog, getPlanPriceMap, invalidatePlanCatalog } from "@/lib/plans/catalog";
 import { resolvePlanKey } from "@/lib/plans/resolvePlanKey";
 import type Stripe from "stripe";
 
@@ -31,9 +31,14 @@ export async function POST(req: NextRequest) {
       // (checkout/change-plan always write it), then the price id via
       // control.plan_prices (grandfathered prices, subscriptions edited in
       // the Stripe dashboard). Unknown → leave tenants.plan untouched rather
-      // than guessing; the status/subscription-id update still applies.
+      // than guessing; the status/subscription-id update still applies —
+      // EXCEPT for an active subscription (see below).
       let plan: string | null;
       try {
+        // Drop this instance's 60 s catalog cache first: a plan created on
+        // another instance seconds ago and bought immediately must resolve
+        // here, not fall through as "unknown" on a stale cache.
+        invalidatePlanCatalog();
         const [catalog, priceToPlan] = await Promise.all([getPlanCatalog(), getPlanPriceMap()]);
         plan = resolvePlanKey({
           metadataPlan: sub.metadata?.plan,
@@ -49,6 +54,15 @@ export async function POST(req: NextRequest) {
       }
       if (!plan) {
         console.error("[billing/webhook] unknown plan for subscription", sub.id, sub.items?.data?.[0]?.price?.id);
+        // An ACTIVE (i.e. paying) subscription we can't map must not be
+        // acknowledged: patching only status would leave a trial tenant on
+        // plan 'trial' (later locked out by isTrialExpired) and a 200 means
+        // Stripe never retries. Fail the event so it is retried once the
+        // catalog / plan_prices catches up.
+        if (sub.status === "active") {
+          writeFailed = true;
+          break;
+        }
       }
 
       const patch: { stripe_subscription_id: string; plan?: string; status?: string } = {

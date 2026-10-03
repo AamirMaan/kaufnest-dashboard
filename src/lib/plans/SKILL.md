@@ -52,6 +52,14 @@ fail-closed empty-catalog throw live in `catalog.ts`.
   sees its own change immediately; every other instance (if there's more
   than one) picks it up within 60 s. Don't reach for Next.js Cache
   Components for this — the app deliberately doesn't use that.
+- **Money paths bypass the cache.** The billing webhook, `checkout` and
+  `change-plan` call `invalidatePlanCatalog()` before reading the catalog:
+  with the 60 s per-instance cache, a plan created on another instance and
+  bought immediately would otherwise resolve as unknown in the webhook (a
+  paying tenant left on `trial`), and checkout could charge a price that an
+  edit has just replaced. The webhook also returns 500 (no write) when an
+  `active` subscription's plan can't be resolved, so Stripe retries instead
+  of the event being acknowledged with only `status` patched.
 - **A refresh failure after the TTL serves the previous catalog, not an
   error** — `getPlanCatalog()` only throws when there is *no* cache yet
   (first load, or right after `invalidatePlanCatalog()`) and the read

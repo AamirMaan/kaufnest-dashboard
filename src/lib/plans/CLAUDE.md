@@ -56,11 +56,15 @@ Client Component calls a server route / thunk that goes through
 - `GET /api/billing/status`: returns `plans` = `pricedPlans()` of the
   catalog filtered by `canPurchase(p, tenant.plan)` (`[]` if the catalog is
   unreadable); `PlanPicker` (Settings, `/trial-expired`) renders only those.
-- `POST /api/billing/checkout` / `change-plan`: `getPlan(key)` +
-  `canPurchase` after the tenant lookup; charge `plan.stripePriceId`;
-  `"Plan not available"` (400) otherwise, 500 if the catalog is unreadable.
-- Billing webhook: `getPlanCatalog()` + `getPlanPriceMap()` →
-  `resolvePlanKey`; a catalog read failure returns 500 so Stripe retries.
+- `POST /api/billing/checkout` / `change-plan`: `invalidatePlanCatalog()`
+  then `getPlan(key)` + `canPurchase` after the tenant lookup; charge
+  `plan.stripePriceId`; `"Plan not available"` (400) otherwise, 500 if the
+  catalog is unreadable.
+- Billing webhook: `invalidatePlanCatalog()` then `getPlanCatalog()` +
+  `getPlanPriceMap()` → `resolvePlanKey`; a catalog read failure returns 500
+  so Stripe retries, and so does an **active** subscription whose plan
+  resolves to `null` (no write at all). Route test:
+  `src/app/api/billing/webhook/route.test.ts`.
 
 ## Consumers (plan-management Task 5 — admin plan API)
 

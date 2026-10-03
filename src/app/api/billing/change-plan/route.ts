@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
 import { requireBillingAdmin } from "@/lib/billing/authGuard";
-import { getPlan } from "@/lib/plans/catalog";
+import { getPlan, invalidatePlanCatalog } from "@/lib/plans/catalog";
 import { canPurchase } from "@/lib/plans/entitlements";
 
 function errorMessage(err: unknown): string {
@@ -52,9 +52,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Resolved after the tenant lookup: a hidden (custom) plan is purchasable
-  // only by the tenant already on it (canPurchase).
+  // only by the tenant already on it (canPurchase). The catalog cache is
+  // dropped first so a stale instance never charges a price an /admin edit
+  // on another instance has just replaced or deactivated.
   let target;
   try {
+    invalidatePlanCatalog();
     target = await getPlan(plan);
   } catch (err) {
     console.error("[billing/change-plan] plan catalog unavailable", err);
