@@ -1,22 +1,29 @@
 "use client";
 
-import { pricedPlans, type PaidPlan } from "@/lib/utils/pricing";
+import type { PricedPlan } from "@/lib/utils/pricing";
 
 interface PlanPickerProps {
+  /** The plans this tenant may buy — `plans` from /api/billing/status
+   * (built server-side from control.plans). */
+  plans: PricedPlan[];
   /** Called with the plan the visitor picked. The caller decides whether
    * that means starting a fresh checkout or changing an existing
    * subscription — this component doesn't know which. */
-  onSelectPlan: (plan: PaidPlan) => void;
+  onSelectPlan: (plan: string) => void;
   /** The tenant's current plan, if they already have one. Rendered as a
    * disabled "Current plan" card instead of a button. */
-  currentPlan?: PaidPlan;
+  currentPlan?: string;
   /** The plan currently mid-request, if any — disables its button and
    * shows a loading label instead of "Subscribe"/"Switch to X". */
-  loadingPlan?: PaidPlan | null;
+  loadingPlan?: string | null;
 }
 
-export function PlanPicker({ onSelectPlan, currentPlan, loadingPlan }: PlanPickerProps) {
-  const plans = pricedPlans();
+export function PlanPicker({ plans, onSelectPlan, currentPlan, loadingPlan }: PlanPickerProps) {
+  if (plans.length === 0) {
+    return (
+      <p className="text-sm text-[var(--color-text-muted)]">No plans are available right now. Please try again later.</p>
+    );
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">

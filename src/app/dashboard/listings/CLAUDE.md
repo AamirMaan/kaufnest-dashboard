@@ -44,8 +44,9 @@ covers only Part 1; Part 2's design is
   Pro tenant or a tenant with no eBay connection could reach the form
   directly by URL even with the list page's button correctly hidden.
 - `_components/BusinessEbayGate.tsx` — the plan/connection gate itself
-  (2026-08-27): renders an upgrade prompt when `tenantPlan` isn't Business
-  (`hasMessagingAndListings`, `lib/utils/planGating.ts`), an "eBay connection
+  (2026-08-27): renders an upgrade prompt when `usePlan().ent` lacks
+  Messages & Listings (`hasMessagingAndListings`, `lib/plans/entitlements.ts`;
+  copy from `availability("messagingAndListings", "eBay listing creation")`), an "eBay connection
   required" prompt when `state.integrations.connections` has no `platform:
   "ebay"` row with `status === "connected"`, or `children` otherwise. Used by
   all three route files above — change the gate condition/copy here, not
@@ -75,8 +76,8 @@ covers only Part 1; Part 2's design is
   default submit button, so Enter in Title/Price/Quantity/an aspect field
   would otherwise publish to a live eBay marketplace from one keystroke —
   a hazard the old step-gated wizard didn't have. See `SKILL.md`.
-  **It also owns `aiVisible`** (2026-09-02) — `!!tenantPlan &&
-  hasAiFeatures(tenantPlan) && aiEnabled`, read from `currentUserSlice` —
+  **It also owns `aiVisible`** (2026-09-02) — `!!ent &&
+  hasAiFeatures(ent) && aiEnabled`, `ent` from `usePlan()`, `aiEnabled` from `currentUserSlice` —
   and passes it down to `DescriptionEditor` and `AspectsStep`, plus an
   `onAiUsed` callback that bumps an `aiUsageToken` counter so
   `<AiUsageNote refreshToken={…} />` re-reads usage after each AI call.
@@ -515,16 +516,22 @@ the XML shapes.
   its second consumer; see that feature's `CLAUDE.md` for its other usage
 - `components/layout/PageHeader`
 - `store/slices/{auditLogsSlice,currentUserSlice,companyProfileSlice}` —
-  `currentUserSlice`'s `tenantPlan` + `aiEnabled` are what gate the AI
+  `usePlan().ent` + `currentUserSlice`'s `aiEnabled` are what gate the AI
   controls (see `aiVisible` above)
 - `app/dashboard/inventory/_store/inventorySlice` — read-only, `selectorItems`
   for the Source step's Inventory picker
 - `store/useAccess` — `useAccess().can("listings", 2)` (Task 5 — replaced
   `lib/utils/permissions`' `hasPermission`)
 - `lib/utils/{audit,currency,detectPlatform,pagedQuery}` —
-  `planGating`'s `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
+  `lib/plans/entitlements`' `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
   specifically, not `hasPlatformIntegrations`; `hasAiFeatures` is used by
   `ListingForm.tsx` and `AiUsageNote.tsx` to compute `aiVisible`
+- `lib/plans/requirePlanFeature` (server-only, 2026-10-03) —
+  `requireMessagingAndListings(tenantSchema)`, called right after the
+  auth/section guard in every `app/api/listings/{[id],ebay}/*` route (the
+  server-side half of `BusinessEbayGate`'s plan check). The AI routes get
+  the same check inside `requireAiAccess`; `ai/usage` is read-only and also
+  feeds Settings' `AiUsageNote`, so it is deliberately not plan-gated
 - `lib/ai/` — server-only (Anthropic client, prompt builders, quota
   accounting, `requireAiAccess`). **Never imported by anything in this
   folder**; the UI only ever talks to it through `app/api/listings/ai/`

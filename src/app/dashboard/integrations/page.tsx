@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { ConnectionCard } from "./_components/ConnectionCard";
 import type { IntegrationPlatform } from "@/types";
 
@@ -22,7 +23,7 @@ function IntegrationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { can } = useAccess();
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const connections = useAppSelector((s) => s.integrations.connections);
 
   useEffect(() => {
@@ -40,7 +41,7 @@ function IntegrationsContent() {
 
   const canManage = can("integrations", 2);
 
-  if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
+  if (!ent || !hasPlatformIntegrations(ent)) {
     return (
       <div>
         <PageHeader
@@ -52,7 +53,7 @@ function IntegrationsContent() {
             Upgrade to unlock integrations
           </h2>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Automatic eBay and Amazon order syncing is available on the Pro and Business plans.
+            {availability("platformIntegrations", "Automatic eBay and Amazon order syncing")}
           </p>
           <Link
             href="/dashboard/settings"

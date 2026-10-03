@@ -5,10 +5,13 @@ import { ebayAdapter } from "@/lib/integrations/ebay";
 import { replyToMessage } from "@/lib/integrations/ebay/messages";
 import { writeAuditLog } from "@/lib/utils/audit";
 import type { EbayMessage, Profile } from "@/types";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireSectionAccess("messages", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client, userId } = auth.context;
 
   // Still needed for the audit log's userEmail below — requireSectionAccess

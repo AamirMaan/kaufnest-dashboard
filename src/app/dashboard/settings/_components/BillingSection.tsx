@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PlanPicker } from "@/components/billing/PlanPicker";
-import type { PaidPlan } from "@/lib/utils/pricing";
+import type { PricedPlan } from "@/lib/utils/pricing";
 import type { TenantPlan } from "@/types";
 
 interface BillingStatus {
@@ -10,6 +10,8 @@ interface BillingStatus {
   hasSubscription: boolean;
   cancelAtPeriodEnd: boolean;
   canManageBilling: boolean;
+  /** The plans this tenant may buy, built server-side from control.plans. */
+  plans: PricedPlan[];
 }
 
 const RECONCILE_ATTEMPTS = 3;
@@ -50,7 +52,7 @@ async function pollBillingStatus(
 
 export function BillingSection() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
-  const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
@@ -98,7 +100,7 @@ export function BillingSection() {
     });
   }, []);
 
-  async function handleSelectPlan(plan: PaidPlan) {
+  async function handleSelectPlan(plan: string) {
     if (!status) return;
     setError(null);
     setLoadingPlan(plan);
@@ -168,7 +170,10 @@ export function BillingSection() {
     );
   }
 
-  const currentPaidPlan = status.plan === "trial" ? undefined : (status.plan as PaidPlan);
+  const currentPaidPlan = status.plan === "trial" ? undefined : status.plan;
+  // A retired plan is not purchasable, so it is not in status.plans — fall
+  // back to the key for the copy.
+  const currentPlanName = status.plans.find((p) => p.plan === status.plan)?.name ?? status.plan;
 
   return (
     <section className="max-w-2xl space-y-4 rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
@@ -191,6 +196,7 @@ export function BillingSection() {
       {status.canManageBilling ? (
         <>
           <PlanPicker
+            plans={status.plans}
             onSelectPlan={handleSelectPlan}
             currentPlan={status.hasSubscription ? currentPaidPlan : undefined}
             loadingPlan={loadingPlan}
@@ -210,7 +216,7 @@ export function BillingSection() {
       ) : (
         <p className="text-sm text-[var(--color-text-muted)]">
           {status.hasSubscription
-            ? `Your workspace is on the ${currentPaidPlan ?? status.plan} plan. Only an admin can change or cancel it.`
+            ? `Your workspace is on the ${currentPlanName} plan. Only an admin can change or cancel it.`
             : "Your workspace is on a trial. Only an admin can subscribe."}
         </p>
       )}

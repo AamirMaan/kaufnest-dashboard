@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
+import { getTrialDays } from "@/lib/plans/catalog";
 import { addExposedSchema, removeExposedSchema } from "@/lib/supabase/managementApi";
 import { slugForCompany, nextAvailableSlug, schemaNameFor } from "@/lib/utils/tenantSlug";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -9,8 +10,6 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 // on a PostgREST schema-cache reload. Comfortably past a default serverless
 // timeout, so the budget is raised explicitly.
 export const maxDuration = 60;
-
-const TRIAL_DAYS = 14;
 
 // Supabase's PostgrestError/AuthError carry a `.message` but aren't always
 // `instanceof Error` — String(err) on those yields "[object Object]".
@@ -78,8 +77,9 @@ export async function POST() {
   }
   let schemaName = schemaNameFor(slug);
 
+  const trialDays = await getTrialDays();
   const trialEnd = new Date();
-  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+  trialEnd.setDate(trialEnd.getDate() + trialDays);
 
   // Claim BEFORE any expensive work, so a refresh or a concurrent request
   // collides on the unique admin_email index instead of building a second

@@ -7,12 +7,15 @@ import {
   createInventoryLocation,
   type CreateInventoryLocationInput,
 } from "@/lib/integrations/ebay/publish";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 async function resolveAccessToken(): Promise<
   { accessToken: string } | { error: NextResponse }
 > {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return { error: auth.error };
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return { error: planError };
   const { client } = auth.context;
 
   const conn = await getConnection(client, "ebay");

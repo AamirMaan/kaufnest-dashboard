@@ -2,6 +2,12 @@ import {
   SECTIONS, SECTION_KEYS, ROLE_DEFAULTS, maxLevel, planAllows, applyPlanCeiling, applyDependencies,
   effectiveAccess, parseAccessMap, sectionForPath, can, canSeeSection, firstAccessiblePath, deniedRedirect, type AccessMap,
 } from "./sections";
+import { NO_ENTITLEMENTS, type PlanEntitlements } from "@/lib/plans/entitlements";
+
+const ENT = (over: Partial<PlanEntitlements> = {}): PlanEntitlements => ({ ...NO_ENTITLEMENTS, ...over });
+const STARTER = ENT({ maxUsers: 3 });
+const PRO = ENT({ maxUsers: 5, platformIntegrations: true });
+const BUSINESS = ENT({ maxUsers: Infinity, platformIntegrations: true, aiFeatures: true, aiGenerationsPerMonth: 300, messagingAndListings: true, advancedInventory: true });
 
 const NONE: AccessMap = Object.fromEntries(SECTION_KEYS.map((k) => [k, 0])) as AccessMap;
 
@@ -37,19 +43,19 @@ describe("sections model", () => {
   });
 
   it("plan ceiling", () => {
-    expect(planAllows("integrations", "starter")).toBe(false);
-    expect(planAllows("integrations", "pro")).toBe(true);
-    expect(planAllows("listings", "pro")).toBe(false);
-    expect(planAllows("messages", "business")).toBe(true);
+    expect(planAllows("integrations", STARTER)).toBe(false);
+    expect(planAllows("integrations", PRO)).toBe(true);
+    expect(planAllows("listings", PRO)).toBe(false);
+    expect(planAllows("messages", BUSINESS)).toBe(true);
     expect(planAllows("orders", null)).toBe(true);
-    expect(applyPlanCeiling(ROLE_DEFAULTS.admin, "pro")).toMatchObject({ integrations: 2, listings: 0, messages: 0, orders: 3 });
+    expect(applyPlanCeiling(ROLE_DEFAULTS.admin, PRO)).toMatchObject({ integrations: 2, listings: 0, messages: 0, orders: 3 });
   });
 
   it("effectiveAccess: exceptions win, super_admin locked to max, plan ceiling applied", () => {
-    const a = effectiveAccess("accountant", { analytics: 0, purchases: 1, integrations: 2 }, "business");
+    const a = effectiveAccess("accountant", { analytics: 0, purchases: 1, integrations: 2 }, BUSINESS);
     expect(a).toMatchObject({ analytics: 0, purchases: 1, integrations: 2, orders: 2 });
-    expect(effectiveAccess("super_admin", { orders: 0 }, "business").orders).toBe(3);
-    expect(effectiveAccess("accountant", { listings: 2 }, "pro").listings).toBe(0);
+    expect(effectiveAccess("super_admin", { orders: 0 }, BUSINESS).orders).toBe(3);
+    expect(effectiveAccess("accountant", { listings: 2 }, PRO).listings).toBe(0);
   });
 
   it("parseAccessMap validates and falls back per key", () => {
@@ -70,9 +76,9 @@ describe("sections model", () => {
   });
 
   it("effectiveAccess and parseAccessMap apply the Integrations dependency", () => {
-    expect(effectiveAccess("accountant", { listings: 2, messages: 2 }, "business")).toMatchObject({ listings: 0, messages: 0 });
-    expect(effectiveAccess("accountant", { integrations: 2, listings: 2 }, "business")).toMatchObject({ integrations: 2, listings: 2, messages: 0 });
-    expect(effectiveAccess("admin", { integrations: 0 }, "business")).toMatchObject({ listings: 0, messages: 0 });
+    expect(effectiveAccess("accountant", { listings: 2, messages: 2 }, BUSINESS)).toMatchObject({ listings: 0, messages: 0 });
+    expect(effectiveAccess("accountant", { integrations: 2, listings: 2 }, BUSINESS)).toMatchObject({ integrations: 2, listings: 2, messages: 0 });
+    expect(effectiveAccess("admin", { integrations: 0 }, BUSINESS)).toMatchObject({ listings: 0, messages: 0 });
     expect(parseAccessMap({ ...ROLE_DEFAULTS.admin, integrations: 0 }, "admin")).toMatchObject({ listings: 0, messages: 0 });
     // Fallback values are subject to the rule too (integrations invalid → accountant default 0).
     expect(parseAccessMap({ integrations: "x", listings: 2 }, "accountant")).toMatchObject({ integrations: 0, listings: 0 });
@@ -101,7 +107,7 @@ describe("sections model", () => {
     // An admin's uncapped default includes integrations (level 2), but a
     // starter-plan ceiling would zero it out for button-level `can()`.
     const uncapped = ROLE_DEFAULTS.admin;
-    const capped = applyPlanCeiling(uncapped, "starter");
+    const capped = applyPlanCeiling(uncapped, STARTER);
     expect(canSeeSection(uncapped, "integrations")).toBe(true);
     expect(can(capped, "integrations", 1)).toBe(false);
   });

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { hasAiFeatures } from "@/lib/utils/planGating";
+import { hasAiFeatures } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 
 interface AiUsage {
   limit: number;
@@ -19,9 +20,9 @@ interface Props {
 }
 
 export function AiUsageNote({ refreshToken = 0 }: Props) {
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent } = usePlan();
   const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
-  const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;
+  const aiVisible = !!ent && hasAiFeatures(ent) && aiEnabled;
 
   const [usage, setUsage] = useState<AiUsage | null>(null);
 

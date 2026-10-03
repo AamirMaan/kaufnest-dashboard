@@ -54,9 +54,9 @@ values.
 **AI usage section** (2026-09-02) — rendered between `BillingSection` and the
 Company Profile form, same card/heading shape as every other section on this
 page (`rounded-[var(--radius-card)] border ... bg-[var(--color-surface)] p-6
-space-y-4` + an `<h2>`). Gated on `aiVisible = !!tenantPlan &&
-hasAiFeatures(tenantPlan) && aiEnabled` (`tenantPlan`/`aiEnabled` from
-`s.currentUser`, `hasAiFeatures` from `lib/utils/planGating`) — the identical
+space-y-4` + an `<h2>`). Gated on `aiVisible = !!ent &&
+hasAiFeatures(ent) && aiEnabled` (`ent` from `usePlan()`, `aiEnabled` from
+`s.currentUser`, `hasAiFeatures` from `lib/plans/entitlements`) — the identical
 computation `ListingForm.tsx` uses, recomputed here rather than shared via
 props/context since the two live in unrelated route trees. When `aiVisible`
 is false the whole `<section>` is omitted, not disabled — same
@@ -91,7 +91,9 @@ alone:
   (mirroring `requireBillingAdmin`'s check — `admin`/`super_admin` AND
   `current_user_access('settings') >= 2`, both via the pure
   `canManageBilling()` in `src/lib/billing/billingAccess.ts`) and returns
-  it alongside `plan`/`hasSubscription`/`cancelAtPeriodEnd`. `BillingSection`
+  it alongside `plan`/`hasSubscription`/`cancelAtPeriodEnd`/`plans` (the
+  `PricedPlan[]` this tenant may buy, built from `control.plans` — see
+  `src/lib/plans/CLAUDE.md`; `PlanPicker` takes it as its `plans` prop). `BillingSection`
   reads `status.canManageBilling` (no separate Redux role lookup anymore) and
   renders a read-only summary sentence for everyone else instead of live
   Subscribe/Switch/Cancel controls — same "read-only, not hidden or broken"
@@ -145,13 +147,14 @@ page's form, and the relevant DB migrations (see this folder's `SKILL.md`).
 - `components/ui/{FormFields,Button,Toast,AiUsageNote}` — `AiUsageNote`
   moved here from `dashboard/listings/_components/` (2026-09-02) once
   Settings became its second consumer
-- `lib/utils/{generateInvoice,currency,planGating}` — `hasAiFeatures` computes
-  the AI usage section's `aiVisible` gate
+- `lib/utils/{generateInvoice,currency}`; `lib/plans/entitlements`
+  (`hasAiFeatures`) + `store/usePlan` compute the AI usage section's
+  `aiVisible` gate
 - `lib/supabase/client` (`createTenantClient`, Company Profile save)
 - `store/useAccess` — `useAccess().can("settings", 2)` (`canEditCompanyProfile`)
 - `store/slices/companyProfileSlice` (`hydrateCompanyProfile`),
-  `store/slices/currentUserSlice` (`tenantPlan`/`aiEnabled` for the AI usage
-  gate)
+  `store/slices/currentUserSlice` (`aiEnabled` for the AI usage gate;
+  entitlements via `usePlan()`)
 - `types` (`Sale`, `CompanyProfile`, `Currency`)
 
 ## Tests

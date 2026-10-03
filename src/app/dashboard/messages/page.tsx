@@ -6,7 +6,8 @@ import { RefreshCw, Search, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { hasMessagingAndListings } from "@/lib/utils/planGating";
+import { hasMessagingAndListings } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { useAccess } from "@/store/useAccess";
 import { formatDateTime } from "@/lib/utils/date";
 import { fetchMessagesPage, syncMessages, sendReply, searchMessages, clearSearch } from "./_store/messagesSlice";
@@ -22,7 +23,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 export default function MessagesPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const { can } = useAccess();
   const connections = useAppSelector((s) => s.integrations.connections);
   const {
@@ -114,7 +115,7 @@ export default function MessagesPage() {
     }
   }
 
-  if (!tenantPlan || !hasMessagingAndListings(tenantPlan)) {
+  if (!ent || !hasMessagingAndListings(ent)) {
     return (
       <div>
         <PageHeader title="Messages" description="Reply to eBay buyer messages from your dashboard" />
@@ -123,7 +124,7 @@ export default function MessagesPage() {
             Upgrade to unlock Messages
           </h2>
           <p className="mt-2 text-sm text-(--color-text-muted)">
-            eBay messaging is available on the Business plan.
+            {availability("messagingAndListings", "eBay messaging")}
           </p>
           <Link
             href="/dashboard/settings"

@@ -4,6 +4,7 @@ import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenS
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { endListing } from "@/lib/integrations/ebay/listings";
 import type { EbayListingDraft } from "@/types";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 // Supabase's PostgrestError/AuthError carry a `.message` but aren't always
 // `instanceof Error` — the naive `err instanceof Error ? err.message :
@@ -21,6 +22,8 @@ function errorMessage(err: unknown): string {
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireSectionAccess("listings", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const { id } = await params;

@@ -1,4 +1,14 @@
-import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, setAccess } from "./currentUserSlice";
+import {
+  currentUserSlice,
+  setCurrentUser,
+  setTenantPlan,
+  setAiEnabled,
+  setShippingLabelsEnabled,
+  setAccess,
+  setPlanEntitlements,
+  setPlanNamesByFeature,
+} from "./currentUserSlice";
+import { NO_ENTITLEMENTS } from "@/lib/plans/entitlements";
 import { ROLE_DEFAULTS } from "@/lib/permissions/sections";
 import type { Profile } from "@/types";
 
@@ -84,5 +94,23 @@ describe("currentUserSlice access", () => {
     expect(init.access).toBeNull();
     const next = currentUserSlice.reducer(init, setAccess({ ...ROLE_DEFAULTS.accountant, orders: 0 }));
     expect(next.access?.orders).toBe(0);
+  });
+});
+
+describe("currentUserSlice plan entitlements", () => {
+  const { reducer } = currentUserSlice;
+
+  it("starts with no plan entitlements or plan names", () => {
+    const state = reducer(undefined, { type: "@@INIT" });
+    expect(state.planEntitlements).toBeNull();
+    expect(state.planNamesByFeature).toBeNull();
+  });
+
+  it("stores plan entitlements and plan names", () => {
+    const names = { platformIntegrations: ["Pro"], aiFeatures: [], messagingAndListings: [], advancedInventory: [] };
+    let state = reducer(undefined, setPlanEntitlements(NO_ENTITLEMENTS));
+    state = reducer(state, setPlanNamesByFeature(names));
+    expect(state.planEntitlements).toEqual(NO_ENTITLEMENTS);
+    expect(state.planNamesByFeature).toEqual(names);
   });
 });
