@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
 import { createClient } from "@/lib/supabase/server";
+import { canManageBilling as billingRule } from "@/lib/billing/billingAccess";
 import type { TenantPlan, UserRole } from "@/types";
 
 export async function GET() {
@@ -62,7 +63,15 @@ export async function GET() {
     .select("role")
     .eq("id", user.id)
     .single<{ role: UserRole }>();
-  const canManageBilling = profile?.role === "admin" || profile?.role === "super_admin";
+  // Same rule as requireBillingAdmin() so the UI never shows controls the
+  // mutating routes would 403. An RPC error just hides the controls.
+  const { data: settingsLevel, error: accessError } = await supabase.rpc("current_user_access", {
+    p_section: "settings",
+  });
+  if (accessError) {
+    console.error("[billing/status] current_user_access failed", { code: accessError.code });
+  }
+  const canManageBilling = billingRule(profile?.role, accessError ? null : (settingsLevel as number | null));
 
   return NextResponse.json({ plan: tenant.plan, hasSubscription, cancelAtPeriodEnd, canManageBilling });
 }

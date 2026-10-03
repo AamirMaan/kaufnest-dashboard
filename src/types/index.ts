@@ -9,10 +9,13 @@ export interface Profile {
   email: string;
   full_name: string;
   role: UserRole;
-  // Permission keys (see `Permission` in lib/utils/permissions.ts) granted to
-  // this user ADDITIVELY on top of their role's defaults. Kept as `string[]`
-  // here (not `Permission[]`) to avoid a circular import — permissions.ts
-  // imports `UserRole` from this file.
+  // Legacy per-user permission-override keys. Superseded by the Section
+  // Permissions feature (`lib/permissions/sections.ts`, `user_section_access`
+  // table, the `/dashboard/users/[id]/permissions` screen) — the column
+  // still exists and this type still mirrors it, but nothing in the app
+  // reads or writes it any more; `lib/utils/permissions.ts` (the module that
+  // defined these keys) and its `PermissionsModal.tsx` UI were both removed
+  // (Task 7, 2026-09-30).
   permission_overrides: string[];
   // Deactivating a user only revokes dashboard access (gated in src/proxy.ts)
   // — never a hard delete, since created_by FKs on sales/expenses/purchases/

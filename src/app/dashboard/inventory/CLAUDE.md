@@ -18,15 +18,29 @@ pagination is active.
   and wires the error banner's Retry button to `advanced.reload`. Also
   computes `isAdmin` from `state.currentUser.profile?.role`
   (`admin`/`super_admin`) and renders `<EnableAdvancedCard isAdmin={isAdmin}
-  />` when `view === "enable"` (Task 4). **When `view === "active"` (Task 6,
+  />` when `view === "enable"` (Task 4) — enabling advanced inventory itself
+  stays role-gated, it isn't one of the grid actions below. **Section
+  gating (Task 5, 2026-09-30; transfers raised to `>= 3` in fix round 1,
+  2026-09-30 — stock transfers are admin-only, same bar as locations, a
+  user ruling):** `const { can } = useAccess()` backs
+  `canManageProducts = can("inventory", 2)` ("+ Add Product"),
+  `canManageTransfers = can("inventory", 3)` ("+ Transfer Stock", passed
+  as `TransfersTab`'s `canManage` prop), and `canManageLocations =
+  can("inventory", 3)` ("+ Add Location" and `platform_location_defaults`
+  writes, passed as `LocationsTab`'s `canManage` prop — RLS requires
+  `inventory >= 3` for `stock_locations`/`platform_location_defaults` AND
+  `stock_transfers` writes, migration `055_section_permissions.sql` —
+  `055` must be re-applied per tenant for the transfers change, see
+  `supabase/SKILL.md`'s row). **When `view === "active"` (Task 6,
   2026-09-26; three tabs as of Task 4, Phase 4)** it renders
   `<InventoryTabs>` (Products/Locations/Transfers) above the active panels;
   `tab` state (`InventoryTabId`) plus `showLocations = view === "active" &&
   tab === "locations"` / `showTransfers = view === "active" && tab ===
   "transfers"` decide which "+ Add …"/"+ Transfer Stock" button
   `PageHeader`'s `action` shows (Locations' Add button and Transfers'
-  Transfer Stock button are both hidden entirely for non-admins, matching
-  `LocationsTab`/`TransfersTab`'s own read-only row-actions gate). **All
+  Transfer Stock button are both hidden entirely for a user below the
+  relevant access level, matching `LocationsTab`/`TransfersTab`'s own
+  read-only row-actions gate). **All
   three of `<ProductsTab>`, `<LocationsTab>` and `<TransfersTab>` stay
   mounted at all times once `view === "active"`** (fix round 1, 2026-09-26;
   extended to Transfers in Task 4) — only their visibility toggles via the
@@ -128,7 +142,13 @@ pagination is active.
   `AddProductModal`/`EditProductModal` and the shared `DeleteConfirmModal`.
   Takes `{ addOpen, onAddClose, stockVersion? }` — the "+ Add Product" button
   and its open state live in `page.tsx` (the header), this component only
-  owns the modal. `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by
+  owns the modal. **Row actions gated by `useAccess()` (Task 5):** Edit icon
+  needs `can("inventory", 2)`, Delete icon needs `can("inventory", 3)` —
+  replaced the previous `isSuperAdmin`-only delete gate; `canManage =
+  can("inventory", 3)` gates `ProductLotsModal`'s opening-lot-cost edit
+  (final review 2026-10-01 — `set_opening_lot_cost` now checks
+  `current_user_access('inventory') >= 3`, no longer the admin role).
+  `stockVersion` (Phase 4 Task 4, 2026-09-26) is bumped by
   `page.tsx` after a transfer moves stock between locations, and is folded
   into `stockRequestKey` (below) so the per-location columns re-fetch.
   **(Phase 3 Task 7, 2026-09-26)** When `useAdvancedInventory().active` is
@@ -158,11 +178,10 @@ pagination is active.
   button (`aria-label="Show batches for <name>"`) that opens
   `<ProductLotsModal>` (`_components/ProductLotsModal.tsx`) via
   `lotsProduct` state; non-active views keep the plain name span
-  unchanged. `isAdmin` (role `admin` or `super_admin`, from
-  `state.currentUser.profile?.role`) is computed alongside the existing
-  `isSuperAdmin` selector and passed straight through as a prop.
+  unchanged. `canManage` (`can("inventory", 3)`, `useAccess()`) is passed
+  straight through as a prop.
 - `_components/ProductLotsModal.tsx` (Phase 3 Task 8, 2026-09-26) —
-  `ProductLotsModal({ product, isAdmin, onClose, onChanged? })`: shows one
+  `ProductLotsModal({ product, canManage, onClose, onChanged? })`: shows one
   product's open batches (stock lots with `qty_remaining !== 0`) plus every
   opening-balance batch even when used up (final-review I4), oldest-first, via
   `fetchOpenLots` (`_store/productLots.ts`) + `sortLotsFifo` (`_lib/productLots.ts`).
@@ -171,7 +190,7 @@ pagination is active.
   the 1970 FIFO placeholder date on opening batches), Remaining (a red
   `Badge` for a negative shortfall row, plain tabular text otherwise), Unit
   cost (a pencil `Button` next to it only when `canEditLotCost(lot,
-  isAdmin)` — admin AND `kind === "opening"`). The pencil opens an inline
+  canManage)` — Inventory ≥ 3 AND `kind === "opening"`). The pencil opens an inline
   `<form id="opening-cost-form">` in the modal body; the footer's Save
   button is `type="submit" form="opening-cost-form"`, disabled while
   `saving` or the parsed cost is invalid, calling the `set_opening_lot_cost`
@@ -183,8 +202,8 @@ pagination is active.
 - `_lib/productLots.ts` (+ test, Phase 3 Task 8, 2026-09-26) — pure helpers
   behind the modal: `lotSourceLabel`, `lotReceivedLabel`, `sortLotsFifo`
   (received_at → created_at → id, mirrors the ledger's own FIFO order),
-  `canEditLotCost(lot, isAdmin)` (mirrors the `set_opening_lot_cost` RPC's
-  own admin + opening-only guard), `parseUnitCostInput` (trims, rejects
+  `canEditLotCost(lot, canManage)` (mirrors the `set_opening_lot_cost` RPC's
+  own Inventory ≥ 3 + opening-only guard), `parseUnitCostInput` (trims, rejects
   blank/negative/non-numeric, rounds to 4 decimals).
 - `_store/productLots.ts` (Phase 3 Task 8, 2026-09-26; Phase 4 Task 1 fetcher, 2026-09-26) — `PRODUCT_LOTS_CAP`
   (1000) + `fetchOpenLots(productId)`: pages `stock_lots` for one product
@@ -216,7 +235,7 @@ pagination is active.
   (`entityType: "stock_transfer"`, `action: "create"`), toasts, then calls
   `onSaved()` and closes. **(Phase 4 Task 4, 2026-09-26)** Mounted by
   `_components/TransfersTab.tsx`, which renders it only while `addOpen` is
-  true (`{isAdmin && addOpen && <TransferStockModal open onClose={onAddClose}
+  true (`{canManage && addOpen && <TransferStockModal open onClose={onAddClose}
   onSaved={handleSaved} />}`) instead of always-mounted-with-a-remount-key —
   see `TransfersTab.tsx`'s own entry below for why.
 - `_components/InventoryTabs.tsx` — accessible tab strip
@@ -224,7 +243,7 @@ pagination is active.
   "transfers"` as of Phase 4 Task 4). Built in Phase 2 Task 3; wired into
   `page.tsx` in Task 6, rendered only when `view === "active"`.
 - `_components/LocationsTab.tsx` (Phase 2 Task 6, 2026-09-26) —
-  `LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersion? })`:
+  `LocationsTab({ canManage, addOpen, onAddClose, hidden, stockVersion? })`:
   the Locations list. `hidden` (fix round 1, 2026-09-26) is applied to the
   component's own root `tabpanel` div so `page.tsx` can keep this component
   mounted while another tab is showing — see `page.tsx`'s entry above for
@@ -258,7 +277,7 @@ pagination is active.
   `deleting` busy state (and the typed reason) once the awaited `onConfirm`
   promise settles either way, so `handleDelete` must never let that promise
   reject or `deleting` gets stuck `true` forever. **(Task 7, 2026-09-26)**
-  Also renders `<FulfillmentDefaultsCard key={defaultsKey} isAdmin={isAdmin}
+  Also renders `<FulfillmentDefaultsCard key={defaultsKey} canManage={canManage}
   />` after the `<DataTable>` — `defaultsKey` is built from
   `settings.default_location_id`, `locations` (id + active flag), and
   `platformDefaults` (sorted by platform) so the card remounts, and its
@@ -281,7 +300,7 @@ pagination is active.
   loaded. The column is sortable (`onHand?.[l.id] ?? 0`, matching the
   render's fallback).
 - `_components/TransfersTab.tsx` (Phase 4 Task 4, 2026-09-26) —
-  `TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChanged })`:
+  `TransfersTab({ canManage, addOpen, onAddClose, hidden, onStockChanged })`:
   the transfer history list. `state.stockTransfers` (`fetchTransfersPage`)
   hydrates on first mount (`if (!loaded) dispatch(...)`); the `<DataTable>`
   shows Date (`formatDate`), Product (`product_name ?? "Deleted product"`),
@@ -301,13 +320,13 @@ pagination is active.
   call `onStockChanged()` — `page.tsx` wires this to `bumpStock`, which
   increments `stockVersion` so `ProductsTab`/`LocationsTab`'s own stock
   caches refetch. **Mounts `<TransferStockModal>` only while `addOpen` is
-  true** (`{isAdmin && addOpen && <TransferStockModal open
+  true** (`{canManage && addOpen && <TransferStockModal open
   onClose={onAddClose} onSaved={handleSaved} />}`), not
   always-mounted-behind-a-remount-key — see the SKILL.md gotcha for why (the
   modal's draft is seeded once per mount, so mounting it while closed would
   let the default source location/today's date go stale).
 - `_components/FulfillmentDefaultsCard.tsx` (Phase 2 Task 7, 2026-09-26) —
-  `FulfillmentDefaultsCard({ isAdmin })`: the tenant's default location plus
+  `FulfillmentDefaultsCard({ canManage })`: the tenant's default location plus
   a default fulfillment location per sales platform (`INVENTORY_PLATFORMS` —
   amazon/ebay/etsy/shopify/other). Local draft state seeded via
   `fulfillmentDraftFrom(settings, platformDefaults)`; validity via
@@ -408,10 +427,13 @@ preview, paginated transfer history, and delete-to-undo — see this file's
 `TransfersTab.tsx`/`TransferStockModal.tsx` entries above and SKILL.md's
 gotchas for the details.
 Transfer creation and deletion in the UI are **admin-only** (the header's
-"+ Transfer Stock" button and each row's delete icon are hidden for
-non-admins, who see read-only history); the underlying RLS on
-`stock_transfers` allows any tenant member, so this is a UI rule, not a
-database one — see `TransfersTab.tsx`'s entry above.
+"+ Transfer Stock" button and each row's delete icon are hidden for anyone
+below `inventory >= 3`, who see read-only history). This used to be a
+UI-only rule — RLS on `stock_transfers` originally allowed any tenant
+member with `inventory >= 2` — but a user ruling (Task 5 review, fix round
+1, 2026-09-30) raised the RLS bar to `inventory >= 3` to match, same as
+`stock_locations`/`platform_location_defaults`; see `TransfersTab.tsx`'s
+entry above and `supabase/SKILL.md`'s 055 row (re-apply needed per tenant).
 
 ## Pagination data flow
 

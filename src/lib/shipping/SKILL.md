@@ -75,15 +75,16 @@ calls the two API routes over `fetch`.
 
 - **`POST /api/shipping/rates`** (`src/app/api/shipping/rates/route.ts`) —
   body `{ saleId, weightOz, lengthIn?, widthIn?, heightIn? }`. Guarded by
-  `requireIntegrationAdmin()` (`src/lib/integrations/authGuard.ts` — reused
-  as-is, it has no eBay-specific logic despite living in that folder).
-  Loads the `sale` and `company_profile` rows via the tenant-scoped
+  `requireSectionAccess("orders", 3)` (`src/lib/permissions/requireSectionAccess.ts`
+  — section `orders` at Delete, since buying a label spends money; matches
+  the `shipments` INSERT rule. Replaced `requireIntegrationAdmin()` as of
+  055/Task 4). Loads the `sale` and `company_profile` rows via the tenant-scoped
   `createClient()`, builds both addresses via the mappers above, calls
   `getRates`, returns `{ easypostShipmentId, rates }`. A thrown
   address-completeness error becomes `400 { error: message }`.
 - **`POST /api/shipping/buy`** (`src/app/api/shipping/buy/route.ts`) — body
   `{ saleId, easypostShipmentId, rateId, weightOz, carrier, service, cost, costCurrency }`.
-  Same guard, plus body validation now also rejects a `cost` that is present
+  Same `requireSectionAccess("orders", 3)` guard, plus body validation now also rejects a `cost` that is present
   but not a `number` (final-review fix — it used to reach the insert
   untyped and could only fail as a confusing Postgres error after a label
   was already purchased). **Before calling `buyLabel()`**, queries
@@ -141,7 +142,7 @@ per order" only at the UI level (the Shipping card's state 3 has no
 - **Per-tenant gate (control-plane migration 010, 2026-09-07):**
   `requireShippingLabelAccess()` (`authGuard.ts`) checks
   `control.tenants.shipping_labels_enabled` — called by both API routes
-  right after `requireIntegrationAdmin()`. Defaults **false** for every
+  right after `requireSectionAccess("orders", 3)`. Defaults **false** for every
   tenant; a platform admin flips it on per tenant from
   `/admin/tenants/[id]` (`TenantDetailActions.tsx`'s "Shipping Labels:
   On/Off" button). No plan tie — this is a pure visibility switch, same

@@ -169,18 +169,16 @@ tax, office, etc.), with add/edit/delete and PDF invoice generation.
   lint rule forbids reading/writing `.current` during render), never against
   `expense`'s raw fields directly.
 
-## Delete gating (super_admin + permission overrides)
+## Buttons gated by section access (`useAccess()`)
 
-`page.tsx` computes `canDelete = isSuperAdmin || hasDeleteOverride`, where
-`hasDeleteOverride` reads
-`s.currentUser.profile?.permission_overrides?.includes("delete_expense")`
-directly (not via `hasPermission()` from `lib/utils/permissions.ts` — see the
-Sales feature's CLAUDE.md for why: it would resurrect the matrix's
-`["super_admin", "admin"]` default, silently giving every admin delete rights
-they've never had in this UI). Overrides are granted per-user via the Users
-feature's Permissions modal and also enforced in Postgres RLS
-(`{{schema}}.current_user_has_override('delete_expense')` in the
-`expenses_delete` policy, see `supabase/migrations/023_user_permission_overrides.sql`).
+`page.tsx` reads `const { can } = useAccess()` (`src/store/useAccess.ts`)
+and gates the Expenses actions on the `expenses` section: Add/Import and the
+row Edit icon need `can("expenses", 2)`; the row Delete icon needs
+`can("expenses", 3)`. This replaced the previous `isSuperAdmin ||
+hasDeleteOverride` check — the page no longer reads
+`profile.permission_overrides` or imports `lib/utils/permissions.ts`. The DB
+backs the delete bar independently via RLS (migration
+`055_section_permissions.sql`, `expenses >= 3`), not just a UI-level gate.
 
 ## Pagination data flow
 

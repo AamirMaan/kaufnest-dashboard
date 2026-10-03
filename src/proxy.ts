@@ -1,8 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { canAccessRoute } from "@/lib/utils/permissions";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 import { isTrialExpired } from "@/lib/utils/trial";
+import { sectionForPath, parseAccessMap, deniedRedirect, type Section } from "@/lib/permissions/sections";
 import type { UserRole, TenantPlan } from "@/types";
 
 export async function proxy(request: NextRequest) {
@@ -104,9 +104,9 @@ export async function proxy(request: NextRequest) {
     const { data: profile } = await supabase
       .schema(tenantSchema)
       .from("profiles")
-      .select("role, status, permission_overrides")
+      .select("role, status")
       .eq("id", user.id)
-      .single<{ role: UserRole; status: string; permission_overrides: string[] | null }>();
+      .single<{ role: UserRole; status: string }>();
 
     // Per-user deactivation (super_admin toggle on /dashboard/users) — distinct
     // from the whole-tenant deactivation check above. A deactivated user can
@@ -120,11 +120,32 @@ export async function proxy(request: NextRequest) {
     }
 
     const role = (profile?.role ?? "accountant") as UserRole;
+    const section = sectionForPath(pathname);
 
-    if (!canAccessRoute(role, pathname, profile?.permission_overrides)) {
+    if (section === "users" && role !== "super_admin") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
+    }
+
+    if (section && section !== "users") {
+      // 055: role defaults + per-user exceptions — UNCAPPED by plan (Task 5
+      // review, fix round 1, 2026-09-30 user ruling: route visibility must
+      // survive the plan ceiling so a role/exception grant to a plan-gated
+      // section like Integrations still reaches the page, which renders its
+      // own upgrade screen; plan gates are handled there, not here). Fails
+      // open to role defaults if the RPC errors (same posture as above).
+      const { data: rawAccess, error: accessError } = await supabase.schema(tenantSchema).rpc("get_my_access");
+      const access = parseAccessMap(accessError ? null : rawAccess, role);
+      const incomingDenied = request.nextUrl.searchParams.get("denied") as Section | null;
+      const redirectTo = deniedRedirect(pathname, section, access, incomingDenied);
+      if (redirectTo) {
+        const [redirectPath, redirectQuery] = redirectTo.split("?");
+        const url = request.nextUrl.clone();
+        url.pathname = redirectPath;
+        url.search = redirectQuery ? `?${redirectQuery}` : "";
+        return NextResponse.redirect(url);
+      }
     }
 
     // Platform-admin gate: /dashboard/dropshipping is only for platform admins

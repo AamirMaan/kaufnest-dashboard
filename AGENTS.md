@@ -59,7 +59,8 @@ New shared code from the migration:
 - `src/components/billing/PlanPicker.tsx` — shared plan-picker cards, used
   by `/trial-expired` and Settings' Billing section
 - `src/lib/billing/authGuard.ts` — `requireBillingAdmin()`, gates the
-  mutating billing routes to `admin`/`super_admin`
+  mutating billing routes to `admin`/`super_admin` with Settings: Edit
+  (rule in `src/lib/billing/billingAccess.ts`, shared with `/api/billing/status`)
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
   (server-only, never imported client-side — see its `SKILL.md`)
 - `src/app/api/integrations/` — connect/callback/disconnect/review/import
@@ -110,6 +111,11 @@ New shared code from the migration:
   `src/app/api/inventory/enable-advanced/` flips the per-tenant switch via the
   service-role RPC `enable_advanced_inventory`. The ledger itself is Postgres
   triggers — see `supabase/migrations/047_advanced_inventory.sql`.
+- `src/lib/permissions/` (2026-09-30) — section permissions. `sections.ts`
+  (pure: 12 sections, levels 0–3, `ROLE_DEFAULTS` mirroring migration 055,
+  `effectiveAccess`, `sectionForPath`, plan ceiling), `requireSectionAccess.ts`
+  (server-only route guard via the `current_user_access` RPC). The database
+  (055's `install_section_permissions`) is the enforcement.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

@@ -25,7 +25,10 @@ to the KaufNest platform admin (verified via `control.admin_users`). Five layers
 
 - `page.tsx` — `"use client"`. Three render branches: plan gate → eBay connection guard → listings page.
   Plan gate links to `/dashboard/settings`. Connection guard links to `/dashboard/integrations`.
-  "Refresh from eBay" button visible only to admin/super_admin (checks `hasPermission(role, "manage_integrations")`).
+  "Refresh from eBay" button visible only to admin/super_admin (`role ===
+  "admin" || role === "super_admin"` — Task 5: dropshipping is platform-admin
+  only, outside the `useAccess()` section grid, so this stays a plain role
+  check rather than `can(...)`).
   Uses `action` prop (singular, not `actions`) on `PageHeader` to render the refresh button.
   After refresh: re-fetches full listing list via `GET /api/dropshipping/listings` and dispatches `upsertListings`.
 - `_components/ListingsTable.tsx` — shadcn `Table`. Columns: image (48×48 with fallback ImageIcon),
@@ -155,7 +158,8 @@ of which write this column) — a price update must never overwrite it.
   rule; used by `scrape.ts` server-side and by `ListingsTable.tsx`/`resolveInitialSourceUrl.ts`
   client-side)
 - `src/lib/utils/planGating` — `hasPlatformIntegrations`
-- `src/lib/utils/permissions` — `hasPermission`, `manage_integrations`
+- `store/slices/currentUserSlice` — `profile.role` (plain admin/super_admin
+  check, not `useAccess()` — see the "Refresh from eBay" bullet above)
 - `src/lib/utils/currency` — `formatCurrency(price, currency)`
 - `src/lib/utils` — `cn()`
 - `src/lib/integrations/ebay/listings.ts` — `fetchActiveListings` (server-only)

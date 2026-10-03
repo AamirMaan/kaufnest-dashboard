@@ -29,7 +29,19 @@ broadly when working on a specific feature.**
   page to decide whether EasyPost label purchasing is offered vs. a plain
   PDF label fallback — `shipping_labels_enabled` is the platform-admin
   EasyPost visibility switch, control-plane migration 010, defaults false,
-  no plan tie). The `platform_connections` select
+  no plan tie). Also calls `get_my_access()` (055) on the tenant-scoped
+  client and parses it with `parseAccessMap` (`@/lib/permissions/sections`)
+  — **UNCAPPED by plan** (Task 5 review, fix round 1, 2026-09-30: the plan
+  ceiling used to be applied here via `applyPlanCeiling` before storing;
+  moved into `useAccess()` instead, so route/nav visibility can see a
+  role/exception grant to a plan-gated section even when the tenant's plan
+  doesn't include it) — and passes the
+  result to `<StoreProvider>` as `access` (hydrated into
+  `currentUserSlice.access`, read via `useAccess()` —
+  `src/store/useAccess.ts`, which applies the plan ceiling itself for
+  `access`/`can()` while keeping `canSee()` uncapped); a failed RPC falls
+  back to the signed-in user's role defaults so the app keeps working
+  before 055 is applied. The `platform_connections` select
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
@@ -48,9 +60,10 @@ broadly when working on a specific feature.**
   returned_cancelled`), the same population as Revenue and the platform
   cards; Analytics' `OrdersCard` still shows all orders + return rate. A "By Platform"
   section of `PlatformStatsCard`s (one per platform with sales in the range,
-  built by `_lib/platformStats.ts`; admins get "Record Transfer" on the
-  eBay/Amazon cards, which opens `RecordTransferModal`),
-  `RecentOrdersCard` (latest orders table), then the Quick Start card.
+  built by `_lib/platformStats.ts`; users with `can("payouts", 2)` (via
+  `useAccess()`) get "Record Transfer" on the eBay/Amazon cards, which opens
+  `RecordTransferModal`), `RecentOrdersCard` (rendered only when `can("orders",
+  1)`) (latest orders table), then the Quick Start card.
 
   **Does NOT read `sales`/`expenses`/`purchases`/`platform_payouts` from
   Redux** — those slices hold only one paginated page (50 rows,
@@ -304,7 +317,15 @@ extracting it is what makes it testable without rendering the page.
 `DashboardShell` (header, user menu, theme toggle, impersonation banner —
 forwards `isPlatformAdmin` to `Sidebar`; now takes a `userId` prop, sourced
 from `layout.tsx`'s `profile.id`, that it forwards to `NotificationBell`),
-`Sidebar` (nav + role-based links + collapse; renders an "Admin Panel" link
+`Sidebar` (nav items gated by `useAccess()` — section access, not role; each
+`NavItem` carries a `section?: Section | "users"`, filtered via
+`canSee(item.section)` (Users stays `role === "super_admin"`, Planner/
+Support have no `section` and always show) — **`canSee()` is UNCAPPED by
+plan** (Task 5 review, fix round 1, 2026-09-30 user ruling), so
+Integrations/Listings/Messages stay visible for a user whose role/exception
+grants them even on a plan that doesn't include the feature; the page
+itself renders its upgrade screen. Button-level gates inside each page use
+`can()` (plan-capped) instead); collapse; renders an "Admin Panel" link
 to `/admin` when `role === "super_admin" && isPlatformAdmin`), `PageHeader`
 (page title/description/actions row used by every feature page), `BrandMark`
 (2026-08-28 — the Boughtopia bag-icon mark next to the wordmark in
@@ -323,6 +344,17 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 (`src/lib/utils/notifications.ts`) computes them at read time from the
 `products` table and merges them into the feed client-side — see
 `inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
+`DeniedAccessToast` (2026-09-30 — rendered once by `DashboardShell`, right
+inside its own `<Suspense fallback={null}>`, so it sits inside the
+`<ToastProvider>` `layout.tsx` already wraps `DashboardShell` in): reads
+`useSearchParams().get("denied")` — set by `proxy.ts`'s section guard
+(`deniedRedirect`, `@/lib/permissions/sections`) when it bounces a request
+away from a section the user can't access — shows a "No access" toast
+naming the denied `Section`'s label, then `router.replace(pathname)` (the
+*current* pathname, not a hard-coded `/dashboard`) to strip the query.
+Rendered at the shell level rather than on `dashboard/page.tsx` specifically
+so the toast still fires when `deniedRedirect` lands the user on some other
+accessible page (e.g. `/dashboard/expenses`) instead of Home.
 
 ## Cross-cutting state & infra
 

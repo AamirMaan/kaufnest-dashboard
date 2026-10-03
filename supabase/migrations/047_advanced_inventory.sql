@@ -1060,7 +1060,10 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      -- Section check (055): Inventory full access, not a role. current_user_access
+      -- is created by install_section_permissions, which runs at the end of
+      -- install_advanced_inventory, so it always exists by the time this is called.
+      IF NOT is_tenant_member() OR (SELECT current_user_access('inventory')) < 3 THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF NOT EXISTS (SELECT 1 FROM stock_locations WHERE id = p_location_id AND is_active AND type <> 'dropship') THEN
@@ -1077,7 +1080,10 @@ BEGIN
     SET search_path = %1$I
     AS $func$
     BEGIN
-      IF NOT is_tenant_member() OR coalesce(current_user_role(), '') NOT IN ('admin', 'super_admin') THEN
+      -- Section check (055): Inventory full access, not a role. current_user_access
+      -- is created by install_section_permissions, which runs at the end of
+      -- install_advanced_inventory, so it always exists by the time this is called.
+      IF NOT is_tenant_member() OR (SELECT current_user_access('inventory')) < 3 THEN
         PERFORM inv_raise('INV_FORBIDDEN', 'Only admins can change inventory settings');
       END IF;
       IF p_unit_cost IS NULL OR p_unit_cost < 0 THEN
@@ -1183,6 +1189,13 @@ BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION %I.inventory_stock_by_location_totals() FROM PUBLIC, anon', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location(uuid[]) TO authenticated', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.inventory_stock_by_location_totals() TO authenticated', schema_name);
+
+  -- Section permissions (055) own the stock_* RLS policies; this installer
+  -- re-creates its own policies above every time it runs, so re-apply the
+  -- section rules last or they would be silently reverted.
+  IF to_regprocedure('public.install_section_permissions(text)') IS NOT NULL THEN
+    PERFORM public.install_section_permissions(schema_name);
+  END IF;
 END;
 $inst$;
 

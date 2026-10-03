@@ -20,7 +20,7 @@ import { FulfillmentDefaultsCard } from "./FulfillmentDefaultsCard";
 import type { StockLocation } from "@/types";
 
 interface Props {
-  isAdmin: boolean;
+  canManage: boolean;
   /** The page header owns the "+ Add Location" button; this tab owns the modal. */
   addOpen: boolean;
   onAddClose: () => void;
@@ -36,7 +36,7 @@ interface Props {
 
 const CONNECTION_ERROR = "Please check your connection and try again.";
 
-export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersion }: Props) {
+export function LocationsTab({ canManage, addOpen, onAddClose, hidden, stockVersion }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError, warning } = useToast();
   const locations = useAppSelector((s) => s.advancedInventory.locations);
@@ -192,7 +192,7 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersio
       render: (l: StockLocation) =>
         l.is_active ? <Badge label="Active" variant="success" /> : <Badge label="Inactive" />,
     },
-    ...(isAdmin
+    ...(canManage
       ? [
           {
             header: "Actions",
@@ -229,8 +229,8 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersio
 
   return (
     <div id="inventory-panel-locations" role="tabpanel" aria-labelledby="inventory-tab-locations" hidden={hidden} className="space-y-6">
-      {!isAdmin && (
-        <p className="text-sm text-(--color-text-muted)">Only admins can add or change locations.</p>
+      {!canManage && (
+        <p className="text-sm text-(--color-text-muted)">You don&apos;t have permission to add or change locations.</p>
       )}
       <DataTable
         columns={columns}
@@ -239,7 +239,7 @@ export function LocationsTab({ isAdmin, addOpen, onAddClose, hidden, stockVersio
         emptyMessage="No locations yet — add your own warehouse, Amazon FBA or a 3PL."
       />
 
-      <FulfillmentDefaultsCard key={defaultsKey} isAdmin={isAdmin} />
+      <FulfillmentDefaultsCard key={defaultsKey} canManage={canManage} />
 
       <LocationModal
         key={editTarget?.id ?? (addOpen ? "new-location" : "closed")}

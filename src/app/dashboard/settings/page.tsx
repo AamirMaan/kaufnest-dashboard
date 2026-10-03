@@ -14,6 +14,7 @@ import {
   validateVATRate,
 } from "@/lib/utils/validation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hasAiFeatures } from "@/lib/utils/planGating";
 import { FileDown } from "lucide-react";
@@ -64,15 +65,13 @@ const DEMO_SALE: Sale = {
   buyer_email: null,
 };
 
-const COMPANY_PROFILE_ROLES = ["admin", "super_admin"];
-
 export default function SettingsPage() {
   const { success, warning, error: toastError } = useToast();
 
   const dispatch = useAppDispatch();
   const companyProfile = useAppSelector((s) => s.companyProfile.profile);
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const canEditCompanyProfile = role ? COMPANY_PROFILE_ROLES.includes(role) : false;
+  const { can } = useAccess();
+  const canEditCompanyProfile = can("settings", 2);
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
   const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;

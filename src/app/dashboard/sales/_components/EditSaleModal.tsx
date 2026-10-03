@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { updateSale, fetchSaleById } from "../_store/salesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
@@ -120,6 +121,7 @@ const blankForm: FormState = {
 
 export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const { can } = useAccess();
   const { error: toastError, warning } = useToast();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
@@ -375,9 +377,11 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         if (fresh) dispatch(updateSale(fresh));
       }
 
-      // Create linked purchase if user filled one in and no purchase is linked yet
+      // Create linked purchase if user filled one in and no purchase is linked
+      // yet — also requires purchases access (defense in depth: the section
+      // is hidden from a user without can("purchases", 2)).
       const rawPrice = parseFloat(purchasePrice);
-      if (!linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
+      if (can("purchases", 2) && !linkedPurchase && showAddPurchase && !isNaN(rawPrice) && rawPrice > 0) {
         const qtyNum = parseInt(form.quantity, 10) || 1;
         const { data: newPurchase, error: purchaseError } = await supabase
           .from("purchases")
@@ -456,16 +460,18 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           <Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} required />
         </Field>
 
-        <Field label="Inventory Product">
-          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
-            <option value="">— Not tracked —</option>
-            {availableProducts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {can("inventory", 1) && (
+          <Field label="Inventory Product">
+            <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
+              <option value="">— Not tracked —</option>
+              {availableProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.sku ? ` (${p.sku})` : ""} — {p.current_stock} in stock
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Row>
           <Field label="Platform" required>
@@ -783,7 +789,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           />
         </Field>
 
-        {/* ── Linked Purchase ── */}
+        {/* ── Linked Purchase — requires purchases access ── */}
+        {can("purchases", 2) && (
         <div className="rounded-(--radius-card) border border-(--color-border)">
           {linkedPurchase ? (
             /* Read-only chip */
@@ -864,6 +871,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             </>
           )}
         </div>
+        )}
       </form>
     </Modal>
   );

@@ -53,8 +53,13 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
 - `tokenCrypto.ts` — `encryptToken`/`decryptToken`/`isEncryptedToken`, AES-256-GCM
   helpers used exclusively by `tokenStore.ts`. Colocated `tokenCrypto.test.ts`.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
-  session+role+tenant-schema check for the connect/callback/disconnect/review
-  routes.
+  session+tenant-schema check for the connect/callback/disconnect/review
+  routes. Since 055 it's a thin wrapper around
+  `src/lib/permissions/requireSectionAccess.ts`'s `requireSectionAccess("integrations", 2)`
+  (section `integrations` at Edit) — the `IntegrationAuthContext`/
+  `IntegrationAuthResult` types and the `current_user_access` RPC check now
+  live in `requireSectionAccess.ts`, re-exported here so every existing
+  `@/lib/integrations/authGuard` import keeps working unchanged.
 - `ebay/publicKey.ts`, `ebay/verifyNotificationSignature.ts` — support the
   `/api/notifications/ebay-account-deletion` webhook's signature check, not
   the main OAuth/sync flow — see "eBay account-deletion webhook" below.
@@ -260,12 +265,14 @@ save handler (see `dashboard/sales/CLAUDE.md`), never automatically — same
   `ebay_synced_at` (both transitions) / `ebay_fulfillment_id` (shipped only)
   are set.
 - **A 403 from this route writes nothing** — `requireIntegrationAdmin()` runs
-  before the row is ever touched, and `manage_integrations` is
-  admin/super_admin only while `update_sale` (which opens `EditSaleModal`)
-  also covers `accountant`. So `EditSaleModal` writes `ebay_sync_error` from
-  the *client* on any sync failure, using the tenant client it already used
-  for the sale update. Without that, an accountant's status change would
-  silently never reach eBay with no trace for an admin to retry.
+  before the row is ever touched, and section `integrations` defaults to
+  admin/super_admin only (055's `ROLE_DEFAULTS`) while `update_sale` (which
+  opens `EditSaleModal`) also covers `accountant` via section `orders`. So
+  `EditSaleModal` writes `ebay_sync_error` from the *client* on any sync
+  failure, using the tenant client it already used for the sale update.
+  Without that, a user without integrations access whose status change
+  succeeds via `orders` would silently never reach eBay with no trace for an
+  admin to retry.
 - No new `PlatformAdapter` methods — `createShippingFulfillment`/
   `cancelOrder` are plain exported functions in `ebay.ts` that the route
   imports directly, same shape as `ebay/messages.ts`'s Trading-API-only
@@ -418,10 +425,20 @@ lookup against existing `sales` rows.
   only syncs one.
 - **`authGuard.requireIntegrationAdmin()`** is the only auth check in
   connect/callback/disconnect/sync — it 401s with no session, 400s with no
-  `tenant_schema`, 403s if the profile role isn't `admin`/`super_admin`. The
-  `connect` route additionally checks `hasPlatformIntegrations(tenantPlan)`
+  `tenant_schema`, 403s if `current_user_access('integrations') < 2` (055).
+  The `connect` route additionally checks `hasPlatformIntegrations(tenantPlan)`
   (403 if the plan doesn't include integrations) — that check is plan-based,
-  not role-based, so it's not in the shared guard.
+  not access-level-based, so it's not in the shared guard.
+- **Listings/messages API routes call `requireSectionAccess` directly**
+  (`"listings"`/`"messages"`, both at Edit — 2) instead of going through
+  `requireIntegrationAdmin()`, since that wrapper is hardcoded to section
+  `integrations`. The old per-route `profiles` + `hasPermission(...,
+  "manage_listings"/"manage_messages", ...)` check these routes used to do
+  on top of `requireIntegrationAdmin()` is gone — `requireSectionAccess`'s
+  `current_user_access` RPC call is now the single check. Where a route
+  still needs the profile row for something else (e.g.
+  `messages/[id]/reply`'s audit-log `userEmail`), it fetches just that
+  column, with no `role`/`permission_overrides`/`hasPermission` involved.
 - **OAuth CSRF**: `connect` sets a short-lived httpOnly `kn_oauth_state`
   cookie (`maxAge: 600`) containing a random UUID; `callback` verifies the
   `state` query param matches before calling `exchangeCode`, and deletes the

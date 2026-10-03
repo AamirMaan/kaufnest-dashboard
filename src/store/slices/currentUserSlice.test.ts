@@ -1,4 +1,5 @@
-import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled } from "./currentUserSlice";
+import { currentUserSlice, setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, setAccess } from "./currentUserSlice";
+import { ROLE_DEFAULTS } from "@/lib/permissions/sections";
 import type { Profile } from "@/types";
 
 const makeProfile = (overrides: Partial<Profile> = {}): Profile => ({
@@ -74,5 +75,14 @@ describe("setShippingLabelsEnabled", () => {
     const enabled = currentUserSlice.reducer(undefined, setShippingLabelsEnabled(true));
     const revoked = currentUserSlice.reducer(enabled, setShippingLabelsEnabled(false));
     expect(revoked.shippingLabelsEnabled).toBe(false);
+  });
+});
+
+describe("currentUserSlice access", () => {
+  it("starts null and stores the hydrated map", () => {
+    const init = currentUserSlice.reducer(undefined, { type: "@@init" });
+    expect(init.access).toBeNull();
+    const next = currentUserSlice.reducer(init, setAccess({ ...ROLE_DEFAULTS.accountant, orders: 0 }));
+    expect(next.access?.orders).toBe(0);
   });
 });

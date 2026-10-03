@@ -116,7 +116,9 @@
   (403) or `null`. Use `const forbidden = await verifyPlatformAdmin(user.email); if (forbidden) return forbidden;`.
 
 - **Refresh is admin/super_admin only (within platform admin):** The "Refresh from eBay"
-  button is hidden from accountants via `hasPermission(role, "manage_integrations")`. The
+  button is hidden from accountants via a plain `role === "admin" || role === "super_admin"`
+  check in `page.tsx` (Task 5, 2026-09-30 — dropshipping sits outside the `useAccess()`
+  section grid entirely, so this intentionally did NOT become `can("integrations", 2)`). The
   `POST /api/dropshipping/listings/refresh` route uses `requireIntegrationAdmin()` in addition
   to `verifyPlatformAdmin()` — both must pass.
 

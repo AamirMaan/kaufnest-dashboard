@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
+import { requireSectionAccess } from "@/lib/permissions/requireSectionAccess";
 import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { fetchListingDetail } from "@/lib/integrations/ebay/listings";
-import { hasPermission } from "@/lib/utils/permissions";
-import type { EbayListingDraft, Profile } from "@/types";
+import type { EbayListingDraft } from "@/types";
 
 // Supabase's PostgrestError/AuthError carry a `.message` but aren't always
 // `instanceof Error` — the naive `err instanceof Error ? err.message :
@@ -20,18 +19,9 @@ function errorMessage(err: unknown): string {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireIntegrationAdmin();
+  const auth = await requireSectionAccess("listings", 2);
   if (auth.error) return auth.error;
-  const { client, userId } = auth.context;
-
-  const { data: profile } = await client
-    .from("profiles")
-    .select("role, permission_overrides")
-    .eq("id", userId)
-    .single<Pick<Profile, "role" | "permission_overrides">>();
-  if (!profile?.role || !hasPermission(profile.role, "manage_listings", profile.permission_overrides)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { client } = auth.context;
 
   const { id } = await params;
 

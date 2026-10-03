@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
 import { BrandMark } from "./BrandMark";
+import { DeniedAccessToast } from "./DeniedAccessToast";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
@@ -54,6 +55,7 @@ export function DashboardShell({ userId, role, fullName, email, children, impers
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[var(--color-surface-subtle)]">
+      <DeniedAccessToast />
       {/* Impersonation banner — only shown when a Boughtopia admin is viewing a tenant */}
       {impersonatingTenant && (
         <div className="shrink-0 bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center justify-between z-20">

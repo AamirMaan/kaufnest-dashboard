@@ -16,6 +16,9 @@ interface Props {
   confirmingLabel?: string;
   reasonLabel?: string;
   reasonPlaceholder?: string;
+  /** Set false to skip the reason field entirely (e.g. a reversible, non-destructive
+   * confirmation like "Reset to role defaults" — no audit-trail reason needed). Defaults true. */
+  requireReason?: boolean;
 }
 
 export function DeleteConfirmModal({
@@ -28,13 +31,14 @@ export function DeleteConfirmModal({
   confirmingLabel = "Deleting…",
   reasonLabel = "Reason for Deletion",
   reasonPlaceholder = "Briefly explain why this record is being deleted…",
+  requireReason = true,
 }: Props) {
   const [reason, setReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleConfirm() {
-    if (!reason.trim()) return setError(`${reasonLabel} is required.`);
+    if (requireReason && !reason.trim()) return setError(`${reasonLabel} is required.`);
     setError(null);
     setDeleting(true);
     await onConfirm(reason.trim());
@@ -75,13 +79,15 @@ export function DeleteConfirmModal({
           </div>
         )}
 
-        <Field label={reasonLabel} required>
-          <Textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={reasonPlaceholder}
-          />
-        </Field>
+        {requireReason && (
+          <Field label={reasonLabel} required>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={reasonPlaceholder}
+            />
+          </Field>
+        )}
       </div>
     </Modal>
   );

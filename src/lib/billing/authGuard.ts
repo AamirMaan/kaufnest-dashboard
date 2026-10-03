@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types";
+import { canManageBilling } from "./billingAccess";
 
 export interface BillingAuthContext {
   userEmail: string;
@@ -13,9 +14,12 @@ export type BillingAuthResult =
 
 /**
  * Shared guard for /api/billing/* routes: confirms the caller is signed in,
- * belongs to a tenant, and holds admin/super_admin — subscribing, changing
+ * belongs to a tenant, holds admin/super_admin AND Settings: Edit
+ * (`current_user_access('settings') >= 2`, 055) — subscribing, changing
  * plan, and cancelling are not actions a lower-privilege role (e.g.
- * accountant) should be able to trigger.
+ * accountant), or an admin whose Settings access was lowered, should be
+ * able to trigger. Same rule as /api/billing/status's `canManageBilling`
+ * (`canManageBilling()` in ./billingAccess). Never returns a raw DB error.
  */
 export async function requireBillingAdmin(): Promise<BillingAuthResult> {
   const client = await createClient();
@@ -38,7 +42,15 @@ export async function requireBillingAdmin(): Promise<BillingAuthResult> {
     .eq("id", user.id)
     .single<{ role: UserRole }>();
 
-  if (profile?.role !== "admin" && profile?.role !== "super_admin") {
+  const { data: settingsLevel, error: accessError } = await client.rpc("current_user_access", {
+    p_section: "settings",
+  });
+  if (accessError) {
+    console.error("[requireBillingAdmin] current_user_access failed", { code: accessError.code });
+    return { error: NextResponse.json({ error: "Could not verify access" }, { status: 500 }) };
+  }
+
+  if (!canManageBilling(profile?.role, settingsLevel as number | null)) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 

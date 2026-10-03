@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select, Textarea, Checkbox, Row } from "@/components/ui/FormFields";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { updatePurchase } from "../_store/purchasesSlice";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -67,6 +68,7 @@ const blankForm: FormState = {
 
 export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
+  const { can } = useAccess();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
   const [form, setForm] = useState<FormState>(() => (purchase ? purchaseToForm(purchase, defaultVatRate) : blankForm));
@@ -223,16 +225,18 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           <Input value={form.product_name} onChange={(e) => set("product_name", e.target.value)} required />
         </Field>
 
-        <Field label="Inventory Product">
-          <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
-            <option value="">— Not tracked —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.sku ? ` (${p.sku})` : ""}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        {can("inventory", 1) && (
+          <Field label="Inventory Product">
+            <Select value={form.product_id} onChange={(e) => selectProduct(e.target.value)}>
+              <option value="">— Not tracked —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.sku ? ` (${p.sku})` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         <Row>
           <Field label="Vendor">

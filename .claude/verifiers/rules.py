@@ -459,7 +459,7 @@ def _suppressed(lines: list[str], index: int, rule_id: str) -> bool:
 # Any one of these is accepted as "this handler authenticates its caller".
 _AUTH_MARKERS = re.compile(
     r"auth\.getUser\(\)|verifyPlatformAdmin|requireIntegrationAdmin|requireBillingAdmin"
-    r"|requireAdvancedInventoryAdmin"
+    r"|requireAdvancedInventoryAdmin|requireSectionAccess"
     r"|requirePermission|verifySignature|constructEvent|verifyNotificationSignature"
     r"|verifyWebhookSignature"
 )

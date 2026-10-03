@@ -94,9 +94,11 @@ since modal dropdowns use a different state key than the table.
   — table, edit form, save flow), `_lib/productLots.ts` (+ test —
   `lotSourceLabel`/`lotReceivedLabel`/`sortLotsFifo`/`canEditLotCost`/
   `parseUnitCostInput`), `_store/productLots.ts` (`fetchOpenLots`,
-  `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `isAdmin`
-  computation live in `_components/ProductsTab.tsx` only — don't duplicate
-  the admin-role check anywhere else in this feature.
+  `PRODUCT_LOTS_CAP`). The Product-name-as-button trigger and `canManage`
+  (`can("inventory", 3)`) live in `_components/ProductsTab.tsx` only. The
+  `set_opening_lot_cost`/`set_default_location` RPCs (047) check
+  `current_user_access('inventory') >= 3`, not the admin role (final review
+  2026-10-01) — keep the UI gate on the same section level.
 - **Change transfer history listing or paging** (Phase 4 Task 2, 2026-09-26):
   `_store/transfersSlice.ts` (+ test) handles the paginated `stock_transfers`
   history. Registered in `src/store/store.ts` as `state.stockTransfers`. Any
@@ -568,7 +570,7 @@ since modal dropdowns use a different state key than the table.
   initializer runs at tab-mount time or right after the previous close —
   long before the user actually opens it again — so a changed default
   location or a date rollover past midnight would go stale. `TransfersTab`
-  instead renders `{isAdmin && addOpen && <TransferStockModal open
+  instead renders `{canManage && addOpen && <TransferStockModal open
   onClose={onAddClose} onSaved={handleSaved} />}`: the component (and its
   `useState` initializer) only exists while `addOpen` is true, so every open
   is a fresh mount with a fresh draft. Don't "fix" this back to the

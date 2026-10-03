@@ -14,7 +14,7 @@ import {
 } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
-import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled } from "@/store/slices/currentUserSlice";
+import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, setAccess } from "@/store/slices/currentUserSlice";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
@@ -36,6 +36,7 @@ import type {
   EbayListingDraft,
   EbayMessage,
 } from "@/types";
+import type { AccessMap } from "@/lib/permissions/sections";
 
 interface StoreProviderProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ interface StoreProviderProps {
   tenantPlan?: TenantPlan | null;
   aiEnabled?: boolean;
   shippingLabelsEnabled?: boolean;
+  access?: AccessMap;
   platformConnections?: PlatformConnection[];
   dropshipListings?: DropshipListing[];
   platformPayouts?: PlatformPayout[];
@@ -74,6 +76,7 @@ export function StoreProvider({
   tenantPlan,
   aiEnabled,
   shippingLabelsEnabled,
+  access,
   platformConnections,
   dropshipListings,
   platformPayouts,
@@ -94,6 +97,7 @@ export function StoreProvider({
     if (tenantPlan)        store.dispatch(setTenantPlan(tenantPlan));
     if (aiEnabled !== undefined) store.dispatch(setAiEnabled(aiEnabled));
     if (shippingLabelsEnabled !== undefined) store.dispatch(setShippingLabelsEnabled(shippingLabelsEnabled));
+    if (access)             store.dispatch(setAccess(access));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));

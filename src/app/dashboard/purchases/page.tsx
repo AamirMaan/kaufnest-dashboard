@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { useAccess } from "@/store/useAccess";
 import { removePurchase, fetchPurchasesPage, fetchPurchasesSummary } from "./_store/purchasesSlice";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -48,11 +49,9 @@ export default function PurchasesPage() {
   const summaryLoading = useAppSelector((s) => s.purchases.summaryLoading);
   const summaryError = useAppSelector((s) => s.purchases.summaryError);
   const summaryVersion = useAppSelector((s) => s.purchases.summaryVersion);
-  const isSuperAdmin = useAppSelector((s) => s.currentUser.profile?.role === "super_admin");
-  const hasDeleteOverride = useAppSelector(
-    (s) => s.currentUser.profile?.permission_overrides?.includes("delete_purchase") ?? false
-  );
-  const canDelete = isSuperAdmin || hasDeleteOverride;
+  const { can } = useAccess();
+  const canEdit = can("purchases", 2);
+  const canDelete = can("purchases", 3);
 
   const [filters, setFilters] = useState<PurchaseFilters>(DEFAULT_PURCHASE_FILTERS);
   const hasActive = !isDefaultFilters(filters);
@@ -269,9 +268,11 @@ export default function PurchasesPage() {
       header: "Actions",
       render: (p: Purchase) => (
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
-            <Pencil size={15} className="text-blue-500" />
-          </Button>
+          {canEdit && (
+            <Button size="icon" variant="ghost" onClick={() => setEditTarget(p)} title="Edit">
+              <Pencil size={15} className="text-blue-500" />
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -310,11 +311,15 @@ export default function PurchasesPage() {
               <Download size={15} />
               Export
             </Button>
-            <Button variant="import" onClick={() => setImportOpen(true)}>
-              <Upload size={15} />
-              Import
-            </Button>
-            <Button onClick={() => setAddOpen(true)}>+ Add Purchase</Button>
+            {can("purchases", 2) && (
+              <>
+                <Button variant="import" onClick={() => setImportOpen(true)}>
+                  <Upload size={15} />
+                  Import
+                </Button>
+                <Button onClick={() => setAddOpen(true)}>+ Add Purchase</Button>
+              </>
+            )}
           </div>
         }
       />

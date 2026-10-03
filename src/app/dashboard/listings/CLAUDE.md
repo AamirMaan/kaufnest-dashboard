@@ -2,14 +2,16 @@
 
 Route: `/dashboard/listings`, `/dashboard/listings/new`, `/dashboard/listings/[id]`,
 `/dashboard/listings/[id]/live`.
-Lets an admin/super_admin build an eBay listing from an Inventory item or a
-third-party (dropship) source, save it as a draft, and publish it to eBay via
-the eBay Inventory API. Gated on the **Business plan** (not Pro — changed
-2026-08-27, see `_components/BusinessEbayGate.tsx`) **and** a connected eBay
-account, applied to all four routes, plus a dedicated `manage_listings`
-permission (admin/super_admin only — nav entry is visible to all roles, but
-Save Draft/Publish/category-search/policy-fetch/Sync/live-edit/Delete all
-require the permission).
+Lets a user with `listings` section access build an eBay listing from an
+Inventory item or a third-party (dropship) source, save it as a draft, and
+publish it to eBay via the eBay Inventory API. Gated on the **Business plan**
+(not Pro — changed 2026-08-27, see `_components/BusinessEbayGate.tsx`) **and**
+a connected eBay account, applied to all four routes, plus `can("listings",
+2)` (`useAccess()`, Task 5, 2026-09-30 — replaced the earlier
+`manage_listings` permission check; accountant's role default is `listings:
+0`, so the Sidebar nav entry is hidden for a default accountant too — Save
+Draft/Publish/category-search/policy-fetch/Sync/live-edit/Delete all still
+require the same level).
 
 **Two-part feature, both parts now built (2026-08-31).** Part 1 is the
 create/publish form described below (Inventory API — a 7-step wizard until
@@ -25,7 +27,7 @@ covers only Part 1; Part 2's design is
 - `page.tsx` — paginated listings table (`fetchListingsPage` thunk, same
   pagination architecture as Sales/Purchases/Expenses). "New Listing" and
   "Sync from eBay" (2026-08-31 — `POST /api/listings/ebay/sync`, then
-  re-fetches page 1) buttons, both gated on `manage_listings`. A Status
+  re-fetches page 1) buttons, both gated on `can("listings", 2)`. A Status
   filter dropdown (2026-09-01 — `STATUS_FILTER_OPTIONS`, a plain `Select`
   next to the header, not the shared `FilterBar` — a single dropdown didn't
   need FilterBar's date/currency/search machinery) defaults to "Active"
@@ -517,7 +519,9 @@ the XML shapes.
   controls (see `aiVisible` above)
 - `app/dashboard/inventory/_store/inventorySlice` — read-only, `selectorItems`
   for the Source step's Inventory picker
-- `lib/utils/{audit,currency,detectPlatform,permissions,pagedQuery}` —
+- `store/useAccess` — `useAccess().can("listings", 2)` (Task 5 — replaced
+  `lib/utils/permissions`' `hasPermission`)
+- `lib/utils/{audit,currency,detectPlatform,pagedQuery}` —
   `planGating`'s `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
   specifically, not `hasPlatformIntegrations`; `hasAiFeatures` is used by
   `ListingForm.tsx` and `AiUsageNote.tsx` to compute `aiVisible`

@@ -240,20 +240,19 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   (`inventory/_store/stockByLocation.ts`) to look up units on hand at the
   chosen location. See "Advanced inventory: fulfillment location" below.
 
-## Delete gating (super_admin + permission overrides)
+## Buttons gated by section access (`useAccess()`)
 
-`page.tsx` and `[id]/page.tsx` both compute `canDelete = isSuperAdmin ||
-hasDeleteOverride`, where `hasDeleteOverride` reads
-`s.currentUser.profile?.permission_overrides?.includes("delete_sale")`
-directly (NOT via `hasPermission()` from `lib/utils/permissions.ts` — this
-file never imports that module, to avoid resurrecting the matrix's
-`["super_admin", "admin"]` default for `delete_sale`, which would silently
-give ALL admins delete rights they've never had in this UI). Overrides are
-granted per-user via the Users feature's Permissions modal
-(`src/app/dashboard/users/_components/PermissionsModal.tsx`) and are also
-enforced in Postgres RLS (`{{schema}}.current_user_has_override('delete_sale')`
-in the `sales_delete` policy, see `supabase/migrations/023_user_permission_overrides.sql`)
-— so this isn't just a UI-level gate, the DB backs it too.
+`page.tsx` and `[id]/page.tsx` read `const { can } = useAccess()`
+(`src/store/useAccess.ts`) and gate Orders actions on the `orders` section:
+Add/Import buttons and the row/page Edit action need `can("orders", 2)`;
+Delete (row icon and `[id]/page.tsx`'s Delete Order button) needs
+`can("orders", 3)`; "Generate Shipping Label" also needs `can("orders", 3)`
+(see the Shipping labels section below). This replaced the previous
+`isSuperAdmin || hasDeleteOverride` role/permission-override check — neither
+page reads `profile.permission_overrides` or imports
+`lib/utils/permissions.ts` any more. The DB backs this independently via RLS
+(migration `055_section_permissions.sql`, which enforces the same
+`orders >= 3` bar for deletes), not just a UI-level gate.
 
 ## Pagination data flow
 
@@ -303,7 +302,9 @@ editable fields.
 ## Inventory link + VAT (additive fields on `Sale`)
 
 - `product_id: string | null` — optional FK to `products` (Inventory feature).
-  Both modals render an "Inventory Product" `Select` sourced from
+  Both modals render an "Inventory Product" `Select` (Task 5: only when
+  `can("inventory", 1)` via `useAccess()` — otherwise just the free-text
+  product name field) sourced from
   `useAppSelector((s) => s.inventory.items)`; selecting one is enough — a DB
   trigger (`sales_stock_change`, see `supabase/migrations/002_inventory_and_vat.sql`)
   decrements `products.current_stock` automatically. **Don't add client-side
@@ -441,8 +442,9 @@ editable fields.
   manual creation.
 - **On any sync failure the modal also writes `ebay_sync_error` itself**, via
   the same tenant client it used for the sale update. The route is gated by
-  `requireIntegrationAdmin()` (`manage_integrations` — admin/super_admin),
-  but this modal is reachable by anyone with `update_sale`, which includes
+  `requireIntegrationAdmin()` (= `requireSectionAccess("integrations", 2)`;
+  the two `/api/shipping/*` routes use `requireSectionAccess("orders", 3)`),
+  but this modal is reachable by anyone with Orders: Edit, which includes
   **`accountant`**. An accountant's save is 403'd *before* the route touches
   the row, so without this client-side write the order would silently never
   reach eBay and no Retry row would ever appear for an admin to find. The
@@ -655,6 +657,17 @@ A sale can be linked to at most one `purchases` row via `purchases.sale_id`. The
 - **AddSaleModal** — collapsible "Purchase cost (optional)" section: creates a purchase alongside the sale in a single submit action.
 - **EditSaleModal** — shows a read-only chip when a purchase is already linked ("View →" to `/dashboard/purchases`); shows the same collapsible add-form when no purchase is linked yet.
 - **Import review page** — Purchase Cost + Vendor columns; linked purchase created per order when the user confirms the import.
+
+**Gated on purchases access (Task 5 review, fix round 1, 2026-09-30):** both
+`AddSaleModal`'s "Purchase cost (optional)" section and `EditSaleModal`'s
+"Linked Purchase" block (the read-only chip AND the add-form) render only
+when `can("purchases", 2)` — a user who can't edit Purchases shouldn't be
+offered a side door to create one from inside a sale. `handleSubmit` in both
+modals also re-checks `can("purchases", 2)` before writing the purchase row
+(defense in depth against a stale form). A purchase-insert failure in either
+modal shows a clean `toastError` ("…the linked purchase could not be
+created — add it manually from the Purchases page."), never the raw
+Postgres message.
 
 **Order detail page** (`[id]/page.tsx`): linked purchase is looked up from `state.purchases.items.find(p => p.sale_id === saleId)`; falls back to a `purchases.select("*").eq("sale_id", saleId).maybeSingle()` Supabase call on direct-URL loads (result dispatched to `addPurchase` to hydrate Redux).
 
@@ -1056,16 +1069,14 @@ who can view the order, same access level as "Download Invoice".
 both `/api/shipping/*` routes — this client flag only decides which button
 renders).
 
-`canGenerateLabel = isAdmin || hasManageIntegrationsOverride` — admin/
-super_admin, OR a user granted the `manage_integrations` permission
-override (final-review fix, 2026-09-06: this now matches
-`requireIntegrationAdmin()`'s `hasPermission(...)` check on the two API
-routes and the `shipments_insert` RLS policy's `current_user_has_override('manage_integrations')`
-branch — previously this gate only checked role, so an override-holder
-could reach a real EasyPost purchase that RLS would then reject). Both
-selectors are defined **before** the page's early loading/not-found
-returns, alongside `isSuperAdmin`/`hasDeleteOverride` — see the gotcha in
-this feature's `SKILL.md` for why. Like the linked purchase, the shipment is
+`canGenerateLabel = can("orders", 3)` (`useAccess()`, Task 5 — replaced the
+previous `isAdmin || hasManageIntegrationsOverride` role/override check) —
+matches RLS migration `055_section_permissions.sql`'s `orders >= 3` bar on
+the `shipments_insert` policy, so a user who can't see the button also can't
+reach a real EasyPost purchase by other means. `canEdit`/`canDelete`/
+`canGenerateLabel` are all defined **before** the page's early
+loading/not-found returns — see the gotcha in this feature's `SKILL.md` for
+why. Like the linked purchase, the shipment is
 fetched on-demand
 (`.from("shipments").select("*").eq("sale_id", sale.id).order("created_at",
 { ascending: false }).limit(1)`, taking `data?.[0] ?? null` — **not**

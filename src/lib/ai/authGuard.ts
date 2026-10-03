@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
-import { hasPermission } from "@/lib/utils/permissions";
 import { hasAiFeatures, getAiGenerationLimit } from "@/lib/utils/planGating";
 import { readTenantUsage, sumCalls } from "@/lib/ai/quota";
 import { aiErrorMessage } from "@/lib/ai/errors";
-import type { Profile, TenantPlan } from "@/types";
+import type { TenantPlan } from "@/types";
 
 export interface AiAuthContext {
   client: Awaited<ReturnType<typeof createClient>>;
@@ -22,8 +21,9 @@ export type AiAuthResult =
 
 /**
  * Guard for `/api/listings/ai/*`. Checks, in order: signed in, has a tenant,
- * holds `manage_listings`, the plan includes AI, the platform admin has not
- * hidden AI for this tenant, and the tenant has quota left.
+ * holds section `listings` at Edit (055's `current_user_access`), the plan
+ * includes AI, the platform admin has not hidden AI for this tenant, and the
+ * tenant has quota left.
  *
  * The UI hides AI controls when the plan or tenant flag says so, but hidden
  * chrome is presentation — this is the enforcement.
@@ -41,13 +41,14 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
     return { error: NextResponse.json({ error: "No tenant schema on user" }, { status: 400 }) };
   }
 
-  const { data: profile } = await client
-    .from("profiles")
-    .select("role, permission_overrides")
-    .eq("id", user.id)
-    .single<Pick<Profile, "role" | "permission_overrides">>();
-
-  if (!profile?.role || !hasPermission(profile.role, "manage_listings", profile.permission_overrides)) {
+  // AI generation lives under the listings section (055) — same `manage_listings`
+  // boundary this guard enforced pre-section-permissions.
+  const { data: level, error: accessError } = await client.rpc("current_user_access", { p_section: "listings" });
+  if (accessError) {
+    console.error("[requireAiAccess] current_user_access failed", { code: accessError.code });
+    return { error: NextResponse.json({ error: "Could not verify access" }, { status: 500 }) };
+  }
+  if (typeof level !== "number" || level < 2) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
@@ -84,8 +85,8 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
   } catch (err) {
     // The real cause — a Postgres error, readTenantUsage's own message, or a
     // missing-env-var throw from createControlClient() — stays server-side.
-    // Every tenant user with `manage_listings` reaches this guard, so the
-    // response body gets the same user-safe copy `usage/route.ts` returns.
+    // Every tenant user with listings access >= Edit reaches this guard, so
+    // the response body gets the same user-safe copy `usage/route.ts` returns.
     console.error("requireAiAccess failed", err);
     return {
       error: NextResponse.json({ error: aiErrorMessage(err) }, { status: 500 }),

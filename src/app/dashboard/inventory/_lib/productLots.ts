@@ -26,9 +26,9 @@ export function sortLotsFifo(lots: StockLot[]): StockLot[] {
   );
 }
 
-/** Mirrors set_opening_lot_cost (047): admins, opening batches only. */
-export function canEditLotCost(lot: StockLot, isAdmin: boolean): boolean {
-  return isAdmin && lot.kind === "opening";
+/** Mirrors set_opening_lot_cost (047): Inventory full access (≥ 3), opening batches only. */
+export function canEditLotCost(lot: StockLot, canManage: boolean): boolean {
+  return canManage && lot.kind === "opening";
 }
 
 export function parseUnitCostInput(raw: string): number | null {

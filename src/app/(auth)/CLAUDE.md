@@ -76,8 +76,10 @@ icon switches with the theme too (see Shared dependencies below).
   `set-password` here comes from `email-templates/invite.html`'s `{{ .SiteURL }}`
   path, not the `redirectTo` this route passes (kept harmlessly — see
   `(auth)/SKILL.md`).
-- `src/proxy.ts` — route-level access control using `lib/utils/permissions.ts`;
-  redirects unauthenticated users to `/login`.
+- `src/proxy.ts` — route-level access control using
+  `src/lib/permissions/sections.ts` (section model, `deniedRedirect`) and
+  `src/store/useAccess.ts` (`canSee`/`can`); redirects unauthenticated users
+  to `/login`.
 - `src/app/welcome/page.tsx` — where a self-serve signup lands after
   confirming their email. Calls `POST /api/signup/provision`, then
   **`supabase.auth.refreshSession()`**, then redirects to `/dashboard`. The

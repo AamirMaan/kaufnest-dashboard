@@ -22,7 +22,7 @@ const FORM_ID = "opening-cost-form";
 
 interface Props {
   product: Product | null;
-  isAdmin: boolean;
+  canManage: boolean;
   onClose: () => void;
   /** Called after an opening cost is saved, so the page can re-fetch stock (Avg. cost). */
   onChanged?: () => void;
@@ -45,7 +45,7 @@ interface LotsResult {
   error: string | null;
 }
 
-export function ProductLotsModal({ product, isAdmin, onClose, onChanged }: Props) {
+export function ProductLotsModal({ product, canManage, onClose, onChanged }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const { locations } = useAdvancedInventory();
@@ -158,7 +158,7 @@ export function ProductLotsModal({ product, isAdmin, onClose, onChanged }: Props
       render: (l: StockLot) => (
         <span className="flex items-center gap-1">
           <span className="text-sm tabular-nums text-(--color-text-base)">{Number(l.unit_cost).toFixed(2)}</span>
-          {canEditLotCost(l, isAdmin) && (
+          {canEditLotCost(l, canManage) && (
             <Button
               size="icon"
               variant="ghost"

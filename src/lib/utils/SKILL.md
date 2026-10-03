@@ -289,56 +289,22 @@ present-but-malformed — so a falsy return means "fine to submit".
 - `validateVATRate(value: number | string)` — coerces, then requires 0–100
   inclusive.
 
-## permissions.ts
+## Removed: permissions.ts (Task 7, 2026-09-30)
 
-Static role-based permission matrix — no Supabase calls, pure lookups against
-`UserRole` from `src/types`.
-
-- `PERMISSIONS` — `Record<Permission, readonly UserRole[]>`. `Permission` is
-  derived as `keyof typeof PERMISSIONS`, so adding a key automatically extends
-  the type. Naming convention: `<verb>_<entity>` (`create_expense`,
-  `manage_users`, `view_audit_logs`, ...). `manage_integrations` (`["admin",
-  "super_admin"]`) gates connecting/disconnecting/syncing platforms on
-  `/dashboard/integrations` — accountants see the page (if the tenant's plan
-  has it) but get a "contact your admin" message instead of the connection
-  cards.
-- `ALL_PERMISSIONS` — `Object.keys(PERMISSIONS) as Permission[]`, for
-  enumerating every permission (used by the Users feature's Permissions modal
-  to render a full checklist).
-- `PERMISSION_LABELS` — `Record<Permission, string>` human-readable label per
-  permission, also consumed by the Permissions modal.
-- `hasPermission(role, permission, overrides?)` — the primitive check; most
-  call sites should use this directly (e.g. to show/hide an Edit/Delete
-  button). Third param `overrides` (a `Profile.permission_overrides` array,
-  optional, defaults to `[]`) is **additive only** — it can grant a
-  permission the role lacks, never take one away. Pass
-  `profile?.permission_overrides` whenever you have the full profile
-  available (Redux `state.currentUser.profile` client-side, or a
-  `role, permission_overrides` Supabase select server-side); omit it only
-  where role-only is intentional/fine.
-- `canAccessRoute(role, pathname, overrides?)` — route-level gate used by
-  `src/proxy.ts` (this app's middleware-equivalent) to block `/dashboard/users`
-  and `/dashboard/audit-logs` for roles (and overrides) without
-  `manage_users`/`view_audit_logs`. Everything else returns `true` (any
-  authenticated role).
-- `ROLE_HIERARCHY = ["accountant", "admin", "super_admin"]` (ascending) backs
-  `hasMinimumRole(role, minimum)` — an index comparison, for "at least as
-  privileged as X" checks rather than an exact-permission lookup. Not
-  override-aware (overrides only ever apply to a specific `Permission` key,
-  never to the role hierarchy itself).
-- Adding a new role to `UserRole` means updating `ROLE_HIERARCHY` *and* every
-  relevant `PERMISSIONS` array — neither is enforced by the type system.
-- **Per-user permission overrides** (`Profile.permission_overrides: string[]`,
-  a jsonb array column, see `supabase/migrations/023_user_permission_overrides.sql`):
-  managed via the Users feature's Permissions modal
-  (`src/app/dashboard/users/_components/PermissionsModal.tsx`), super_admin
-  only. `delete_sale`/`delete_expense`/`delete_purchase` overrides are ALSO
-  enforced in Postgres RLS (`{{schema}}.current_user_has_override(perm)`,
-  since those three DELETE policies are role-only, not app-code-gated) — see
-  that migration's header comment. Every other permission in the matrix is
-  only ever checked in application code (proxy.ts/authGuard.ts/page-level
-  `hasPermission` calls), so granting e.g. `manage_integrations` via an
-  override needs no RLS change — the app code is already the sole gate.
+The old static role-based permission matrix (`PERMISSIONS`/`hasPermission`/
+`canAccessRoute`/`hasMinimumRole`) and its UI
+(`src/app/dashboard/users/_components/PermissionsModal.tsx`) were deleted —
+superseded by **section permissions**: `src/lib/permissions/sections.ts`
+(`SECTIONS`/`LEVEL_LABELS`/`ROLE_DEFAULTS`/`planAllows`, a section × level
+model instead of a flat permission checklist), the `user_section_access`
+table (migration `055_section_permissions.sql`), and the
+`/dashboard/users/[id]/permissions` screen (see
+`src/app/dashboard/users/CLAUDE.md`). `src/proxy.ts`'s route guard and every
+page's button-level gating now read `useAccess()`
+(`src/store/useAccess.ts`), not `hasPermission`/`canAccessRoute`.
+`Profile.permission_overrides: string[]` (the jsonb column the old modal
+wrote) still exists in the DB and in `src/types/index.ts` for now, but
+nothing reads or writes it any more.
 
 ## invoiceMath.ts
 
@@ -442,8 +408,8 @@ bundle — keep that pattern if you touch the imports.
 
 ## Where these are used
 
-`audit.ts`/`currency.ts`/`date.ts`/`permissions.ts` are imported directly by
-feature `page.tsx`/`_components/*` files and `_store/*Slice.ts` reducers.
+`audit.ts`/`currency.ts`/`date.ts` are imported directly by feature
+`page.tsx`/`_components/*` files and `_store/*Slice.ts` reducers.
 `filters.ts` pairs specifically with `components/ui/FilterBar.tsx`.
 `generateInvoice.ts` is invoked from `components/modals/InvoiceModal.tsx` and
 `app/dashboard/settings/page.tsx` (preview/test-generate button).

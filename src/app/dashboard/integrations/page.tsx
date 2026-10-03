@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector } from "@/store/hooks";
-import { hasPermission } from "@/lib/utils/permissions";
+import { useAccess } from "@/store/useAccess";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { ConnectionCard } from "./_components/ConnectionCard";
 import type { IntegrationPlatform } from "@/types";
@@ -21,8 +21,7 @@ function IntegrationsContent() {
   const { success, error: toastError } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const role = useAppSelector((s) => s.currentUser.profile?.role);
-  const permissionOverrides = useAppSelector((s) => s.currentUser.profile?.permission_overrides);
+  const { can } = useAccess();
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const connections = useAppSelector((s) => s.integrations.connections);
 
@@ -39,9 +38,7 @@ function IntegrationsContent() {
     }
   }, [searchParams, success, toastError, router]);
 
-  if (!role) return null;
-
-  const canManage = hasPermission(role, "manage_integrations", permissionOverrides);
+  const canManage = can("integrations", 2);
 
   if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
     return (

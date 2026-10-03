@@ -18,7 +18,7 @@ import { pageAfterRemoval } from "../_lib/transfers";
 import { TransferStockModal } from "./TransferStockModal";
 
 interface Props {
-  isAdmin: boolean;
+  canManage: boolean;
   /** The page header owns the "+ Transfer Stock" button; this tab owns the modal. */
   addOpen: boolean;
   onAddClose: () => void;
@@ -28,7 +28,7 @@ interface Props {
   onStockChanged: () => void;
 }
 
-export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChanged }: Props) {
+export function TransfersTab({ canManage, addOpen, onAddClose, hidden, onStockChanged }: Props) {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
   const { items, page, pageSize, total, loaded, isFetching, error } = useAppSelector((s) => s.stockTransfers);
@@ -51,7 +51,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
     ? error
       ? "Transfers couldn't be loaded."
       : "Loading transfers…"
-    : isAdmin
+    : canManage
       ? "No transfers yet — move stock between your locations with “Transfer Stock”."
       : "No transfers yet.";
 
@@ -125,7 +125,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
       ),
     },
     { header: "Note", render: (t: StockTransferRow) => <span className="text-sm text-(--color-text-muted)">{t.note ?? ""}</span> },
-    ...(isAdmin
+    ...(canManage
       ? [
           {
             header: "Actions",
@@ -141,7 +141,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
 
   return (
     <div id="inventory-panel-transfers" role="tabpanel" aria-labelledby="inventory-tab-transfers" hidden={hidden} className="space-y-4">
-      {!isAdmin && <p className="text-sm text-(--color-text-muted)">Only admins can record or delete transfers.</p>}
+      {!canManage && <p className="text-sm text-(--color-text-muted)">You don&apos;t have permission to record or delete transfers.</p>}
 
       {error && (
         <div className="flex items-center justify-between gap-3 rounded-(--radius-card) border border-(--color-border) bg-(--color-surface) p-4">
@@ -168,7 +168,7 @@ export function TransfersTab({ isAdmin, addOpen, onAddClose, hidden, onStockChan
         />
       </div>
 
-      {isAdmin && addOpen && <TransferStockModal open onClose={onAddClose} onSaved={handleSaved} />}
+      {canManage && addOpen && <TransferStockModal open onClose={onAddClose} onSaved={handleSaved} />}
       <DeleteConfirmModal
         open={!!deleteTarget}
         title="Delete Transfer"
