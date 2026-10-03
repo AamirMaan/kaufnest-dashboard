@@ -10,7 +10,9 @@ not tenant roles.
 - `layout.tsx` — server component auth guard: redirects to `/login` if no
   session, then redirects to `/dashboard` if `isPlatformAdmin(user.email)`
   (`@/lib/supabase/control`) is `false`. Renders the admin header/shell, wrapped
-  in `<ToastProvider>` so `_components/*` can call `useToast()`.
+  in `<ToastProvider>` so `_components/*` can call `useToast()`. The header
+  has a nav (`next/link`) next to the Admin badge: Tenants (`/admin`), Plans
+  (`/admin/plans`), Support (`/admin/support`).
 - `page.tsx` — "Tenant Management" page: stats cards (Total/Active/Invited/
   Deactivated) + a slim tenants table (Tenant, **Admin Email**, Plan, Status,
   **AI Usage**, and a final unlabeled column holding a hamburger-icon `Link`
@@ -38,14 +40,60 @@ not tenant roles.
   when `limit` is 0), and an Actions card (`TenantDetailActions`). A
   `refreshKey` bumped by `TenantDetailActions.onRefresh` re-runs both fetches
   in place, mirroring `page.tsx`'s own refresh pattern.
+- `plans/page.tsx` — "Plans" list (plan-management Task 6, 2026-10-03).
+  Client component on `usePlanCatalog()` (`GET /api/admin/plans`). Columns:
+  Plan (name + mono key), Visibility (`visibilityBadge`), Price, Users,
+  Features (four `Check`/`X` icons with `aria-label`, plus `AI n/mo`),
+  Tenants (from `tenantCounts`), and a hamburger `Link` to
+  `/admin/plans/[key]`. "New plan" pushes `/admin/plans/new`.
+- `plans/new/page.tsx` — "New plan": loads the catalog (for `validatePlan`'s
+  duplicate-key / last-public checks) and renders `PlanForm mode="create"`;
+  on save, routes to the new plan's edit page.
+- `plans/[key]/page.tsx` — edit page. `params: Promise<{ key: string }>`
+  resolved with `use()`. Finds the plan in the catalog ("Plan not found"
+  otherwise), shows name + visibility badge, renders `PlanForm mode="edit"`
+  with `tenantCount={tenantCounts[key] ?? 0}`, keyed on the catalog
+  `version` so a save (`onSaved` → `reload()`) remounts it with fresh data.
+- `plans/_components/PlanForm.tsx` — the create/edit form. `<form
+  id="plan-form">` with card sections Identity / Visibility (paid only) /
+  Price (paid only) / Limits & features / Trial (trial only) / Display; the
+  footer (Cancel + `type="submit" form="plan-form"`, `disabled={saving ||
+  !isFormValid}`, "Saving…") sits outside the form. Validation is
+  `validatePlan` on every render; errors show per field once touched or
+  after a submit attempt, merged with the API's `fieldErrors`. Edit mode
+  notes a price change (new Stripe price; existing subscribers keep the old
+  one) and a newly retired plan, and confirms reductions
+  (`detectReductions`) with `ConfirmActionModal` when tenants are on the
+  plan. POSTs `/api/admin/plans` or PATCHes `/api/admin/plans/[key]`; toasts
+  on success and failure; a failed save keeps the edits.
+- `plans/_components/usePlanCatalog.ts` — `GET /api/admin/plans` →
+  `{ plans, tenantCounts, error, version, reload }` for the three plan pages.
+- `plans/_components/PlanCatalogStatus.tsx` — shared loading spinner /
+  error + Retry for the plan pages.
+- `plans/_lib/planFormState.ts` (+ test) — pure: `emptyPlanInput`,
+  `inputFromPlan` (drops Stripe ids), `slugifyKey`, `visibilityBadge`, and
+  the number-input helpers `parseNumberField` (empty → NaN),
+  `parseOptionalNumberField` (empty → null), `numberFieldValue`.
+- `_components/planOptions.ts` (+ test) — pure: tenant plan `<option>`s from
+  the catalog — `sortPlans`, keep `isAssignablePlan(p, currentKey)` (retired
+  only when current), label "Trial (N days)" / "Name (hidden)" /
+  "Name (retired)" / name.
+- `_components/usePlanOptions.ts` — fetches `GET /api/admin/plans` when a
+  tenant modal opens and maps it through `planOptions`. Until it loads (or if
+  it fails) the only option is the current value; `error` drives the modals'
+  "Couldn't load plans." note.
 - `_components/AddTenantModal.tsx` — "Provision New Tenant" form (company
-  name → auto-slug, plan, admin email/name, optional referral). Posts to
+  name → auto-slug, plan, admin email/name, optional referral). Plan options
+  come from `usePlanOptions(open, null, plan)` (default `"trial"`; the trial
+  label carries the catalog's trial length). Posts to
   `/api/admin/provision-tenant`. On failure shows `data.detail ?? data.error`
   both inline (red banner in the form) and via `useToast().error(...)`; on
   success shows a `useToast().success(...)` toast before closing.
 - `_components/EditTenantModal.tsx` — "Edit Tenant" modal: pre-filled form for
   `plan`, `status`, `admin_email`, `ai_enabled` (rendered as a `Checkbox`
   from `@/components/ui/FormFields`, "AI features visible to this tenant").
+  Plan options come from `usePlanOptions(open, tenant.plan, tenant.plan)`, so
+  a retired plan shows only when it's the tenant's current plan.
   Computes a partial diff against the current tenant and sends only changed
   fields to `PATCH /api/admin/tenants/[tenant.id]`. Shows inline note when
   email changes ("A verification email will be sent to the new address.").
@@ -90,10 +138,12 @@ not tenant roles.
   actions (Toggle AI, Impersonate) that need a plain confirm, no reason
   field. `tone` colors an informational banner only; the confirm button is
   always `variant="primary"` regardless of tone.
-- `_components/tenantVariants.ts` — `PLAN_VARIANT`/`STATUS_VARIANT` badge
-  maps (2026-09-03), shared between `page.tsx`'s table and
+- `_components/tenantVariants.ts` — `planVariant(key)` (trial warning,
+  starter info, pro success, business danger, any admin-created plan
+  `default`; replaced the `PLAN_VARIANT` map on 2026-10-03) and
+  `STATUS_VARIANT`, shared between `page.tsx`'s table and
   `tenants/[id]/page.tsx`'s header badges. Extracted so the two don't define
-  the same maps twice.
+  the same mapping twice.
 - `_components/AiUsageModal.tsx` — thin `Modal` wrapper (2026-09-03) around
   `AiUsageBreakdown`, kept only so the table's AI Usage cell can open it in a
   popup. Accepts `{ open, tenant, used, limit, byUser, onClose }`, unchanged
@@ -182,9 +232,14 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
      `user_metadata`; `set_user_tenant` is the canonical `app_metadata` writer
      used everywhere else).
   6. Register the tenant in `control.tenants` (plan, `admin_email`,
-     `status: "invited"`, `trial_ends_at` = now + 14 days). Status stays
+     `status: "invited"`, `trial_ends_at` = now + the catalog trial length, `getTrialDays()`). Status stays
      `invited` until the admin accepts their invite and logs in (or a platform
      admin flips it via `EditTenantModal`).
+
+  Before step 1, the requested `plan` must pass
+  `isAssignablePlan(await getPlan(plan), null)` (a catalog plan, not
+  retired) — otherwise 400 "That plan can't be assigned.", before anything
+  is created.
 
   On any thrown error, returns `{ error: "Provisioning failed", detail }`
   (500) where `detail` is the underlying Supabase/Postgres error message
@@ -215,7 +270,9 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
     changed, scan Project B Auth users and call `updateUserById`; (3)
     `.update(patch)` only changed fields (`ai_enabled` uses a `!== undefined`
     guard, not truthiness — `false` is a real value: a platform admin actually
-    revoking AI). Platform-admin override — writes `plan`/`status` directly,
+    revoking AI). A changed `plan` is checked first with
+    `isAssignablePlan(await getPlan(body.plan), tenant.plan)` → 400 "That
+    plan can't be assigned." (500 if the catalog lookup throws). Platform-admin override — writes `plan`/`status` directly,
     bypassing Stripe. `ai_enabled` is the AI-visibility switch, not a plan
     field — it doesn't touch the Stripe-owns-`plan`/`status` invariant.
   - `DELETE`: permanently destroys a tenant. Steps: (1) fetch tenant `schema_name`;
@@ -265,7 +322,7 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `kaufnest_impersonating` cookie.
 - **`plans/route.ts`** (`GET`, `POST`) / **`plans/[key]/route.ts`** (`PATCH`)
   (plan-management Task 5, 2026-10-03) — the plan-catalog API behind the
-  (not-yet-built) `/admin` plan management UI. Both guarded by
+  `/admin/plans` UI (`plans/*`, above). Both guarded by
   `verifyPlatformAdmin()` imported from `../tenants/route` (now returns
   `{ ok: true; email: string }` instead of bare `{ ok: true }` — the email
   is what every write stamps into `control.admin_audit_log.admin_email`).
@@ -372,7 +429,9 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
 
 ## Tests
 
-No test suite targets this folder — it's almost entirely Supabase/network
+`npx jest src/app/admin` runs the pure helpers' tests
+(`plans/_lib/planFormState.test.ts`, `_components/planOptions.test.ts`).
+Beyond those, no test suite targets this folder — it's almost entirely Supabase/network
 calls (provisioning, impersonation, control-plane queries), which the working
 agreement keeps out of unit tests. Verify by using `/admin` → "Add Tenant" in
 the browser.

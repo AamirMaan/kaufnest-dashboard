@@ -47,6 +47,20 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   already `select("*")` — just a new `Column<BugReport>` entry. A column
   needing tenant data beyond `slug` needs the parent `page.tsx`'s `tenants`
   select widened and the derived map's value type changed to match.
+- **Change plan form fields** (a new limit/feature, a new display field):
+  `plans/_components/PlanForm.tsx` (section + control) +
+  `src/lib/plans/validatePlan.ts` (`PlanInput` is derived from `Plan`; add the
+  rule to `validatePlan`, the column to `planInputToRow`/`INPUT_KEYS`, and to
+  `detectReductions` if removing it takes something away from tenants) +
+  `plans/_lib/planFormState.ts` (`emptyPlanInput`/`inputFromPlan`, with their
+  tests) + `Plan`/`PlanRow`/`planFromRow` in `src/lib/plans/entitlements.ts`.
+  A new stored field also needs a `supabase/control-plane/` migration on
+  `control.plans` (the user applies it). Show it in the list via
+  `plans/page.tsx`.
+- **Change tenant plan dropdowns**: `_components/planOptions.ts` (pure,
+  tested — what's assignable and the labels) + `_components/usePlanOptions.ts`
+  (fetch-on-open). Server-side the same rule is `isAssignablePlan` in
+  `api/admin/tenants/[id]/route.ts` and `provision-tenant/route.ts`.
 - **Change the resync sweep** (different staleness window, different status
   source): `api/support/resync/route.ts` alone — it's a single self-contained
   route, not colocated under `admin/` (see `CLAUDE.md`'s cross-reference).
@@ -100,6 +114,32 @@ not tenant RBAC. Don't reuse tenant role checks (`current_user_role()`,
   `plan` and `status` directly to `control.tenants` without touching Stripe.
   It's a manual admin override. Stripe webhooks continue to be the
   authoritative writer for production billing events.
+- **Plan key is immutable**: `PlanForm` makes Key `readOnly` in edit mode and
+  `PATCH /api/admin/plans/[key]` forces `key`/`kind` from the stored row
+  anyway. Billing (`plan_prices`, Stripe metadata, `control.tenants.plan`)
+  references it. In create mode the key follows `slugifyKey(name)` until the
+  admin types in the Key field (`keyTouched`).
+- **Reductions confirm only when tenants exist**: `PlanForm` opens the
+  "Reduce this plan?" `ConfirmActionModal` only when
+  `detectReductions(original, input)` is non-empty AND `tenantCount > 0`.
+  With no tenants on the plan, a reduction saves straight away.
+- **Retired plans only appear in a tenant's dropdown when it's the current
+  plan** (`planOptions` → `isAssignablePlan`). The PATCH/provision routes
+  enforce the same rule and 400 with "That plan can't be assigned.", so a
+  stale modal can't sneak a retired plan onto a new tenant.
+- **Plan number inputs: empty means NaN, not 0**: `parseNumberField` turns a
+  cleared Max users / AI allowance / Display order into `NaN` so
+  `validatePlan` flags it and the submit button stays disabled. Price and
+  trial length use `parseOptionalNumberField` (`null`). Render with
+  `numberFieldValue` so `null`/`NaN` show as an empty input.
+- **Edit page remounts the form after a save**: `plans/[key]/page.tsx` keys
+  `PlanForm` on the `usePlanCatalog` `version` (bumped on each successful
+  load), and `onSaved` calls `reload()`. The form keeps the admin's edits
+  until the refetch lands, then remounts with the saved plan as its new
+  baseline, so price/retire notes and reduction checks compare against it.
+- **The trial is labelled by kind, not visibility**: it is stored `hidden`,
+  but `visibilityBadge` shows "Trial", and `PlanForm` hides the Visibility
+  and Price sections for it (and shows the Trial section instead).
 - **`adminEmail` reuse across tenants is rejected**: `inviteUserByEmail` does
   NOT error for an email with an existing pending/accepted invite — it
   silently resends and returns that *existing* `auth.users` row (from whatever

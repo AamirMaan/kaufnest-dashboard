@@ -8,7 +8,7 @@ import { AddTenantModal } from "./_components/AddTenantModal";
 import { AiUsageModal } from "./_components/AiUsageModal";
 import type { Tenant } from "@/types";
 import { Plus, Building2, Menu } from "lucide-react";
-import { PLAN_VARIANT, STATUS_VARIANT } from "./_components/tenantVariants";
+import { planVariant, STATUS_VARIANT } from "./_components/tenantVariants";
 
 export default function AdminPage() {
   // null = not yet loaded (shows skeleton), array = loaded
@@ -122,7 +122,7 @@ export default function AdminPage() {
                       {t.admin_email ?? "—"}
                     </td>
                     <td className="py-3 pr-4">
-                      <Badge label={t.plan} variant={PLAN_VARIANT[t.plan]} />
+                      <Badge label={t.plan} variant={planVariant(t.plan)} />
                     </td>
                     <td className="py-3 pr-4">
                       <Badge label={t.status} variant={STATUS_VARIANT[t.status]} />
