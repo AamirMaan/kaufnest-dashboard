@@ -426,7 +426,7 @@ lookup against existing `sales` rows.
 - **`authGuard.requireIntegrationAdmin()`** is the only auth check in
   connect/callback/disconnect/sync — it 401s with no session, 400s with no
   `tenant_schema`, 403s if `current_user_access('integrations') < 2` (055).
-  The `connect` route additionally checks `hasPlatformIntegrations(tenantPlan)`
+  The `connect` route additionally checks `hasPlatformIntegrations(await getEntitlements(tenant.plan))`
   (403 if the plan doesn't include integrations) — that check is plan-based,
   not access-level-based, so it's not in the shared guard.
 - **Listings/messages API routes call `requireSectionAccess` directly**

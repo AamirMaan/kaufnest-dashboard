@@ -13,6 +13,12 @@ import {
   INVENTORY_PLATFORMS,
   LOCATION_TYPE_LABELS,
 } from "./advancedInventory";
+import { NO_ENTITLEMENTS, type PlanEntitlements } from "@/lib/plans/entitlements";
+
+const ENT = (over: Partial<PlanEntitlements> = {}): PlanEntitlements => ({ ...NO_ENTITLEMENTS, ...over });
+const STARTER = ENT({ maxUsers: 3 });
+const PRO = ENT({ maxUsers: 5, platformIntegrations: true });
+const BUSINESS = ENT({ maxUsers: Infinity, platformIntegrations: true, aiFeatures: true, aiGenerationsPerMonth: 300, messagingAndListings: true, advancedInventory: true });
 import type { InventorySettings, PlatformLocationDefault, StockLocation } from "@/types";
 
 const loc = (id: string, overrides: Partial<StockLocation> = {}): StockLocation => ({
@@ -39,33 +45,33 @@ describe("advancedInventoryView", () => {
   const idle = { loaded: false, loading: false, error: null, settings: null };
 
   it("shows the upsell for plans without advanced inventory, and when the plan is unknown", () => {
-    expect(advancedInventoryView("starter", idle)).toBe("upsell");
-    expect(advancedInventoryView("pro", { ...idle, loaded: true, settings: settings() })).toBe("upsell");
+    expect(advancedInventoryView(STARTER, idle)).toBe("upsell");
+    expect(advancedInventoryView(PRO, { ...idle, loaded: true, settings: settings() })).toBe("upsell");
     expect(advancedInventoryView(null, idle)).toBe("upsell");
   });
 
   it("is loading until the first fetch completes", () => {
-    expect(advancedInventoryView("business", idle)).toBe("loading");
-    expect(advancedInventoryView("business", { ...idle, loading: true })).toBe("loading");
+    expect(advancedInventoryView(BUSINESS, idle)).toBe("loading");
+    expect(advancedInventoryView(BUSINESS, { ...idle, loading: true })).toBe("loading");
   });
 
   it("reports a load error", () => {
-    expect(advancedInventoryView("business", { ...idle, error: "boom" })).toBe("error");
+    expect(advancedInventoryView(BUSINESS, { ...idle, error: "boom" })).toBe("error");
   });
 
   it("offers enabling when the flag is off or the settings row is missing", () => {
-    expect(advancedInventoryView("business", { ...idle, loaded: true, settings: settings({ advanced_enabled: false }) })).toBe("enable");
-    expect(advancedInventoryView("trial", { ...idle, loaded: true, settings: null })).toBe("enable");
+    expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: settings({ advanced_enabled: false }) })).toBe("enable");
+    expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: null })).toBe("enable");
   });
 
   it("is active once enabled on business or trial", () => {
-    expect(advancedInventoryView("business", { ...idle, loaded: true, settings: settings() })).toBe("active");
-    expect(advancedInventoryView("trial", { ...idle, loaded: true, settings: settings() })).toBe("active");
+    expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: settings() })).toBe("active");
+    expect(advancedInventoryView(BUSINESS, { ...idle, loaded: true, settings: settings() })).toBe("active");
   });
 
   it("keeps showing loaded data when a background refresh fails", () => {
-    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings() })).toBe("active");
-    expect(advancedInventoryView("business", { loaded: true, loading: false, error: "boom", settings: settings({ advanced_enabled: false }) })).toBe("enable");
+    expect(advancedInventoryView(BUSINESS, { loaded: true, loading: false, error: "boom", settings: settings() })).toBe("active");
+    expect(advancedInventoryView(BUSINESS, { loaded: true, loading: false, error: "boom", settings: settings({ advanced_enabled: false }) })).toBe("enable");
   });
 });
 

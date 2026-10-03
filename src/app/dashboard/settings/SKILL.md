@@ -35,8 +35,10 @@ from `CompanyProfile`.
   feature's `_components/BillingSection.tsx` is presentation only — the
   actual logic lives in `src/app/api/billing/*` (routes) and
   `src/components/billing/PlanPicker.tsx` (shared with `/trial-expired`).
-  Changing what a plan costs or includes is `src/lib/utils/pricing.ts` +
-  `src/lib/utils/planGating.ts`, not this folder. `src/app/trial-expired/
+  Changing what a plan costs or includes is the plan catalog
+  (`control.plans`, `src/lib/plans/`) — gates read it via `usePlan()` —
+  plus `src/lib/utils/pricing.ts` for the marketing/picker copy, not this
+  folder. `src/app/trial-expired/
   page.tsx` (outside this folder) duplicates `BillingSection`'s
   checkout-success-confirmation and `canManageBilling` gating patterns
   against the same `GET /api/billing/status` response shape — if you change

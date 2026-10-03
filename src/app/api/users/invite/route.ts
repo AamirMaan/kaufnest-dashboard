@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
+import { createControlClient } from "@/lib/supabase/control";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { canAddUser, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { UserRole, Profile } from "@/types";
 
 export async function POST(request: Request) {
@@ -78,6 +81,35 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "A user with this email already exists in this team." },
       { status: 409 }
+    );
+  }
+
+  // 3c. Plan user limit (control.plans.max_users). Deactivated users don't count.
+  const { data: tenantRow } = await createControlClient()
+    .schema("control")
+    .from("tenants")
+    .select("plan")
+    .eq("schema_name", tenantSchema)
+    .maybeSingle<{ plan: string }>();
+  const { count: userCount, error: countError } = await tenantService
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .neq("status", "deactivated");
+  let ent: PlanEntitlements;
+  try {
+    ent = await getEntitlements(tenantRow?.plan ?? null);
+  } catch (err) {
+    console.error("[users/invite] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (countError) {
+    console.error("[users/invite] user count failed", countError.message);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!canAddUser(ent, userCount ?? 0)) {
+    return NextResponse.json(
+      { error: `Your plan allows up to ${ent.maxUsers} users. Upgrade your plan to invite more.` },
+      { status: 403 }
     );
   }
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getTrialDays } from "@/lib/plans/catalog";
 import { MarketingNav } from "./_components/MarketingNav";
 import { Hero } from "./_components/Hero";
 import { IntegrationsBar } from "./_components/IntegrationsBar";
@@ -22,15 +23,17 @@ export default async function HomePage() {
     redirect(!tenantSchema && pendingCompany ? "/welcome" : "/dashboard");
   }
 
+  const trialDays = await getTrialDays();
+
   return (
     <>
       <MarketingNav />
       <main>
-        <Hero />
+        <Hero trialDays={trialDays} />
         <IntegrationsBar />
         <Features />
         <Pricing />
-        <TrialInfo />
+        <TrialInfo trialDays={trialDays} />
       </main>
       <MarketingFooter />
     </>

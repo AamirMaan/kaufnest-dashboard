@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
-import { hasAiFeatures, getAiGenerationLimit } from "@/lib/utils/planGating";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { hasAiFeatures, getAiGenerationLimit } from "@/lib/plans/entitlements";
 import { readTenantUsage, sumCalls } from "@/lib/ai/quota";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import type { TenantPlan } from "@/types";
@@ -74,13 +75,14 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
       return { error: NextResponse.json({ error: "Tenant not found" }, { status: 404 }) };
     }
 
-    if (!hasAiFeatures(row.plan) || !row.ai_enabled) {
+    const ent = await getEntitlements(row.plan);
+    if (!hasAiFeatures(ent) || !row.ai_enabled) {
       return {
         error: NextResponse.json({ error: "AI features are not available on this account." }, { status: 403 }),
       };
     }
 
-    limit = getAiGenerationLimit(row.plan);
+    limit = getAiGenerationLimit(ent);
     used = sumCalls(await readTenantUsage(row.id));
   } catch (err) {
     // The real cause — a Postgres error, readTenantUsage's own message, or a

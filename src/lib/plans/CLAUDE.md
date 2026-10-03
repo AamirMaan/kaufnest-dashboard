@@ -12,7 +12,7 @@ needs. It replaces the old hardcoded `PLAN_LIMITS` table in
 
 | File | Server-only? | Owns |
 | --- | --- | --- |
-| `entitlements.ts` | No — pure, client-safe | `Plan`/`PlanRow`/`PlanEntitlements` types, `planFromRow`, `entitlementsOf`, every gating helper (`canAddUser`, `hasPlatformIntegrations`, `hasAiFeatures`, `getAiGenerationLimit`, `hasMessagingAndListings`, `hasAdvancedInventory`), the feature-list helpers (`PLAN_FEATURES`, `sortPlans`, `plansWithFeature`, `planNamesByFeature`, `formatPlanList`, `availabilityLine`), and the purchase/assignability rules (`canPurchase`, `isAssignablePlan`) |
+| `entitlements.ts` | No — pure, client-safe | `Plan`/`PlanRow`/`PlanEntitlements` types, `planFromRow`, `entitlementsOf`, every gating helper (`canAddUser`, `hasPlatformIntegrations`, `hasAiFeatures`, `getAiGenerationLimit`, `hasMessagingAndListings`, `hasAdvancedInventory`), the feature-list helpers (`PLAN_FEATURES`, `sortPlans`, `plansWithFeature`, `planNamesByFeature`, `formatPlanList`, `availabilityLine`), the purchase/assignability rules (`canPurchase`, `isAssignablePlan`), and `toWireEntitlements`/`fromWireEntitlements` (unlimited `maxUsers` ↔ `-1` for the Server → Client Component hop in `dashboard/layout.tsx` → `StoreProvider`) |
 | `entitlements.test.ts` | — | unit tests for the above |
 | `catalog.ts` | **Yes** | `getPlanCatalog()` (60 s in-memory cache per server instance), `invalidatePlanCatalog()`, `getPlan(key)`, `getEntitlements(key)`, `getTrialDays()`, `getPlanPriceMap()` — all read `control.plans`/`control.plan_prices` via `createControlClient()` (`src/lib/supabase/control.ts`) |
 | `catalog.test.ts` | — | unit tests, mocks `@/lib/supabase/control` |
@@ -33,6 +33,19 @@ control.plans (012)  →  catalog.ts (60 s cache, server-only)  →  layout hydr
 Client Component calls a server route / thunk that goes through
 `catalog.ts`; it must never import `catalog.ts` directly (enforced by
 `.claude/verifiers/rules.py`'s `server-module-in-client` rule).
+
+## Consumers (plan-management Task 3)
+
+- Client: `dashboard/layout.tsx` hydrates `currentUserSlice.planEntitlements`
+  + `planNamesByFeature`; every client gate reads them via
+  `src/store/usePlan.ts` (`usePlan(): { ent, availability }`), and
+  `useAccess()`/`sections.ts`' `planAllows`/`applyPlanCeiling`/
+  `effectiveAccess` take `PlanEntitlements | null`.
+- Server: integrations routes (`review`, `review/import`, `[platform]/connect`),
+  `lib/ai/authGuard.ts`, `api/listings/ai/usage`, `api/admin/ai-usage`,
+  `lib/inventory/authGuard.ts`, `api/users/invite` (user limit) call
+  `getEntitlements`/`getPlanCatalog`; `api/signup/provision`,
+  `api/admin/provision-tenant` and the marketing page call `getTrialDays()`.
 
 ## Shared deps
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
+import { getTrialDays } from "@/lib/plans/catalog";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { addExposedSchema } from "@/lib/supabase/managementApi";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -119,8 +120,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Register in control plane
+    const trialDays = await getTrialDays();
     const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 14);
+    trialEnd.setDate(trialEnd.getDate() + trialDays);
 
     const { error: tenantInsertError } = await control.schema("control").from("tenants").insert({
       name,

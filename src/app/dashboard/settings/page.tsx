@@ -16,7 +16,8 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
-import { hasAiFeatures } from "@/lib/utils/planGating";
+import { hasAiFeatures } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { FileDown } from "lucide-react";
 import { BillingSection } from "./_components/BillingSection";
 import { AiUsageNote } from "@/components/ui/AiUsageNote";
@@ -72,9 +73,9 @@ export default function SettingsPage() {
   const companyProfile = useAppSelector((s) => s.companyProfile.profile);
   const { can } = useAccess();
   const canEditCompanyProfile = can("settings", 2);
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent } = usePlan();
   const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
-  const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;
+  const aiVisible = !!ent && hasAiFeatures(ent) && aiEnabled;
   const [companyForm, setCompanyForm] = useState<CompanyProfile | null>(companyProfile);
   const [savingCompanyProfile, setSavingCompanyProfile] = useState(false);
 

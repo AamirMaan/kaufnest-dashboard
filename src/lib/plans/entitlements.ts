@@ -110,6 +110,21 @@ export function entitlementsOf(plan: Plan | null | undefined): PlanEntitlements 
   };
 }
 
+/**
+ * Entitlements as they cross the Server → Client Component boundary
+ * (dashboard/layout.tsx → StoreProvider). `Infinity` does not survive RSC
+ * serialization reliably, so unlimited `maxUsers` travels as -1.
+ */
+export type WirePlanEntitlements = PlanEntitlements;
+
+export function toWireEntitlements(ent: PlanEntitlements): WirePlanEntitlements {
+  return { ...ent, maxUsers: Number.isFinite(ent.maxUsers) ? ent.maxUsers : -1 };
+}
+
+export function fromWireEntitlements(wire: WirePlanEntitlements): PlanEntitlements {
+  return { ...wire, maxUsers: wire.maxUsers === -1 ? Infinity : wire.maxUsers };
+}
+
 export const canAddUser = (ent: PlanEntitlements, currentUserCount: number): boolean =>
   currentUserCount < ent.maxUsers;
 export const hasPlatformIntegrations = (ent: PlanEntitlements): boolean => ent.platformIntegrations;

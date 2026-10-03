@@ -36,7 +36,8 @@ Trading API mechanics this reuses.
   built from `searchResults` instead of `items`, and infinite-scroll loading
   is paused (search's own 200-row cap is its only "pagination"). Two-pane
   layout: `ThreadList` (left) + `ThreadView`/`ReplyBox` (right). Gates the
-  whole page behind `hasMessagingAndListings(tenantPlan)` (Business only)
+  whole page behind `hasMessagingAndListings(ent)` (`usePlan()`; upgrade copy
+  from `availability("messagingAndListings", "eBay messaging")`)
   with an upgrade prompt, THEN a connected-eBay check
   (`s.integrations.connections`) with a "connect eBay" prompt — same
   two-guard sequence as `dropshipping/page.tsx` and Listings'
@@ -231,13 +232,13 @@ OAuth token.
 - `components/ui/{Badge, Button, Toast}` — **not** `Pagination` (removed
   2026-08-27 in favor of infinite scroll, see `ThreadList.tsx` above)
 - `components/layout/PageHeader`
-- `store/slices/currentUserSlice` (`tenantPlan`)
+- `store/usePlan` — `ent` + `availability()` for the plan gate
 - `store/useAccess` — `useAccess().can("messages", 2)` (Task 5 — replaced
   `lib/utils/permissions`' `hasPermission`)
 - `store/slices` — `s.integrations.connections` (the eBay-connected check;
   hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
   Dropshipping/Listings use)
-- `lib/utils/{date, pagedQuery, currency}` — `planGating`'s
+- `lib/utils/{date, pagedQuery, currency}`; `lib/plans/entitlements`'
   `hasMessagingAndListings` specifically, not `hasPlatformIntegrations`
   (`currency`'s `formatCurrency` renders `EbayMessage.item_price` in
   `ThreadView.tsx`'s header; `item_currency` is narrowed to the app's

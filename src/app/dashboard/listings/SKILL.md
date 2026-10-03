@@ -142,8 +142,8 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
 - **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
   and the create/edit routes had no gate at all until the same change.**
   `hasPlatformIntegrations` (Pro + Business) was the original gate on
-  `page.tsx` only; it's now `hasMessagingAndListings` (Business only, see
-  `lib/utils/planGating.ts`) PLUS a connected-eBay check, applied via
+  `page.tsx` only; it's now `hasMessagingAndListings` (see
+  `lib/plans/entitlements.ts`, via `usePlan()`) PLUS a connected-eBay check, applied via
   `_components/BusinessEbayGate.tsx` to **all three** routes. Before this,
   `new/page.tsx`/`[id]/page.tsx` rendered the listing form with no gate
   whatsoever — a Pro tenant, or one with no eBay connection at all, could
@@ -630,8 +630,8 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   too — today's Publish sits outside the `<form>` via `form="listing-form"`,
   but a future one might not.
 - **AI controls are HIDDEN when unavailable, not disabled-with-a-tooltip —
-  but the routes still enforce it.** `aiVisible = !!tenantPlan &&
-  hasAiFeatures(tenantPlan) && aiEnabled` (computed in `ListingForm.tsx`,
+  but the routes still enforce it.** `aiVisible = !!ent &&
+  hasAiFeatures(ent) && aiEnabled` (`ent` from `usePlan()`) (computed in `ListingForm.tsx`,
   passed down; `AiUsageNote` recomputes it for itself). When it is false the
   buttons and the usage note are not rendered at all — a greyed-out "Write
   with AI" advertises a feature the tenant's plan does not include. Hidden

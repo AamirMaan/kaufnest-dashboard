@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter, isIntegrationPlatform } from "@/lib/integrations/registry";
 import { createControlClient } from "@/lib/supabase/control";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { TenantPlan } from "@/types";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ platform: string }> }) {
   const { platform } = await params;
@@ -24,12 +24,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pla
     .eq("schema_name", tenantSchema)
     .single();
 
-  const plan = (tenant?.plan ?? "trial") as TenantPlan;
-  if (!hasPlatformIntegrations(plan)) {
-    return NextResponse.json(
-      { error: "Platform integrations require the Pro or Business plan." },
-      { status: 403 }
-    );
+  let ent: PlanEntitlements;
+  try {
+    ent = await getEntitlements(tenant?.plan ?? null);
+  } catch (err) {
+    console.error("[integrations/connect] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   const adapter = getAdapter(platform);

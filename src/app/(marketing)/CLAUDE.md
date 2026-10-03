@@ -27,8 +27,9 @@ signed-in state.
   (Features, TrialInfo) light.
 - `page.tsx` — Server Component. Auth redirect, then composes the sections.
 - `_components/MarketingNav.tsx` — logo + "Sign in" + "Start free trial".
-- `_components/Hero.tsx` — headline, CTA, the "14 days free · no credit
-  card" pill, two `animate-pulse` blurred gradient blobs behind the text
+- `_components/Hero.tsx` — headline, CTA, the "{trialDays} days free · no credit
+  card" pill (`trialDays` prop — `page.tsx` reads `getTrialDays()` from
+  the plan catalog; `TrialInfo` takes the same prop), two `animate-pulse` blurred gradient blobs behind the text
   (pure CSS, no client component needed), and a framed product screenshot
   (`public/brand/Boughtopia-dashboard.png`) below the CTAs.
 - `_components/IntegrationsBar.tsx` (2026-08-29) — "Sync with the platforms

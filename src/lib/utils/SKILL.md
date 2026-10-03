@@ -239,7 +239,10 @@ The shared contract for the server-side pagination architecture described in
 
 ## planGating.ts
 
-Subscription-plan feature gates, keyed off `TenantPlan`. Pure lookups against
+**Legacy — only `pricing.ts` still reads it (removed in plan-management
+Task 4).** Every app gate now uses `src/lib/plans/entitlements.ts` (client:
+`usePlan()`; server: `getEntitlements()` from `src/lib/plans/catalog.ts`).
+Subscription-plan feature gates, keyed off a plan key. Pure lookups against
 `PLAN_LIMITS`; no Supabase calls.
 
 - `getPlanLimits(plan) → PlanLimits`
@@ -416,8 +419,8 @@ bundle — keep that pattern if you touch the imports.
 `csv.ts`/`excel.ts`/`localeParse.ts` are the import/export stack behind the
 `Import*Modal`/`export` buttons on Sales, Expenses and Purchases.
 `pagedQuery.ts` is used by every `fetch*Page` thunk plus
-`dashboard/layout.tsx`'s hydration query. `planGating.ts` is read by the
-Integrations, Listings and Messages pages and by the Users invite flow.
+`dashboard/layout.tsx`'s hydration query. `planGating.ts` is read only by
+`pricing.ts` now (app gates moved to `src/lib/plans/`).
 `validation.ts` backs the Settings company-profile form.
 `detectPlatform.ts` is used by Dropshipping and the listing wizard's Source step.
 

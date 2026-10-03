@@ -24,7 +24,7 @@ not tenant roles.
   `used / limit` link (opens `AiUsageModal`, stores the clicked row in
   `usageTenant`) when the tenant's plan has a nonzero `limit`, otherwise `—`
   (Starter/Pro have no AI allowance — see `getAiGenerationLimit` in
-  `planGating.ts`). Plan/Status badge variants come from the shared
+  `lib/plans/entitlements.ts`, fed from the `control.plans` catalog). Plan/Status badge variants come from the shared
   `_components/tenantVariants.ts` (also used by the detail page) rather than
   being defined here.
 - `tenants/[id]/page.tsx` — tenant detail page (2026-09-03). Client component;
@@ -198,9 +198,10 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   `{ok, response}` wrapper `tenants/route.ts` defines for itself). For each
   `control.tenants` row, filters `control.tenant_ai_usage` rows (fetched once
   for `currentPeriod()`, not per-tenant) down to that tenant and returns
-  `{ tenantId, used: sumCalls(...), limit: getAiGenerationLimit(tenant.plan),
+  `{ tenantId, used: sumCalls(...), limit: getAiGenerationLimit(entitlementsOf(catalog.find(...))),
   byUser: callsByUser(...) }` (`sumCalls`/`callsByUser`/`currentPeriod` from
-  `@/lib/ai/quota`, `getAiGenerationLimit` from `@/lib/utils/planGating`).
+  `@/lib/ai/quota`, `getPlanCatalog` from `@/lib/plans/catalog`, loaded once per request;
+  `entitlementsOf`/`getAiGenerationLimit` from `@/lib/plans/entitlements`).
   Response: `{ period, usage: [...] }`. **Both Supabase queries are wrapped in
   a try/catch that returns `{ error, detail }` (500) on failure** — this
   route reads `tenant_ai_usage` directly rather than going through
@@ -284,7 +285,8 @@ shared `isPlatformAdmin(email)` helper (`@/lib/supabase/control`):
   also called from `dashboard/layout.tsx` to decide whether to show the
   sidebar's "Admin Panel" link (see `src/app/dashboard/CLAUDE.md`).
 - `src/lib/ai/quota.ts` (`currentPeriod`, `sumCalls`, `callsByUser`) and
-  `src/lib/utils/planGating.ts` (`getAiGenerationLimit`) — used by
+  `src/lib/plans/{catalog,entitlements}.ts` (`getPlanCatalog`, `entitlementsOf`,
+  `getAiGenerationLimit`) — used by
   `ai-usage/route.ts` to compute the AI Usage column's `used`/`limit`/
   `byUser` per tenant.
 - `src/lib/support/{config,trello}.ts` (`trelloEnv`, `statusForList`,

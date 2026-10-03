@@ -143,7 +143,7 @@ export default function TrialExpiredPage() {
           Your free trial has ended
         </h1>
         <p className="text-sm text-(--color-text-muted)">
-          Your 14-day Boughtopia trial is over. All of your data is safe and
+          Your Boughtopia trial is over. All of your data is safe and
           will be exactly as you left it as soon as you choose a plan.
         </p>
 

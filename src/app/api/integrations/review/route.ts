@@ -3,8 +3,9 @@ import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, getConnection } from "@/lib/integrations/tokenStore";
 import { createControlClient } from "@/lib/supabase/control";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { IntegrationPlatform, TenantPlan } from "@/types";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
+import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
 export type ReviewOrder = NormalizedOrder & { imported: boolean };
@@ -27,11 +28,15 @@ export async function GET(_req: NextRequest) {
     .select("plan")
     .eq("schema_name", tenantSchema)
     .single();
-  if (!hasPlatformIntegrations((tenant?.plan ?? "trial") as TenantPlan)) {
-    return NextResponse.json(
-      { error: "Platform integrations require the Pro or Business plan." },
-      { status: 403 }
-    );
+  let ent: PlanEntitlements;
+  try {
+    ent = await getEntitlements(tenant?.plan ?? null);
+  } catch (err) {
+    console.error("[integrations/review] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   const since = new Date(Date.now() - REVIEW_LOOKBACK_MS).toISOString();

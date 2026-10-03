@@ -14,8 +14,10 @@ import {
 /**
  * Current user's section access. `state.currentUser.access` (from
  * `get_my_access()`, hydrated by `dashboard/layout.tsx`) is UNCAPPED by
- * plan — this hook applies the plan ceiling itself for `access`/`can()`
- * (button-level gating: a plan-gated section like Integrations reads as 0
+ * plan — this hook applies the plan ceiling itself for `access`/`can()`,
+ * from `state.currentUser.planEntitlements` (control.plans; null before
+ * hydration ⇒ plan-gated sections read as 0) — button-level gating
+ * (a plan-gated section like Integrations reads as 0
  * until the tenant upgrades), while `canSee()` stays uncapped (nav/route
  * visibility: a role/exception grant to a plan-gated section still shows
  * the Sidebar link and lets the page render its own upgrade screen instead
@@ -32,9 +34,9 @@ export function useAccess(): {
 } {
   const stored = useAppSelector((s) => s.currentUser.access);
   const role = useAppSelector((s) => s.currentUser.profile?.role) ?? "accountant";
-  const plan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const ent = useAppSelector((s) => s.currentUser.planEntitlements);
   const uncapped = stored ?? ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS.accountant;
-  const access = applyPlanCeiling(uncapped, plan);
+  const access = applyPlanCeiling(uncapped, ent);
   return {
     access,
     can: (s, min) => canAccess(access, s, min),

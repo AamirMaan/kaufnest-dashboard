@@ -7,10 +7,11 @@ import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAppDispatch } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
@@ -27,7 +28,7 @@ export default function ReviewPage() {
   const toast = useToast();
   const dispatch = useAppDispatch();
   const { can } = useAccess();
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent } = usePlan();
 
   const [data, setData] = useState<ReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,8 +106,8 @@ export default function ReviewPage() {
   // reference every render (useAccess() isn't memoized), so depending on it
   // directly in the effect below re-ran it on every render.
   const isEligible =
-    !!tenantPlan &&
-    hasPlatformIntegrations(tenantPlan) &&
+    !!ent &&
+    hasPlatformIntegrations(ent) &&
     can("integrations", 2);
 
   useEffect(() => {

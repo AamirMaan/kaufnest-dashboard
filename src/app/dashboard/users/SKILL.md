@@ -104,6 +104,15 @@ file that *can't* be colocated (the invite API route, which Next.js pins to
   Delete Order, etc.) is unaffected. Only pass `requireReason={false}` for a
   genuinely reversible, not-yet-committed confirmation like "Reset to role
   defaults" where there's nothing yet to audit-log a reason against.
+- **Invites are capped by the plan's user limit** (`control.plans.max_users`,
+  enforced since plan-management Task 3). Step 3c of
+  `src/app/api/users/invite/route.ts` counts the tenant's `profiles` rows
+  whose `status` isn't `deactivated` and checks `canAddUser(ent, count)`
+  (`getEntitlements(tenant.plan)`); at the limit it returns **403** `"Your
+  plan allows up to <maxUsers> users. Upgrade your plan to invite more."`,
+  which `InviteUserModal` shows inline (it already prefers `json.error`). A
+  catalog/count failure is a 500 "Could not check your plan". Deactivating a
+  user frees a seat.
 - `src/app/api/users/invite/route.ts` invites users into the **caller's own**
   tenant (`user.app_metadata.tenant_schema`) — it 400s with a friendly message
   if that's missing (stale JWT from before Phase 2.3 stamping; user needs to

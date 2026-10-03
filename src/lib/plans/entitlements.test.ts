@@ -5,6 +5,7 @@ import {
   canPurchase,
   entitlementsOf,
   formatPlanList,
+  fromWireEntitlements,
   getAiGenerationLimit,
   hasAdvancedInventory,
   hasAiFeatures,
@@ -15,6 +16,7 @@ import {
   planNamesByFeature,
   plansWithFeature,
   sortPlans,
+  toWireEntitlements,
   type Plan,
   type PlanRow,
 } from "./entitlements";
@@ -146,5 +148,21 @@ describe("isAssignablePlan", () => {
     expect(isAssignablePlan(plan({ visibility: "hidden" }), null)).toBe(true);
     expect(isAssignablePlan(plan(), null)).toBe(true);
     expect(isAssignablePlan(plan({ key: "trial", kind: "trial", visibility: "hidden" }), null)).toBe(true);
+  });
+});
+
+describe("toWireEntitlements / fromWireEntitlements", () => {
+  it("round-trips a finite user limit unchanged", () => {
+    const ent = entitlementsOf(plan({ maxUsers: 5 }));
+    expect(toWireEntitlements(ent).maxUsers).toBe(5);
+    expect(fromWireEntitlements(toWireEntitlements(ent))).toEqual(ent);
+  });
+  it("encodes unlimited (Infinity) as -1 and decodes it back", () => {
+    const ent = entitlementsOf(plan({ maxUsers: null }));
+    const wire = toWireEntitlements(ent);
+    expect(wire.maxUsers).toBe(-1);
+    expect(JSON.parse(JSON.stringify(wire)).maxUsers).toBe(-1);
+    expect(fromWireEntitlements(wire).maxUsers).toBe(Infinity);
+    expect(fromWireEntitlements(wire)).toEqual(ent);
   });
 });

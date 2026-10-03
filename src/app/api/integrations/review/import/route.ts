@@ -4,8 +4,9 @@ import { upsertConnection } from "@/lib/integrations/tokenStore";
 import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
 import { mergeImportedSale } from "@/lib/integrations/mergeImportedSale";
 import { createControlClient } from "@/lib/supabase/control";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { Currency, IntegrationPlatform, Purchase, Sale, TenantPlan } from "@/types";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
+import type { Currency, IntegrationPlatform, Purchase, Sale } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
 export async function POST(req: NextRequest) {
@@ -20,11 +21,15 @@ export async function POST(req: NextRequest) {
     .select("plan")
     .eq("schema_name", tenantSchema)
     .single();
-  if (!hasPlatformIntegrations((tenant?.plan ?? "trial") as TenantPlan)) {
-    return NextResponse.json(
-      { error: "Platform integrations require the Pro or Business plan." },
-      { status: 403 }
-    );
+  let ent: PlanEntitlements;
+  try {
+    ent = await getEntitlements(tenant?.plan ?? null);
+  } catch (err) {
+    console.error("[import] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   const body = (await req.json()) as {

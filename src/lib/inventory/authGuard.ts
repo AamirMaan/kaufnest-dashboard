@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { canEnableAdvancedInventory } from "@/lib/inventory/access";
+import { getEntitlements } from "@/lib/plans/catalog";
+import type { PlanEntitlements } from "@/lib/plans/entitlements";
 import type { Profile, TenantPlan } from "@/types";
 
 export interface AdvancedInventoryAuthContext {
@@ -15,7 +17,7 @@ export type AdvancedInventoryAuthResult =
 
 /**
  * Guard for advanced-inventory admin routes. Checks, in order: signed in,
- * has a tenant, and canEnableAdvancedInventory(plan, role). The plan lives
+ * has a tenant, and canEnableAdvancedInventory(entitlements, role). The plan lives
  * in the control plane (Project A), which the tenant database cannot see —
  * that is why enable_advanced_inventory() is service_role-only and this
  * guard is the enforcement point. Server-only.
@@ -39,6 +41,7 @@ export async function requireAdvancedInventoryAdmin(): Promise<AdvancedInventory
     .single<Pick<Profile, "role">>();
 
   let plan: TenantPlan | null;
+  let ent: PlanEntitlements;
   try {
     const control = createControlClient();
     const { data: tenant } = await control
@@ -48,6 +51,7 @@ export async function requireAdvancedInventoryAdmin(): Promise<AdvancedInventory
       .eq("schema_name", tenantSchema)
       .single();
     plan = (tenant as { plan: TenantPlan } | null)?.plan ?? null;
+    ent = await getEntitlements(plan);
   } catch (err) {
     console.error("requireAdvancedInventoryAdmin failed", err);
     return { error: NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 }) };
@@ -56,10 +60,10 @@ export async function requireAdvancedInventoryAdmin(): Promise<AdvancedInventory
   if (!plan) {
     return { error: NextResponse.json({ error: "Tenant not found" }, { status: 404 }) };
   }
-  if (!canEnableAdvancedInventory(plan, profile?.role)) {
+  if (!canEnableAdvancedInventory(ent, profile?.role)) {
     return {
       error: NextResponse.json(
-        { error: "Batches and locations are available to admins on the Business plan." },
+        { error: "Batches and locations are available to admins on plans with advanced inventory." },
         { status: 403 },
       ),
     };

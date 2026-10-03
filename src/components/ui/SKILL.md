@@ -287,8 +287,8 @@ called outside `<ToastProvider>`.
 by design apart from the optional `refreshToken: number` (bump it to
 re-trigger the fetch after an action the caller knows changed usage).
 
-- Computes its own visibility: `aiVisible = !!tenantPlan &&
-  hasAiFeatures(tenantPlan) && aiEnabled`, read directly from
+- Computes its own visibility: `aiVisible = !!ent &&
+  hasAiFeatures(ent) && aiEnabled`, read directly from `usePlan()` +
   `currentUserSlice` — it does not take `aiVisible` as a prop. Renders `null`
   when `!aiVisible`, or before its `GET /api/listings/ai/usage` fetch
   resolves. A failed fetch is swallowed silently (usage is informational,

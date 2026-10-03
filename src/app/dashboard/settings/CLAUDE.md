@@ -54,9 +54,9 @@ values.
 **AI usage section** (2026-09-02) — rendered between `BillingSection` and the
 Company Profile form, same card/heading shape as every other section on this
 page (`rounded-[var(--radius-card)] border ... bg-[var(--color-surface)] p-6
-space-y-4` + an `<h2>`). Gated on `aiVisible = !!tenantPlan &&
-hasAiFeatures(tenantPlan) && aiEnabled` (`tenantPlan`/`aiEnabled` from
-`s.currentUser`, `hasAiFeatures` from `lib/utils/planGating`) — the identical
+space-y-4` + an `<h2>`). Gated on `aiVisible = !!ent &&
+hasAiFeatures(ent) && aiEnabled` (`ent` from `usePlan()`, `aiEnabled` from
+`s.currentUser`, `hasAiFeatures` from `lib/plans/entitlements`) — the identical
 computation `ListingForm.tsx` uses, recomputed here rather than shared via
 props/context since the two live in unrelated route trees. When `aiVisible`
 is false the whole `<section>` is omitted, not disabled — same
@@ -145,13 +145,14 @@ page's form, and the relevant DB migrations (see this folder's `SKILL.md`).
 - `components/ui/{FormFields,Button,Toast,AiUsageNote}` — `AiUsageNote`
   moved here from `dashboard/listings/_components/` (2026-09-02) once
   Settings became its second consumer
-- `lib/utils/{generateInvoice,currency,planGating}` — `hasAiFeatures` computes
-  the AI usage section's `aiVisible` gate
+- `lib/utils/{generateInvoice,currency}`; `lib/plans/entitlements`
+  (`hasAiFeatures`) + `store/usePlan` compute the AI usage section's
+  `aiVisible` gate
 - `lib/supabase/client` (`createTenantClient`, Company Profile save)
 - `store/useAccess` — `useAccess().can("settings", 2)` (`canEditCompanyProfile`)
 - `store/slices/companyProfileSlice` (`hydrateCompanyProfile`),
-  `store/slices/currentUserSlice` (`tenantPlan`/`aiEnabled` for the AI usage
-  gate)
+  `store/slices/currentUserSlice` (`aiEnabled` for the AI usage gate;
+  entitlements via `usePlan()`)
 - `types` (`Sale`, `CompanyProfile`, `Currency`)
 
 ## Tests
