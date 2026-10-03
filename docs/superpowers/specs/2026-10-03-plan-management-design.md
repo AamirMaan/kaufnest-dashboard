@@ -344,8 +344,9 @@ Deviations from the plan above, discovered during implementation:
 - The billing webhook fails the event (returns 500, so Stripe retries)
   when `getPlanCatalog()`/`getPlanPriceMap()` can't be read, rather than
   silently skipping the plan write.
-- Catalog/integrations/invite tenant lookups use `.maybeSingle()` instead of
-  `.single()`, so a genuine lookup error still surfaces as a 500 while a
+- The integrations routes (`review`, `review/import`, `[platform]/connect`)
+  and the users/invite route's tenant lookups use `.maybeSingle()` instead
+  of `.single()`, so a genuine lookup error still surfaces as a 500 while a
   merely-missing row fails closed (null) instead of both cases throwing the
   same way.
 - The old Stripe price is deactivated only **after** the `control.plans`
