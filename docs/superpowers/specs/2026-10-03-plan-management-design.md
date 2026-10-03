@@ -88,8 +88,7 @@ unlimited / everything / 300 AI; `trial` hidden / 14 days / Business features
 / 300 AI), names and taglines from `pricing.ts`, `sort_order` 1–3,
 `highlighted` on `pro`. Stripe IDs are left null.
 
-A one-off script (`scripts/plans-seed-stripe.mjs`, replacing
-`scripts/stripe-setup.mjs`; `npm run plans:seed-stripe`) reads
+A one-off script (`scripts/plans-seed-stripe.mjs`; `npm run plans:seed-stripe`) reads
 `STRIPE_PRICE_STARTER/PRO/BUSINESS` from `.env.local`, looks each price up in
 Stripe to get its product, and writes `stripe_price_id` / `stripe_product_id`
 plus the matching `plan_prices` row. Idempotent.
@@ -224,7 +223,7 @@ Stripe calls use an idempotency key derived from
 ### Removed
 
 `STRIPE_PRICE_*` env vars (`.env.local.example`), `PLANS` in
-`src/lib/stripe.ts`, `scripts/stripe-setup.mjs` / `stripe:setup`.
+`src/lib/stripe.ts`.
 
 ## 4. /admin
 
