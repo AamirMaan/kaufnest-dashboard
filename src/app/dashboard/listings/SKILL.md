@@ -139,6 +139,15 @@ description: Agent playbook for the eBay listing creation feature (src/app/dashb
   multi-buy failed — never treat that as a failed publish, and never move
   marketing calls inside the publish try/catch (that would mark a live
   listing `failed` and invite a duplicate publish on retry).
+- **The plan gate is enforced server-side too (2026-10-03).** Every
+  `app/api/listings/{[id],ebay}/*` route calls
+  `requireMessagingAndListings(auth.context.tenantSchema)`
+  (`lib/plans/requirePlanFeature.ts`) right after its auth/section guard —
+  403 "Listings and messages are not included in your plan." otherwise, so a
+  Pro or downgraded tenant with a live eBay connection can't call them
+  directly. `requireAiAccess` checks `hasMessagingAndListings` before the AI
+  checks for `ai/{describe,aspects}`. A **new** listings route must add the
+  same two lines; `BusinessEbayGate` is presentation only.
 - **Listings is Business-plan-only, not Pro+Business — CHANGED 2026-08-27,
   and the create/edit routes had no gate at all until the same change.**
   `hasPlatformIntegrations` (Pro + Business) was the original gate on

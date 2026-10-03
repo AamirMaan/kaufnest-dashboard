@@ -16,6 +16,8 @@ needs. It replaces the old hardcoded `PLAN_LIMITS` table in
 | `entitlements.test.ts` | — | unit tests for the above |
 | `catalog.ts` | **Yes** | `getPlanCatalog()` (60 s in-memory cache per server instance), `invalidatePlanCatalog()`, `getPlan(key)`, `getEntitlements(key)`, `getTrialDays()`, `getPlanPriceMap()` — all read `control.plans`/`control.plan_prices` via `createControlClient()` (`src/lib/supabase/control.ts`) |
 | `catalog.test.ts` | — | unit tests, mocks `@/lib/supabase/control` |
+| `requirePlanFeature.ts` | **Yes** | `requirePlanFeature(tenantSchema, feature)` → `NextResponse \| null` (reads `control.tenants.plan` by `schema_name` with `maybeSingle`, then `getEntitlements`; 403 with per-feature copy when not entitled, 500 "Could not check your plan. Please try again." on a lookup/catalog error; no tenant row fails closed to 403) and `requireMessagingAndListings(tenantSchema)` — the server-side plan gate for API routes, called right after the auth/section guard |
+| `requirePlanFeature.test.ts` | — | unit tests, mocks the control client + `catalog.ts` |
 | `resolvePlanKey.ts` | No — pure, client-safe | `resolvePlanKey({ metadataPlan, priceId, paidPlanKeys, priceToPlan })` — which paid plan a Stripe subscription is on, for the billing webhook: `metadata.plan` first, then the price id via `control.plan_prices` (grandfathered prices / dashboard edits). Never resolves to the trial; `null` = unknown, and the webhook then leaves `tenants.plan` untouched (no silent `starter` default) |
 | `resolvePlanKey.test.ts` | — | unit tests for the above |
 | `catalog.integration.test.ts` | — | live parity test against the real control-plane DB; skips cleanly (console note) while 012 is unapplied — see its own header comment |
@@ -48,6 +50,14 @@ Client Component calls a server route / thunk that goes through
   `lib/inventory/authGuard.ts`, `api/users/invite` (user limit) call
   `getEntitlements`/`getPlanCatalog`; `api/signup/provision`,
   `api/admin/provision-tenant` and the marketing page call `getTrialDays()`.
+
+## Consumers (final-review fix — server plan gate)
+
+- `requireMessagingAndListings` is called by every
+  `src/app/api/listings/{[id],ebay}/*` route and
+  `src/app/api/messages/{[id]/reply,ebay/sync}`. `lib/ai/authGuard.ts`
+  checks `hasMessagingAndListings` itself (it already loads the
+  entitlements), so `api/listings/ai/{describe,aspects}` are covered too.
 
 ## Consumers (plan-management Task 4 — billing)
 

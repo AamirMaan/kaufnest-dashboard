@@ -64,6 +64,13 @@ description: Agent playbook for the eBay buyer-messaging feature (src/app/dashbo
 
 ## Gotchas
 
+- **The plan gate is enforced server-side too (2026-10-03).**
+  `app/api/messages/{[id]/reply,ebay/sync}` call
+  `requireMessagingAndListings(auth.context.tenantSchema)`
+  (`lib/plans/requirePlanFeature.ts`) right after `requireSectionAccess` —
+  403 for a plan without Messages & Listings. Any new messages route must do
+  the same; the page's `usePlan()` check is presentation only.
+
 - **Messages is Business-plan-only, not Pro+Business, and requires a
   connected eBay account — CHANGED 2026-08-27.** `hasPlatformIntegrations`
   (Pro + Business) was the original gate; it's now `hasMessagingAndListings`

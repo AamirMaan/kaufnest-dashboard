@@ -31,6 +31,13 @@ take `PlanEntitlements`, not `Plan`, so callers go through
 `entitlementsOf()`'s fail-closed mapping and can't accidentally bypass it
 with a raw plan row.
 
+**Gate a new API route on a plan feature**: right after the route's
+auth/section guard, `const planError = await
+requirePlanFeature(auth.context.tenantSchema, "<feature>"); if (planError)
+return planError;` (`requirePlanFeature.ts`; listings/messages routes use the
+`requireMessagingAndListings` shorthand). Add the 403 copy to its
+`FORBIDDEN_COPY` map if you add a new `PlanFeature`.
+
 **Read the catalog from a server context**: `getPlanCatalog()` /
 `getPlan(key)` / `getEntitlements(key)` from `catalog.ts`. Never call
 `createControlClient()` directly for plans — the 60 s cache and the

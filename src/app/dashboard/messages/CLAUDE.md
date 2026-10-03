@@ -232,7 +232,10 @@ OAuth token.
 - `components/ui/{Badge, Button, Toast}` — **not** `Pagination` (removed
   2026-08-27 in favor of infinite scroll, see `ThreadList.tsx` above)
 - `components/layout/PageHeader`
-- `store/usePlan` — `ent` + `availability()` for the plan gate
+- `store/usePlan` — `ent` + `availability()` for the plan gate (client
+  side; the server side is `lib/plans/requirePlanFeature`'s
+  `requireMessagingAndListings(tenantSchema)`, called right after the
+  section guard in `app/api/messages/{[id]/reply,ebay/sync}` — 2026-10-03)
 - `store/useAccess` — `useAccess().can("messages", 2)` (Task 5 — replaced
   `lib/utils/permissions`' `hasPermission`)
 - `store/slices` — `s.integrations.connections` (the eBay-connected check;

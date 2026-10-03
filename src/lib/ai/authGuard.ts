@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { getEntitlements } from "@/lib/plans/catalog";
-import { hasAiFeatures, getAiGenerationLimit } from "@/lib/plans/entitlements";
+import { hasAiFeatures, getAiGenerationLimit, hasMessagingAndListings } from "@/lib/plans/entitlements";
 import { readTenantUsage, sumCalls } from "@/lib/ai/quota";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import type { TenantPlan } from "@/types";
@@ -23,7 +23,7 @@ export type AiAuthResult =
 /**
  * Guard for `/api/listings/ai/*`. Checks, in order: signed in, has a tenant,
  * holds section `listings` at Edit (055's `current_user_access`), the plan
- * includes AI, the platform admin has not hidden AI for this tenant, and the
+ * includes Listings (messagingAndListings), the plan includes AI, the platform admin has not hidden AI for this tenant, and the
  * tenant has quota left.
  *
  * The UI hides AI controls when the plan or tenant flag says so, but hidden
@@ -76,6 +76,14 @@ export async function requireAiAccess(): Promise<AiAuthResult> {
     }
 
     const ent = await getEntitlements(row.plan);
+    // Listings AI is part of Listings: a plan with AI but without
+    // messagingAndListings must not reach these routes either (same copy as
+    // lib/plans/requirePlanFeature.ts, which the other listings routes use).
+    if (!hasMessagingAndListings(ent)) {
+      return {
+        error: NextResponse.json({ error: "Listings and messages are not included in your plan." }, { status: 403 }),
+      };
+    }
     if (!hasAiFeatures(ent) || !row.ai_enabled) {
       return {
         error: NextResponse.json({ error: "AI features are not available on this account." }, { status: 403 }),

@@ -526,6 +526,12 @@ the XML shapes.
   `lib/plans/entitlements`' `hasMessagingAndListings` is used by `BusinessEbayGate.tsx`
   specifically, not `hasPlatformIntegrations`; `hasAiFeatures` is used by
   `ListingForm.tsx` and `AiUsageNote.tsx` to compute `aiVisible`
+- `lib/plans/requirePlanFeature` (server-only, 2026-10-03) —
+  `requireMessagingAndListings(tenantSchema)`, called right after the
+  auth/section guard in every `app/api/listings/{[id],ebay}/*` route (the
+  server-side half of `BusinessEbayGate`'s plan check). The AI routes get
+  the same check inside `requireAiAccess`; `ai/usage` is read-only and also
+  feeds Settings' `AiUsageNote`, so it is deliberately not plan-gated
 - `lib/ai/` — server-only (Anthropic client, prompt builders, quota
   accounting, `requireAiAccess`). **Never imported by anything in this
   folder**; the UI only ever talks to it through `app/api/listings/ai/`
