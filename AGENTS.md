@@ -28,6 +28,8 @@ plan changes, and cancellation, with the webhook as the sole writer of
 2. Never hardcode a schema name — read it from `user.app_metadata.tenant_schema`.
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
+   `/admin` may also assign a plan (`isAssignablePlan`); plan *definitions*
+   live in `control.plans` and are edited only through `/api/admin/plans`.
 5. **Tenant schema DDL must use `run_on_all_tenant_schemas`** — never write
    `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are
    multiple live tenants (see `supabase/SKILL.md`'s intro for the current
@@ -47,13 +49,14 @@ New shared code from the migration:
   middleware equivalent — do NOT add `src/middleware.ts`, having both crashes
   the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
-- `src/lib/stripe.ts` (Stripe client) + `src/lib/plans/` (the plan
-  catalog: `control.plans` reader, entitlements/feature gates,
-  `resolvePlanKey` for the webhook) + `src/lib/utils/pricing.ts`
-  (`pricedPlans(plans)` — pricing cards built from catalog rows, feature
-  ticks derived from `entitlementsOf`) — billing helpers. Plan prices and
-  Stripe price ids live in `control.plans`, not env vars
-- `src/app/admin/` — Boughtopia platform admin panel (`/admin`)
+- `src/lib/stripe.ts` (Stripe client only) + `src/lib/plans/` (plan catalog:
+  `entitlements.ts` pure gating helpers, `catalog.ts` server-only 60 s
+  cached loader of `control.plans`, `validatePlan.ts`, `stripeSync.ts`,
+  `resolvePlanKey.ts`) + `src/lib/utils/pricing.ts` (pricing cards built
+  from catalog plans). Plan prices and Stripe price ids live in
+  `control.plans`, not env vars
+- `src/app/admin/` — Boughtopia platform admin panel (`/admin`), including
+  Plans management (`/admin/plans`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — checkout, change-plan, cancel, status, and
   webhook routes. The webhook is the only writer of `control.tenants.plan`/

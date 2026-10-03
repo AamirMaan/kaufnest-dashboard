@@ -324,3 +324,41 @@ Update `src/app/admin/CLAUDE.md` + `SKILL.md` (Plans pages, API, components),
 with `src/lib/plans/`), `supabase/SKILL.md` file map (012 control-plane),
 `src/lib/utils/SKILL.md`, billing/integrations/AI/listings/messages/
 inventory docs that cite `planGating.ts`, `.env.local.example`.
+
+## Implementation notes (2026-10-03)
+
+Deviations from the plan above, discovered during implementation:
+
+- Reused `verifyPlatformAdmin` (from `api/admin/tenants/route.ts`, now
+  returning `{ ok: true; email: string } | { ok: false; response }`) instead
+  of adding a new `requirePlatformAdmin()` in `src/lib/plans/authGuard.ts` —
+  the existing helper already did the job and now also supplies the audit
+  log's `admin_email`.
+- `toWireEntitlements`/`fromWireEntitlements` (`src/lib/plans/entitlements.ts`)
+  carry `PlanEntitlements` across the Server → Client Component hop in
+  `dashboard/layout.tsx` → `StoreProvider.tsx`, since `Infinity` (unlimited
+  `maxUsers`) doesn't survive RSC serialization — the wire form uses `-1`.
+- The invite route (`src/app/api/users/invite/route.ts`) now enforces
+  `maxUsers` via `canAddUser(ent, userCount)` — this limit was never
+  enforced before the catalog existed.
+- The billing webhook fails the event (returns 500, so Stripe retries)
+  when `getPlanCatalog()`/`getPlanPriceMap()` can't be read, rather than
+  silently skipping the plan write.
+- Catalog/integrations/invite tenant lookups use `.maybeSingle()` instead of
+  `.single()`, so a genuine lookup error still surfaces as a 500 while a
+  merely-missing row fails closed (null) instead of both cases throwing the
+  same way.
+- The old Stripe price is deactivated only **after** the `control.plans`
+  update commits — `syncStripePlan` returns `{ priceId?, deactivatePriceId? }`
+  and never calls `deactivateStripePrice` itself; the route handler does,
+  once the DB write succeeds. This avoids deactivating a still-referenced
+  price if the DB write then fails.
+- `stripeSync.ts`'s `StripePlanApi` types against `Stripe.ProductResource`/
+  `Stripe.PriceResource` (singular) — the actual exported names in the
+  `stripe@22` SDK, not the `Product`/`Price` names used elsewhere in older
+  examples.
+- `/trial-expired` shows "Loading plans…" until its `GET /api/billing/status`
+  read settles, rather than rendering an empty `PlanPicker` first.
+- The marketing page's "Every plan starts with the same N-day free trial"
+  line and the Hero/TrialInfo copy both read the trial length from
+  `getTrialDays()` (the catalog's `trial` row) instead of a hardcoded `14`.
