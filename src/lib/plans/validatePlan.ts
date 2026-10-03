@@ -123,8 +123,14 @@ const INPUT_KEYS: (keyof PlanInput)[] = [
 export function planDiff(before: Plan | null, after: PlanInput): Record<string, { from: unknown; to: unknown }> {
   const diff: Record<string, { from: unknown; to: unknown }> = {};
   for (const k of INPUT_KEYS) {
-    const from = before ? before[k] : null;
-    if (from !== after[k]) diff[k] = { from, to: after[k] };
+    // On create (before === null) every field is included, even one whose
+    // value happens to be null (e.g. a paid plan's trialDays) — otherwise
+    // `null !== null` is false and the audit record silently drops it.
+    if (!before) {
+      diff[k] = { from: null, to: after[k] };
+    } else if (before[k] !== after[k]) {
+      diff[k] = { from: before[k], to: after[k] };
+    }
   }
   return diff;
 }

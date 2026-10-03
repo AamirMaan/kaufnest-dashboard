@@ -266,15 +266,22 @@ describe("planDiff", () => {
     expect(diff.name).toEqual({ from: "Pro", to: "Pro Plus" });
   });
 
-  it("lists every present field with from: null when before is null", () => {
+  it("lists every field with from: null when before is null, including fields whose input value is itself null", () => {
     const diff = planDiff(null, baseInput());
     expect(Object.values(diff).every((d) => d.from === null)).toBe(true);
     expect(diff.key).toEqual({ from: null, to: "pro" });
     expect(diff.name).toEqual({ from: null, to: "Pro" });
     expect(diff.monthlyEur).toEqual({ from: null, to: 30 });
-    // A field whose input value is itself null (trialDays on a paid plan)
-    // produces no diff entry: from === to === null.
-    expect(diff.trialDays).toBeUndefined();
+    // trialDays is null on this (paid-plan) input, but must still appear —
+    // an audit record for a create should never silently drop a field.
+    expect(diff.trialDays).toEqual({ from: null, to: null });
+    expect(Object.keys(diff).sort()).toEqual(
+      [
+        "key", "kind", "name", "tagline", "visibility", "monthlyEur", "maxUsers",
+        "platformIntegrations", "aiFeatures", "aiGenerationsPerMonth", "messagingAndListings",
+        "advancedInventory", "trialDays", "sortOrder", "highlighted",
+      ].sort()
+    );
   });
 });
 

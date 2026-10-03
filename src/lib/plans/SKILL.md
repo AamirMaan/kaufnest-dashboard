@@ -57,7 +57,7 @@ fail-closed empty-catalog throw live in `catalog.ts`.
   (first load, or right after `invalidatePlanCatalog()`) and the read
   fails. This is deliberate: a transient control-plane blip shouldn't 500
   every tenant's dashboard.
-- **Never import `@/lib/plans/catalog` (or the future `stripeSync.ts`) from
+- **Never import `@/lib/plans/catalog` (or `stripeSync.ts`) from
   a `"use client"` file** — verifier-enforced (`server-module-in-client` in
   `.claude/verifiers/rules.py`); the PreToolUse hook blocks the edit
   outright. `entitlements.ts` is pure/client-safe and is the one file in
@@ -80,7 +80,24 @@ fail-closed empty-catalog throw live in `catalog.ts`.
   `plan-create-price-<key>-<cents>`, `plan-price-<key>-<cents>-<oldPriceId>`.
   Stripe keeps a given key's response for 24 h, so an identical retry
   within that window returns the original object instead of erroring or
-  duplicating.
+  duplicating. **Caveat**: the create key is per plan *key* only
+  (`plan-create-product-<key>`/`plan-create-price-<key>-<cents>`, the price
+  key also folds in the amount) — retrying a failed `POST /api/admin/plans`
+  with an *edited* name/tagline/price (same key, different body) within that
+  24 h window is rejected by Stripe as an idempotency-key reuse with
+  different parameters, surfacing as this route's `502`. The workaround is
+  to either retry with the exact same values that failed, or wait out the
+  24 h window before trying a different body.
+- **The OLD price is deactivated only AFTER the DB write commits, not by
+  `syncStripePlan` itself.** `syncStripePlan` creates the new price but
+  returns `deactivatePriceId` (the old one) rather than deactivating it —
+  the PATCH route calls the separate `deactivateStripePrice(stripe, id)`
+  helper only once `control.plans.stripe_price_id` has successfully been
+  updated to the new price (logged, non-fatal on failure: a stale-but-still-
+  active old price is harmless). Deactivating up front, before the DB
+  write, would leave `stripe_price_id` pointing at a price Stripe no longer
+  accepts for new purchases if that DB write then failed — breaking
+  checkout/change-plan for the plan until a retry.
 - **Deactivating a Stripe price never touches existing subscriptions** —
   `prices.update(id, { active: false })` only stops that price from being
   usable for *new* purchases/plan-changes; tenants already subscribed at

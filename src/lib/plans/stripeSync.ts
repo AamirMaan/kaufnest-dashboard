@@ -8,6 +8,12 @@ import type { PlanInput } from "./validatePlan";
  * an unused orphan (harmless) and the retry reuses it via the idempotency
  * key. Old prices are deactivated for NEW purchases only — existing
  * subscriptions keep billing on them (grandfathering).
+ *
+ * `syncStripePlan` itself never deactivates the OLD price — it only reports
+ * which one to deactivate (`deactivatePriceId`) via `deactivateStripePrice`,
+ * and the caller runs that AFTER its own DB write commits. Deactivating
+ * up front would leave `stripe_price_id` pointing at an inactive price (and
+ * checkout/change-plan broken) if the DB write then failed.
  */
 
 // Deviation from the brief: this SDK version (stripe@22) names these
@@ -51,11 +57,16 @@ export async function createStripePlan(
   return { productId: product.id, priceId: price.id };
 }
 
+/** Deactivates a Stripe price so it can no longer be used for NEW purchases/plan-changes. */
+export async function deactivateStripePrice(stripe: StripePlanApi, priceId: string): Promise<void> {
+  await stripe.prices.update(priceId, { active: false });
+}
+
 export async function syncStripePlan(
   stripe: StripePlanApi,
   before: Plan,
   after: PlanInput
-): Promise<{ priceId?: string }> {
+): Promise<{ priceId?: string; deactivatePriceId?: string }> {
   if (before.kind !== "paid") return {};
 
   const priceChanged = after.monthlyEur !== null && toCents(after.monthlyEur) !== toCents(before.monthlyEur ?? 0);
@@ -88,8 +99,5 @@ export async function syncStripePlan(
     },
     { idempotencyKey: `plan-price-${before.key}-${cents}-${before.stripePriceId ?? "none"}` }
   );
-  if (before.stripePriceId) {
-    await stripe.prices.update(before.stripePriceId, { active: false });
-  }
-  return { priceId: price.id };
+  return { priceId: price.id, ...(before.stripePriceId ? { deactivatePriceId: before.stripePriceId } : {}) };
 }

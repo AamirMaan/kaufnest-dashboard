@@ -1,5 +1,12 @@
 import type { Plan } from "./entitlements";
-import { createStripePlan, PlanSyncError, syncStripePlan, toCents, type StripePlanApi } from "./stripeSync";
+import {
+  createStripePlan,
+  deactivateStripePrice,
+  PlanSyncError,
+  syncStripePlan,
+  toCents,
+  type StripePlanApi,
+} from "./stripeSync";
 import type { PlanInput } from "./validatePlan";
 
 const makeStripe = (): StripePlanApi => ({
@@ -109,7 +116,7 @@ describe("syncStripePlan", () => {
     expect(stripe.prices.update).not.toHaveBeenCalled();
   });
 
-  it("creates a new price and deactivates the old one on a price change, in that order", async () => {
+  it("creates a new price on a price change, but does NOT deactivate the old one itself", async () => {
     const stripe = makeStripe();
     const before = basePlan({ key: "pro", stripeProductId: "prod_p", stripePriceId: "price_p", monthlyEur: 30 });
     const after = baseInput({ key: "pro", monthlyEur: 35 });
@@ -126,12 +133,10 @@ describe("syncStripePlan", () => {
       },
       { idempotencyKey: "plan-price-pro-3500-price_p" }
     );
-    expect(stripe.prices.update).toHaveBeenCalledWith("price_p", { active: false });
-    expect(result).toEqual({ priceId: "price_new" });
-
-    const createOrder = (stripe.prices.create as jest.Mock).mock.invocationCallOrder[0];
-    const updateOrder = (stripe.prices.update as jest.Mock).mock.invocationCallOrder[0];
-    expect(createOrder).toBeLessThan(updateOrder);
+    // Deactivation is the CALLER's job, run only after its own DB write
+    // commits — see deactivateStripePrice below and the PATCH route.
+    expect(stripe.prices.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ priceId: "price_new", deactivatePriceId: "price_p" });
   });
 
   it("updates the product name on a name change", async () => {
@@ -223,5 +228,13 @@ describe("syncStripePlan", () => {
     expect(stripe.products.update).not.toHaveBeenCalled();
     expect(stripe.prices.create).not.toHaveBeenCalled();
     expect(stripe.prices.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("deactivateStripePrice", () => {
+  it("deactivates the given price", async () => {
+    const stripe = makeStripe();
+    await deactivateStripePrice(stripe, "price_p");
+    expect(stripe.prices.update).toHaveBeenCalledWith("price_p", { active: false });
   });
 });

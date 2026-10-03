@@ -3,7 +3,7 @@ import { createControlClient } from "@/lib/supabase/control";
 import { getStripe } from "@/lib/stripe";
 import { getPlanCatalog, invalidatePlanCatalog } from "@/lib/plans/catalog";
 import { planFromRow, type PlanRow } from "@/lib/plans/entitlements";
-import { PlanSyncError, syncStripePlan } from "@/lib/plans/stripeSync";
+import { deactivateStripePrice, PlanSyncError, syncStripePlan } from "@/lib/plans/stripeSync";
 import { parsePlanInput, planDiff, planInputToRow, validatePlan } from "@/lib/plans/validatePlan";
 import { verifyPlatformAdmin } from "../../tenants/route";
 
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
     return NextResponse.json({ error: "Please fix the highlighted fields.", fieldErrors }, { status: 400 });
   }
 
-  let sync: { priceId?: string };
+  let sync: { priceId?: string; deactivatePriceId?: string };
   try {
     sync = await syncStripePlan(getStripe(), before, input);
   } catch (err) {
@@ -74,6 +74,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
       .from("plan_prices")
       .insert({ stripe_price_id: sync.priceId, plan_key: key, monthly_eur: input.monthlyEur });
     if (priceError) console.error("[admin/plans/:key] plan_prices insert failed", priceError);
+  }
+
+  // Only deactivate the OLD price once control.plans has committed to the
+  // NEW one — never before. If this fails, the old price is left active
+  // (harmless: it only means it stays usable for new purchases a little
+  // longer) rather than risking stripe_price_id pointing at an inactive
+  // price if the DB write above had failed.
+  if (sync.deactivatePriceId) {
+    try {
+      await deactivateStripePrice(getStripe(), sync.deactivatePriceId);
+    } catch (err) {
+      console.error("[admin/plans/:key] old price deactivation failed", err);
+    }
   }
 
   invalidatePlanCatalog();
