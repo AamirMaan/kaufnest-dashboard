@@ -102,7 +102,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 - **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
   connected platforms (90-day lookback via `adapter.fetchOrders`), queries
   `sales` for existing `external_order_id` values, attaches `imported: boolean`
-  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors? }`.
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, pausedAccounts? }`. Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by account display name.
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
@@ -111,7 +111,14 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `orderFees[order.external_order_id]` — parsed to numbers, blank/invalid →
   `null` — as the new optional 4th `fees` argument), upserts into `sales`
   with `onConflict: "platform,external_order_id"`, updates `last_synced_at`
-  per platform. Returns `{ imported: number }`.
+  per account. Rejects (409 `INTEGRATION_ACCOUNT_PAUSED`) items whose
+  `connection_id` isn't an active account (`invalidImportItems`), and stamps
+  `sales.connection_id`. Returns `{ imported: number }`.
+- **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
+  resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 at the cap).
+- `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;
+  `[platform]/connect` returns 403 `INTEGRATION_ACCOUNT_LIMIT` at the cap
+  (`?reconnect=1` skips); the callback redirects with `account=<id>`.
 
 ## Plan gating
 

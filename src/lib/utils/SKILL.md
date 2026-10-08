@@ -264,7 +264,8 @@ Pure, client-safe rule deciding which connected eBay/Amazon accounts are usable
 under the plan cap (oldest-first, admin pause always holds). Shared by the
 Integrations page and server routes so they cannot disagree. Exports
 `resolveActiveAccounts`, `accountState`, `canResumeAccount`, `connectedCount`,
-`firstUsableAccount`. Colocated test.
+`firstUsableAccount`. Colocated test. Ordering is by `Date.parse(created_at)`
+with a tie-break on `id`, so accounts sharing a timestamp resolve deterministically.
 
 ## integrationErrors.ts
 

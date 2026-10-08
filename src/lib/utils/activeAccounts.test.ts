@@ -117,3 +117,13 @@ describe("firstUsableAccount", () => {
     expect(firstUsableAccount([acc("a1", { is_active: false }), acc("a2", { status: "disconnected" })], "ebay")).toBeNull();
   });
 });
+
+describe("ordering tie-break", () => {
+  it("orders rows sharing a created_at by id, regardless of input order", () => {
+    const same = "2026-03-01T00:00:00.000Z";
+    const rows = [acc("c", { created_at: same }), acc("b", { created_at: same }), acc("a", { created_at: same })];
+    expect(firstUsableAccount(rows, "ebay")?.id).toBe("a");
+    expect(firstUsableAccount([...rows].reverse(), "ebay")?.id).toBe("a");
+    expect(resolveActiveAccounts(rows, "pro").active.map((r) => r.id)).toEqual(["a", "b"]);
+  });
+});

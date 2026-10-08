@@ -49,9 +49,21 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   bulk percent-of-total apply, since neither eBay's nor Amazon's
   order-listing API returns a fee breakdown at that granularity (added
   2026-08-27). Has a colocated `mapToSale.test.ts`.
-- `tokenStore.ts` — `getConnection`, `upsertConnection`,
-  `ensureValidAccessToken` (refresh-on-demand). `getConnection` decrypts,
-  `upsertConnection` encrypts — see "Token encryption at rest" below.
+- `tokenStore.ts` — per-account persistence keyed by connection id:
+  `listConnections(client, platform?)`, `getConnectionById`, `updateConnection`,
+  `insertConnection` (returns id), `requireActiveConnection` (throws
+  `IntegrationAccountError` with an `INTEGRATION_ACCOUNT_*` code),
+  `ensureValidAccessToken` (refresh-on-demand, persists by `connection.id`),
+  and the `getConnection(client, platform)` compatibility shim. Reads decrypt,
+  writes encrypt — see "Token encryption at rest" below. `upsertConnection`
+  no longer exists.
+- `connectionSave.ts` — pure `decideConnectionSave` (update / adopt legacy
+  null-id row / insert / limit) + `defaultDisplayName`, used by the callback.
+- `connectionPatch.ts` — pure `parseConnectionPatch` for
+  `PATCH /api/integrations/connections/[id]`.
+- `reviewImport.ts` — pure `invalidImportItems`: the import route rejects any
+  item whose `connection_id` is not an ACTIVE account of its platform.
+- `tenantPlan.ts` — server-only `getTenantPlan(schema)` (`"trial"` fallback).
 - `tokenCrypto.ts` — `encryptToken`/`decryptToken`/`isEncryptedToken`, AES-256-GCM
   helpers used exclusively by `tokenStore.ts`. Colocated `tokenCrypto.test.ts`.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
@@ -125,8 +137,8 @@ platform-agnostic via `getAdapter`.
 - If `connection.token_expires_at` is more than `REFRESH_MARGIN_MS` (5 min) in
   the future, returns the stored `access_token` unchanged.
 - Otherwise calls `adapter.refreshAccessToken(connection.refresh_token)`,
-  persists the new `access_token`/`refresh_token`/`token_expires_at` via
-  `upsertConnection`, and returns the new token.
+  persists the new `access_token`/`refresh_token`/`token_expires_at` by
+  connection id via `updateConnection`, and returns the new token.
 - Throws if `connection.refresh_token` is null (connection was never
   completed, or was disconnected).
 
@@ -138,11 +150,11 @@ never refresh themselves.
 
 `platform_connections.access_token`/`refresh_token` are encrypted (AES-256-GCM,
 `tokenCrypto.ts`) before every write and decrypted on every read — entirely
-inside `tokenStore.ts`'s `getConnection`/`upsertConnection`, so every other
+inside `tokenStore.ts`'s read/write helpers, so every other
 file in the codebase (adapters, API routes) only ever sees plaintext tokens
 in memory and never needs to know encryption exists. **Never** call
 `.from("platform_connections")` directly for these columns — always go
-through `getConnection`/`upsertConnection`.
+through `tokenStore.ts`.
 
 - Requires `TOKEN_ENCRYPTION_KEY` (base64, 32 bytes — `openssl rand -base64 32`)
   in every environment that reads/writes this table. Missing/wrong-length key
@@ -152,7 +164,7 @@ through `getConnection`/`upsertConnection`.
   unchanged rather than throwing — so tokens stored before this change keep
   working. They get re-encrypted automatically the next time
   `ensureValidAccessToken` refreshes them (writes go through
-  `upsertConnection`, which always encrypts) or the user reconnects the
+  `updateConnection`/`insertConnection`, which always encrypt) or the user reconnects the
   platform. To close that window immediately instead of waiting, run
   `npm run encrypt-existing-tokens` (optionally `-- --dry-run` first) — see
   `scripts/encrypt-existing-tokens.mjs`.
@@ -476,3 +488,25 @@ lookup against existing `sales` rows.
   `purchaseMarketplaceId` ("EBAY_DE"), both via `normalizeMarketplace`
   (`lib/utils/marketplace.ts`). In `mergeImportedSale` it is **fill-only**:
   written when the stored row has none, never overwritten.
+
+## Gotchas — multi-account (sub-project 1)
+
+- `getConnection(client, platform)` is a **compatibility shim** = the oldest
+  connected, non-paused account of the platform. Listings, messages and
+  dropshipping still use it; new code uses `getConnectionById` /
+  `requireActiveConnection`. Delete the shim once sub-projects 2/3 migrate them.
+- **Disconnect keeps the row** (status `disconnected`, tokens nulled) so
+  `sales.connection_id` links survive and reconnecting the same account
+  (matched on `external_account_id`) reuses it. Disconnected rows do not count
+  against the plan cap; a reconnect re-checks the cap.
+- Legacy eBay rows have `external_account_id` NULL: the callback "adopts" one
+  (`decideConnectionSave` -> `adopt`) rather than inserting a duplicate.
+- Connect route takes `?reconnect=1` to skip the cap pre-check; the callback
+  always re-checks via `decideConnectionSave`.
+- Callback and import routes log raw errors server-side and return generic
+  copy / `INTEGRATION_*` codes only. Review `errors` are keyed by account
+  display name and still carry adapter (eBay/Amazon HTTP) messages.
+- `ebay/orders/[saleId]/sync-status` uses the sale's own `connection_id`
+  (fallback: shim for pre-056 sales) and deliberately does NOT enforce the plan
+  cap: pushing status for an existing order is allowed after its account is paused.
+- `mapToSale` stamps `connection_id` (5th arg); `mergeImportedSale` keeps it fill-only.

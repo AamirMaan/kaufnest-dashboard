@@ -19,7 +19,10 @@ export type AccountState = "active" | "paused" | "plan_limit" | "disconnected" |
 const PLATFORMS: IntegrationPlatform[] = ["ebay", "amazon"];
 
 function byCreatedAt<T extends AccountLike>(a: T, b: T): number {
-  return a.created_at.localeCompare(b.created_at);
+  // Compare instants, not strings (offset/precision differences), then break
+  // ties on id so the ordering is deterministic.
+  const diff = Date.parse(a.created_at) - Date.parse(b.created_at);
+  return diff !== 0 ? diff : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 function eligible<T extends AccountLike>(rows: T[], platform: IntegrationPlatform): T[] {
