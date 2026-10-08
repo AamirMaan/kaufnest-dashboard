@@ -169,8 +169,11 @@ Home-only (continued):
 - `RecentOrdersCard.tsx` — latest `RECENT_ORDERS_LIMIT` (5) orders, own
   Supabase query (bypasses the `sales` slice — see `SKILL.md`'s gotcha),
   each row links to `/dashboard/sales/[id]`.
-- `RecordTransferModal.tsx` — records a platform payout (admin only; opened
-  from a `PlatformStatsCard`'s "Record Transfer" on Home).
+- `RecordTransferModal.tsx` — records a platform payout. Shared by Home (fixed
+  `platform`/`currency` + `pendingBalance` prefill, opened from a
+  `PlatformStatsCard`) and the Payouts page (no `platform` → platform + currency
+  Selects). Validity/payload in `_lib/recordTransfer.ts`. Writes a
+  `create`/`payout` audit entry; `onSaved(payout)` lets the caller refresh.
 
 Shared by Home and Analytics:
 - `useDateRangePicker.ts` / `DateRangePicker.tsx` — the date-range picker
@@ -210,6 +213,8 @@ The pure modules below (no React/Supabase/Redux) each have a colocated
 test — `npx jest dashboard/_lib`. Keep new Overview maths in this shape:
 extracting it is what makes it testable without rendering the page.
 
+- `recordTransfer.ts` (2026-10-08) — `isTransferFormValid`,
+  `transferInsertPayload` for `RecordTransferModal`. Colocated test.
 - `aggregateSales.ts` — `aggregateSaleRevenue(sales) → { revenue, fees }`.
   Filters through `isRevenueSale` first (so returned/cancelled orders are
   excluded — see `lib/utils/filters.ts`), then sums
