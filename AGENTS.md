@@ -437,7 +437,8 @@ owns it. Current shared locations:
 - `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + `src/store/slices/{auditLogsSlice,currentUserSlice}`
   — `auditLogsSlice` is written to by every CRUD feature; `currentUserSlice` is
   read directly by Sales/Expenses/Purchases for role checks
-- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows}`
+- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows,activeAccounts,integrationErrors}`
+  (`activeAccounts` = which connected eBay/Amazon accounts the plan cap leaves active; `integrationErrors` = client-safe `INTEGRATION_ACCOUNT_*` error copy)
   (`generateInvoice` is also used by the shared `InvoiceModal`, both read
   company/invoice settings from `src/store/slices/companyProfileSlice`;
   `fetchAllRows` pages a Supabase query past the project's PostgREST "Max

@@ -1,6 +1,6 @@
 ---
 name: lib-utils
-description: Reference for every shared utility module in src/lib/utils (audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, invoiceMath, localeParse, pagedQuery, permissions, planGating, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
+description: Reference for every shared utility module in src/lib/utils (audit, csv, currency, date, activeAccounts, audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, integrationErrors, invoiceMath, localeParse, pagedQuery, permissions, planGating, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
 ---
 
 # Shared utilities (`src/lib/utils/`)
@@ -250,11 +250,27 @@ Subscription-plan feature gates, keyed off `TenantPlan`. Pure lookups against
   `/dashboard/listings` and `/dashboard/messages` (Pro/Business only). Read the
   plan from `currentUserSlice.tenantPlan`, hydrated by `dashboard/layout.tsx`.
 - `hasAiFeatures(plan) → boolean`
+- `getMaxAccountsPerPlatform(plan) → number` — connected seller accounts allowed
+  per platform (starter 0, pro 2, business/trial unlimited). `canAddAccount(plan,
+  connectedCount) → boolean` is the add gate built on it.
 
 **These are UI gates, not security boundaries.** `plan` itself is owned by the
-Stripe webhook (`AGENTS.md` key rule 4) — never write it from UI. This is the
-one module here with **no colocated test**; add `planGating.test.ts` if you
-extend it.
+Stripe webhook (`AGENTS.md` key rule 4) — never write it from UI. Covered by
+`planGating.test.ts`.
+
+## activeAccounts.ts
+
+Pure, client-safe rule deciding which connected eBay/Amazon accounts are usable
+under the plan cap (oldest-first, admin pause always holds). Shared by the
+Integrations page and server routes so they cannot disagree. Exports
+`resolveActiveAccounts`, `accountState`, `canResumeAccount`, `connectedCount`,
+`firstUsableAccount`. Colocated test.
+
+## integrationErrors.ts
+
+Client-safe `INTEGRATION_ERRORS` copy keyed by `INTEGRATION_ACCOUNT_*` codes;
+`integrationErrorMessage(code, fallback)` maps a route's `{ error: code }` to
+copy. Colocated test.
 
 ## pricing.ts
 
@@ -426,7 +442,7 @@ Integrations, Listings and Messages pages and by the Users invite flow.
 
 Every module here has a colocated `*.test.ts` **except `generateInvoice.ts`**
 (jsPDF is awkward to assert on — its pure maths lives in `invoiceMath.ts`, which
-*is* tested) and **`planGating.ts`** (no test yet — add one if you extend it).
+*is* tested).
 
 ```bash
 npx jest lib/utils
