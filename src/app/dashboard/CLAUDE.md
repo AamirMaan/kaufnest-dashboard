@@ -9,10 +9,12 @@ broadly when working on a specific feature.**
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
   (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**/
-  **platform_connections**/dropship_listings/platform_payouts/
+  **platform_connections**/dropship_listings/
   ebay_listing_drafts/**ebay_messages**)
   from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
-  individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
+  individual pages never refetch on mount. `platform_payouts` is **not** hydrated
+  here (removed 2026-10-08 — it was an unbounded full-table read nothing
+  consumed); the Payouts page fetches its own pages via `fetchPayoutsPage`. Also reads the `kaufnest_impersonating`
   cookie, and calls `isPlatformAdmin(user.email)` (`@/lib/supabase/control`) to
   compute `isPlatformAdmin` — both are passed to `<DashboardShell>` (the
   impersonation banner and the sidebar's "Admin Panel" link, respectively).

@@ -4,8 +4,6 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Textarea, Row } from "@/components/ui/FormFields";
-import { useAppDispatch } from "@/store/hooks";
-import { addPayout } from "@/store/slices/platformPayoutsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/currency";
 import { useToast } from "@/components/ui/Toast";
@@ -28,7 +26,6 @@ export function RecordTransferModal({
   onClose,
   onSaved,
 }: Props) {
-  const dispatch = useAppDispatch();
   const { error: toastError } = useToast();
   const [amount, setAmount] = useState(
     pendingBalance > 0 ? pendingBalance.toFixed(2) : ""
@@ -79,7 +76,6 @@ export function RecordTransferModal({
       return;
     }
 
-    dispatch(addPayout(data));
     setSaving(false);
     onSaved();
   }

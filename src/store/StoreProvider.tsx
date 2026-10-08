@@ -18,7 +18,6 @@ import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, 
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
-import { hydratePayouts } from "@/store/slices/platformPayoutsSlice";
 import { hydrateListingDrafts } from "@/app/dashboard/listings/_store/listingsSlice";
 import { hydrateMessages } from "@/app/dashboard/messages/_store/messagesSlice";
 import type {
@@ -32,7 +31,6 @@ import type {
   TenantPlan,
   PlatformConnection,
   DropshipListing,
-  PlatformPayout,
   EbayListingDraft,
   EbayMessage,
 } from "@/types";
@@ -57,7 +55,6 @@ interface StoreProviderProps {
   access?: AccessMap;
   platformConnections?: PlatformConnection[];
   dropshipListings?: DropshipListing[];
-  platformPayouts?: PlatformPayout[];
   listingDrafts?: { data: EbayListingDraft[]; count: number };
   messages?: { data: EbayMessage[]; count: number };
 }
@@ -79,7 +76,6 @@ export function StoreProvider({
   access,
   platformConnections,
   dropshipListings,
-  platformPayouts,
   listingDrafts,
   messages,
 }: StoreProviderProps) {
@@ -100,7 +96,6 @@ export function StoreProvider({
     if (access)             store.dispatch(setAccess(access));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
-    if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));
     if (listingDrafts)     store.dispatch(hydrateListingDrafts({ data: listingDrafts.data, count: listingDrafts.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (messages)          store.dispatch(hydrateMessages({ data: messages.data, count: messages.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     return store;
