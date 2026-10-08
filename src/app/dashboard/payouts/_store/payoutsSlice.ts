@@ -2,7 +2,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { createTenantClient } from "@/lib/supabase/client";
 import { DEFAULT_PAGE_SIZE, rangeFor } from "@/lib/utils/pagedQuery";
 import type { PlatformPayout } from "@/types";
-import { payoutFilterParams, type PayoutFilters } from "../_lib/payoutFilters";
+import { DEFAULT_PAYOUT_FILTERS, payoutFilterParams, type PayoutFilters } from "../_lib/payoutFilters";
 
 export const PAYOUTS_LOAD_ERROR = "Could not load payouts.";
 
@@ -14,6 +14,8 @@ interface PayoutsState {
   loaded: boolean;
   isFetching: boolean;
   error: string | null;
+  /** Last-applied filters — survives page remounts so the FilterBar matches the rows. */
+  filters: PayoutFilters;
 }
 
 const initialState: PayoutsState = {
@@ -24,6 +26,7 @@ const initialState: PayoutsState = {
   loaded: false,
   isFetching: false,
   error: null,
+  filters: DEFAULT_PAYOUT_FILTERS,
 };
 
 /** Newest first. Payouts grow with the business, so always paged. */
@@ -64,6 +67,7 @@ export const payoutsSlice = createSlice({
         state.total = action.payload.count;
         state.page = action.payload.page;
         state.pageSize = action.payload.pageSize;
+        state.filters = action.meta.arg.filters;
         state.loaded = true;
         state.isFetching = false;
       })

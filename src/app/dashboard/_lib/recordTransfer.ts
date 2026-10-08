@@ -1,5 +1,10 @@
 import type { Currency } from "@/types";
 
+/** Local (not UTC) YYYY-MM-DD — toISOString() is off by a day near midnight. */
+export function localDateISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export type PayoutPlatform = "ebay" | "amazon";
 
 export interface TransferForm {

@@ -214,7 +214,7 @@ test — `npx jest dashboard/_lib`. Keep new Overview maths in this shape:
 extracting it is what makes it testable without rendering the page.
 
 - `recordTransfer.ts` (2026-10-08) — `isTransferFormValid`,
-  `transferInsertPayload` for `RecordTransferModal`. Colocated test.
+  `transferInsertPayload`, `localDateISO` (local-date default) for `RecordTransferModal`. Colocated test.
 - `aggregateSales.ts` — `aggregateSaleRevenue(sales) → { revenue, fees }`.
   Filters through `isRevenueSale` first (so returned/cancelled orders are
   excluded — see `lib/utils/filters.ts`), then sums

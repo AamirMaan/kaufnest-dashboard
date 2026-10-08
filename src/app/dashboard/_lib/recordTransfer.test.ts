@@ -1,4 +1,4 @@
-import { isTransferFormValid, transferInsertPayload, type TransferForm } from "./recordTransfer";
+import { isTransferFormValid, localDateISO, transferInsertPayload, type TransferForm } from "./recordTransfer";
 
 const form = (over: Partial<TransferForm> = {}): TransferForm => ({
   platform: "ebay", currency: "EUR", amount: "100.00", date: "2026-10-08", notes: "", ...over,
@@ -33,5 +33,12 @@ describe("transferInsertPayload", () => {
   });
   it("throws on an invalid form rather than inserting garbage", () => {
     expect(() => transferInsertPayload(form({ platform: "" }), "u1")).toThrow();
+  });
+});
+
+describe("localDateISO", () => {
+  it("formats the local calendar date, zero-padded", () => {
+    expect(localDateISO(new Date(2026, 0, 5, 23, 59))).toBe("2026-01-05");
+    expect(localDateISO(new Date(2026, 9, 8, 0, 1))).toBe("2026-10-08");
   });
 });

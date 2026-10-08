@@ -35,14 +35,14 @@ const filterInputCls =
 export default function PayoutsPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
-  const { items, page, pageSize, total, loaded, isFetching, error } = useAppSelector((s) => s.payouts);
+  const { items, page, pageSize, total, loaded, isFetching, error, filters: appliedFilters } = useAppSelector((s) => s.payouts);
   const users = useAppSelector((s) => s.users.items);
   const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const { can } = useAccess();
   const canRecord = can("payouts", 2);
   const canDelete = can("payouts", 3);
 
-  const [filters, setFilters] = useState<PayoutFilters>(DEFAULT_PAYOUT_FILTERS);
+  const [filters, setFilters] = useState<PayoutFilters>(appliedFilters);
   const [recordOpen, setRecordOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PlatformPayout | null>(null);
   const hasActive = !isDefaultPayoutFilters(filters);
@@ -203,7 +203,7 @@ export default function PayoutsPage() {
           columns={columns}
           rows={items}
           keyField="id"
-          emptyMessage={hasActive ? "No transfers match the current filters." : "No transfers recorded yet."}
+          emptyMessage={!loaded ? "Transfers couldn't be loaded." : hasActive ? "No transfers match the current filters." : "No transfers recorded yet."}
         />
         <Pagination
           page={page}

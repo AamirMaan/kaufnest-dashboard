@@ -11,7 +11,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency } from "@/lib/utils/currency";
 import { useToast } from "@/components/ui/Toast";
 import type { Currency, PlatformPayout } from "@/types";
-import { isTransferFormValid, transferInsertPayload, type PayoutPlatform, type TransferForm } from "../_lib/recordTransfer";
+import { isTransferFormValid, localDateISO, transferInsertPayload, type PayoutPlatform, type TransferForm } from "../_lib/recordTransfer";
 
 interface Props {
   /** Fixed platform (Home's per-platform card). Omitted → the user picks one (Payouts page). */
@@ -26,7 +26,7 @@ interface Props {
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 const PLATFORM_LABELS: Record<PayoutPlatform, string> = { ebay: "eBay", amazon: "Amazon" };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDateISO(new Date());
 
 export function RecordTransferModal({ platform, currency, pendingBalance, onClose, onSaved }: Props) {
   const dispatch = useAppDispatch();
@@ -66,15 +66,20 @@ export function RecordTransferModal({ platform, currency, pendingBalance, onClos
         toastError("Failed to record transfer", "Please try again.");
         return;
       }
-      const log = await writeAuditLog(supabase, {
-        userId: user.id,
-        userEmail: user.email ?? "",
-        action: "create",
-        entityType: "payout",
-        entityId: data.id,
-        metadata: { after: data },
-      });
-      if (log) dispatch(addAuditLog(log));
+      // Best-effort: the payout is already saved, so an audit failure must not report it as failed.
+      try {
+        const log = await writeAuditLog(supabase, {
+          userId: user.id,
+          userEmail: user.email ?? "",
+          action: "create",
+          entityType: "payout",
+          entityId: data.id,
+          metadata: { after: data },
+        });
+        if (log) dispatch(addAuditLog(log));
+      } catch {
+        // audit trail is secondary
+      }
       success("Transfer recorded", `${formatCurrency(data.amount, data.currency)} from ${PLATFORM_LABELS[data.platform]}.`);
       onSaved(data);
     } catch {

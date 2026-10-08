@@ -17,7 +17,8 @@ transfers) recorded in `platform_payouts`, with Record and Delete.
   `created_by` against `state.users.items` (`full_name` → `email` → `—`).
 - `_store/payoutsSlice.ts` (+ test) — `state.payouts`; `fetchPayoutsPage({
   page, pageSize, filters })`, newest first (`date`, then `created_at`). Throws
-  the fixed `PAYOUTS_LOAD_ERROR`, never the Postgres message. Not hydrated by
+  the fixed `PAYOUTS_LOAD_ERROR`, never the Postgres message. Also stores the last-applied `filters` (the page seeds its filter state
+  from it, so the FilterBar survives a remount). Not hydrated by
   `dashboard/layout.tsx` — the page fetches page 1 on mount.
 - `_lib/payoutFilters.ts` (+ test) — `PayoutFilters`, `DEFAULT_PAYOUT_FILTERS`,
   `payoutFilterParams` (`resolveDateBounds`; `"all"` → null),
