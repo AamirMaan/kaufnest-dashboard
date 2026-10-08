@@ -32,7 +32,7 @@ export const SECTIONS: SectionDef[] = [
   { key: "expenses", label: "Expenses", levels: [0, 1, 2, 3], routes: ["/dashboard/expenses"], description: "Expense records" },
   { key: "purchases", label: "Purchases", levels: [0, 1, 2, 3], routes: ["/dashboard/purchases"], description: "Inventory purchases" },
   { key: "inventory", label: "Inventory", levels: [0, 1, 2, 3], routes: ["/dashboard/inventory"], description: "Products, stock, locations, transfers" },
-  { key: "payouts", label: "Payouts", levels: [0, 1, 2, 3], routes: [], description: "Recorded eBay/Amazon transfers" },
+  { key: "payouts", label: "Payouts", levels: [0, 1, 2, 3], routes: ["/dashboard/payouts"], description: "Recorded eBay/Amazon transfers" },
   { key: "integrations", label: "Integrations", levels: [0, 2], routes: ["/dashboard/integrations"], description: "eBay/Amazon connections, Review Orders" },
   { key: "listings", label: "Listings", levels: [0, 2], routes: ["/dashboard/listings"], description: "eBay listings" },
   { key: "messages", label: "Messages", levels: [0, 2], routes: ["/dashboard/messages"], description: "eBay buyer messages" },

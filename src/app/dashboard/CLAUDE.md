@@ -310,6 +310,7 @@ extracting it is what makes it testable without rendering the page.
 | `sales/` | `/dashboard/sales` | sales records ("Orders" in UI), `salesSlice` |
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
+| `payouts/` | `/dashboard/payouts` | recorded eBay/Amazon payout history + `payoutsSlice` (record ≥ 2, delete ≥ 3 on section `payouts`) |
 | `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |
 | `users/` | `/dashboard/users` | user invites/roles/permission overrides/deactivation, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |
