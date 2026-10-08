@@ -195,6 +195,22 @@ their eBay account, so it authenticates the caller before doing anything:
 - Gotcha: signature verification needs the **raw request body bytes**
   (`req.text()`), not the parsed JSON — `JSON.parse` happens only after the
   signature check passes.
+- **Deletion match is per account (multi-account, 2026-10-08).** Cleanup no
+  longer assumes one eBay connection per tenant. In each tenant,
+  `ebay/deletionMatch.ts` (`matchDeletedEbayConnections`, pure) selects the
+  `platform_connections` rows (`platform = 'ebay'`) whose
+  `external_account_id` equals the notification's `userId`, or whose
+  `external_username` / `external_account_id` equals its `username`. Only
+  those rows' synced sales (`sales.connection_id IN (ids)` AND
+  `external_order_id IS NOT NULL`) and connection rows are deleted. Sales
+  must be deleted before the connection rows (the FK is `ON DELETE SET NULL`,
+  so deleting connections first would orphan the synced sales instead).
+- Gotcha — **legacy-row fallback**: connections made before migration 056 may
+  have `external_account_id` NULL (no match possible) or holding the old
+  eBay *username* instead of the Identity userId. The matcher therefore also
+  compares `external_account_id` against the notification's `username`. A
+  missing identifier never matches (`undefined`/`null` short-circuit), so a
+  notification with neither field deletes nothing.
 
 ## eBay messages (Trading API)
 
@@ -413,8 +429,9 @@ lookup against existing `sales` rows.
 - **eBay account deletion endpoint** lives at
   `src/app/api/notifications/ebay-account-deletion/route.ts`. GET handles the
   eBay challenge verification (SHA256 of `challengeCode + EBAY_VERIFICATION_TOKEN
-  + endpointUrl`). POST acknowledges deletions and best-effort removes the
-  matching tenant's eBay connection + synced sales. Register the URL
+  + endpointUrl`). POST acknowledges deletions and best-effort removes, per
+  tenant, only the eBay connection(s) matching the deleted user (see the
+  deletion-match rule above) plus their synced sales. Register the URL
   `${NEXT_PUBLIC_SITE_URL}/api/notifications/ebay-account-deletion` in the
   eBay developer portal under Application → Notifications, then copy the
   generated Verification Token into `EBAY_VERIFICATION_TOKEN` (also add to
