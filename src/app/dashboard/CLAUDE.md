@@ -47,6 +47,8 @@ broadly when working on a specific feature.**
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
+  `platformAccounts` (from the `get_platform_accounts()` RPC, hydrated into
+  `integrationsSlice.accounts`; `[]` if the RPC fails, e.g. 056 not applied).
   **If you add a new feature with its own collection, hydrate it here.**
 - `page.tsx` — **Home** (`/dashboard`) = **the numbers; every chart lives on
   `/dashboard/analytics`** (split settled 2026-09-28 — Home had briefly held

@@ -16,7 +16,7 @@ import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
 import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, setAccess } from "@/store/slices/currentUserSlice";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
-import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
+import { hydrateAccounts, hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
 import { hydrateListingDrafts } from "@/app/dashboard/listings/_store/listingsSlice";
 import { hydrateMessages } from "@/app/dashboard/messages/_store/messagesSlice";
@@ -29,6 +29,7 @@ import type {
   Profile,
   CompanyProfile,
   TenantPlan,
+  PlatformAccount,
   PlatformConnection,
   DropshipListing,
   EbayListingDraft,
@@ -54,6 +55,7 @@ interface StoreProviderProps {
   shippingLabelsEnabled?: boolean;
   access?: AccessMap;
   platformConnections?: PlatformConnection[];
+  platformAccounts?: PlatformAccount[];
   dropshipListings?: DropshipListing[];
   listingDrafts?: { data: EbayListingDraft[]; count: number };
   messages?: { data: EbayMessage[]; count: number };
@@ -75,6 +77,7 @@ export function StoreProvider({
   shippingLabelsEnabled,
   access,
   platformConnections,
+  platformAccounts,
   dropshipListings,
   listingDrafts,
   messages,
@@ -95,6 +98,7 @@ export function StoreProvider({
     if (shippingLabelsEnabled !== undefined) store.dispatch(setShippingLabelsEnabled(shippingLabelsEnabled));
     if (access)             store.dispatch(setAccess(access));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
+    if (platformAccounts) store.dispatch(hydrateAccounts(platformAccounts));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
     if (listingDrafts)     store.dispatch(hydrateListingDrafts({ data: listingDrafts.data, count: listingDrafts.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (messages)          store.dispatch(hydrateMessages({ data: messages.data, count: messages.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));

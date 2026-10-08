@@ -46,7 +46,7 @@ export function ConnectionCard({ platform, connection, canManage }: ConnectionCa
       return;
     }
 
-    dispatch(setConnectionStatus({ platform, status: "disconnected" }));
+    if (connection) dispatch(setConnectionStatus({ id: connection.id, status: "disconnected" }));
     success(`${label} disconnected`);
   }
 

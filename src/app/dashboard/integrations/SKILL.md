@@ -57,7 +57,8 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   `window.location.assign(\`/api/integrations/${platform}/connect\`)` because
   that route 302-redirects to the platform's OAuth consent screen; a `fetch`
   would just receive the redirect response without navigating the browser.
-- **`setConnectionStatus` is a no-op if the platform has no connection row
+- **`accounts` vs `connections`**: `connections` (admin-only, RLS) drives the Integrations page; `accounts` (all members, `get_platform_accounts` RPC) drives account filters/pickers. `layout.tsx` tolerates the RPC failing (056 not applied): it `console.error`s and hydrates `[]`, same as `get_my_access`. Both are keyed by `id`, never `platform`.
+- **`setConnectionStatus` is a no-op if the connection id has no row
   yet** — after a fresh "Connect" + OAuth round-trip, the page does a full
   reload (browser navigation back from the callback redirect), so
   `dashboard/layout.tsx` re-hydrates `platform_connections` with the new row;

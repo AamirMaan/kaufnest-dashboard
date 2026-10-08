@@ -69,11 +69,16 @@ tenant admin grants an exception via the Users feature).
   percent toggle per row (table space) — bulk-percent is the only percent
   entry point here, unlike the Add/Edit Sale modals' per-field toggle
   (`dashboard/sales/_components/FeeAmountOrPercentField.tsx`).
-- `_store/integrationsSlice.ts` — `state.integrations.connections:
-  PlatformConnection[]`. Actions: `hydrateConnections`, `upsertConnection`
-  (replace-or-append by `platform`), `setConnectionStatus` (no-op if no
-  connection exists for that platform yet).
-- `_store/integrationsSlice.test.ts` — reducer tests for all three actions.
+- `_store/integrationsSlice.ts` — `state.integrations = { connections:
+  PlatformConnection[]; accounts: PlatformAccount[] }`. `connections` is the
+  admin view (`platform_connections` safe columns; RLS makes it `[]` for
+  non-admins); `accounts` is the token-free list every member can read (RPC
+  `get_platform_accounts`, migration 056) for filters/pickers. Actions:
+  `hydrateConnections`, `hydrateAccounts`, `upsertConnection` (replace-or-append
+  by `id`; also mirrors into `accounts`), `setConnectionStatus({ id, status })`
+  (by `id`; updates both lists; no-op for unknown id). Several accounts per
+  platform coexist.
+- `_store/integrationsSlice.test.ts` — reducer tests for all four actions.
 
 ## Data flow (different from other features)
 

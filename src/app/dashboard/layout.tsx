@@ -16,6 +16,7 @@ import type {
   AuditLog,
   CompanyProfile,
   TenantPlan,
+  PlatformAccount,
   PlatformConnection,
   DropshipListing,
   EbayListingDraft,
@@ -130,8 +131,9 @@ export default async function DashboardLayout({
     supabase
       .from("platform_connections")
       .select(
-        "id, platform, status, external_account_id, marketplace_id, last_synced_at, last_sync_status, last_sync_error, updated_at"
+        "id, platform, status, external_account_id, external_username, display_name, is_active, marketplace_id, last_synced_at, last_sync_status, last_sync_error, created_at, updated_at"
       )
+      .order("created_at", { ascending: true })
       .returns<PlatformConnection[]>(),
     supabase
       .from("dropship_listings")
@@ -193,6 +195,12 @@ export default async function DashboardLayout({
   if (accessError) console.error("[dashboard/layout] get_my_access failed", accessError);
   const access = parseAccessMap(accessError ? null : rawAccess, profile.role);
 
+  // Token-free account list for every member (056) — Orders' account filter
+  // and the order modals' account picker. Empty (not an error) before 056.
+  const { data: rawAccounts, error: accountsError } = await supabase.rpc("get_platform_accounts");
+  if (accountsError) console.error("[dashboard/layout] get_platform_accounts failed", accountsError);
+  const platformAccounts = (accountsError ? [] : (rawAccounts ?? [])) as PlatformAccount[];
+
   return (
     <StoreProvider
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
@@ -209,6 +217,7 @@ export default async function DashboardLayout({
       shippingLabelsEnabled={shippingLabelsEnabled}
       access={access}
       platformConnections={platformConnections ?? []}
+      platformAccounts={platformAccounts}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       listingDrafts={{ data: listingDraftsData ?? [], count: listingDraftsCount ?? 0 }}
       messages={{ data: messagesData ?? [], count: messagesCount ?? 0 }}
