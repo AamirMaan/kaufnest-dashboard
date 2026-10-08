@@ -16,13 +16,16 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   adapter in `src/lib/integrations/`, add to `IntegrationPlatform` in
   `src/types/index.ts`, register in `src/lib/integrations/registry.ts`. In
   *this* folder: add the platform to the `PLATFORMS` array and
-  `PLATFORM_LABELS` map in `page.tsx`, and to `PLATFORM_LABELS` /
-  `STATUS_VARIANTS` (if a new status) in `_components/ConnectionCard.tsx`.
+  `PLATFORM_LABELS` map in `page.tsx`, and to `LABELS` in
+  `_components/PlatformAccountsSection.tsx` and `PLATFORM_LABELS` in
+  `_components/ConnectionCard.tsx`.
   Also add the table row to `008_platform_integrations.sql` /
   `provision_tenant_schema()`'s `platform` CHECK constraint
   (`supabase/SKILL.md`).
-- **Change the connection card UI** (badges, buttons, layout): edit
-  `_components/ConnectionCard.tsx` only.
+- **Change the account card UI** (badges, rename, pause/resume, disconnect,
+  reconnect): edit `_components/ConnectionCard.tsx` only. Per-platform section
+  (heading, Add button, cap hint): `_components/PlatformAccountsSection.tsx`;
+  heading/banner text rules: `_lib/accountSummary.ts` + test.
 - **Change the upgrade-prompt or no-permission messaging**: edit the relevant
   branch in `page.tsx`'s `IntegrationsContent` only.
 - **Change reducer logic**: `_store/integrationsSlice.ts` + its colocated
@@ -80,3 +83,4 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
 - **Cron is removed** — `vercel.json` no longer has a `crons` key. Both eBay
   and Amazon are now manual-review only. Do not re-add auto-sync without
   updating the review flow to handle already-synced orders correctly.
+- **Account state is derived, never stored.** Cards take `state`/`canResume` from `accountState`/`canResumeAccount` (`lib/utils/activeAccounts`) over ALL connections — pass the full list, not one platform's. Pause/resume/rename go through PATCH `/api/integrations/connections/[id]`; map failures with `integrationErrorMessage(json.error, json.error ?? fallback)` (409 = resume refused at cap). Reconnect uses `?reconnect=1` so the connect-time cap check is skipped.

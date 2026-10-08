@@ -22,18 +22,22 @@ tenant admin grants an exception via the Users feature).
   1. `!tenantPlan || !hasPlatformIntegrations(tenantPlan)` → upgrade-prompt
      card linking to `/dashboard/settings`.
   2. `!canManage` → "contact your admin" message.
-  3. Otherwise → a `sm:grid-cols-2` grid of `<ConnectionCard>`, one per
-     `IntegrationPlatform` (`["ebay", "amazon"]`).
-- `_components/ConnectionCard.tsx` — per-platform card: status `Badge`
-  (`connected`/`disconnected`/`error`), `external_account_id` (if set), "Last
-  synced" (`formatDateTime` or "Never"), `last_sync_error` (if present). When
-  `canManage` and connected: a "Review orders" `<Link>` (navigates to
-  `/dashboard/integrations/review`) and a "Disconnect" button
-  (`POST /api/integrations/{platform}/disconnect`). When disconnected: a
-  "Connect {label}" button that does `window.location.assign(\`/api/integrations/${platform}/connect\`)` (a full
-  navigation, not `fetch` — the connect route 302s to the platform's OAuth
-  consent screen). The "Sync now" button and `handleSync` logic have been
-  removed — syncing is now manual via the review page.
+  3. Otherwise → plan-limit and legacy-eBay "reconnect once" banners, then one
+     `<PlatformAccountsSection>` per `IntegrationPlatform` (`["ebay", "amazon"]`).
+     `error=` codes from the callback go through `integrationErrorMessage`.
+- `_components/PlatformAccountsSection.tsx` — one platform's section: heading
+  (`platformHeading`: used/cap), "Add {label} account" button (disabled by
+  `canAddAccount`; full navigation to `/api/integrations/{platform}/connect`),
+  upgrade hint at the cap, empty state, and a grid of `ConnectionCard`s.
+- `_components/ConnectionCard.tsx` — ONE account: `display_name ?? label`,
+  username subline, state `Badge` (`AccountState` from `accountState`), last
+  synced/error. `canManage`: inline rename form (PATCH `display_name`),
+  Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
+  orders link, Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
+  dispatches `setConnectionStatus`), and Reconnect on disconnected rows
+  (`/connect?reconnect=1`, skips the connect-time cap check). PATCH success
+  dispatches `upsertConnection`.
+- `_lib/accountSummary.ts` (+ test) — pure `platformHeading`, `needsReconnectBanner`.
 - `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
   Fetches `GET /api/integrations/review` on mount (only when eligible), renders
   platform tabs (eBay / Amazon), an order table with checkbox selection
@@ -150,4 +154,4 @@ upsert them into `sales` and update `last_synced_at` per platform.
 
 ## Tests
 
-`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts`.
+`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts` and `_lib/accountSummary.test.ts`.
