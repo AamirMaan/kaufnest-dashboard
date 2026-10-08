@@ -18,7 +18,6 @@ import type {
   TenantPlan,
   PlatformConnection,
   DropshipListing,
-  PlatformPayout,
   EbayListingDraft,
   EbayMessage,
 } from "@/types";
@@ -76,7 +75,6 @@ export default async function DashboardLayout({
     { data: companyProfile },
     { data: platformConnections },
     { data: dropshipListings },
-    { data: platformPayoutsData },
     { data: listingDraftsData, count: listingDraftsCount },
     { data: messagesData, count: messagesCount },
   ] = await Promise.all([
@@ -140,11 +138,6 @@ export default async function DashboardLayout({
       .select("*")
       .order("created_at", { ascending: false })
       .returns<DropshipListing[]>(),
-    supabase
-      .from("platform_payouts")
-      .select("*")
-      .order("date", { ascending: false })
-      .returns<PlatformPayout[]>(),
     supabase
       .from("ebay_listing_drafts")
       .select("*", { count: "exact" })
@@ -217,7 +210,6 @@ export default async function DashboardLayout({
       access={access}
       platformConnections={platformConnections ?? []}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
-      platformPayouts={platformPayoutsData ?? []}
       listingDrafts={{ data: listingDraftsData ?? [], count: listingDraftsCount ?? 0 }}
       messages={{ data: messagesData ?? [], count: messagesCount ?? 0 }}
     >

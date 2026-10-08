@@ -326,7 +326,7 @@ export type AuditAction =
   | "permission_change"
   | "status_change";
 
-export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment" | "stock_location" | "stock_transfer" | "inventory_settings";
+export type AuditEntity = "expense" | "purchase" | "sale" | "user" | "product" | "message" | "shipment" | "stock_location" | "stock_transfer" | "inventory_settings" | "payout";
 
 export interface AuditLog {
   id: string;

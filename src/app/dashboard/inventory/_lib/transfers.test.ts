@@ -1,7 +1,6 @@
 import {
   emptyTransferDraft,
   fifoPreview,
-  pageAfterRemoval,
   parseTransferCost,
   parseTransferQuantity,
   transferCostAddon,
@@ -207,17 +206,5 @@ describe("transferInsertPayload", () => {
     const p = transferInsertPayload(draft(), "u1");
     expect(p.transfer_cost).toBeNull();
     expect(p.note).toBeNull();
-  });
-});
-
-describe("pageAfterRemoval", () => {
-  it("stays on the page when rows remain", () => {
-    expect(pageAfterRemoval(2, 50, 75)).toBe(2);
-  });
-  it("steps back when the last row of the last page goes", () => {
-    expect(pageAfterRemoval(2, 50, 51)).toBe(1);
-  });
-  it("never goes below page 1", () => {
-    expect(pageAfterRemoval(1, 50, 1)).toBe(1);
   });
 });

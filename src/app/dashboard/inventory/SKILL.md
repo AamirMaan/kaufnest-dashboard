@@ -112,7 +112,7 @@ since modal dropdowns use a different state key than the table.
 - **Change the Transfers tab** (history, delete, stock refresh — Phase 4
   Task 4, 2026-09-26): `_components/TransfersTab.tsx` (list + row actions +
   the shared `DeleteConfirmModal` + mounting `TransferStockModal`),
-  `_store/transfersSlice.ts` (`fetchTransfersPage`), `_lib/transfers.ts`
+  `_store/transfersSlice.ts` (`fetchTransfersPage`), `@/lib/utils/pagedQuery`
   (`pageAfterRemoval`). `page.tsx` only owns `tab`/`transferOpen`/
   `stockVersion` state and the "+ Transfer Stock" header button — see the
   "Add a tab" and `stockVersion` gotchas below.

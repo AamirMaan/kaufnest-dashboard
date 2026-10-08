@@ -1,4 +1,4 @@
-import { rangeFor, DEFAULT_PAGE_SIZE } from "./pagedQuery";
+import { rangeFor, DEFAULT_PAGE_SIZE, pageAfterRemoval } from "./pagedQuery";
 
 describe("rangeFor", () => {
   it("page 1, size 50 → [0, 49]", () => {
@@ -21,5 +21,17 @@ describe("rangeFor", () => {
 describe("DEFAULT_PAGE_SIZE", () => {
   it("is 50", () => {
     expect(DEFAULT_PAGE_SIZE).toBe(50);
+  });
+});
+
+describe("pageAfterRemoval", () => {
+  it("stays on the page when rows remain", () => {
+    expect(pageAfterRemoval(2, 50, 75)).toBe(2);
+  });
+  it("steps back when the last row of the last page goes", () => {
+    expect(pageAfterRemoval(2, 50, 51)).toBe(1);
+  });
+  it("never goes below page 1", () => {
+    expect(pageAfterRemoval(1, 50, 1)).toBe(1);
   });
 });

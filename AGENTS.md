@@ -390,6 +390,7 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/sales/` | `/dashboard/sales`, `/dashboard/sales/[id]` | sales records ("Orders" in UI) + `salesSlice`; [id] is order-detail page |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
+| `src/app/dashboard/payouts/` | `/dashboard/payouts` | recorded eBay/Amazon payout history + `payoutsSlice` (record ≥ 2, delete ≥ 3 on section `payouts`) |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
 | `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles/permission overrides/deactivation + `usersSlice` |
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |

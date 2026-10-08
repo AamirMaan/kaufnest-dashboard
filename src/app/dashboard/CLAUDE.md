@@ -9,10 +9,12 @@ broadly when working on a specific feature.**
 - `layout.tsx` — server component: auth-guards the route (`redirect("/login")`
   if no session/profile), fetches the first page of every collection
   (sales/expenses/purchases/products/audit_logs/profiles/**company_profile**/
-  **platform_connections**/dropship_listings/platform_payouts/
+  **platform_connections**/dropship_listings/
   ebay_listing_drafts/**ebay_messages**)
   from Supabase **once**, and hydrates them into Redux via `<StoreProvider>` so
-  individual pages never refetch on mount. Also reads the `kaufnest_impersonating`
+  individual pages never refetch on mount. `platform_payouts` is **not** hydrated
+  here (removed 2026-10-08 — it was an unbounded full-table read nothing
+  consumed); the Payouts page fetches its own pages via `fetchPayoutsPage`. Also reads the `kaufnest_impersonating`
   cookie, and calls `isPlatformAdmin(user.email)` (`@/lib/supabase/control`) to
   compute `isPlatformAdmin` — both are passed to `<DashboardShell>` (the
   impersonation banner and the sidebar's "Admin Panel" link, respectively).
@@ -167,8 +169,11 @@ Home-only (continued):
 - `RecentOrdersCard.tsx` — latest `RECENT_ORDERS_LIMIT` (5) orders, own
   Supabase query (bypasses the `sales` slice — see `SKILL.md`'s gotcha),
   each row links to `/dashboard/sales/[id]`.
-- `RecordTransferModal.tsx` — records a platform payout (admin only; opened
-  from a `PlatformStatsCard`'s "Record Transfer" on Home).
+- `RecordTransferModal.tsx` — records a platform payout. Shared by Home (fixed
+  `platform`/`currency` + `pendingBalance` prefill, opened from a
+  `PlatformStatsCard`) and the Payouts page (no `platform` → platform + currency
+  Selects). Validity/payload in `_lib/recordTransfer.ts`. Writes a
+  `create`/`payout` audit entry; `onSaved(payout)` lets the caller refresh.
 
 Shared by Home and Analytics:
 - `useDateRangePicker.ts` / `DateRangePicker.tsx` — the date-range picker
@@ -208,6 +213,8 @@ The pure modules below (no React/Supabase/Redux) each have a colocated
 test — `npx jest dashboard/_lib`. Keep new Overview maths in this shape:
 extracting it is what makes it testable without rendering the page.
 
+- `recordTransfer.ts` (2026-10-08) — `isTransferFormValid`,
+  `transferInsertPayload`, `localDateISO` (local-date default) for `RecordTransferModal`. Colocated test.
 - `aggregateSales.ts` — `aggregateSaleRevenue(sales) → { revenue, fees }`.
   Filters through `isRevenueSale` first (so returned/cancelled orders are
   excluded — see `lib/utils/filters.ts`), then sums
@@ -303,6 +310,7 @@ extracting it is what makes it testable without rendering the page.
 | `sales/` | `/dashboard/sales` | sales records ("Orders" in UI), `salesSlice` |
 | `expenses/` | `/dashboard/expenses` | expense records, `expensesSlice` |
 | `purchases/` | `/dashboard/purchases` | inventory purchases, `purchasesSlice` |
+| `payouts/` | `/dashboard/payouts` | recorded eBay/Amazon payout history + `payoutsSlice` (record ≥ 2, delete ≥ 3 on section `payouts`) |
 | `inventory/` | `/dashboard/inventory` | product catalog + stock levels, `inventorySlice` (stock kept in sync via DB triggers off linked purchases/sales — see its CLAUDE.md) |
 | `users/` | `/dashboard/users` | user invites/roles/permission overrides/deactivation, `usersSlice` (super_admin only) |
 | `audit-logs/` | `/dashboard/audit-logs` | activity trail viewer (slice is shared, see its CLAUDE.md) |

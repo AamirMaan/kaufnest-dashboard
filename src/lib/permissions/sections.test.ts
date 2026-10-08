@@ -85,6 +85,7 @@ describe("sections model", () => {
     expect(sectionForPath("/dashboard/integrations/review")).toBe("integrations");
     expect(sectionForPath("/dashboard/audit-logs")).toBe("audit_logs");
     expect(sectionForPath("/dashboard/users/1/permissions")).toBe("users");
+    expect(sectionForPath("/dashboard/payouts")).toBe("payouts");
     expect(sectionForPath("/dashboard/support")).toBeNull();
     expect(sectionForPath("/dashboard/planner")).toBeNull();
     expect(sectionForPath("/dashboard/dropshipping")).toBeNull();
