@@ -233,6 +233,7 @@ The shared contract for the server-side pagination architecture described in
 `AGENTS.md` — every paginated feature uses these rather than its own maths.
 
 - `DEFAULT_PAGE_SIZE = 50` — also the page size `dashboard/layout.tsx` hydrates.
+- `pageAfterRemoval(page, pageSize, totalBefore)` — page to refetch after deleting one row (steps back off an emptied last page). Used by Inventory Transfers and Payouts.
 - `PageRequest` — `{ page, pageSize }`; `page` is **1-indexed**.
 - `rangeFor({ page, pageSize }) → [from, to]` — inclusive bounds for Supabase
   `.range(from, to)`. `page=1, pageSize=50` → `[0, 49]`.

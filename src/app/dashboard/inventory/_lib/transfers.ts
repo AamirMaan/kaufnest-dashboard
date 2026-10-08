@@ -156,8 +156,3 @@ export function transferInsertPayload(
   };
 }
 
-/** The page to show after deleting one row, so the last page never ends up empty. */
-export function pageAfterRemoval(page: number, pageSize: number, totalBefore: number): number {
-  const lastPage = Math.ceil(Math.max(0, totalBefore - 1) / pageSize);
-  return Math.max(1, Math.min(page, lastPage));
-}
