@@ -18,12 +18,14 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   shipping address capture, is `undefined` when an adapter doesn't support
   address capture (Amazon) and `null` when the platform returned no address;
   `ShippingAddress` is also defined here), `TokenSet`, `ExchangeCodeResult`
-  (`TokenSet` + optional `externalAccountId`/`marketplaceId`),
+  (`TokenSet` + optional `externalAccountId`/`externalUsername`/`marketplaceId`),
   `PlatformAdapter` interface, `SyncResult`.
 - `registry.ts` — `getAdapter(platform)` → `PlatformAdapter`,
   `isIntegrationPlatform(value)` type guard used by every API route to
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
+  `ebay.ts` also exports `fetchEbayIdentity(accessToken)` (Identity API —
+  see the 2026-10-08 section below).
   `ebay.ts`'s `fetchOrders` also extracts the buyer's shipping address from
   `fulfillmentStartInstructions[].shippingStep.shipTo` (order-level,
   duplicated onto every line item's `NormalizedOrder.shipping`, same as
@@ -316,6 +318,32 @@ draft has no `ad_campaign_id`) → `addListingToCampaign` →
   then; failures become warning strings stored in `marketing_error`.
 - `ebayFetch`/`throwIfNotOk`/`MARKETPLACE_ID` are exported from
   `ebay/publish.ts` for this module — reuse them, don't copy them.
+
+## eBay account identity (Identity API, 2026-10-08)
+
+- **Scope**: `https://api.ebay.com/oauth/api_scope/commerce.identity.readonly`
+  is in `EBAY_SCOPE` (`ebay.ts`). It lets us ask eBay *which* seller account
+  an access token belongs to, so a tenant can hold several eBay accounts
+  (multi-account integrations spec).
+- **Host**: the Identity API is served from `apiz.ebay.com` (sandbox:
+  `apiz.sandbox.ebay.com`), NOT `api.ebay.com`. `EBAY_IDENTITY_URL` in
+  `ebay.ts` picks the host from `EBAY_SANDBOX`, same as `EBAY_BASE`.
+- **Endpoint**: `GET {apiz}/commerce/identity/v1/user/` with the user's
+  Bearer token. `fetchEbayIdentity(accessToken)` returns
+  `{ userId, username }` and throws `eBay account lookup failed: <status>`
+  on non-OK, or `... returned no userId` when the body lacks one.
+- **`exchangeCode` return values (eBay)**: after the token exchange it calls
+  `fetchEbayIdentity` and returns `{ ...tokens, externalAccountId: userId,
+  externalUsername: username }`. `externalAccountId` is eBay's stable
+  `userId` (not the username, which can change). Amazon's `exchangeCode` is
+  unchanged and leaves `externalUsername` undefined.
+- **Gotcha — existing eBay connections must reconnect once.** Tokens issued
+  before 2026-10-08 were granted without `commerce.identity.readonly`, and
+  the refresh flow cannot add it (refresh omits `scope`). So any Identity
+  call with such a token 403s, and those connections have no
+  `external_account_id` until the tenant disconnects and reconnects eBay
+  in Integrations (the fresh consent grants the new scope). Same rule as
+  `sell.marketing`/`sell.account` above.
 
 ## Merge rule (re-import field ownership)
 
