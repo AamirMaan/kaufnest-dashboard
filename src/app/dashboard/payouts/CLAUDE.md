@@ -8,6 +8,9 @@ transfers) recorded in `platform_payouts`, with Record and Delete.
 - `page.tsx` — paginated list (`fetchPayoutsPage`), `FilterBar` (date preset/
   period, currency) + a Platform `<select>` child, `DataTable` (Date, Platform,
   Amount, Notes, Recorded by, Actions), `Pagination`, error banner + Retry.
+  Before the first load resolves, the empty state reads "Loading transfers…"
+  (or "Transfers couldn't be loaded." if it failed) — same as Inventory's
+  `TransfersTab`.
   "+ Record Transfer" opens the shared `RecordTransferModal`
   (`../_components/`) without a `platform` prop (platform + currency Selects,
   currency defaults to `companyProfile.currency`); on save refetches page 1.

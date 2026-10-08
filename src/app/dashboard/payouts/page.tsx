@@ -203,7 +203,11 @@ export default function PayoutsPage() {
           columns={columns}
           rows={items}
           keyField="id"
-          emptyMessage={!loaded ? "Transfers couldn't be loaded." : hasActive ? "No transfers match the current filters." : "No transfers recorded yet."}
+          emptyMessage={
+            !loaded
+              ? error ? "Transfers couldn't be loaded." : "Loading transfers…"
+              : hasActive ? "No transfers match the current filters." : "No transfers recorded yet."
+          }
         />
         <Pagination
           page={page}
