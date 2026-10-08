@@ -85,7 +85,11 @@ export async function GET(_req: NextRequest) {
           }))
         );
       } catch (err) {
-        errors[name] = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[integrations/review] fetch failed (platform=${conn.platform}, connection=${conn.id}):`,
+          err instanceof Error ? err.message : err
+        );
+        errors[name] = `Couldn't fetch orders from ${name}. Try again, or reconnect the account if this keeps happening.`;
       }
     })
   );

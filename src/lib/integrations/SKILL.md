@@ -505,7 +505,7 @@ lookup against existing `sales` rows.
   always re-checks via `decideConnectionSave`.
 - Callback and import routes log raw errors server-side and return generic
   copy / `INTEGRATION_*` codes only. Review `errors` are keyed by account
-  display name and still carry adapter (eBay/Amazon HTTP) messages.
+  display name and carry generic copy only; the raw adapter error is logged server-side.
 - `ebay/orders/[saleId]/sync-status` uses the sale's own `connection_id`
   (fallback: shim for pre-056 sales) and deliberately does NOT enforce the plan
   cap: pushing status for an existing order is allowed after its account is paused.
