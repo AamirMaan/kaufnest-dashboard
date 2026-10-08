@@ -368,3 +368,41 @@ describe("ebayAdapter.getAuthUrl", () => {
     expect(decodeURIComponent(ebayAdapter.getAuthUrl("s"))).toContain("commerce.identity.readonly");
   });
 });
+
+describe("fetchEbayIdentity error handling (review fix)", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("falls back to userId when the response has no username", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ userId: "u-7" }),
+    }) as unknown as typeof fetch;
+    await expect(fetchEbayIdentity("tok")).resolves.toEqual({ userId: "u-7", username: "u-7" });
+  });
+});
+
+describe("ebayAdapter.exchangeCode identity failure (review fix)", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it("rejects when the identity lookup fails, without leaking the upstream body", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ access_token: "at", refresh_token: "rt", expires_in: 7200 }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: () => Promise.resolve("SECRET-UPSTREAM-BODY insufficient scope"),
+      }) as unknown as typeof fetch;
+
+    const err = await ebayAdapter.exchangeCode("code-1").catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/eBay account lookup failed: 403/);
+    expect((err as Error).message).not.toContain("SECRET-UPSTREAM-BODY");
+  });
+});

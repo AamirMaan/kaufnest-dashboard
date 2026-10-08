@@ -157,7 +157,10 @@ export async function fetchEbayIdentity(accessToken: string): Promise<{ userId: 
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) {
-    throw new Error(`eBay account lookup failed: ${res.status} ${await res.text()}`);
+    // Raw upstream body is logged server-side only: the callback route
+    // redirects err.message to the browser, so it must carry status alone.
+    console.error("[ebay identity]", res.status, await res.text());
+    throw new Error(`eBay account lookup failed: ${res.status}`);
   }
   const json = (await res.json()) as { userId?: string; username?: string };
   if (!json.userId) throw new Error("eBay account lookup returned no userId");
