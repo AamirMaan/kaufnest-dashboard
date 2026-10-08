@@ -67,9 +67,10 @@ changes are added to `provision_tenant_schema()` in
   editable by admins.
 - Add `external_username text` — eBay username, used by the deletion webhook to
   match legacy rows that predate the account-id fetch.
-- Add `is_active boolean not null default true` — the admin's choice of which
-  accounts stay active when over the plan cap. It is an input to the cap rule,
-  not a guarantee: `is_active` rows can still be paused by the cap.
+- Add `is_active boolean not null default true` — `false` means the admin
+  paused the account. A paused account is always paused; `is_active = true`
+  is necessary but not sufficient for being active (the plan cap can still
+  pause it — see the active-account rule in §2).
 - Add index `(platform, created_at)` — "oldest first" ordering.
 
 **`sales`**
@@ -82,8 +83,20 @@ changes are added to `provision_tenant_schema()` in
   rows stay null (Unassigned).
 - The dedup index `(platform, external_order_id)` is unchanged — order ids are
   globally unique per marketplace, so two accounts cannot collide.
-- `on delete set null`: removing a connection row leaves its orders in place
-  as Unassigned, consistent with today's disconnect keeping synced sales.
+- `on delete set null` is a safety net only — nothing in the app deletes a
+  connection row except the eBay account-deletion webhook. Disconnect keeps
+  the row (§2), so orders stay linked and relink automatically on reconnect.
+
+**`get_sales_summary`** gains a trailing `p_connection_id text DEFAULT NULL`
+(`'__unassigned__'` sentinel = `connection_id IS NULL`), so the Orders summary
+tiles and table filter identically. Old 7-arg signature dropped first, as 052
+did.
+
+**New RPC `get_platform_accounts()`** — `SECURITY DEFINER`, gated on
+`is_tenant_member()`, returns `id, platform, display_name, status, is_active,
+created_at` (no tokens). `platform_connections` RLS is admin-only, but the
+Orders filter, account column and order modals are used by non-admins
+(e.g. accountant), so they read account names through this RPC instead.
 
 **RLS** — unchanged. `platform_connections` stays admin/super_admin-only;
 `sales.connection_id` is covered by the existing `sales` policies.
@@ -110,16 +123,23 @@ changes are added to `provision_tenant_schema()` in
   row (update in place) rather than inserting a new one, so its existing
   `sales.connection_id` links survive.
 
-**Active-account rule** — new pure module `lib/integrations/activeAccounts.ts`
+**Active-account rule** — new pure, client-safe module
+`lib/utils/activeAccounts.ts` (not under `lib/integrations/`: the verifier
+blocks client imports from there, and the Integrations page needs the same
+rule)
 
 ```ts
 resolveActiveAccounts(connections, plan) => { active, paused }
 ```
 
-Per platform: take `status = 'connected'` rows; order by `is_active desc,
-created_at asc`; the first `maxAccountsPerPlatform(plan)` are active, the rest
-paused. Effects: admin choices win; unused slots fall back to oldest; Starter
-yields zero active. Used by both server and client so they cannot disagree.
+Per platform: take `status = 'connected'` rows. Rows with `is_active = false`
+are paused. The remaining rows, oldest first, fill up to
+`maxAccountsPerPlatform(plan)`; any beyond that are paused by the plan limit.
+Effects: an admin Pause always holds; after a downgrade the oldest accounts
+stay active by default; to keep different ones the admin pauses the ones they
+don't need. Resuming is refused when the non-paused count is already at the
+cap. Starter yields zero active. Used by server and client so they cannot
+disagree.
 
 **`planGating.ts`** — `PlanLimits.maxAccountsPerPlatform: number`
 (starter 0, pro 2, business/trial `Infinity`), plus
@@ -133,10 +153,10 @@ yields zero active. Used by both server and client so they cannot disagree.
   `INTEGRATION_ACCOUNT_PAUSED` when the account is outside the active set.
   Every sync/import path calls it.
 - **Compatibility shim:** `getConnection(client, platform)` keeps its signature
-  and now returns the platform's first *active* account (per
-  `resolveActiveAccounts`). Listings, messages and dropshipping keep working
-  unchanged until sub-projects 2/3. It needs the tenant plan, so it reads it
-  via the existing control-client lookup pattern used in `connect`.
+  and now returns the oldest connected, non-paused account (`null` if none).
+  With any cap ≥ 1 that row is always inside the active set, so the shim needs
+  no plan lookup; plan-gated callers already refuse Starter. Listings,
+  messages and dropshipping keep working unchanged until sub-projects 2/3.
 
 **Routes**
 
@@ -149,15 +169,20 @@ yields zero active. Used by both server and client so they cannot disagree.
   and store nothing. Reconnecting an existing account always succeeds.
   Redirects with `?connected=<platform>&account=<id>`.
 - `[platform]/disconnect` — body `{ connectionId }`; clears that row's tokens
-  and sets `status = 'disconnected'`. Other accounts untouched.
+  and sets `status = 'disconnected'`. The row is kept, so its orders stay
+  linked and reconnecting the same account reuses it. Other accounts
+  untouched.
 - **New** `PATCH /api/integrations/connections/[id]` — gated by
   `requireIntegrationAdmin()`; accepts `{ display_name?, is_active? }`.
-  Activating is refused (`INTEGRATION_ACCOUNT_LIMIT`) if it would put more
-  `is_active` connected rows than the cap on that platform. `display_name`
+  Resuming (`is_active: true`) is refused (`INTEGRATION_ACCOUNT_LIMIT`) if the
+  platform already has `cap` connected, non-paused accounts. `display_name`
   trimmed, 1–60 chars.
 - `review` / `review/import` — iterate the **active accounts** instead of
-  platforms; stamp `connection_id` on every imported sale; dedup stays per
-  platform. The review payload groups orders by account with `display_name`.
+  platforms; each `ReviewOrder` carries `connection_id` and `account_name`;
+  the response lists `pausedAccounts`. Import rejects any item whose
+  `connection_id` is not an active account of its platform, and stamps
+  `connection_id` on every imported sale (fill-only on re-import, like
+  `marketplace`); dedup stays per platform.
 - `ebay/orders/[saleId]/sync-status` — use the sale's `connection_id` when set,
   falling back to the shim when null.
 
@@ -180,30 +205,34 @@ tenants, which is every tenant today).
 - One section per platform, headed "eBay — 2 of 2 accounts" ("2 accounts" on
   unlimited plans).
 - One `ConnectionCard` per account: inline-editable `display_name`, status
-  `Badge` (Connected / Paused — plan limit / Error), last synced, row actions
-  **Set active / Pause** and **Disconnect** (via `DeleteConfirmModal`, copy
-  states orders are kept as Unassigned).
+  `Badge` (Active / Paused / Paused — plan limit / Disconnected / Error), last
+  synced, row actions **Pause** / **Resume** and **Disconnect** (via
+  `DeleteConfirmModal`, no reason field; copy states the account's orders are
+  kept). A disconnected account shows a **Reconnect** button instead.
 - "Add <platform> account" — `secondary` button; disabled at the cap with an
   upgrade hint linking to Billing. "Review Orders" remains the single primary
   action.
 - Downgrade banner when any account is paused: "Your plan includes 2 eBay
   accounts. 2 are paused — choose which stay active, or upgrade."
 - Legacy-eBay reconnect banner (§2).
-- `integrationsSlice` holds a list of connections; the active/paused split is
-  derived with `resolveActiveAccounts`.
+- `integrationsSlice` holds a list of connections (admin view, from
+  `platform_connections`) and `accounts` (everyone, from
+  `get_platform_accounts`); the active/paused split is derived with
+  `resolveActiveAccounts`.
 - Every mutation: busy label ("Saving…", "Disconnecting…"), disabled while in
   flight, success and failure toasts.
 
-**Review Orders** (`integrations/review/`) — grouped by platform → account;
-account header shows `display_name` and new-order count; paused accounts are
-omitted with an explanatory note.
+**Review Orders** (`integrations/review/`) — keeps its per-platform tabs. When
+a platform has 2+ accounts, the tab gains an **Account** column and an account
+filter `<select>`; paused accounts are omitted with an explanatory note above
+the tabs.
 
 **Orders** (`dashboard/sales/`)
 
 - `FilterBar` **Account** filter, shown only when the tenant has 2+
   connections on any platform: All accounts / each account / Unassigned. Sent
   to the paginated thunk as a connection id or the `"unassigned"` sentinel
-  (`is null`). Persisted with the other filters.
+  (`is null`).
 - Account column (`Badge` with `display_name`), same visibility rule.
 - Order detail (`sales/[id]`) shows the account name when set.
 
