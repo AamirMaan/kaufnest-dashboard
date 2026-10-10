@@ -527,3 +527,5 @@ lookup against existing `sales` rows.
   (fallback: shim for pre-056 sales) and deliberately does NOT enforce the plan
   cap: pushing status for an existing order is allowed after its account is paused.
 - `mapToSale` stamps `connection_id` (5th arg); `mergeImportedSale` keeps it fill-only.
+- Routes taking a connection id (`connections/[id]` PATCH, `[platform]/disconnect`) check `isConnectionId` (`connectionPatch.ts`) first: a non-uuid becomes 404 `INTEGRATION_ACCOUNT_UNKNOWN`, not a Postgres cast error/500.
+- eBay account-deletion cleanup deletes the matched connection rows only after the sales delete succeeds; on failure it logs and keeps them so a later notification can still match.

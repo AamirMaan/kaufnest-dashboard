@@ -18,10 +18,12 @@ export type AccountState = "active" | "paused" | "plan_limit" | "disconnected" |
 
 const PLATFORMS: IntegrationPlatform[] = ["ebay", "amazon"];
 
-function byCreatedAt<T extends AccountLike>(a: T, b: T): number {
+/** Oldest first. Shared with `platformAccounts.accountOptionsFor` so pickers list accounts in cap order. */
+export function byCreatedAt(a: Pick<AccountLike, "id" | "created_at">, b: Pick<AccountLike, "id" | "created_at">): number {
   // Compare instants, not strings (offset/precision differences), then break
-  // ties on id so the ordering is deterministic.
-  const diff = Date.parse(a.created_at) - Date.parse(b.created_at);
+  // ties on id so the ordering is deterministic. An unparseable timestamp
+  // sorts as the epoch rather than poisoning the comparator with NaN.
+  const diff = (Date.parse(a.created_at) || 0) - (Date.parse(b.created_at) || 0);
   return diff !== 0 ? diff : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 

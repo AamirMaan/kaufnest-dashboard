@@ -114,10 +114,21 @@ async function cleanupEbayUser(userId?: string, username?: string) {
 
       // Only this account's synced orders — other eBay accounts of the same
       // tenant are untouched (multi-account, 056). external_order_id NOT NULL = synced, not manual.
-      await client.from("sales").delete().in("connection_id", ids).not("external_order_id", "is", null);
+      const { error: salesError } = await client
+        .from("sales")
+        .delete()
+        .in("connection_id", ids)
+        .not("external_order_id", "is", null);
+      if (salesError) {
+        // Keep the connection rows: deleting them would orphan these sales from
+        // the only key a later notification could match them by.
+        console.error("[ebay-account-deletion] sales cleanup failed", schema_name, salesError.message);
+        continue;
+      }
 
       // Remove the matched connection rows (clears tokens and OAuth state)
-      await client.from("platform_connections").delete().in("id", ids);
+      const { error: connError } = await client.from("platform_connections").delete().in("id", ids);
+      if (connError) console.error("[ebay-account-deletion] connection cleanup failed", schema_name, connError.message);
     } catch {
       // Skip this tenant on error — continue with others
     }

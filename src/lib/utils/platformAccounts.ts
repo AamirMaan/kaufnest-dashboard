@@ -1,4 +1,5 @@
 import type { PlatformAccount } from "@/types";
+import { byCreatedAt } from "./activeAccounts";
 
 /** "No account" filter value — keep in sync with '__unassigned__' in 056's get_sales_summary. */
 export const UNASSIGNED_ACCOUNT = "__unassigned__";
@@ -16,7 +17,7 @@ export function hasMultipleAccounts(accounts: Pick<PlatformAccount, "platform">[
 
 /** One platform's accounts, oldest first. */
 export function accountOptionsFor(accounts: PlatformAccount[], platform: string): PlatformAccount[] {
-  return accounts.filter((a) => a.platform === platform).sort((x, y) => x.created_at.localeCompare(y.created_at));
+  return accounts.filter((a) => a.platform === platform).sort(byCreatedAt);
 }
 
 /** Label for a sale's connection_id; null when unset or the account is gone. */

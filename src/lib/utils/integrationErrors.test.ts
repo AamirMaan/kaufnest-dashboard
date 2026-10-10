@@ -8,4 +8,7 @@ describe("integrationErrorMessage", () => {
     expect(integrationErrorMessage("SOMETHING_ELSE", "fallback")).toBe("fallback");
     expect(integrationErrorMessage(undefined, "fallback")).toBe("fallback");
   });
+  it("ignores inherited Object.prototype keys", () => {
+    expect(integrationErrorMessage("toString", "fallback")).toBe("fallback");
+  });
 });

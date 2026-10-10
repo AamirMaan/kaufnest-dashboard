@@ -25,3 +25,10 @@ export function parseConnectionPatch(
   if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to update." };
   return { ok: true, patch };
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** platform_connections.id is a uuid; anything else would make Postgres throw a cast error (500). */
+export function isConnectionId(id: string): boolean {
+  return UUID_RE.test(id);
+}

@@ -4,6 +4,7 @@ import {
   canResumeAccount,
   connectedCount,
   firstUsableAccount,
+  byCreatedAt,
   type AccountLike,
 } from "./activeAccounts";
 
@@ -125,5 +126,13 @@ describe("ordering tie-break", () => {
     expect(firstUsableAccount(rows, "ebay")?.id).toBe("a");
     expect(firstUsableAccount([...rows].reverse(), "ebay")?.id).toBe("a");
     expect(resolveActiveAccounts(rows, "pro").active.map((r) => r.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("byCreatedAt", () => {
+  it("treats an unparseable timestamp as oldest instead of returning NaN", () => {
+    const r = byCreatedAt({ id: "a", created_at: "garbage" }, { id: "b", created_at: "2026-01-01T00:00:00Z" });
+    expect(Number.isNaN(r)).toBe(false);
+    expect(r).toBeLessThan(0);
   });
 });

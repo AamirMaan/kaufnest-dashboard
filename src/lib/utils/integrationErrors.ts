@@ -16,5 +16,5 @@ export const INTEGRATION_ERRORS = {
 export type IntegrationErrorCode = keyof typeof INTEGRATION_ERRORS;
 
 export function integrationErrorMessage(code: string | undefined, fallback: string): string {
-  return code && code in INTEGRATION_ERRORS ? INTEGRATION_ERRORS[code as IntegrationErrorCode] : fallback;
+  return code && Object.hasOwn(INTEGRATION_ERRORS, code) ? INTEGRATION_ERRORS[code as IntegrationErrorCode] : fallback;
 }

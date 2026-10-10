@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getConnectionById, listConnections, updateConnection } from "@/lib/integrations/tokenStore";
-import { parseConnectionPatch } from "@/lib/integrations/connectionPatch";
+import { isConnectionId, parseConnectionPatch } from "@/lib/integrations/connectionPatch";
 import { getTenantPlan } from "@/lib/integrations/tenantPlan";
 import { canResumeAccount } from "@/lib/utils/activeAccounts";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
@@ -21,6 +21,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!hasPlatformIntegrations(plan)) {
     return NextResponse.json({ error: "Platform integrations require the Pro or Business plan." }, { status: 403 });
   }
+
+  if (!isConnectionId(id)) return NextResponse.json({ error: "INTEGRATION_ACCOUNT_UNKNOWN" }, { status: 404 });
 
   const parsed = parseConnectionPatch(await req.json().catch(() => null));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
