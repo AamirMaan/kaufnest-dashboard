@@ -1,33 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter } from "@/lib/integrations/registry";
-import { ensureValidAccessToken, getConnection } from "@/lib/integrations/tokenStore";
-import { createControlClient } from "@/lib/supabase/control";
+import { ensureValidAccessToken, listConnections, type ConnectionRow } from "@/lib/integrations/tokenStore";
+import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { IntegrationPlatform, TenantPlan } from "@/types";
+import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
-export type ReviewOrder = NormalizedOrder & { imported: boolean };
+export type ReviewOrder = NormalizedOrder & { imported: boolean; connection_id: string; account_name: string };
 export type ReviewResponse = Partial<Record<IntegrationPlatform, { orders: ReviewOrder[] }>> & {
+  /** Keyed by account display name. */
   errors?: Record<string, string>;
+  /** Display names of connected accounts left out because they're paused. */
+  pausedAccounts?: string[];
 };
 
 const REVIEW_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
-const PLATFORMS: IntegrationPlatform[] = ["ebay", "amazon"];
+
+function accountLabel(c: Pick<ConnectionRow, "display_name" | "platform">): string {
+  return c.display_name ?? (c.platform === "ebay" ? "eBay" : "Amazon");
+}
 
 export async function GET(_req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
   const { client, tenantSchema } = auth.context;
 
-  const control = createControlClient();
-  const { data: tenant } = await control
-    .schema("control")
-    .from("tenants")
-    .select("plan")
-    .eq("schema_name", tenantSchema)
-    .single();
-  if (!hasPlatformIntegrations((tenant?.plan ?? "trial") as TenantPlan)) {
+  const plan = await getTenantPlan(tenantSchema);
+  if (!hasPlatformIntegrations(plan)) {
     return NextResponse.json(
       { error: "Platform integrations require the Pro or Business plan." },
       { status: 403 }
@@ -36,19 +37,17 @@ export async function GET(_req: NextRequest) {
 
   const since = new Date(Date.now() - REVIEW_LOOKBACK_MS).toISOString();
 
-  // Load connections for all platforms to find which are active
-  let active: { platform: IntegrationPlatform; conn: Awaited<ReturnType<typeof getConnection>> }[];
+  let active: ConnectionRow[];
+  let paused: ConnectionRow[];
   let importedSet: Set<string>;
   try {
-    const connections = await Promise.all(
-      PLATFORMS.map(async (p) => ({ platform: p, conn: await getConnection(client, p) }))
-    );
-    active = connections.filter((c) => c.conn?.status === "connected");
-
-    if (active.length === 0) return NextResponse.json({});
+    ({ active, paused } = resolveActiveAccounts(await listConnections(client), plan));
+    if (active.length === 0) {
+      return NextResponse.json(paused.length ? { pausedAccounts: paused.map(accountLabel) } : {});
+    }
 
     // Fetch existing external_order_ids from sales for dedup
-    const activePlatforms = active.map((c) => c.platform);
+    const activePlatforms = [...new Set(active.map((c) => c.platform))];
     const { data: existingSales } = await client
       .from("sales")
       .select("platform, external_order_id")
@@ -62,32 +61,40 @@ export async function GET(_req: NextRequest) {
       )
     );
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "Failed to load connections", detail }, { status: 500 });
+    console.error("[integrations/review] load failed:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Failed to load connections" }, { status: 500 });
   }
 
   const result: ReviewResponse = {};
   const errors: Record<string, string> = {};
 
-  // Fetch orders from each active platform in parallel
   await Promise.all(
-    active.map(async ({ platform, conn }) => {
+    active.map(async (conn) => {
+      const name = accountLabel(conn);
       try {
-        const adapter = getAdapter(platform);
-        const token = await ensureValidAccessToken(client, conn!, adapter);
-        const orders = await adapter.fetchOrders(token, since, conn!.marketplace_id);
-        result[platform] = {
-          orders: orders.map((o) => ({
+        const adapter = getAdapter(conn.platform);
+        const token = await ensureValidAccessToken(client, conn, adapter);
+        const orders = await adapter.fetchOrders(token, since, conn.marketplace_id);
+        const bucket = (result[conn.platform] ??= { orders: [] });
+        bucket.orders.push(
+          ...orders.map((o) => ({
             ...o,
-            imported: importedSet.has(`${platform}:${o.external_order_id}`),
-          })),
-        };
+            imported: importedSet.has(`${conn.platform}:${o.external_order_id}`),
+            connection_id: conn.id,
+            account_name: name,
+          }))
+        );
       } catch (err) {
-        errors[platform] = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[integrations/review] fetch failed (platform=${conn.platform}, connection=${conn.id}):`,
+          err instanceof Error ? err.message : err
+        );
+        errors[name] = `Couldn't fetch orders from ${name}. Try again, or reconnect the account if this keeps happening.`;
       }
     })
   );
 
   if (Object.keys(errors).length > 0) result.errors = errors;
+  if (paused.length > 0) result.pausedAccounts = paused.map(accountLabel);
   return NextResponse.json(result);
 }

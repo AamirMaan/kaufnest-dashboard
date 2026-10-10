@@ -81,6 +81,7 @@ describe("normalizedOrderToSaleRow", () => {
       buyer_phone: null,
       buyer_email: null,
       marketplace: null,
+      connection_id: null,
     });
   });
 
@@ -127,6 +128,7 @@ describe("normalizedOrderToSaleRow", () => {
       buyer_phone: null,
       buyer_email: null,
       marketplace: null,
+      connection_id: null,
     });
   });
 
@@ -215,5 +217,25 @@ describe("normalizedOrderToSaleRow", () => {
   it("carries order.marketplace onto the sale row, null when absent", () => {
     expect(normalizedOrderToSaleRow({ ...ebayOrder, marketplace: "ebay.de" }, "ebay", "u").marketplace).toBe("ebay.de");
     expect(normalizedOrderToSaleRow(ebayOrder, "ebay", "u").marketplace).toBeNull();
+  });
+});
+
+describe("normalizedOrderToSaleRow — connection_id", () => {
+  const order: NormalizedOrder = {
+    external_order_id: "12-34567-89012:001",
+    product_name: "Wireless Mouse",
+    quantity: 1,
+    unit_price: 9.99,
+    total_amount: 9.99,
+    currency: "EUR",
+    date: "2026-06-01",
+    status: "delivered",
+    description: "eBay order",
+  };
+  it("stamps the account the order came from", () => {
+    expect(normalizedOrderToSaleRow(order, "ebay", "user-1", undefined, "conn-1").connection_id).toBe("conn-1");
+  });
+  it("defaults to null when no account is given", () => {
+    expect(normalizedOrderToSaleRow(order, "ebay", "user-1").connection_id).toBeNull();
   });
 });

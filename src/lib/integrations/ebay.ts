@@ -8,6 +8,10 @@ const EBAY_AUTH_URL = SANDBOX
   : "https://auth.ebay.com/oauth2/authorize";
 const EBAY_TOKEN_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
 const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
+// The Identity API is served from apiz.*, not api.*.
+const EBAY_IDENTITY_URL = SANDBOX
+  ? "https://apiz.sandbox.ebay.com/commerce/identity/v1/user/"
+  : "https://apiz.ebay.com/commerce/identity/v1/user/";
 // sell.inventory (full, not .readonly) is required for Trading API calls
 // (GetMyeBaySelling in listings.ts). sell.account is required for the
 // Business Policies endpoints (fetchBusinessPolicies in publish.ts —
@@ -18,11 +22,14 @@ const EBAY_ORDERS_URL = `${EBAY_BASE}/sell/fulfillment/v1/order`;
 // authorised before any scope was added must be disconnected and
 // reconnected — a code deploy alone does not retroactively grant scopes to
 // an already-issued token/refresh-token pair.
+// commerce.identity.readonly (2026-10-08) identifies WHICH eBay account was
+// connected, so a tenant can hold several (multi-account integrations spec).
 const EBAY_SCOPE =
   "https://api.ebay.com/oauth/api_scope/sell.fulfillment" +
   " https://api.ebay.com/oauth/api_scope/sell.inventory" +
   " https://api.ebay.com/oauth/api_scope/sell.account" +
-  " https://api.ebay.com/oauth/api_scope/sell.marketing";
+  " https://api.ebay.com/oauth/api_scope/sell.marketing" +
+  " https://api.ebay.com/oauth/api_scope/commerce.identity.readonly";
 
 interface EbayTokenResponse {
   access_token: string;
@@ -144,6 +151,22 @@ function extractShippingAddress(order: EbayOrder): ShippingAddress | null {
   };
 }
 
+/** Which eBay account an access token belongs to (needs commerce.identity.readonly). */
+export async function fetchEbayIdentity(accessToken: string): Promise<{ userId: string; username: string }> {
+  const res = await fetch(EBAY_IDENTITY_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    // Raw upstream body is logged server-side only: the callback route
+    // redirects err.message to the browser, so it must carry status alone.
+    console.error("[ebay identity]", res.status, await res.text());
+    throw new Error(`eBay account lookup failed: ${res.status}`);
+  }
+  const json = (await res.json()) as { userId?: string; username?: string };
+  if (!json.userId) throw new Error("eBay account lookup returned no userId");
+  return { userId: json.userId, username: json.username ?? json.userId };
+}
+
 export const ebayAdapter: PlatformAdapter = {
   platform: "ebay",
 
@@ -159,13 +182,15 @@ export const ebayAdapter: PlatformAdapter = {
   },
 
   async exchangeCode(code) {
-    return requestToken(
+    const tokens = await requestToken(
       new URLSearchParams({
         grant_type: "authorization_code",
         code,
         redirect_uri: process.env.EBAY_RU_NAME ?? "",
       })
     );
+    const identity = await fetchEbayIdentity(tokens.access_token);
+    return { ...tokens, externalAccountId: identity.userId, externalUsername: identity.username };
   },
 
   async refreshAccessToken(refreshToken) {

@@ -199,6 +199,8 @@ export interface Sale {
    * existing Sale literals stay valid.
    */
   marketplace?: string | null;
+  /** platform_connections.id the order came from (056). null/absent = Unassigned. */
+  connection_id?: string | null;
   // ─── Buyer shipping address (migration 041) ──────────────────────────────
   // Captured automatically on eBay sync (ebay.ts's fetchOrders), or entered/
   // corrected by hand via AddSaleModal/EditSaleModal's "Shipping Address
@@ -524,11 +526,28 @@ export interface PlatformConnection {
   platform: IntegrationPlatform;
   status: PlatformConnectionStatus;
   external_account_id: string | null;
+  /** eBay username — used to match legacy rows in the account-deletion webhook (056). */
+  external_username: string | null;
+  /** Admin-editable label, e.g. "eBay – Main Store" (056). */
+  display_name: string | null;
+  /** false = paused by an admin. The plan cap applies on top — see lib/utils/activeAccounts.ts. */
+  is_active: boolean;
   marketplace_id: string | null;
   last_synced_at: string | null;
   last_sync_status: string | null;
   last_sync_error: string | null;
+  created_at: string;
   updated_at: string;
+}
+
+/** Token-free account row from get_platform_accounts() (056) — readable by every tenant member. */
+export interface PlatformAccount {
+  id: string;
+  platform: IntegrationPlatform;
+  display_name: string | null;
+  status: PlatformConnectionStatus;
+  is_active: boolean;
+  created_at: string;
 }
 
 // ─── Dropshipping ─────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser, getAiGenerationLimit, hasAiFeatures, hasAdvancedInventory } from "./planGating";
+import { hasMessagingAndListings, hasPlatformIntegrations, canAddUser, getAiGenerationLimit, hasAiFeatures, hasAdvancedInventory, getMaxAccountsPerPlatform, canAddAccount } from "./planGating";
 
 describe("hasMessagingAndListings", () => {
   it("is true for business and for trial (trial mirrors business)", () => {
@@ -68,5 +68,28 @@ describe("hasAdvancedInventory", () => {
   it("is false for pro and starter", () => {
     expect(hasAdvancedInventory("pro")).toBe(false);
     expect(hasAdvancedInventory("starter")).toBe(false);
+  });
+});
+
+describe("getMaxAccountsPerPlatform", () => {
+  it("is 0 for starter, 2 for pro, unlimited for business and trial", () => {
+    expect(getMaxAccountsPerPlatform("starter")).toBe(0);
+    expect(getMaxAccountsPerPlatform("pro")).toBe(2);
+    expect(getMaxAccountsPerPlatform("business")).toBe(Infinity);
+    expect(getMaxAccountsPerPlatform("trial")).toBe(Infinity);
+  });
+});
+
+describe("canAddAccount", () => {
+  it("allows pro up to 2 accounts per platform", () => {
+    expect(canAddAccount("pro", 0)).toBe(true);
+    expect(canAddAccount("pro", 1)).toBe(true);
+    expect(canAddAccount("pro", 2)).toBe(false);
+  });
+  it("never allows starter", () => {
+    expect(canAddAccount("starter", 0)).toBe(false);
+  });
+  it("always allows business", () => {
+    expect(canAddAccount("business", 50)).toBe(true);
   });
 });

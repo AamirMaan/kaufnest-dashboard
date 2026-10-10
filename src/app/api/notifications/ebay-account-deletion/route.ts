@@ -4,6 +4,7 @@ import { createControlClient } from "@/lib/supabase/control";
 import { createServiceClientForTenant } from "@/lib/supabase/server";
 import { parseSignatureHeader, verifySignature } from "@/lib/integrations/ebay/verifyNotificationSignature";
 import { fetchEbayPublicKey } from "@/lib/integrations/ebay/publicKey";
+import { matchDeletedEbayConnections } from "@/lib/integrations/ebay/deletionMatch";
 
 // Must match exactly what you register in the eBay developer portal.
 const ENDPOINT_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/notifications/ebay-account-deletion`;
@@ -39,10 +40,12 @@ export async function GET(req: NextRequest) {
  * shows up as failed deliveries in eBay's Developer Portal rather than
  * failing open.
  *
- * On a verified notification, cleanup is still best-effort: finds any
- * tenant whose eBay connection's external_account_id matches the deleted
- * user's userId or username, then removes their synced eBay sales and the
- * connection row.
+ * On a verified notification, cleanup is still best-effort and matches per
+ * account: in each tenant, only the eBay connection(s) whose
+ * external_account_id (or, for legacy rows, external_username / a username
+ * stored in external_account_id) matches the deleted user's userId or
+ * username are removed, together with their synced eBay sales. Other eBay
+ * accounts of the same tenant are left alone.
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -101,29 +104,31 @@ async function cleanupEbayUser(userId?: string, username?: string) {
     try {
       const client = createServiceClientForTenant(schema_name as string);
 
-      const { data: connection } = await client
-        .from("platform_connections")
-        .select("id, external_account_id")
-        .eq("platform", "ebay")
-        .maybeSingle();
+      const { data: connections } = await client
+        .from("platform_connections") // verifier:allow unpaginated-collection-read — one row per seller account
+        .select("id, external_account_id, external_username")
+        .eq("platform", "ebay");
 
-      if (!connection?.external_account_id) continue;
+      const ids = matchDeletedEbayConnections(connections ?? [], userId, username);
+      if (ids.length === 0) continue;
 
-      const accountId = connection.external_account_id;
-      if (accountId !== userId && accountId !== username) continue;
-
-      // Delete synced eBay sales (external_order_id NOT NULL = synced, not manual)
-      await client
+      // Only this account's synced orders — other eBay accounts of the same
+      // tenant are untouched (multi-account, 056). external_order_id NOT NULL = synced, not manual.
+      const { error: salesError } = await client
         .from("sales")
         .delete()
-        .eq("platform", "ebay")
+        .in("connection_id", ids)
         .not("external_order_id", "is", null);
+      if (salesError) {
+        // Keep the connection rows: deleting them would orphan these sales from
+        // the only key a later notification could match them by.
+        console.error("[ebay-account-deletion] sales cleanup failed", schema_name, salesError.message);
+        continue;
+      }
 
-      // Remove the connection row (clears tokens and OAuth state)
-      await client
-        .from("platform_connections")
-        .delete()
-        .eq("platform", "ebay");
+      // Remove the matched connection rows (clears tokens and OAuth state)
+      const { error: connError } = await client.from("platform_connections").delete().in("id", ids);
+      if (connError) console.error("[ebay-account-deletion] connection cleanup failed", schema_name, connError.message);
     } catch {
       // Skip this tenant on error — continue with others
     }

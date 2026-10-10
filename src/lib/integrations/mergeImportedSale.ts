@@ -42,5 +42,8 @@ export function mergeImportedSale(
     // Fill-only: a sync may supply a marketplace the row never had (pre-052
     // rows), but never overwrites one — a manual correction wins.
     marketplace: existing.marketplace ?? incoming.marketplace ?? null,
+    // Fill-only, like marketplace: a pre-056 row gains its account on the
+    // next sync, but an existing link is never moved to another account.
+    connection_id: existing.connection_id ?? incoming.connection_id ?? null,
   } as Sale;
 }

@@ -18,12 +18,14 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   shipping address capture, is `undefined` when an adapter doesn't support
   address capture (Amazon) and `null` when the platform returned no address;
   `ShippingAddress` is also defined here), `TokenSet`, `ExchangeCodeResult`
-  (`TokenSet` + optional `externalAccountId`/`marketplaceId`),
+  (`TokenSet` + optional `externalAccountId`/`externalUsername`/`marketplaceId`),
   `PlatformAdapter` interface, `SyncResult`.
 - `registry.ts` — `getAdapter(platform)` → `PlatformAdapter`,
   `isIntegrationPlatform(value)` type guard used by every API route to
   validate the `[platform]` URL segment.
 - `ebay.ts` / `amazon.ts` — one `PlatformAdapter` implementation each.
+  `ebay.ts` also exports `fetchEbayIdentity(accessToken)` (Identity API —
+  see the 2026-10-08 section below).
   `ebay.ts`'s `fetchOrders` also extracts the buyer's shipping address from
   `fulfillmentStartInstructions[].shippingStep.shipTo` (order-level,
   duplicated onto every line item's `NormalizedOrder.shipping`, same as
@@ -47,9 +49,21 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   bulk percent-of-total apply, since neither eBay's nor Amazon's
   order-listing API returns a fee breakdown at that granularity (added
   2026-08-27). Has a colocated `mapToSale.test.ts`.
-- `tokenStore.ts` — `getConnection`, `upsertConnection`,
-  `ensureValidAccessToken` (refresh-on-demand). `getConnection` decrypts,
-  `upsertConnection` encrypts — see "Token encryption at rest" below.
+- `tokenStore.ts` — per-account persistence keyed by connection id:
+  `listConnections(client, platform?)`, `getConnectionById`, `updateConnection`,
+  `insertConnection` (returns id), `requireActiveConnection` (throws
+  `IntegrationAccountError` with an `INTEGRATION_ACCOUNT_*` code),
+  `ensureValidAccessToken` (refresh-on-demand, persists by `connection.id`),
+  and the `getConnection(client, platform)` compatibility shim. Reads decrypt,
+  writes encrypt — see "Token encryption at rest" below. `upsertConnection`
+  no longer exists.
+- `connectionSave.ts` — pure `decideConnectionSave` (update / adopt legacy
+  null-id row / insert / limit) + `defaultDisplayName`, used by the callback.
+- `connectionPatch.ts` — pure `parseConnectionPatch` for
+  `PATCH /api/integrations/connections/[id]`.
+- `reviewImport.ts` — pure `invalidImportItems`: the import route rejects any
+  item whose `connection_id` is not an ACTIVE account of its platform.
+- `tenantPlan.ts` — server-only `getTenantPlan(schema)` (`"trial"` fallback).
 - `tokenCrypto.ts` — `encryptToken`/`decryptToken`/`isEncryptedToken`, AES-256-GCM
   helpers used exclusively by `tokenStore.ts`. Colocated `tokenCrypto.test.ts`.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
@@ -123,8 +137,8 @@ platform-agnostic via `getAdapter`.
 - If `connection.token_expires_at` is more than `REFRESH_MARGIN_MS` (5 min) in
   the future, returns the stored `access_token` unchanged.
 - Otherwise calls `adapter.refreshAccessToken(connection.refresh_token)`,
-  persists the new `access_token`/`refresh_token`/`token_expires_at` via
-  `upsertConnection`, and returns the new token.
+  persists the new `access_token`/`refresh_token`/`token_expires_at` by
+  connection id via `updateConnection`, and returns the new token.
 - Throws if `connection.refresh_token` is null (connection was never
   completed, or was disconnected).
 
@@ -136,11 +150,11 @@ never refresh themselves.
 
 `platform_connections.access_token`/`refresh_token` are encrypted (AES-256-GCM,
 `tokenCrypto.ts`) before every write and decrypted on every read — entirely
-inside `tokenStore.ts`'s `getConnection`/`upsertConnection`, so every other
+inside `tokenStore.ts`'s read/write helpers, so every other
 file in the codebase (adapters, API routes) only ever sees plaintext tokens
 in memory and never needs to know encryption exists. **Never** call
 `.from("platform_connections")` directly for these columns — always go
-through `getConnection`/`upsertConnection`.
+through `tokenStore.ts`.
 
 - Requires `TOKEN_ENCRYPTION_KEY` (base64, 32 bytes — `openssl rand -base64 32`)
   in every environment that reads/writes this table. Missing/wrong-length key
@@ -150,7 +164,7 @@ through `getConnection`/`upsertConnection`.
   unchanged rather than throwing — so tokens stored before this change keep
   working. They get re-encrypted automatically the next time
   `ensureValidAccessToken` refreshes them (writes go through
-  `upsertConnection`, which always encrypts) or the user reconnects the
+  `updateConnection`/`insertConnection`, which always encrypt) or the user reconnects the
   platform. To close that window immediately instead of waiting, run
   `npm run encrypt-existing-tokens` (optionally `-- --dry-run` first) — see
   `scripts/encrypt-existing-tokens.mjs`.
@@ -181,6 +195,22 @@ their eBay account, so it authenticates the caller before doing anything:
 - Gotcha: signature verification needs the **raw request body bytes**
   (`req.text()`), not the parsed JSON — `JSON.parse` happens only after the
   signature check passes.
+- **Deletion match is per account (multi-account, 2026-10-08).** Cleanup no
+  longer assumes one eBay connection per tenant. In each tenant,
+  `ebay/deletionMatch.ts` (`matchDeletedEbayConnections`, pure) selects the
+  `platform_connections` rows (`platform = 'ebay'`) whose
+  `external_account_id` equals the notification's `userId`, or whose
+  `external_username` / `external_account_id` equals its `username`. Only
+  those rows' synced sales (`sales.connection_id IN (ids)` AND
+  `external_order_id IS NOT NULL`) and connection rows are deleted. Sales
+  must be deleted before the connection rows (the FK is `ON DELETE SET NULL`,
+  so deleting connections first would orphan the synced sales instead).
+- Gotcha — **legacy-row fallback**: connections made before migration 056 may
+  have `external_account_id` NULL (no match possible) or holding the old
+  eBay *username* instead of the Identity userId. The matcher therefore also
+  compares `external_account_id` against the notification's `username`. A
+  missing identifier never matches (`undefined`/`null` short-circuit), so a
+  notification with neither field deletes nothing.
 
 ## eBay messages (Trading API)
 
@@ -317,6 +347,32 @@ draft has no `ad_campaign_id`) → `addListingToCampaign` →
 - `ebayFetch`/`throwIfNotOk`/`MARKETPLACE_ID` are exported from
   `ebay/publish.ts` for this module — reuse them, don't copy them.
 
+## eBay account identity (Identity API, 2026-10-08)
+
+- **Scope**: `https://api.ebay.com/oauth/api_scope/commerce.identity.readonly`
+  is in `EBAY_SCOPE` (`ebay.ts`). It lets us ask eBay *which* seller account
+  an access token belongs to, so a tenant can hold several eBay accounts
+  (multi-account integrations spec).
+- **Host**: the Identity API is served from `apiz.ebay.com` (sandbox:
+  `apiz.sandbox.ebay.com`), NOT `api.ebay.com`. `EBAY_IDENTITY_URL` in
+  `ebay.ts` picks the host from `EBAY_SANDBOX`, same as `EBAY_BASE`.
+- **Endpoint**: `GET {apiz}/commerce/identity/v1/user/` with the user's
+  Bearer token. `fetchEbayIdentity(accessToken)` returns
+  `{ userId, username }` and throws `eBay account lookup failed: <status>`
+  on non-OK, or `... returned no userId` when the body lacks one.
+- **`exchangeCode` return values (eBay)**: after the token exchange it calls
+  `fetchEbayIdentity` and returns `{ ...tokens, externalAccountId: userId,
+  externalUsername: username }`. `externalAccountId` is eBay's stable
+  `userId` (not the username, which can change). Amazon's `exchangeCode` is
+  unchanged and leaves `externalUsername` undefined.
+- **Gotcha — existing eBay connections must reconnect once.** Tokens issued
+  before 2026-10-08 were granted without `commerce.identity.readonly`, and
+  the refresh flow cannot add it (refresh omits `scope`). So any Identity
+  call with such a token 403s, and those connections have no
+  `external_account_id` until the tenant disconnects and reconnects eBay
+  in Integrations (the fresh consent grants the new scope). Same rule as
+  `sell.marketing`/`sell.account` above.
+
 ## Merge rule (re-import field ownership)
 
 `mergeImportedSale(existing, incoming)` in `mergeImportedSale.ts` is the single
@@ -373,8 +429,9 @@ lookup against existing `sales` rows.
 - **eBay account deletion endpoint** lives at
   `src/app/api/notifications/ebay-account-deletion/route.ts`. GET handles the
   eBay challenge verification (SHA256 of `challengeCode + EBAY_VERIFICATION_TOKEN
-  + endpointUrl`). POST acknowledges deletions and best-effort removes the
-  matching tenant's eBay connection + synced sales. Register the URL
+  + endpointUrl`). POST acknowledges deletions and best-effort removes, per
+  tenant, only the eBay connection(s) matching the deleted user (see the
+  deletion-match rule above) plus their synced sales. Register the URL
   `${NEXT_PUBLIC_SITE_URL}/api/notifications/ebay-account-deletion` in the
   eBay developer portal under Application → Notifications, then copy the
   generated Verification Token into `EBAY_VERIFICATION_TOKEN` (also add to
@@ -448,3 +505,27 @@ lookup against existing `sales` rows.
   `purchaseMarketplaceId` ("EBAY_DE"), both via `normalizeMarketplace`
   (`lib/utils/marketplace.ts`). In `mergeImportedSale` it is **fill-only**:
   written when the stored row has none, never overwritten.
+
+## Gotchas — multi-account (sub-project 1)
+
+- `getConnection(client, platform)` is a **compatibility shim** = the oldest
+  connected, non-paused account of the platform. Listings, messages and
+  dropshipping still use it; new code uses `getConnectionById` /
+  `requireActiveConnection`. Delete the shim once sub-projects 2/3 migrate them.
+- **Disconnect keeps the row** (status `disconnected`, tokens nulled) so
+  `sales.connection_id` links survive and reconnecting the same account
+  (matched on `external_account_id`) reuses it. Disconnected rows do not count
+  against the plan cap; a reconnect re-checks the cap.
+- Legacy eBay rows have `external_account_id` NULL: the callback "adopts" one
+  (`decideConnectionSave` -> `adopt`) rather than inserting a duplicate.
+- Connect route takes `?reconnect=1` to skip the cap pre-check; the callback
+  always re-checks via `decideConnectionSave`.
+- Callback and import routes log raw errors server-side and return generic
+  copy / `INTEGRATION_*` codes only. Review `errors` are keyed by account
+  display name and carry generic copy only; the raw adapter error is logged server-side.
+- `ebay/orders/[saleId]/sync-status` uses the sale's own `connection_id`
+  (fallback: shim for pre-056 sales) and deliberately does NOT enforce the plan
+  cap: pushing status for an existing order is allowed after its account is paused.
+- `mapToSale` stamps `connection_id` (5th arg); `mergeImportedSale` keeps it fill-only.
+- Routes taking a connection id (`connections/[id]` PATCH, `[platform]/disconnect`) check `isConnectionId` (`connectionPatch.ts`) first: a non-uuid becomes 404 `INTEGRATION_ACCOUNT_UNKNOWN`, not a Postgres cast error/500.
+- eBay account-deletion cleanup deletes the matched connection rows only after the sales delete succeeds; on failure it logs and keeps them so a later notification can still match.

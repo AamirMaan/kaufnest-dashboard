@@ -4,6 +4,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type { SalesFilters } from "@/lib/utils/filters";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
+import { UNASSIGNED_ACCOUNT } from "@/lib/utils/platformAccounts";
 import { salesFilterParams } from "./salesFilterParams";
 
 interface SalesState {
@@ -55,6 +56,8 @@ export const fetchSalesPage = createAsyncThunk(
     if (p.p_platform) query = query.eq("platform", p.p_platform);
     if (p.p_marketplace === UNKNOWN_MARKETPLACE) query = query.is("marketplace", null);
     else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
+    if (p.p_connection_id === UNASSIGNED_ACCOUNT) query = query.is("connection_id", null);
+    else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
     if (p.p_currency) query = query.eq("currency", p.p_currency);
     if (p.p_status) query = query.eq("status", p.p_status);
     if (p.p_pattern) {

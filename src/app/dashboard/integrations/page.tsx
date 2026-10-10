@@ -8,7 +8,10 @@ import { useToast } from "@/components/ui/Toast";
 import { useAppSelector } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import { ConnectionCard } from "./_components/ConnectionCard";
+import { PlatformAccountsSection } from "./_components/PlatformAccountsSection";
+import { needsReconnectBanner } from "./_lib/accountSummary";
+import { accountState } from "@/lib/utils/activeAccounts";
+import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { IntegrationPlatform } from "@/types";
 
 const PLATFORMS: IntegrationPlatform[] = ["ebay", "amazon"];
@@ -30,11 +33,11 @@ function IntegrationsContent() {
     const err = searchParams.get("error");
 
     if (connected && (connected === "ebay" || connected === "amazon")) {
-      success(`${PLATFORM_LABELS[connected]} connected`, "You can now sync orders from this platform.");
+      success(`${PLATFORM_LABELS[connected]} account connected`, "You can now sync orders from this platform.");
       // Re-fetch server data so the connection card reflects the new status
       router.refresh();
     } else if (err) {
-      toastError("Connection failed", err);
+      toastError("Connection failed", integrationErrorMessage(err, err));
     }
   }, [searchParams, success, toastError, router]);
 
@@ -81,20 +84,27 @@ function IntegrationsContent() {
     );
   }
 
+  const pausedCount = connections.filter((c) => accountState(connections, c.id, tenantPlan) === "plan_limit").length;
+
   return (
     <div>
       <PageHeader
         title="Integrations"
         description="Connect eBay and Amazon to sync orders automatically"
       />
-      <div className="grid gap-4 sm:grid-cols-2">
+      {pausedCount > 0 && (
+        <div className="mb-4 rounded-[var(--radius-btn)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-text)]">
+          {pausedCount} account{pausedCount === 1 ? " is" : "s are"} paused by your plan&apos;s account limit. Pause the accounts you don&apos;t need to choose which stay active, or upgrade your plan.
+        </div>
+      )}
+      {needsReconnectBanner(connections) && (
+        <div className="mb-4 rounded-[var(--radius-btn)] bg-[var(--color-info-bg)] px-4 py-3 text-sm text-[var(--color-info-text)]">
+          Reconnect your eBay account once to enable multiple eBay accounts.
+        </div>
+      )}
+      <div className="space-y-8">
         {PLATFORMS.map((platform) => (
-          <ConnectionCard
-            key={platform}
-            platform={platform}
-            connection={connections.find((c) => c.platform === platform)}
-            canManage={canManage}
-          />
+          <PlatformAccountsSection key={platform} platform={platform} connections={connections} plan={tenantPlan} canManage={canManage} />
         ))}
       </div>
     </div>

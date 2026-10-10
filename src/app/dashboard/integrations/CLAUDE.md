@@ -22,18 +22,26 @@ tenant admin grants an exception via the Users feature).
   1. `!tenantPlan || !hasPlatformIntegrations(tenantPlan)` → upgrade-prompt
      card linking to `/dashboard/settings`.
   2. `!canManage` → "contact your admin" message.
-  3. Otherwise → a `sm:grid-cols-2` grid of `<ConnectionCard>`, one per
-     `IntegrationPlatform` (`["ebay", "amazon"]`).
-- `_components/ConnectionCard.tsx` — per-platform card: status `Badge`
-  (`connected`/`disconnected`/`error`), `external_account_id` (if set), "Last
-  synced" (`formatDateTime` or "Never"), `last_sync_error` (if present). When
-  `canManage` and connected: a "Review orders" `<Link>` (navigates to
-  `/dashboard/integrations/review`) and a "Disconnect" button
-  (`POST /api/integrations/{platform}/disconnect`). When disconnected: a
-  "Connect {label}" button that does `window.location.assign(\`/api/integrations/${platform}/connect\`)` (a full
-  navigation, not `fetch` — the connect route 302s to the platform's OAuth
-  consent screen). The "Sync now" button and `handleSync` logic have been
-  removed — syncing is now manual via the review page.
+  3. Otherwise → plan-limit and legacy-eBay "reconnect once" banners, then one
+     `<PlatformAccountsSection>` per `IntegrationPlatform` (`["ebay", "amazon"]`).
+     `error=` codes from the callback go through `integrationErrorMessage`.
+- `_components/PlatformAccountsSection.tsx` — one platform's section: heading
+  (`platformHeading`: used/cap), "Add {label} account" button (disabled by
+  `canAddAccount`; full navigation to `/api/integrations/{platform}/connect`),
+  upgrade hint at the cap, empty state, and a grid of `ConnectionCard`s.
+- `_components/ConnectionCard.tsx` — ONE account: `display_name ?? label`,
+  username subline, state `Badge` (`AccountState` from `accountState`), last
+  synced/error. `canManage`: inline rename form (PATCH `display_name`),
+  Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
+  orders link, Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
+  dispatches `setConnectionStatus`), and Reconnect on disconnected rows
+  (`/connect?reconnect=1`, skips the connect-time cap check). PATCH success
+  dispatches `upsertConnection`.
+- `_lib/accountSummary.ts` (+ test) — pure `platformHeading` (used by
+  `PlatformAccountsSection`) and `needsReconnectBanner` (used by `page.tsx`).
+- `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
+  accounts in a tab, first-seen order) and `filterByAccount` (`"all"` or one
+  `connection_id`), used by `review/page.tsx`.
 - `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
   Fetches `GET /api/integrations/review` on mount (only when eligible), renders
   platform tabs (eBay / Amazon), an order table with checkbox selection
@@ -43,6 +51,14 @@ tenant admin grants an exception via the Users feature).
   `salesSlice`. Applies the same plan/`can("integrations", 2)` guards as
   `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
+  **Accounts (multi-account)**: when the active tab's orders span more than one
+  account, an "Account" `<select>` (All accounts / each account) sits above the
+  fee toolbar and an "Account" column (`order.account_name`) appears after Order
+  ID. Changing the account clears the selection; switching tab resets it to
+  "all". `pausedAccounts` from the response renders a "Not shown (paused)" note.
+  Import/sync failures map `INTEGRATION_ACCOUNT_*` codes via
+  `integrationErrorMessage`. The import payload is the full `ReviewOrder`, so
+  each item carries its `connection_id` (the route 409s without it).
   **"Sync Statuses" button (2026-09-07)**: a second, independent submission
   path to the *same* import route — re-fetches `GET /api/integrations/review`
   for fresh platform data, collects every order already marked `imported:
@@ -69,11 +85,16 @@ tenant admin grants an exception via the Users feature).
   percent toggle per row (table space) — bulk-percent is the only percent
   entry point here, unlike the Add/Edit Sale modals' per-field toggle
   (`dashboard/sales/_components/FeeAmountOrPercentField.tsx`).
-- `_store/integrationsSlice.ts` — `state.integrations.connections:
-  PlatformConnection[]`. Actions: `hydrateConnections`, `upsertConnection`
-  (replace-or-append by `platform`), `setConnectionStatus` (no-op if no
-  connection exists for that platform yet).
-- `_store/integrationsSlice.test.ts` — reducer tests for all three actions.
+- `_store/integrationsSlice.ts` — `state.integrations = { connections:
+  PlatformConnection[]; accounts: PlatformAccount[] }`. `connections` is the
+  admin view (`platform_connections` safe columns; RLS makes it `[]` for
+  non-admins); `accounts` is the token-free list every member can read (RPC
+  `get_platform_accounts`, migration 056) for filters/pickers. Actions:
+  `hydrateConnections`, `hydrateAccounts`, `upsertConnection` (replace-or-append
+  by `id`; also mirrors into `accounts`), `setConnectionStatus({ id, status })`
+  (by `id`; updates both lists; no-op for unknown id). Several accounts per
+  platform coexist.
+- `_store/integrationsSlice.test.ts` — reducer tests for all four actions.
 
 ## Data flow (different from other features)
 
@@ -102,7 +123,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 - **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
   connected platforms (90-day lookback via `adapter.fetchOrders`), queries
   `sales` for existing `external_order_id` values, attaches `imported: boolean`
-  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors? }`.
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, pausedAccounts? }`. Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by account display name and holds generic copy (raw errors are logged server-side).
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
@@ -111,7 +132,14 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `orderFees[order.external_order_id]` — parsed to numbers, blank/invalid →
   `null` — as the new optional 4th `fees` argument), upserts into `sales`
   with `onConflict: "platform,external_order_id"`, updates `last_synced_at`
-  per platform. Returns `{ imported: number }`.
+  per account. Rejects (409 `INTEGRATION_ACCOUNT_PAUSED`) items whose
+  `connection_id` isn't an active account (`invalidImportItems`), and stamps
+  `sales.connection_id`. Returns `{ imported: number }`.
+- **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
+  resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 at the cap).
+- `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;
+  `[platform]/connect` returns 403 `INTEGRATION_ACCOUNT_LIMIT` at the cap
+  (`?reconnect=1` skips); the callback redirects with `account=<id>`.
 
 ## Plan gating
 
@@ -138,4 +166,5 @@ upsert them into `sales` and update `last_synced_at` per platform.
 
 ## Tests
 
-`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts`.
+`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts`,
+`_lib/accountSummary.test.ts` and `review/_lib/reviewAccounts.test.ts`.

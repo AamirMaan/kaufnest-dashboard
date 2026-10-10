@@ -302,8 +302,8 @@ BEGIN
     )
   $sql$, schema_name);
 
-  -- platform_connections: one row per platform (ebay/amazon) holding OAuth
-  -- tokens for the tenant's connected seller account. Tokens are sensitive —
+  -- platform_connections: one row per connected seller account (multiple per
+  -- platform since 056) holding OAuth tokens. Tokens are sensitive —
   -- see section 5 below, RLS restricts ALL operations (incl. SELECT) to
   -- admin/super_admin, unlike company_profile which allows SELECT for any
   -- tenant member.
@@ -322,9 +322,12 @@ BEGIN
       last_sync_status     text,
       last_sync_error      text,
       connected_by         uuid REFERENCES %1$I.profiles(id),
+      display_name         text,
+      external_username    text,
+      is_active            boolean NOT NULL DEFAULT true,
       created_at           timestamptz NOT NULL DEFAULT now(),
       updated_at           timestamptz NOT NULL DEFAULT now(),
-      UNIQUE (platform)
+      CONSTRAINT platform_connections_platform_account_key UNIQUE (platform, external_account_id)
     )
   $sql$, schema_name);
 
@@ -903,6 +906,11 @@ BEGIN
   -- .upsert(rows, { onConflict: "platform,external_order_id" }).
   EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_platform_external_order_id ON %1$I.sales (platform, external_order_id)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_marketplace ON %1$I.sales (marketplace)', schema_name);
+  -- Multi-account (056): sales.connection_id references platform_connections,
+  -- which is created above (~L311), so the FK can be added here, not inline.
+  EXECUTE format('ALTER TABLE %1$I.sales ADD COLUMN IF NOT EXISTS connection_id uuid REFERENCES %1$I.platform_connections(id) ON DELETE SET NULL', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_connection_id ON %1$I.sales (connection_id)', schema_name);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS idx_platform_connections_platform_created ON %1$I.platform_connections (platform, created_at)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_products_name ON %1$I.products (name)', schema_name);
 
@@ -1054,11 +1062,13 @@ BEGIN
   -- full header comment. Not SECURITY DEFINER. No literal percent signs in
   -- these bodies on purpose: format() would treat them as placeholders.
   EXECUTE format('DROP FUNCTION IF EXISTS %1$I.get_sales_summary(date, date, text, text, text, text)', schema_name);
+  EXECUTE format('DROP FUNCTION IF EXISTS %1$I.get_sales_summary(date, date, text, text, text, text, text)', schema_name);
 
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.get_sales_summary(
       p_from date, p_to date, p_platform text, p_currency text, p_status text, p_pattern text,
-      p_marketplace text DEFAULT NULL
+      p_marketplace text DEFAULT NULL,
+      p_connection_id text DEFAULT NULL
     )
     RETURNS TABLE (
       currency text, order_count int, gross numeric, vat numeric,
@@ -1079,6 +1089,9 @@ BEGIN
           AND (p_marketplace IS NULL
                OR (p_marketplace = '__unknown__' AND s.marketplace IS NULL)
                OR s.marketplace = p_marketplace)
+          AND (p_connection_id IS NULL
+               OR (p_connection_id = '__unassigned__' AND s.connection_id IS NULL)
+               OR s.connection_id::text = p_connection_id)
           AND (p_pattern IS NULL
                OR s.product_name ILIKE p_pattern
                OR s.external_order_id ILIKE p_pattern
@@ -1101,7 +1114,29 @@ BEGIN
     $func$;
   $sql$, schema_name);
 
-  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_summary(date, date, text, text, text, text, text) TO authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_sales_summary(date, date, text, text, text, text, text, text) TO authenticated', schema_name);
+
+  -- Token-free account list for any tenant member (platform_connections RLS is
+  -- admin-only) — see 056_multi_account_connections.sql.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.get_platform_accounts()
+    RETURNS TABLE (
+      id uuid, platform text, display_name text, status text,
+      is_active boolean, created_at timestamptz
+    )
+    LANGUAGE sql STABLE
+    SECURITY DEFINER
+    SET search_path = %1$I
+    AS $func$
+      SELECT pc.id, pc.platform, pc.display_name, pc.status, pc.is_active, pc.created_at
+      FROM platform_connections pc
+      WHERE %1$I.is_tenant_member()
+      ORDER BY pc.platform, pc.created_at;
+    $func$;
+  $sql$, schema_name);
+
+  EXECUTE format('REVOKE ALL ON FUNCTION %1$I.get_platform_accounts() FROM public', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.get_platform_accounts() TO authenticated', schema_name);
 
   -- Marketplace breakdown + filter options — see 052_sales_marketplace.sql.
   EXECUTE format($sql$

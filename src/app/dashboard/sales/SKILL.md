@@ -74,7 +74,14 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 - **Change server-side filter pushdown logic**: `_store/salesSlice.ts` →
   `fetchSalesPage` thunk. Filters map: `preset`/`dateFrom`/`dateTo` →
   `gte/lte("date", ...)`, `platform` → `eq("platform", ...)`,
-  `currency` → `eq("currency", ...)`, `status` → `eq("status", ...)`.
+  `currency` → `eq("currency", ...)`, `status` → `eq("status", ...)`,
+  `account` → `eq("connection_id", ...)` or `.is("connection_id", null)` for
+  `UNASSIGNED_ACCOUNT`.
+- **Add/change a filter dimension**: `SalesFilters`/`DEFAULT_SALES_FILTERS`/
+  `isDefaultFilters`/`filterSales` (`lib/utils/filters.ts`) +
+  `_store/salesFilterParams.ts` (+ test) + BOTH pushdown sites
+  (`fetchSalesPage` and `handleExport`) + `get_sales_summary`'s matching
+  trailing arg in a migration. Missing one makes the table, tiles and export disagree.
 - **Change pagination defaults** (page size, etc.): `src/lib/utils/pagedQuery.ts`
   (`DEFAULT_PAGE_SIZE`) — affects all features once they adopt this pattern.
 - **Change reducer logic**: `_store/salesSlice.ts` + its test.
@@ -877,3 +884,10 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
     too) would change the VAT figures themselves, not just the base, which is
     a product decision pending with the user, not a bug fix to make
     unilaterally.
+
+## Gotchas — marketplace accounts (056)
+
+- **Account picker resets on platform change** (Add/Edit modals set `connection_id: ""` in the same `setForm` as `platform`) — an account id from another platform must never be saved. The CSV import's assign-to-account never touches refund-matched rows or existing sales.
+- **The account UI is conditional.** `hasMultipleAccounts` gates the filter, column and (Task 12) modal picker; single-account tenants see nothing new. The CSV export's `account` column is always present.
+- **`UNASSIGNED_ACCOUNT` (`__unassigned__`) must match the literal in 056's `get_sales_summary`** — the summary tiles get it straight through `salesFilterParams`, the table/export via `.is("connection_id", null)`.
+- **`state.integrations.accounts` is read by members, not `connections`** — `connections` is admin-only (RLS) and would be `[]` for an accountant. Before 056 is applied `accounts` is `[]`, so every account UI stays hidden.

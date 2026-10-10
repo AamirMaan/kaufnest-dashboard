@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useAppSelector } from "@/store/hooks";
 import { hasMessagingAndListings } from "@/lib/utils/planGating";
+import { firstUsableAccount } from "@/lib/utils/activeAccounts";
 
 interface Props {
   children: ReactNode;
@@ -21,7 +22,8 @@ interface Props {
 export function BusinessEbayGate({ children }: Props) {
   const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
   const connections = useAppSelector((s) => s.integrations.connections);
-  const isEbayConnected = connections.find((c) => c.platform === "ebay")?.status === "connected";
+  // Any connected, non-paused eBay account — same rule as the server's getConnection shim.
+  const isEbayConnected = firstUsableAccount(connections, "ebay") !== null;
 
   if (!tenantPlan || !hasMessagingAndListings(tenantPlan)) {
     return (

@@ -12,8 +12,10 @@ import { useAccess } from "@/store/useAccess";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
+import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
+import { accountsInOrders, filterByAccount } from "./_lib/reviewAccounts";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
   ebay: "eBay",
@@ -32,6 +34,8 @@ export default function ReviewPage() {
   const [data, setData] = useState<ReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<IntegrationPlatform | null>(null);
+  // Connection id, or "all". Reset whenever the platform tab changes.
+  const [accountFilter, setAccountFilter] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -120,7 +124,10 @@ export default function ReviewPage() {
       .then((d: ReviewResponse) => {
         setData(d);
         const first = ALL_PLATFORMS.find((p) => d[p]);
-        if (first) setActiveTab(first);
+        if (first) {
+          setActiveTab(first);
+          setAccountFilter("all");
+        }
       })
       .catch(() => setData({}))
       .finally(() => setLoading(false));
@@ -130,9 +137,15 @@ export default function ReviewPage() {
     ? ALL_PLATFORMS.filter((p) => data[p])
     : [];
 
-  const activeOrders: ReviewOrder[] = activeTab
+  const tabOrders: ReviewOrder[] = activeTab
     ? (data?.[activeTab]?.orders ?? [])
     : [];
+  const tabAccounts = accountsInOrders(tabOrders);
+  // Account picker + column only matter when the tab mixes accounts.
+  const showAccounts = tabAccounts.length > 1;
+  // Falls back to "all" if the chosen account dropped out after a re-fetch.
+  const effectiveAccount = tabAccounts.some((a) => a.id === accountFilter) ? accountFilter : "all";
+  const activeOrders = filterByAccount(tabOrders, effectiveAccount);
 
   const unimportedOnTab = activeOrders.filter((o) => !o.imported);
 
@@ -198,7 +211,7 @@ export default function ReviewPage() {
       };
 
       if (!res.ok) {
-        const message = result.detail ?? result.error ?? "Import failed";
+        const message = integrationErrorMessage(result.error, result.detail ?? result.error ?? "Import failed");
         setImportError(message);
         toast.error("Import failed", message);
         return;
@@ -288,7 +301,7 @@ export default function ReviewPage() {
       const result = (await res.json()) as { imported?: number; error?: string; detail?: string };
 
       if (!res.ok) {
-        const message = result.detail ?? result.error ?? "Sync failed";
+        const message = integrationErrorMessage(result.error, result.detail ?? result.error ?? "Sync failed");
         setImportError(message);
         toast.error("Sync failed", message);
         return;
@@ -299,7 +312,7 @@ export default function ReviewPage() {
       if (failedPlatforms.length > 0) {
         toast.warning(
           "Statuses partially synced",
-          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.map((p) => PLATFORM_LABELS[p as IntegrationPlatform]).join(", ")} — try again later.`
+          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.map((p) => PLATFORM_LABELS[p as IntegrationPlatform] ?? p).join(", ")} — try again later.`
         );
       } else {
         toast.success(
@@ -360,6 +373,12 @@ export default function ReviewPage() {
         </div>
       )}
 
+      {data?.pausedAccounts && data.pausedAccounts.length > 0 && (
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Not shown (paused): {data.pausedAccounts.join(", ")}. Manage accounts on the Integrations page.
+        </p>
+      )}
+
       {platforms.length === 0 ? (
         <div className={`${cardCls} p-8 text-center`}>
           <p className="text-sm text-[var(--color-text-muted)]">
@@ -378,6 +397,7 @@ export default function ReviewPage() {
                   key={platform}
                   onClick={() => {
                     setActiveTab(platform);
+                    setAccountFilter("all");
                     setSelected(new Set());
                   }}
                   className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
@@ -402,6 +422,28 @@ export default function ReviewPage() {
             <p className="text-sm text-[var(--color-danger)] bg-[var(--color-danger-bg)] rounded-[var(--radius-btn)] px-3 py-2">
               {importError}
             </p>
+          )}
+
+          {showAccounts && (
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-[var(--color-text-muted)]">Account</span>
+              <select
+                value={effectiveAccount}
+                onChange={(e) => {
+                  setAccountFilter(e.target.value);
+                  // Don't import rows the user can no longer see.
+                  setSelected(new Set());
+                }}
+                className="rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
+              >
+                <option value="all">All accounts</option>
+                {tabAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           )}
 
           {/* Bulk fee-percent toolbar — fills advertisingFee/platformFee for
@@ -467,7 +509,7 @@ export default function ReviewPage() {
                       className="cursor-pointer disabled:cursor-not-allowed"
                     />
                   </th>
-                  {["Date", "Order ID", "Product", "Qty", "Amount", "Status"].map(
+                  {["Date", "Order ID", ...(showAccounts ? ["Account"] : []), "Product", "Qty", "Amount", "Status"].map(
                     (h) => (
                       <th
                         key={h}
@@ -495,7 +537,7 @@ export default function ReviewPage() {
                 {activeOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={showAccounts ? 12 : 11}
                       className="py-8 text-center text-sm text-[var(--color-text-muted)]"
                     >
                       No orders found in the last 90 days.
@@ -536,6 +578,11 @@ export default function ReviewPage() {
                         <td className="py-3 pr-4 font-mono text-xs text-[var(--color-text-faint)]">
                           {order.external_order_id}
                         </td>
+                        {showAccounts && (
+                          <td className="p-3 text-xs text-[var(--color-text-muted)]">
+                            {order.account_name}
+                          </td>
+                        )}
                         <td className="py-3 pr-4 text-[var(--color-text-base)]">
                           {order.product_name}
                         </td>

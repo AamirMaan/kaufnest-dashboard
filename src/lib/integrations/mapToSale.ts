@@ -27,12 +27,16 @@ export interface ReviewOrderFees {
  * Amazon's order-listing API returns a fee breakdown at that granularity.
  * `shipping_cost`/`shipping_charged` stay null either way — filling those in
  * remains a manual Edit Sale step, same as before this change.
+ *
+ * `connectionId` is the platform_connections row the order was fetched
+ * through (056); null for callers that don't know it.
  */
 export function normalizedOrderToSaleRow(
   order: NormalizedOrder,
   platform: IntegrationPlatform,
   connectedBy: string,
-  fees?: ReviewOrderFees
+  fees?: ReviewOrderFees,
+  connectionId?: string | null
 ): SaleInsert {
   return {
     platform,
@@ -56,6 +60,7 @@ export function normalizedOrderToSaleRow(
     refunded_amount: null,
     external_order_id: order.external_order_id,
     marketplace: order.marketplace ?? null,
+    connection_id: connectionId ?? null,
     tracking_number: null,
     shipping_carrier: null,
     ebay_fulfillment_id: null,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
-import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
+import { getConnection, getConnectionById, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter, createShippingFulfillment, cancelOrder } from "@/lib/integrations/ebay";
 import { isEbayIntegrationSyncedSale } from "@/lib/utils/filters";
 import type { Sale } from "@/types";
@@ -83,7 +83,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ saleId:
 
   let conn;
   try {
-    conn = await getConnection(client, "ebay");
+    conn = sale.connection_id
+      ? await getConnectionById(client, sale.connection_id)
+      : await getConnection(client, "ebay");
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to look up eBay connection";
     console.error("[ebay/sync-status] getConnection failed:", message);

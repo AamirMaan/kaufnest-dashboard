@@ -32,6 +32,7 @@ import {
   type ParsedRow,
 } from "./importFormats";
 import { dedupeImportRows } from "./dedupeImportRows";
+import { accountForImportRow, accountLabel, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { markExistingOrders, groupBackfills, type ExistingSaleRef } from "./marketplaceBackfill";
 import type { Sale, Platform } from "@/types";
 
@@ -128,6 +129,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const dispatch = useAppDispatch();
   const inventoryItems = useAppSelector((s) => s.inventory.items);
   const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
+  const accounts = useAppSelector((s) => s.integrations.accounts);
+  // Optional "assign every row to this account" (056); applies only to rows of its platform.
+  const [assignAccountId, setAssignAccountId] = useState("");
+  const assignAccount = accounts.find((a) => a.id === assignAccountId) ?? null;
   const fileRef = useRef<HTMLInputElement>(null);
   const [formatId, setFormatId] = useState<ImportFormatId>("generic");
   const [parsedSource, setParsedSource] = useState<ParsedSource | null>(null);
@@ -244,6 +249,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setFxReviewOpen(false);
     setFxRows([]);
     setPendingUnmatchedRefunds(null);
+    setAssignAccountId("");
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -595,7 +601,12 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // `payload`; refunds are applied via `update`, not `insert`, below.
     const payload = insertRows.map((r) => {
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
-      return { ...r.data!, created_by: user.id, product_id: productId };
+      return {
+        ...r.data!,
+        created_by: user.id,
+        product_id: productId,
+        connection_id: accountForImportRow(r.data!.platform, assignAccount),
+      };
     });
 
     let inserted: Sale[] = [];
@@ -972,6 +983,20 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
             ))}
           </Select>
         </Field>
+
+        {hasMultipleAccounts(accounts) && (
+          <div className="space-y-1">
+            <Field label="Assign rows to account (optional)">
+              <Select value={assignAccountId} onChange={(e) => setAssignAccountId(e.target.value)}>
+                <option value="">Leave unassigned</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{`${a.platform === "ebay" ? "eBay" : "Amazon"} · ${accountLabel(a)}`}</option>
+                ))}
+              </Select>
+            </Field>
+            <p className="text-xs text-[var(--color-text-muted)]">Only rows from the same platform are assigned.</p>
+          </div>
+        )}
 
         {dateDetection && (
           <label className="flex items-center gap-2 text-sm">

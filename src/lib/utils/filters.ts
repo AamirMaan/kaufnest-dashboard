@@ -1,5 +1,6 @@
 import type { Sale, Expense, Purchase } from "@/types";
 import type { AuditAction } from "@/types";
+import { UNASSIGNED_ACCOUNT } from "./platformAccounts";
 
 export type DatePreset =
   | "all"
@@ -146,6 +147,8 @@ export interface SalesFilters {
   dateTo: string;
   platform: string;
   marketplace: string;
+  /** Connection id, "all", or UNASSIGNED_ACCOUNT (no account). */
+  account: string;
   currency: string;
   status: string;
   search: string;
@@ -174,6 +177,7 @@ export const DEFAULT_SALES_FILTERS: SalesFilters = {
   dateTo: "",
   platform: "all",
   marketplace: "all",
+  account: "all",
   currency: "all",
   status: "all",
   search: "",
@@ -306,6 +310,8 @@ export function filterSales(sales: Sale[], f: SalesFilters): Sale[] {
   const range = resolveDateRange(f.preset, f.dateFrom, f.dateTo);
   if (range) result = result.filter((s) => s.date >= range.from && s.date <= range.to);
   if (f.platform !== "all") result = result.filter((s) => s.platform === f.platform);
+  if (f.account && f.account !== "all")
+    result = result.filter((s) => (f.account === UNASSIGNED_ACCOUNT ? !s.connection_id : s.connection_id === f.account));
   if (f.currency !== "all") result = result.filter((s) => s.currency === f.currency);
   if (f.status !== "all") result = result.filter((s) => s.status === f.status);
   if (f.search.trim())
@@ -349,6 +355,7 @@ export function isDefaultFilters(f: SalesFilters | ExpenseFilters | PurchaseFilt
     f.search === "" &&
     ("platform" in f ? f.platform === "all" : true) &&
     ("marketplace" in f ? f.marketplace === "all" : true) &&
+    ("account" in f ? f.account === "all" : true) &&
     ("status" in f ? f.status === "all" : true) &&
     ("category" in f ? f.category === "all" : true)
   );
