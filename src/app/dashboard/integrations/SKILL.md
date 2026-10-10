@@ -18,7 +18,9 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   *this* folder: add the platform to the `PLATFORMS` array and
   `PLATFORM_LABELS` map in `page.tsx`, and to `LABELS` in
   `_components/PlatformAccountsSection.tsx` and `PLATFORM_LABELS` in
-  `_components/ConnectionCard.tsx`.
+  `_components/ConnectionCard.tsx` (and `PLATFORM_LABELS` in
+  `review/page.tsx`). These label maps are independent copies — no shared
+  source of truth — so update all of them together.
   Also add the table row to `008_platform_integrations.sql` /
   `provision_tenant_schema()`'s `platform` CHECK constraint
   (`supabase/SKILL.md`).
@@ -38,6 +40,8 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
 - **Change the review page** (table columns, selection behaviour, import
   logic): `review/page.tsx` + optionally `api/integrations/review/route.ts`
   (if changing what fields are fetched or how `imported` is determined).
+- **Change the review page's account filter/column**: `review/page.tsx` +
+  `review/_lib/reviewAccounts.ts` (+ test).
 - **Add pagination to the review page**: `api/integrations/review/route.ts`
   (add `page`/`cursor` query param, thread through to `adapter.fetchOrders`)
   + `review/page.tsx` (add "Load more" button).
@@ -84,3 +88,4 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   and Amazon are now manual-review only. Do not re-add auto-sync without
   updating the review flow to handle already-synced orders correctly.
 - **Account state is derived, never stored.** Cards take `state`/`canResume` from `accountState`/`canResumeAccount` (`lib/utils/activeAccounts`) over ALL connections — pass the full list, not one platform's. Pause/resume/rename go through PATCH `/api/integrations/connections/[id]`; map failures with `integrationErrorMessage(json.error, json.error ?? fallback)` (409 = resume refused at cap). Reconnect uses `?reconnect=1` so the connect-time cap check is skipped.
+- **Review page account filter uses `effectiveAccount`, not `accountFilter`.** After Sync Statuses re-fetches, a previously chosen account may no longer be in the tab; the page falls back to "all" rather than showing an empty table. `errors` keys are account display names (not platforms) — `PLATFORM_LABELS[k] ?? k` handles both. Never drop `connection_id` from the import payload: the route rejects items without an active account.

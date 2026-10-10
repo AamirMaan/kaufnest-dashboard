@@ -37,7 +37,11 @@ tenant admin grants an exception via the Users feature).
   dispatches `setConnectionStatus`), and Reconnect on disconnected rows
   (`/connect?reconnect=1`, skips the connect-time cap check). PATCH success
   dispatches `upsertConnection`.
-- `_lib/accountSummary.ts` (+ test) — pure `platformHeading`, `needsReconnectBanner`.
+- `_lib/accountSummary.ts` (+ test) — pure `platformHeading` (used by
+  `PlatformAccountsSection`) and `needsReconnectBanner` (used by `page.tsx`).
+- `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
+  accounts in a tab, first-seen order) and `filterByAccount` (`"all"` or one
+  `connection_id`), used by `review/page.tsx`.
 - `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
   Fetches `GET /api/integrations/review` on mount (only when eligible), renders
   platform tabs (eBay / Amazon), an order table with checkbox selection
@@ -47,6 +51,14 @@ tenant admin grants an exception via the Users feature).
   `salesSlice`. Applies the same plan/`can("integrations", 2)` guards as
   `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
+  **Accounts (multi-account)**: when the active tab's orders span more than one
+  account, an "Account" `<select>` (All accounts / each account) sits above the
+  fee toolbar and an "Account" column (`order.account_name`) appears after Order
+  ID. Changing the account clears the selection; switching tab resets it to
+  "all". `pausedAccounts` from the response renders a "Not shown (paused)" note.
+  Import/sync failures map `INTEGRATION_ACCOUNT_*` codes via
+  `integrationErrorMessage`. The import payload is the full `ReviewOrder`, so
+  each item carries its `connection_id` (the route 409s without it).
   **"Sync Statuses" button (2026-09-07)**: a second, independent submission
   path to the *same* import route — re-fetches `GET /api/integrations/review`
   for fresh platform data, collects every order already marked `imported:
@@ -154,4 +166,5 @@ upsert them into `sales` and update `last_synced_at` per platform.
 
 ## Tests
 
-`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts` and `_lib/accountSummary.test.ts`.
+`npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts`,
+`_lib/accountSummary.test.ts` and `review/_lib/reviewAccounts.test.ts`.
