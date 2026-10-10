@@ -27,6 +27,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   Product-name cells are `<Link>`s to `/dashboard/sales/[id]`. The Platform
   column cell also renders the order's `marketplace` (e.g. `amazon.de`) as a
   small muted line under the `PlatformBadge` when set.
+  **Account (multi-account, 056)**: once any platform has 2+ accounts
+  (`hasMultipleAccounts(state.integrations.accounts)`, `lib/utils/platformAccounts.ts`)
+  the filter bar gains an "Account" select (each account as "eBay · name",
+  plus "Unassigned" = `UNASSIGNED_ACCOUNT`) and the table an "Account" column
+  (`accountName(accounts, s.connection_id)` badge, "—" when unset). Hidden for
+  single-account tenants. The export always appends an `account` column.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -34,7 +40,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   Profit rows when a cost of goods can be resolved — see "Linked Purchase (cost
   of goods)" below for the FIFO-vs-linked-purchase precedence, Phase 3 Task 6)
   and Details card (description/linked product/**Fulfilled from** location
-  (Phase 3 Task 6, advanced-inventory tenants only)/restock flag/audit fields).
+  (Phase 3 Task 6, advanced-inventory tenants only)/**Account** (the sale's
+  `connection_id` resolved via `accountName`, only when it resolves)/restock
+  flag/audit fields).
   The header row shows the order's **marketplace** (e.g. `amazon.de`) under the
   PlatformBadge when set (Task 7, 2026-09-28).
   Linked purchase is resolved from `state.purchases.items` (fast path) or a
@@ -57,11 +65,14 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `_components/orderMath.ts`.
 - `_store/salesFilterParams.ts` (+ colocated `.test.ts`) — pure mapper from
   `SalesFilters` to the RPC/query param shape (`p_from`/`p_to`/`p_platform`/
-  `p_currency`/`p_status`/`p_pattern`/`p_marketplace`), shared by
+  `p_currency`/`p_status`/`p_pattern`/`p_marketplace`/`p_connection_id`), shared by
   `fetchSalesPage` and `fetchSalesSummary` so the table and the summary tiles
   can never disagree about which filter predicates apply. `p_marketplace` is
   `null` for `"all"`, the marketplace string otherwise, or the
   `UNKNOWN_MARKETPLACE` sentinel (`__unknown__`) — see `lib/utils/marketplace.ts`.
+  `p_connection_id` (056) is `null` for `"all"`, a connection id, or
+  `UNASSIGNED_ACCOUNT` (`__unassigned__`) = `connection_id IS NULL`;
+  `fetchSalesPage`/`handleExport` turn the sentinel into `.is("connection_id", null)`.
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.
@@ -590,7 +601,7 @@ rule as `Purchase`'s trigger-owned landed-cost columns.
 - `app/dashboard/purchases/_store/purchasesSlice` — `addPurchase` action imported
   by `[id]/page.tsx` to hydrate Redux when the linked purchase is fetched on
   direct-URL load; `state.purchases.items` is also read for the fast path
-- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows}`, `store/slices/companyProfileSlice`
+- `lib/utils/{audit,currency,date,filters,generateInvoice,csv,fetchAllRows,platformAccounts}`, `store/slices/companyProfileSlice`
   (`generateInvoice` also exports `InvoiceOptions` — import from there when passing custom fields to generate functions)
 - `lib/utils/importAliases.ts` — shared header-alias vocabulary and
   `resolveHeaders`/`canonicalizeRow` (also used by Expenses); `importFormats.ts`
@@ -720,8 +731,9 @@ fallback), fetches ALL matching rows via `fetchAllRows`, and calls
 `exportToCsv(filename, headers, rows)` from `lib/utils/csv`.
 Exported columns: `date, product_name, platform, marketplace, quantity, unit_price, total_amount,
 currency, vat_rate, vat_amount, status, description, shipping_cost, shipping_charged,
-advertising_fee, platform_fee` (`marketplace` added Task 6, 2026-09-28 — blank
-when unset). Export button is disabled when no rows match the filter.
+advertising_fee, platform_fee, account` (`marketplace` added Task 6, 2026-09-28 — blank
+when unset; `account` = the account's display name via `accountName`, blank when
+unset or unknown). Export button is disabled when no rows match the filter.
 
 **Import** (`ImportSalesModal` + `importFormats.ts`): the modal has a
 **format dropdown** with three formats defined in the pure registry

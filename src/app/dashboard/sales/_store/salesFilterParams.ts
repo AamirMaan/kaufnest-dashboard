@@ -14,6 +14,8 @@ export interface SalesSummaryParams {
   p_pattern: string | null;
   /** Arg name matches get_sales_summary in 052. */
   p_marketplace: string | null;
+  /** Arg name matches get_sales_summary in 056; UNASSIGNED_ACCOUNT = connection_id IS NULL. */
+  p_connection_id: string | null;
 }
 
 /**
@@ -31,5 +33,6 @@ export function salesFilterParams(f: SalesFilters): SalesSummaryParams {
     p_status: f.status === "all" ? null : f.status,
     p_pattern: ilikePattern(f.search),
     p_marketplace: f.marketplace === "all" ? null : f.marketplace,
+    p_connection_id: f.account === "all" ? null : f.account,
   };
 }
