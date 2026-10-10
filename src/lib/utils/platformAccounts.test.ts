@@ -1,4 +1,4 @@
-import { hasMultipleAccounts, accountOptionsFor, accountName, accountLabel, UNASSIGNED_ACCOUNT } from "./platformAccounts";
+import { hasMultipleAccounts, accountOptionsFor, accountName, accountLabel, accountForImportRow, UNASSIGNED_ACCOUNT } from "./platformAccounts";
 import type { PlatformAccount } from "@/types";
 
 const a = (id: string, platform: "ebay" | "amazon", created_at: string, display_name: string | null = id): PlatformAccount => ({
@@ -32,5 +32,16 @@ describe("platformAccounts", () => {
   });
   it("accountLabel prefers the display name", () => {
     expect(accountLabel(accounts[0])).toBe("e2");
+  });
+});
+
+describe("accountForImportRow", () => {
+  const ebay = a("e1", "ebay", "2026-01-01", "Main");
+  it("assigns the account to rows of its platform", () => {
+    expect(accountForImportRow("ebay", ebay)).toBe("e1");
+  });
+  it("leaves other platforms and no-selection unassigned", () => {
+    expect(accountForImportRow("amazon", ebay)).toBeNull();
+    expect(accountForImportRow("ebay", null)).toBeNull();
   });
 });

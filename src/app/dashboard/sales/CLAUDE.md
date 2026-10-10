@@ -136,7 +136,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   precedence rule. `computeGrossProfit(netProceeds, linkedPurchase)` is kept
   for existing callers/tests but is no longer called by `[id]/page.tsx`. Used
   by `[id]/page.tsx`.
-- `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms. Both modals render an optional **Marketplace** field after Platform/Date (AddSaleModal) or Platform select (EditSaleModal), accepting a free-text regional storefront name (`amazon.de`, `ebay.co.uk`, …) which is normalized on save via `normalizeMarketplace` (`lib/utils/marketplace.ts`). Marketplace is included in the edit audit-log diff (EditSaleModal).
+- `_components/AddSaleModal.tsx` / `EditSaleModal.tsx` — create/edit forms. Both modals render an optional **Marketplace** field after Platform/Date (AddSaleModal) or Platform select (EditSaleModal), accepting a free-text regional storefront name (`amazon.de`, `ebay.co.uk`, …) which is normalized on save via `normalizeMarketplace` (`lib/utils/marketplace.ts`). Marketplace is included in the edit audit-log diff (EditSaleModal). An optional **Account** `Select` (056) follows Marketplace when the chosen platform has 2+ accounts (`accountOptionsFor(state.integrations.accounts, platform)`); "" = Unassigned → `connection_id: null`. Changing Platform resets it. EditSaleModal also shows it whenever the sale already has a `connection_id`, keeping a removed account selectable ("Removed account"), and diffs `connection_id` in the audit log.
 - `_components/GenerateLabelModal.tsx` (Task 6 of the shipping-label-generation
   plan, 2026-09-06) — two-step modal: `Props { sale: Sale | null; onClose;
   onSuccess(shipment: Shipment) }`, `sale` non-null means open. Step 1
@@ -179,6 +179,11 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   RETURN/FC_TRANSFER/INBOUND/blank/summary noise, so a toast without it reads as
   though the import quietly lost hundreds of rows. One clause only — the
   per-reason breakdown stays in the pre-import preview.
+  **Assign rows to account (056)**: when `hasMultipleAccounts(accounts)`, an
+  optional select under "Import format" stamps `connection_id` on inserted rows
+  via `accountForImportRow(row.platform, account)` — only rows on the chosen
+  account's platform; others stay unassigned. Refund updates and the duplicate
+  pre-check ignore it. Cleared in `reset()`.
 - `_components/importFormats.ts` (+ colocated `.test.ts`) — pure import-format
   registry: `IMPORT_FORMATS` (generic/amazon/ebay), German status synonyms
   (`normalizeStatus` — includes Amazon's `sale` → `delivered`, since Amazon's

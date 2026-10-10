@@ -25,3 +25,8 @@ export function accountName(accounts: PlatformAccount[], id: string | null | und
   const a = accounts.find((x) => x.id === id);
   return a ? accountLabel(a) : null;
 }
+
+/** CSV import "Assign all rows to account": applies only to rows on the account's own platform. */
+export function accountForImportRow(rowPlatform: string, account: PlatformAccount | null): string | null {
+  return account && account.platform === rowPlatform ? account.id : null;
+}

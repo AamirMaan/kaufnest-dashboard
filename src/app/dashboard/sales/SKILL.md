@@ -887,6 +887,7 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 
 ## Gotchas — marketplace accounts (056)
 
+- **Account picker resets on platform change** (Add/Edit modals set `connection_id: ""` in the same `setForm` as `platform`) — an account id from another platform must never be saved. The CSV import's assign-to-account never touches refund-matched rows or existing sales.
 - **The account UI is conditional.** `hasMultipleAccounts` gates the filter, column and (Task 12) modal picker; single-account tenants see nothing new. The CSV export's `account` column is always present.
 - **`UNASSIGNED_ACCOUNT` (`__unassigned__`) must match the literal in 056's `get_sales_summary`** — the summary tiles get it straight through `salesFilterParams`, the table/export via `.is("connection_id", null)`.
 - **`state.integrations.accounts` is read by members, not `connections`** — `connections` is admin-only (RLS) and would be `[]` for an accountant. Before 056 is applied `accounts` is `[]`, so every account UI stays hidden.

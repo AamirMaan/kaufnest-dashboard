@@ -15,6 +15,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { normalizeMarketplace } from "@/lib/utils/marketplace";
+import { accountLabel, accountOptionsFor } from "@/lib/utils/platformAccounts";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, statusLabel } from "./orderStatus";
 import { FeeAmountOrPercentField } from "./FeeAmountOrPercentField";
@@ -36,6 +37,8 @@ interface Props {
 interface FormState {
   platform: Platform;
   marketplace: string;
+  /** Marketplace account (056); "" = unassigned. Reset when platform changes. */
+  connection_id: string;
   product_name: string;
   product_id: string;
   quantity: string;
@@ -69,6 +72,7 @@ function makeDefaults(defaultVatRate: number): FormState {
   return {
     platform: "amazon",
     marketplace: "",
+    connection_id: "",
     product_name: "",
     product_id: "",
     quantity: "1",
@@ -102,8 +106,11 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
   const { can } = useAccess();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const accounts = useAppSelector((s) => s.integrations.accounts);
   const { error: toastError } = useToast();
   const [form, setForm] = useState<FormState>(() => makeDefaults(defaultVatRate));
+  // Account picker only shows once this platform has 2+ accounts.
+  const accountOptions = accountOptionsFor(accounts, form.platform);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFees, setShowFees] = useState(false);
@@ -178,6 +185,7 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
         .insert({
           platform: form.platform,
           marketplace: normalizeMarketplace(form.marketplace),
+          connection_id: form.connection_id || null,
           product_name: form.product_name.trim(),
           product_id: form.product_id || null,
           quantity: qty,
@@ -371,7 +379,9 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
           <Field label="Platform" required>
             <Select
               value={form.platform}
-              onChange={(e) => set("platform", e.target.value as Platform)}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, platform: e.target.value as Platform, connection_id: "" }))
+              }
             >
               {PLATFORMS.map((p) => (
                 <option key={p} value={p}>
@@ -401,6 +411,17 @@ export function AddSaleModal({ open, onClose, onSuccess }: Props) {
             placeholder="e.g. amazon.de, ebay.co.uk"
           />
         </Field>
+
+        {accountOptions.length >= 2 && (
+          <Field label="Account">
+            <Select value={form.connection_id} onChange={(e) => set("connection_id", e.target.value)}>
+              <option value="">Unassigned</option>
+              {accountOptions.map((a) => (
+                <option key={a.id} value={a.id}>{accountLabel(a)}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
 
         {tracksStock && (
           <FulfillmentLocationField
