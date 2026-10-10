@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient, verifyPlatformAdmin } from "@/lib/supabase/control";
 import { currentPeriod, sumCalls, callsByUser, type UsageRow } from "@/lib/ai/quota";
-import { getAiGenerationLimit } from "@/lib/utils/planGating";
+import { getPlanCatalog } from "@/lib/plans/catalog";
+import { entitlementsOf, getAiGenerationLimit } from "@/lib/plans/entitlements";
 import type { TenantPlan } from "@/types";
 
 function errorMessage(err: unknown): string {
@@ -44,6 +45,8 @@ export async function GET() {
       throw new Error(`Failed to read AI usage: ${usageError.message}`);
     }
 
+    const catalog = await getPlanCatalog();
+
     const allRows = (rows as (UsageRow & { tenant_id: string })[] | null) ?? [];
 
     const usage = ((tenants as { id: string; plan: TenantPlan }[] | null) ?? []).map(
@@ -52,7 +55,7 @@ export async function GET() {
         return {
           tenantId: tenant.id,
           used: sumCalls(mine),
-          limit: getAiGenerationLimit(tenant.plan),
+          limit: getAiGenerationLimit(entitlementsOf(catalog.find((p) => p.key === tenant.plan) ?? null)),
           byUser: callsByUser(mine),
         };
       }

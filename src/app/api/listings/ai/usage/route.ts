@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createControlClient } from "@/lib/supabase/control";
 import { readTenantUsage, sumCalls, callsByUser } from "@/lib/ai/quota";
-import { getAiGenerationLimit } from "@/lib/utils/planGating";
+import { getEntitlements } from "@/lib/plans/catalog";
+import { getAiGenerationLimit } from "@/lib/plans/entitlements";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import type { Profile, TenantPlan } from "@/types";
 
@@ -45,7 +46,7 @@ export async function GET() {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
 
-    const limit = getAiGenerationLimit(tenant.plan);
+    const limit = getAiGenerationLimit(await getEntitlements(tenant.plan));
     const rows = await readTenantUsage(tenant.id);
     const tenantUsed = sumCalls(rows);
     const byUser = callsByUser(rows);

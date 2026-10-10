@@ -28,6 +28,8 @@ plan changes, and cancellation, with the webhook as the sole writer of
 2. Never hardcode a schema name — read it from `user.app_metadata.tenant_schema`.
 3. Control plane client (`createControlClient`) is server-only — never in Client Components.
 4. Stripe webhooks are the source of truth for `plan`/`status` — never write those directly from UI.
+   `/admin` may also assign a plan (`isAssignablePlan`); plan *definitions*
+   live in `control.plans` and are edited only through `/api/admin/plans`.
 5. **Tenant schema DDL must use `run_on_all_tenant_schemas`** — never write
    `ALTER TABLE tenant_kaufnest.*` directly in a new migration. There are
    multiple live tenants (see `supabase/SKILL.md`'s intro for the current
@@ -47,15 +49,19 @@ New shared code from the migration:
   middleware equivalent — do NOT add `src/middleware.ts`, having both crashes
   the dev server), updated for tenant-aware RBAC profile lookups
 - `src/store/slices/companyProfileSlice.ts` — per-tenant company profile state
-- `src/lib/stripe.ts` (Stripe client + `PLANS` price-ID map) +
-  `src/lib/utils/planGating.ts` (feature gates) +
-  `src/lib/utils/pricing.ts` (the three paid plans' prices/copy, feature
-  ticks derived from `planGating.ts`) — billing helpers
-- `src/app/admin/` — Boughtopia platform admin panel (`/admin`)
+- `src/lib/stripe.ts` (Stripe client only) + `src/lib/plans/` (plan catalog:
+  `entitlements.ts` pure gating helpers, `catalog.ts` server-only 60 s
+  cached loader of `control.plans`, `validatePlan.ts`, `stripeSync.ts`,
+  `resolvePlanKey.ts`) + `src/lib/utils/pricing.ts` (pricing cards built
+  from catalog plans). Plan prices and Stripe price ids live in
+  `control.plans`, not env vars
+- `src/app/admin/` — Boughtopia platform admin panel (`/admin`), including
+  Plans management (`/admin/plans`)
 - `src/app/api/admin/` — provision/impersonate/list API routes
 - `src/app/api/billing/` — checkout, change-plan, cancel, status, and
-  webhook routes. The webhook is the only writer of `control.tenants.plan`/
-  `status`; the other four only talk to Stripe.
+  webhook routes. The webhook is the only billing writer of `control.tenants.plan`/
+  `status` (platform admins also assign plans from `/admin`); the other four only
+  talk to Stripe.
 - `src/components/billing/PlanPicker.tsx` — shared plan-picker cards, used
   by `/trial-expired` and Settings' Billing section
 - `src/lib/billing/authGuard.ts` — `requireBillingAdmin()`, gates the
@@ -94,7 +100,8 @@ New shared code from the migration:
 - `src/lib/ai/` — Anthropic client, prompt builders, quota metering and the
   AI route guard (server-only, never imported client-side). Quota lives in
   `control.tenant_ai_usage` (Project A); the per-plan allowance is
-  `aiGenerationsPerMonth` in `lib/utils/planGating.ts`. AI visibility is
+  `aiGenerationsPerMonth` on the tenant's `control.plans` row (read via
+  `src/lib/plans/`). AI visibility is
   `control.tenants.ai_enabled`, toggled per tenant from `/admin`.
 - `src/app/api/listings/ai/` — describe, aspects and usage routes.
 - `src/lib/utils/sanitizeListingHtml.ts` — eBay-safe HTML allowlist, applied

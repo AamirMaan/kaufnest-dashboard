@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-export function Hero() {
+export function Hero({ trialDays }: { trialDays: number }) {
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-emerald-50 via-white to-white" />
@@ -16,7 +16,7 @@ export function Hero() {
 
       <div className="mx-auto max-w-3xl px-6 pt-24 pb-16 text-center">
         <span className="inline-flex items-center rounded-full bg-emerald-100 px-3.5 py-1.5 text-sm font-semibold text-emerald-700">
-          14 days free · full access · no credit card
+          {trialDays} days free · full access · no credit card
         </span>
         <h1 className="mt-6 text-5xl font-bold tracking-tight text-(--color-text-strong) sm:text-7xl">
           Bookkeeping for <span className="text-emerald-600">multi-platform sellers</span>

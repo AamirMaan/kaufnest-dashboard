@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getConnection } from "@/lib/integrations/tokenStore";
 import { searchCategories } from "@/lib/integrations/ebay/publish";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 export async function GET(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const query = req.nextUrl.searchParams.get("q")?.trim();

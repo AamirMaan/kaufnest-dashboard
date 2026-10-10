@@ -14,12 +14,12 @@ tenant admin grants an exception via the Users feature).
 - `page.tsx` — `"use client"`. Default export wraps `IntegrationsContent` in
   `<Suspense fallback={null}>` (required because it reads `useSearchParams()`
   for the `connected=`/`error=` query params set by the OAuth callback route
-  and shows a `Toast` for each). Reads `tenantPlan` from `state.currentUser`
+  and shows a `Toast` for each). Reads `ent`/`availability` from `usePlan()`
   and `connections` from `state.integrations.connections`. `canManage =
   can("integrations", 2)` via `useAccess()` (Task 5 — replaced
   `hasPermission(role, "manage_integrations")`). Three render branches, in
   order:
-  1. `!tenantPlan || !hasPlatformIntegrations(tenantPlan)` → upgrade-prompt
+  1. `!ent || !hasPlatformIntegrations(ent)` → upgrade-prompt
      card linking to `/dashboard/settings`.
   2. `!canManage` → "contact your admin" message.
   3. Otherwise → a `sm:grid-cols-2` grid of `<ConnectionCard>`, one per
@@ -115,10 +115,17 @@ upsert them into `sales` and update `last_synced_at` per platform.
 
 ## Plan gating
 
-`tenantPlan` (`TenantPlan | null`) is hydrated into
-`state.currentUser.tenantPlan` by `dashboard/layout.tsx` (fetched from
-`control.tenants` via `createControlClient()`). `hasPlatformIntegrations(plan)`
-(`src/lib/utils/planGating.ts`) returns `true` only for `pro`/`business`.
+`state.currentUser.planEntitlements` is hydrated by `dashboard/layout.tsx`
+from the plan catalog (`control.plans`, `getPlanCatalog()`) and read via
+`usePlan()`. `hasPlatformIntegrations(ent)` (`src/lib/plans/entitlements.ts`)
+returns the plan's `platformIntegrations` flag; null (not hydrated) ⇒ not
+entitled. The upgrade copy comes from `availability("platformIntegrations",
+…)` — never hardcode plan names. The API routes (`review`, `review/import`,
+`[platform]/connect`) check `getEntitlements(tenant.plan)` server-side: 500
+"Could not check your plan" if the `control.tenants` lookup (`maybeSingle`)
+or the catalog read fails, 403 "Platform
+integrations are not included in your plan." otherwise (a missing tenant row
+now fails closed — the old `?? "trial"` fallback is gone).
 
 ## Shared dependencies
 
@@ -126,13 +133,13 @@ upsert them into `sales` and update `last_synced_at` per platform.
   imported here directly, only via the API routes); `mapToSale.ts`'s
   `normalizedOrderToSaleRow`/`ReviewOrderFees` specifically for the fee-entry
   feature above
-- `src/lib/utils/planGating` — `hasPlatformIntegrations`
+- `src/lib/plans/entitlements` — `hasPlatformIntegrations`
 - `src/lib/utils/currency` — `computeFeeFromPercent` (bulk fee-percent toolbar)
 - `src/store/useAccess` — `useAccess().can("integrations", 2)` (Task 5 —
   replaced `lib/utils/permissions`' `hasPermission`)
 - `src/lib/utils/date` — `formatDateTime`
 - `components/layout/PageHeader`, `components/ui/{Badge,Button,Toast}`
-- `store/slices/currentUserSlice` — `tenantPlan`
+- `store/usePlan` — `ent`, `availability`
 - `types` — `IntegrationPlatform`, `PlatformConnection`,
   `PlatformConnectionStatus`
 

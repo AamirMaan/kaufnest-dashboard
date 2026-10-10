@@ -473,7 +473,7 @@ export interface CompanyProfile {
 
 // ─── SaaS / Multi-Tenant ──────────────────────────────────────────────────────
 
-export type TenantPlan = "trial" | "starter" | "pro" | "business";
+export type TenantPlan = string; // a control.plans key (see src/lib/plans/)
 // "provisioning" is a transient state written by /api/signup/provision before
 // it creates the tenant schema, so a crash mid-provision leaves a visible row
 // in /admin rather than an invisible half-tenant. It flips to "active" on

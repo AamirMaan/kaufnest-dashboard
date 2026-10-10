@@ -5,13 +5,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
+import { usePlanOptions } from "./usePlanOptions";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
-
-type Plan = "trial" | "starter" | "pro" | "business";
 
 const labelCls =
   "block text-[11px] font-medium uppercase tracking-wider text-(--color-text-faint) mb-1";
@@ -22,12 +21,13 @@ export function AddTenantModal({ open, onClose }: Props) {
   const toast = useToast();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [plan, setPlan] = useState<Plan>("trial");
+  const [plan, setPlan] = useState<string>("trial");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
   const [referral, setReferral] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { options: planOpts, error: plansError } = usePlanOptions(open, null, plan);
 
   function handleNameChange(value: string) {
     setName(value);
@@ -119,14 +119,16 @@ export function AddTenantModal({ open, onClose }: Props) {
           <span className={labelCls}>Plan</span>
           <select
             value={plan}
-            onChange={(e) => setPlan(e.target.value as Plan)}
+            onChange={(e) => setPlan(e.target.value)}
             className={selectCls}
           >
-            <option value="trial">Trial (14 days)</option>
-            <option value="starter">Starter</option>
-            <option value="pro">Pro</option>
-            <option value="business">Business</option>
+            {planOpts.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
+          {plansError && (
+            <p className="text-xs text-(--color-danger) mt-1">Couldn&apos;t load plans.</p>
+          )}
         </div>
 
         <Field label="Admin Email" required>

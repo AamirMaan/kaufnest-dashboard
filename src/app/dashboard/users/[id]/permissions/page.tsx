@@ -36,7 +36,7 @@ export default function UserPermissionsPage({ params }: PageProps) {
   const { success, error: toastError } = useToast();
 
   const currentUserRole = useAppSelector((s) => s.currentUser.profile?.role);
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const planEnt = useAppSelector((s) => s.currentUser.planEntitlements);
   const target = useAppSelector((s) => s.users.items.find((u) => u.id === id)) ?? null;
 
   const [saved, setSaved] = useState<AccessMap | null>(null);
@@ -256,7 +256,7 @@ export default function UserPermissionsPage({ params }: PageProps) {
             </thead>
             <tbody>
               {SECTIONS.map((section) => {
-                const planOk = planAllows(section.key, tenantPlan);
+                const planOk = planAllows(section.key, planEnt);
                 const isCustom = customKeys.has(section.key);
                 return (
                   <tr

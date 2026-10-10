@@ -5,10 +5,13 @@ import {
   fetchCategoryAspects,
   getProductIdentifierNotApplicableText,
 } from "@/lib/integrations/ebay/publish";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 export async function GET(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const categoryId = req.nextUrl.searchParams.get("categoryId")?.trim();

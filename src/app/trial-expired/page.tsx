@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PlanPicker } from "@/components/billing/PlanPicker";
-import type { PaidPlan } from "@/lib/utils/pricing";
+import type { PricedPlan } from "@/lib/utils/pricing";
 import type { TenantPlan } from "@/types";
 
 interface BillingStatus {
@@ -10,6 +10,8 @@ interface BillingStatus {
   hasSubscription: boolean;
   cancelAtPeriodEnd: boolean;
   canManageBilling: boolean;
+  /** The plans this tenant may buy, built server-side from control.plans. */
+  plans: PricedPlan[];
 }
 
 const RECONCILE_ATTEMPTS = 3;
@@ -50,8 +52,11 @@ async function pollBillingStatus(
 
 export default function TrialExpiredPage() {
   const [status, setStatus] = useState<BillingStatus | null>(null);
-  const [loadingPlan, setLoadingPlan] = useState<PaidPlan | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // True once the first status read settled (either way) — until then the
+  // plan list is unknown, so show a loading line rather than "no plans".
+  const [statusSettled, setStatusSettled] = useState(false);
   const [confirmingCheckout, setConfirmingCheckout] = useState(false);
   const mountedRef = useRef(true);
 
@@ -70,7 +75,10 @@ export default function TrialExpiredPage() {
       .catch(() => {
         // A failed status read shouldn't block the page — it just means we
         // can't gate PlanPicker or detect an already-active subscription;
-        // the safe default (render PlanPicker) still applies.
+        // PlanPicker then renders with no plans (its "try again later" copy).
+      })
+      .finally(() => {
+        if (mountedRef.current) setStatusSettled(true);
       });
   }, []);
 
@@ -114,7 +122,7 @@ export default function TrialExpiredPage() {
     }
   }, [status]);
 
-  async function handleSelectPlan(plan: PaidPlan) {
+  async function handleSelectPlan(plan: string) {
     setError(null);
     setLoadingPlan(plan);
     try {
@@ -143,7 +151,7 @@ export default function TrialExpiredPage() {
           Your free trial has ended
         </h1>
         <p className="text-sm text-(--color-text-muted)">
-          Your 14-day Boughtopia trial is over. All of your data is safe and
+          Your Boughtopia trial is over. All of your data is safe and
           will be exactly as you left it as soon as you choose a plan.
         </p>
 
@@ -163,7 +171,15 @@ export default function TrialExpiredPage() {
             </p>
           ) : (
             <div className="mt-8">
-              <PlanPicker onSelectPlan={handleSelectPlan} loadingPlan={loadingPlan} />
+              {statusSettled ? (
+                <PlanPicker
+                  plans={status?.plans ?? []}
+                  onSelectPlan={handleSelectPlan}
+                  loadingPlan={loadingPlan}
+                />
+              ) : (
+                <p className="text-sm text-(--color-text-muted)">Loading plans…</p>
+              )}
             </div>
           ))}
       </div>

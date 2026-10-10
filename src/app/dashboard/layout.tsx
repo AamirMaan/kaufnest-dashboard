@@ -7,6 +7,15 @@ import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import { parseAccessMap } from "@/lib/permissions/sections";
+import { getPlanCatalog } from "@/lib/plans/catalog";
+import {
+  NO_ENTITLEMENTS,
+  entitlementsOf,
+  planNamesByFeature,
+  toWireEntitlements,
+  type PlanEntitlements,
+  type PlanFeature,
+} from "@/lib/plans/entitlements";
 import type {
   Profile,
   Sale,
@@ -159,7 +168,8 @@ export default async function DashboardLayout({
   // Boughtopia platform admin? Drives the "Admin Panel" + "Dropshipping" sidebar links.
   const isAdmin = await isAdminPromise;
 
-  // Tenant's subscription plan — drives platform-integrations gating.
+  // Tenant's subscription plan key (display/billing). Plan-feature gating
+  // uses the entitlements loaded from control.plans below, not this key.
   // ai_enabled is the platform-admin AI visibility switch (control-plane 007).
   // shipping_labels_enabled is the platform-admin EasyPost visibility switch
   // (control-plane 010) — no plan tie, defaults false.
@@ -180,6 +190,19 @@ export default async function DashboardLayout({
     tenantPlan = (tenant?.plan as TenantPlan | undefined) ?? null;
     aiEnabled = (tenant?.ai_enabled as boolean | undefined) ?? false;
     shippingLabelsEnabled = (tenant?.shipping_labels_enabled as boolean | undefined) ?? false;
+  }
+
+  // Plan entitlements + upgrade-copy plan names now come from control.plans
+  // (src/lib/plans/catalog.ts), not a hardcoded table.
+  let planEntitlements: PlanEntitlements = NO_ENTITLEMENTS;
+  let namesByFeature: Record<PlanFeature, string[]> | null = null;
+  try {
+    const catalog = await getPlanCatalog();
+    planEntitlements = entitlementsOf(catalog.find((p) => p.key === tenantPlan) ?? null);
+    namesByFeature = planNamesByFeature(catalog);
+  } catch (err) {
+    // Fail closed: no plan features until the catalog is readable again.
+    console.error("[dashboard/layout] plan catalog unavailable", err);
   }
 
   // Section access (055). get_my_access() applies role defaults + the
@@ -205,6 +228,8 @@ export default async function DashboardLayout({
       currentUser={profile}
       companyProfile={companyProfile ?? undefined}
       tenantPlan={tenantPlan}
+      planEntitlements={toWireEntitlements(planEntitlements)}
+      planNamesByFeature={namesByFeature}
       aiEnabled={aiEnabled}
       shippingLabelsEnabled={shippingLabelsEnabled}
       access={access}

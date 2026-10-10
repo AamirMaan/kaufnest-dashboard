@@ -206,7 +206,7 @@ RULES: list[Rule] = [
         ),
         pattern=re.compile(
             r"""from\s+["'](@/lib/supabase/(server|control)"""
-            r"""|@/lib/integrations[^"']*|@/lib/stripe|stripe)["']"""
+            r"""|@/lib/integrations[^"']*|@/lib/plans/(catalog|stripeSync)|@/lib/stripe|stripe)["']"""
         ),
         requires_file_pattern=re.compile(r"""^\s*["']use client["']"""),
         path_include=(r"^src/.*\.tsx?$",),

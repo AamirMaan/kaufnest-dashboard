@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { AiUsageBreakdown } from "../../_components/AiUsageBreakdown";
 import { TenantDetailActions } from "../../_components/TenantDetailActions";
-import { PLAN_VARIANT, STATUS_VARIANT } from "../../_components/tenantVariants";
+import { planVariant, STATUS_VARIANT } from "../../_components/tenantVariants";
 import type { Tenant } from "@/types";
 import { ArrowLeft, Building2 } from "lucide-react";
 
@@ -77,7 +77,7 @@ export default function TenantDetailPage({ params }: PageProps) {
               <h1 className="text-2xl font-bold text-(--color-text-strong)">{tenant.name}</h1>
               <p className="text-xs text-(--color-text-faint) font-mono">{tenant.schema_name}</p>
             </div>
-            <Badge label={tenant.plan} variant={PLAN_VARIANT[tenant.plan]} />
+            <Badge label={tenant.plan} variant={planVariant(tenant.plan)} />
             <Badge label={tenant.status} variant={STATUS_VARIANT[tenant.status]} />
           </div>
 

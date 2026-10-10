@@ -3,6 +3,8 @@ import { createControlClient } from "@/lib/supabase/control";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { removeExposedSchema } from "@/lib/supabase/managementApi";
 import { verifyPlatformAdmin } from "../route";
+import { getPlan } from "@/lib/plans/catalog";
+import { isAssignablePlan } from "@/lib/plans/entitlements";
 import type { TenantPlan, TenantStatus } from "@/types";
 
 function makeServiceClient() {
@@ -58,6 +60,21 @@ export async function PATCH(
   }
   if (!tenant) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  }
+
+  // 1b. A plan change must target a catalog plan that can be assigned —
+  // retired plans only stay on the tenants already on them.
+  if (body.plan !== undefined && body.plan !== tenant.plan) {
+    let target;
+    try {
+      target = await getPlan(body.plan);
+    } catch (err) {
+      console.error("Plan lookup failed:", err);
+      return NextResponse.json({ error: "Could not update tenant. Please try again." }, { status: 500 });
+    }
+    if (!isAssignablePlan(target, tenant.plan)) {
+      return NextResponse.json({ error: "That plan can't be assigned." }, { status: 400 });
+    }
   }
 
   // 2. If admin_email changed, update in Project B Auth first.
