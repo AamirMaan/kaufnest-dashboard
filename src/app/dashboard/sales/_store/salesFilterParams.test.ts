@@ -1,4 +1,4 @@
-import { salesFilterParams } from "./salesFilterParams";
+import { salesFilterParams, salesSummaryRpcArgs } from "./salesFilterParams";
 import { DEFAULT_SALES_FILTERS } from "@/lib/utils/filters";
 
 describe("salesFilterParams", () => {
@@ -30,5 +30,15 @@ describe("salesFilterParams", () => {
     expect(salesFilterParams({ ...DEFAULT_SALES_FILTERS, account: "all" }).p_connection_id).toBeNull();
     expect(salesFilterParams({ ...DEFAULT_SALES_FILTERS, account: "conn-1" }).p_connection_id).toBe("conn-1");
     expect(salesFilterParams({ ...DEFAULT_SALES_FILTERS, account: "__unassigned__" }).p_connection_id).toBe("__unassigned__");
+  });
+});
+
+describe("salesSummaryRpcArgs", () => {
+  it("leaves p_connection_id out when no account filter is set (pre-056 7-arg function)", () => {
+    expect(salesSummaryRpcArgs(DEFAULT_SALES_FILTERS)).not.toHaveProperty("p_connection_id");
+  });
+
+  it("sends p_connection_id when an account is picked", () => {
+    expect(salesSummaryRpcArgs({ ...DEFAULT_SALES_FILTERS, account: "conn-1" }).p_connection_id).toBe("conn-1");
   });
 });

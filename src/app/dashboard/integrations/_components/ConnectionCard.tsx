@@ -127,6 +127,12 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
   }
 
   const connected = state !== "disconnected";
+  // Error-state accounts need fresh tokens; pre-056 eBay rows (no account id)
+  // must be reconnected once — via THIS card, so the callback knows which row
+  // the signed-in seller belongs to (connectionSave.decideConnectionSave).
+  const needsReconnect = !connected || state === "error" || connection.external_account_id === null;
+  const reconnect = () =>
+    window.location.assign(`/api/integrations/${platform}/connect?reconnect=${encodeURIComponent(id)}`);
 
   return (
     <div className="rounded-[var(--radius-card)] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4">
@@ -174,6 +180,10 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
       <div className="text-xs text-[var(--color-text-muted)] space-y-1">
         <p>Last synced: {connection.last_synced_at ? formatDateTime(connection.last_synced_at) : "Never"}</p>
         {connection.last_sync_error && <p className="text-[var(--color-danger-text)]">{connection.last_sync_error}</p>}
+        {state === "error" && <p>Reconnect this account to restore syncing.</p>}
+        {connected && state !== "error" && connection.external_account_id === null && (
+          <p>Reconnect once with this account&apos;s seller login to enable more {label} accounts.</p>
+        )}
         {state === "plan_limit" && (
           <p>Pause another account to use this one, or upgrade your plan.</p>
         )}
@@ -184,7 +194,12 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
 
       {canManage && (
         <div className="flex flex-wrap items-center gap-2">
-          {connected ? (
+          {needsReconnect && (
+            <Button size="sm" variant="secondary" onClick={reconnect}>
+              Reconnect
+            </Button>
+          )}
+          {connected && (
             <>
               {(state === "active" || state === "plan_limit") && (
                 <Button size="sm" variant="secondary" onClick={() => handleToggle(false)} disabled={toggling}>
@@ -211,14 +226,6 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
                 Disconnect
               </Button>
             </>
-          ) : (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => window.location.assign(`/api/integrations/${platform}/connect?reconnect=1`)}
-            >
-              Reconnect
-            </Button>
           )}
         </div>
       )}

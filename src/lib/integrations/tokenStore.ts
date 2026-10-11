@@ -33,7 +33,14 @@ export class IntegrationAccountError extends Error {
 }
 
 function decryptRow(row: ConnectionRow): ConnectionRow {
-  return { ...row, access_token: decryptToken(row.access_token), refresh_token: decryptToken(row.refresh_token) };
+  return {
+    ...row,
+    // Before 056 the column doesn't exist; undefined would read as "paused"
+    // and leave Listings/Messages with no usable account.
+    is_active: row.is_active ?? true,
+    access_token: decryptToken(row.access_token),
+    refresh_token: decryptToken(row.refresh_token),
+  };
 }
 
 function encryptFields(fields: ConnectionFields): ConnectionFields {

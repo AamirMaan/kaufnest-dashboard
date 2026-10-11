@@ -5,7 +5,11 @@ export function platformHeading(label: string, count: number, cap: number): stri
   return `${label} — ${count} account${count === 1 ? "" : "s"}`;
 }
 
-/** Pre-056 eBay connections have no account id until reconnected once. */
+/**
+ * Pre-056 eBay connections have no account id until reconnected once (from
+ * their own card). Same rule as connectionSave's isPendingLegacy: any
+ * non-disconnected row, error state included.
+ */
 export function needsReconnectBanner(connections: PlatformConnection[]): boolean {
-  return connections.some((c) => c.platform === "ebay" && c.status === "connected" && c.external_account_id === null);
+  return connections.some((c) => c.platform === "ebay" && c.status !== "disconnected" && c.external_account_id === null);
 }

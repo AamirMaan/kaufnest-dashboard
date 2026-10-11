@@ -278,7 +278,7 @@ export default function ReviewPage() {
       }
 
       const fresh = (await freshRes.json()) as ReviewResponse;
-      const failedPlatforms = Object.keys(fresh.errors ?? {});
+      const failedAccounts = Object.keys(fresh.errors ?? {}).length;
 
       const items: { platform: IntegrationPlatform; order: ReviewOrder }[] = [];
       for (const platform of ALL_PLATFORMS) {
@@ -309,10 +309,10 @@ export default function ReviewPage() {
 
       setData(fresh);
       const syncedCount = result.imported ?? 0;
-      if (failedPlatforms.length > 0) {
+      if (failedAccounts > 0) {
         toast.warning(
           "Statuses partially synced",
-          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedPlatforms.map((p) => PLATFORM_LABELS[p as IntegrationPlatform] ?? p).join(", ")} — try again later.`
+          `${syncedCount} order${syncedCount === 1 ? "" : "s"} synced. Could not refresh ${failedAccounts} account${failedAccounts === 1 ? "" : "s"} — try again later.`
         );
       } else {
         toast.success(
@@ -365,10 +365,8 @@ export default function ReviewPage() {
       {/* Platform API errors */}
       {data?.errors && Object.keys(data.errors).length > 0 && (
         <div className="rounded-[var(--radius-btn)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger)]">
-          {Object.entries(data.errors).map(([p, msg]) => (
-            <p key={p}>
-              {PLATFORM_LABELS[p as IntegrationPlatform] ?? p}: {msg}
-            </p>
+          {Object.entries(data.errors).map(([connectionId, msg]) => (
+            <p key={connectionId}>{msg}</p>
           ))}
         </div>
       )}

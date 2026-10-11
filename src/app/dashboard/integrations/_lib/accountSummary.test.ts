@@ -16,6 +16,9 @@ describe("needsReconnectBanner", () => {
   it("is true for a connected legacy eBay row without an account id", () => {
     expect(needsReconnectBanner([base])).toBe(true);
   });
+  it("is true for a legacy row in error state", () => {
+    expect(needsReconnectBanner([{ ...base, status: "error" }])).toBe(true);
+  });
   it("is false once the id is known, for Amazon, or when disconnected", () => {
     expect(needsReconnectBanner([{ ...base, external_account_id: "u-1" }])).toBe(false);
     expect(needsReconnectBanner([{ ...base, platform: "amazon" }])).toBe(false);

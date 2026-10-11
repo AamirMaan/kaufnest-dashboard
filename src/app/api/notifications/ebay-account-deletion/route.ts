@@ -4,7 +4,7 @@ import { createControlClient } from "@/lib/supabase/control";
 import { createServiceClientForTenant } from "@/lib/supabase/server";
 import { parseSignatureHeader, verifySignature } from "@/lib/integrations/ebay/verifyNotificationSignature";
 import { fetchEbayPublicKey } from "@/lib/integrations/ebay/publicKey";
-import { matchDeletedEbayConnections } from "@/lib/integrations/ebay/deletionMatch";
+import { deletesUnassignedOrders, matchDeletedEbayConnections } from "@/lib/integrations/ebay/deletionMatch";
 
 // Must match exactly what you register in the eBay developer portal.
 const ENDPOINT_URL = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/notifications/ebay-account-deletion`;
@@ -112,13 +112,20 @@ async function cleanupEbayUser(userId?: string, username?: string) {
       const ids = matchDeletedEbayConnections(connections ?? [], userId, username);
       if (ids.length === 0) continue;
 
-      // Only this account's synced orders — other eBay accounts of the same
-      // tenant are untouched (multi-account, 056). external_order_id NOT NULL = synced, not manual.
-      const { error: salesError } = await client
+      // This account's synced orders (external_order_id NOT NULL = synced,
+      // not manual). Other eBay accounts of the same tenant are untouched
+      // (multi-account, 056) — unless the deleted account(s) are the tenant's
+      // only eBay accounts, in which case unassigned synced eBay orders go too.
+      const allIds = (connections ?? []).map((c) => c.id as string);
+      let salesDelete = client
         .from("sales")
         .delete()
-        .in("connection_id", ids)
+        .eq("platform", "ebay")
         .not("external_order_id", "is", null);
+      salesDelete = deletesUnassignedOrders(allIds, ids)
+        ? salesDelete.or(`connection_id.is.null,connection_id.in.(${ids.join(",")})`)
+        : salesDelete.in("connection_id", ids);
+      const { error: salesError } = await salesDelete;
       if (salesError) {
         // Keep the connection rows: deleting them would orphan these sales from
         // the only key a later notification could match them by.

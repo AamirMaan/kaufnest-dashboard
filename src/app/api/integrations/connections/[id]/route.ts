@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (parsed.patch.is_active === true && !conn.is_active) {
       const rows = await listConnections(client, conn.platform);
       if (!canResumeAccount(rows, id, plan)) {
-        return NextResponse.json({ error: "INTEGRATION_ACCOUNT_LIMIT" }, { status: 409 });
+        return NextResponse.json({ error: "INTEGRATION_RESUME_LIMIT" }, { status: 409 });
       }
     }
 

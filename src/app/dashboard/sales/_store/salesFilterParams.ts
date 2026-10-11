@@ -36,3 +36,16 @@ export function salesFilterParams(f: SalesFilters): SalesSummaryParams {
     p_connection_id: f.account === "all" ? null : f.account,
   };
 }
+
+/**
+ * `get_sales_summary` RPC args. `p_connection_id` is sent only when the
+ * account filter is set: it has a DEFAULT in 056, and leaving it out keeps the
+ * call resolvable against the pre-056 7-arg function (PostgREST matches
+ * functions by named args, so an extra key would 404 with PGRST202).
+ */
+export function salesSummaryRpcArgs(f: SalesFilters): Omit<SalesSummaryParams, "p_connection_id"> & {
+  p_connection_id?: string;
+} {
+  const { p_connection_id, ...rest } = salesFilterParams(f);
+  return p_connection_id ? { ...rest, p_connection_id } : rest;
+}

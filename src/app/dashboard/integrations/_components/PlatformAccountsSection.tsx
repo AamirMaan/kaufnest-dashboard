@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { getMaxAccountsPerPlatform, canAddAccount } from "@/lib/utils/planGating";
 import { accountState, canResumeAccount, connectedCount } from "@/lib/utils/activeAccounts";
 import { ConnectionCard } from "./ConnectionCard";
-import { platformHeading } from "../_lib/accountSummary";
+import { needsReconnectBanner, platformHeading } from "../_lib/accountSummary";
 import type { IntegrationPlatform, PlatformConnection, TenantPlan } from "@/types";
 
 const LABELS: Record<IntegrationPlatform, string> = { ebay: "eBay", amazon: "Amazon" };
@@ -20,7 +20,11 @@ export function PlatformAccountsSection({ platform, connections, plan, canManage
   const mine = connections.filter((c) => c.platform === platform);
   const cap = getMaxAccountsPerPlatform(plan);
   const used = connectedCount(connections, platform);
-  const canAdd = canAddAccount(plan, used);
+  const atCap = !canAddAccount(plan, used);
+  // A pre-056 row must be reconnected from its own card first; the connect
+  // route refuses "Add account" until then (INTEGRATION_LEGACY_RECONNECT).
+  const legacyPending = needsReconnectBanner(mine);
+  const canAdd = !atCap && !legacyPending;
 
   return (
     <section className="space-y-3">
@@ -37,7 +41,12 @@ export function PlatformAccountsSection({ platform, connections, plan, canManage
           </Button>
         )}
       </div>
-      {canManage && !canAdd && (
+      {canManage && legacyPending && !atCap && (
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Reconnect your existing {label} account below before adding another.
+        </p>
+      )}
+      {canManage && atCap && (
         <p className="text-xs text-[var(--color-text-muted)]">
           Your plan includes {cap} {label} account{cap === 1 ? "" : "s"}.{" "}
           <Link href="/dashboard/settings" className="font-medium text-[var(--color-primary)] hover:underline">

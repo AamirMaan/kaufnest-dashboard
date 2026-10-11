@@ -1,4 +1,10 @@
-import { decideConnectionSave, defaultDisplayName, type ConnectionSummary } from "./connectionSave";
+import {
+  connectPrecheck,
+  decideConnectionSave,
+  defaultDisplayName,
+  displayNameForSave,
+  type ConnectionSummary,
+} from "./connectionSave";
 
 const row = (id: string, external_account_id: string | null, o: Partial<ConnectionSummary> = {}): ConnectionSummary => ({
   id,
@@ -22,9 +28,30 @@ describe("decideConnectionSave", () => {
     expect(decideConnectionSave(rows, "ebay", "u1", "business")).toEqual({ kind: "update", id: "c1" });
   });
 
-  it("adopts a legacy null-id row of the same platform", () => {
+  it("adopts a legacy null-id row only when the admin reconnected that row", () => {
     const rows = [row("legacy", null), row("amz", null, { platform: "amazon" })];
-    expect(decideConnectionSave(rows, "ebay", "u1", "pro")).toEqual({ kind: "adopt", id: "legacy" });
+    expect(decideConnectionSave(rows, "ebay", "u1", "pro", "legacy")).toEqual({ kind: "adopt", id: "legacy" });
+  });
+
+  it("never adopts a legacy row implicitly — an Add-account sign-in may be another seller", () => {
+    const rows = [row("legacy", null)];
+    expect(decideConnectionSave(rows, "ebay", "u2", "pro")).toEqual({ kind: "legacy_pending" });
+    expect(decideConnectionSave(rows, "ebay", "u2", "pro", "other-id")).toEqual({ kind: "legacy_pending" });
+  });
+
+  it("does not let a disconnected legacy row block adding accounts", () => {
+    const rows = [row("legacy", null, { status: "disconnected" })];
+    expect(decideConnectionSave(rows, "ebay", "u2", "pro")).toEqual({ kind: "insert" });
+  });
+
+  it("re-checks the cap when adopting a disconnected legacy row", () => {
+    const rows = [row("legacy", null, { status: "disconnected" }), row("c2", "u2"), row("c3", "u3")];
+    expect(decideConnectionSave(rows, "ebay", "u1", "pro", "legacy")).toEqual({ kind: "limit" });
+  });
+
+  it("updates the matching account even when a legacy row is pending", () => {
+    const rows = [row("legacy", null), row("c1", "u1")];
+    expect(decideConnectionSave(rows, "ebay", "u1", "pro")).toEqual({ kind: "update", id: "c1" });
   });
 
   it("inserts a new account under the cap", () => {
@@ -44,6 +71,47 @@ describe("decideConnectionSave", () => {
   it("caps per platform", () => {
     const rows = [row("c1", "a1", { platform: "amazon" }), row("c2", "a2", { platform: "amazon" })];
     expect(decideConnectionSave(rows, "ebay", "u1", "pro")).toEqual({ kind: "insert" });
+  });
+});
+
+describe("connectPrecheck", () => {
+  it("lets a reconnect of a known row through, even at the cap", () => {
+    const rows = [row("c1", "u1"), row("c2", "u2")];
+    expect(connectPrecheck(rows, "ebay", "pro", "c1")).toBe("ok");
+  });
+
+  it("rejects a reconnect target that isn't one of the platform's rows", () => {
+    const rows = [row("c1", "u1"), row("amz", "a1", { platform: "amazon" })];
+    expect(connectPrecheck(rows, "ebay", "pro", "amz")).toBe("unknown_target");
+    expect(connectPrecheck(rows, "ebay", "pro", "nope")).toBe("unknown_target");
+  });
+
+  it("asks for the legacy row to be reconnected before adding an account", () => {
+    expect(connectPrecheck([row("legacy", null)], "ebay", "business", null)).toBe("legacy_pending");
+  });
+
+  it("checks the cap when adding", () => {
+    expect(connectPrecheck([row("c1", "u1"), row("c2", "u2")], "ebay", "pro", null)).toBe("limit");
+    expect(connectPrecheck([row("c1", "u1")], "ebay", "pro", null)).toBe("ok");
+  });
+});
+
+describe("displayNameForSave", () => {
+  it("always names an inserted row", () => {
+    expect(displayNameForSave({ kind: "insert" }, null, "shop_a")).toBe("shop_a");
+  });
+
+  it("replaces 056's placeholder on an adopted legacy row", () => {
+    expect(displayNameForSave({ kind: "adopt", id: "x" }, "eBay account", "shop_a")).toBe("shop_a");
+    expect(displayNameForSave({ kind: "update", id: "x" }, "Amazon – account", "Amazon – E5F6G7")).toBe("Amazon – E5F6G7");
+  });
+
+  it("fills an empty name", () => {
+    expect(displayNameForSave({ kind: "update", id: "x" }, null, "shop_a")).toBe("shop_a");
+  });
+
+  it("keeps an admin's rename", () => {
+    expect(displayNameForSave({ kind: "adopt", id: "x" }, "Main store", "shop_a")).toBeUndefined();
   });
 });
 

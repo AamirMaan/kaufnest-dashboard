@@ -16,3 +16,17 @@ export function matchDeletedEbayConnections(
     )
     .map((r) => r.id);
 }
+
+/**
+ * Whether a deletion must also remove the tenant's UNASSIGNED synced eBay
+ * orders (connection_id NULL — e.g. CSV imports left unassigned, or orders an
+ * admin set to Unassigned). True when the deleted account(s) are every eBay
+ * account the tenant has: those orders can only be that seller's, and
+ * pre-multi-account behaviour deleted every synced eBay order. With other
+ * eBay accounts left we can't attribute them, so only the matched account's
+ * orders go.
+ */
+export function deletesUnassignedOrders(allEbayConnectionIds: string[], matchedIds: string[]): boolean {
+  const matched = new Set(matchedIds);
+  return matched.size > 0 && allEbayConnectionIds.every((id) => matched.has(id));
+}

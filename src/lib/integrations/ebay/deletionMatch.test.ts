@@ -1,4 +1,4 @@
-import { matchDeletedEbayConnections } from "./deletionMatch";
+import { deletesUnassignedOrders, matchDeletedEbayConnections } from "./deletionMatch";
 
 const rows = [
   { id: "c1", external_account_id: "u-1", external_username: "store_one" },
@@ -32,5 +32,20 @@ describe("matchDeletedEbayConnections", () => {
       { id: "b", external_account_id: "u-1", external_username: "y" },
     ];
     expect(matchDeletedEbayConnections(dup, "u-1", undefined)).toEqual(["a", "b"]);
+  });
+});
+
+describe("deletesUnassignedOrders", () => {
+  it("is true when the deleted account is the tenant's only eBay account", () => {
+    expect(deletesUnassignedOrders(["c1"], ["c1"])).toBe(true);
+  });
+  it("is true when every eBay account matched", () => {
+    expect(deletesUnassignedOrders(["c1", "c2"], ["c2", "c1"])).toBe(true);
+  });
+  it("is false while another eBay account remains", () => {
+    expect(deletesUnassignedOrders(["c1", "c2"], ["c1"])).toBe(false);
+  });
+  it("is false when nothing matched", () => {
+    expect(deletesUnassignedOrders([], [])).toBe(false);
   });
 });

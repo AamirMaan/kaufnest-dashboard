@@ -99,7 +99,7 @@ function IntegrationsContent() {
       )}
       {needsReconnectBanner(connections) && (
         <div className="mb-4 rounded-[var(--radius-btn)] bg-[var(--color-info-bg)] px-4 py-3 text-sm text-[var(--color-info-text)]">
-          Reconnect your eBay account once to enable multiple eBay accounts.
+          Click Reconnect on your eBay account&apos;s card once to enable multiple eBay accounts.
         </div>
       )}
       <div className="space-y-8">

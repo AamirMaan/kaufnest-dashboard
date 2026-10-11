@@ -4,23 +4,20 @@ import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, listConnections, type ConnectionRow } from "@/lib/integrations/tokenStore";
 import { getTenantPlan } from "@/lib/integrations/tenantPlan";
 import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
+import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
 export type ReviewOrder = NormalizedOrder & { imported: boolean; connection_id: string; account_name: string };
 export type ReviewResponse = Partial<Record<IntegrationPlatform, { orders: ReviewOrder[] }>> & {
-  /** Keyed by account display name. */
+  /** Keyed by connection id (display names aren't unique); each message names its account. */
   errors?: Record<string, string>;
   /** Display names of connected accounts left out because they're paused. */
   pausedAccounts?: string[];
 };
 
 const REVIEW_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
-
-function accountLabel(c: Pick<ConnectionRow, "display_name" | "platform">): string {
-  return c.display_name ?? (c.platform === "ebay" ? "eBay" : "Amazon");
-}
 
 export async function GET(_req: NextRequest) {
   const auth = await requireIntegrationAdmin();
@@ -89,7 +86,7 @@ export async function GET(_req: NextRequest) {
           `[integrations/review] fetch failed (platform=${conn.platform}, connection=${conn.id}):`,
           err instanceof Error ? err.message : err
         );
-        errors[name] = `Couldn't fetch orders from ${name}. Try again, or reconnect the account if this keeps happening.`;
+        errors[conn.id] = `Couldn't fetch orders from ${name}. Try again, or reconnect the account if this keeps happening.`;
       }
     })
   );

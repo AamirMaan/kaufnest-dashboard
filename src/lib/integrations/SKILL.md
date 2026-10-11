@@ -516,16 +516,45 @@ lookup against existing `sales` rows.
   `sales.connection_id` links survive and reconnecting the same account
   (matched on `external_account_id`) reuses it. Disconnected rows do not count
   against the plan cap; a reconnect re-checks the cap.
-- Legacy eBay rows have `external_account_id` NULL: the callback "adopts" one
-  (`decideConnectionSave` -> `adopt`) rather than inserting a duplicate.
-- Connect route takes `?reconnect=1` to skip the cap pre-check; the callback
-  always re-checks via `decideConnectionSave`.
+- Legacy eBay rows have `external_account_id` NULL. The callback adopts one
+  (`decideConnectionSave` -> `adopt`) **only when the admin reconnected that
+  row** (its card's Reconnect → `?reconnect=<id>` → `kn_oauth_target` cookie →
+  `targetId`). Never implicitly: an "Add account" sign-in may be a different
+  seller, and adopting would overwrite the legacy account's tokens and hand it
+  that account's order history (PR #124 review). While a non-disconnected
+  legacy row exists, "Add account" is refused (`legacy_pending` →
+  `INTEGRATION_LEGACY_RECONNECT`) in both the connect route (`connectPrecheck`)
+  and the callback, since inserting could duplicate the legacy account.
+- `displayNameForSave`: an adopt/update replaces an empty name or 056's
+  backfilled placeholder (`"eBay account"` / `"Amazon – account"` — keep the
+  set in sync with 056's UPDATE) with the real username; an admin rename stays.
+- Connect route: `?reconnect=<connectionId>` skips the cap pre-check (the
+  callback re-checks via `decideConnectionSave`); a non-uuid / foreign id is
+  `INTEGRATION_ACCOUNT_UNKNOWN`. No param = add (stale target cookie cleared).
+  Every refusal **redirects** to `/dashboard/integrations?error=<code>`
+  (`redirect.ts`) — it's a full-page navigation, never return JSON there.
+- Add-account cap counts every non-disconnected row, paused ones included
+  (`INTEGRATION_ACCOUNT_LIMIT` says "disconnect"); resume counts only
+  non-paused rows (`INTEGRATION_RESUME_LIMIT` says "pause another").
 - Callback and import routes log raw errors server-side and return generic
   copy / `INTEGRATION_*` codes only. Review `errors` are keyed by account
-  display name and carry generic copy only; the raw adapter error is logged server-side.
-- `ebay/orders/[saleId]/sync-status` uses the sale's own `connection_id`
-  (fallback: shim for pre-056 sales) and deliberately does NOT enforce the plan
-  cap: pushing status for an existing order is allowed after its account is paused.
+  connection id (display names aren't unique) and each message names its account; the raw adapter error is logged server-side.
+- `ebay/orders/[saleId]/sync-status` picks the account with
+  `resolveSaleEbayAccount` (`saleAccount.ts`): the sale's own `connection_id`
+  (must be a connected eBay row); an unassigned sale only when the tenant has
+  exactly one non-disconnected eBay account, else 409
+  `INTEGRATION_ACCOUNT_AMBIGUOUS` copy (no longer the oldest-account shim — it
+  sent other accounts' orders to the wrong seller). It deliberately does NOT
+  enforce pause/the plan cap: pushing status for an existing order is allowed
+  after its account is paused. Errors are sent as copy, not codes — the order
+  page and EditSaleModal show `error` as-is.
+- `listConnections`/`getConnectionById` default `is_active` to `true` when the
+  column is missing (pre-056), so the shim still finds an account.
 - `mapToSale` stamps `connection_id` (5th arg); `mergeImportedSale` keeps it fill-only.
 - Routes taking a connection id (`connections/[id]` PATCH, `[platform]/disconnect`) check `isConnectionId` (`connectionPatch.ts`) first: a non-uuid becomes 404 `INTEGRATION_ACCOUNT_UNKNOWN`, not a Postgres cast error/500.
 - eBay account-deletion cleanup deletes the matched connection rows only after the sales delete succeeds; on failure it logs and keeps them so a later notification can still match.
+- It deletes the matched accounts' synced sales, plus **unassigned** synced eBay
+  sales (`connection_id` NULL) when the matched accounts are all of the
+  tenant's eBay accounts (`deletesUnassignedOrders`) — matching the
+  pre-multi-account behaviour. With other eBay accounts left, unassigned
+  orders can't be attributed and are kept.

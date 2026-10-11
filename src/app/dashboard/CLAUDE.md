@@ -47,7 +47,12 @@ broadly when working on a specific feature.**
   only includes the non-token columns (RLS restricts the table to
   admin/super_admin anyway). Wraps everything in `<ToastProvider>` and
   `<DashboardShell>`.
-  `platformAccounts` (from the `get_platform_accounts()` RPC, hydrated into
+  If the `platform_connections` select fails (056's columns missing), it
+  retries with the pre-056 columns and fills them via `withPre056Defaults`
+  (`integrations/_lib/pre056Connection.ts`), so connections and the
+  Listings/Messages eBay gates keep working before 056 is applied.
+  `platformAccounts` (from the `get_platform_accounts()` RPC, fetched inside
+  the main `Promise.all`, hydrated into
   `integrationsSlice.accounts`; `[]` if the RPC fails, e.g. 056 not applied).
   **If you add a new feature with its own collection, hydrate it here.**
 - `page.tsx` — **Home** (`/dashboard`) = **the numbers; every chart lives on

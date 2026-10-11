@@ -5,7 +5,7 @@ import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import type { SalesFilters } from "@/lib/utils/filters";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { UNASSIGNED_ACCOUNT } from "@/lib/utils/platformAccounts";
-import { salesFilterParams } from "./salesFilterParams";
+import { salesFilterParams, salesSummaryRpcArgs } from "./salesFilterParams";
 
 interface SalesState {
   items: Sale[];
@@ -85,7 +85,7 @@ export const fetchSalesSummary = createAsyncThunk(
   "sales/fetchSummary",
   async (filters: SalesFilters) => {
     const supabase = await createTenantClient();
-    const { data, error } = await supabase.rpc("get_sales_summary", salesFilterParams(filters));
+    const { data, error } = await supabase.rpc("get_sales_summary", salesSummaryRpcArgs(filters));
     // Never forward the raw Postgres error — the page shows a generic message.
     if (error) throw new Error("sales_summary_failed");
     return (data ?? []) as SalesSummaryRow[];

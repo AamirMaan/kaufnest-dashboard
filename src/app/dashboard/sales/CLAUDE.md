@@ -73,6 +73,10 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `p_connection_id` (056) is `null` for `"all"`, a connection id, or
   `UNASSIGNED_ACCOUNT` (`__unassigned__`) = `connection_id IS NULL`;
   `fetchSalesPage`/`handleExport` turn the sentinel into `.is("connection_id", null)`.
+  `fetchSalesSummary` calls the RPC with `salesSummaryRpcArgs`, which omits
+  `p_connection_id` when it's `null` — PostgREST matches functions by named
+  args, so always sending it 404s (PGRST202) against the pre-056 7-arg
+  `get_sales_summary`.
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.

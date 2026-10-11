@@ -34,11 +34,16 @@ tenant admin grants an exception via the Users feature).
   synced/error. `canManage`: inline rename form (PATCH `display_name`),
   Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
   orders link, Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
-  dispatches `setConnectionStatus`), and Reconnect on disconnected rows
-  (`/connect?reconnect=1`, skips the connect-time cap check). PATCH success
+  dispatches `setConnectionStatus`), and Reconnect
+  (`/connect?reconnect=<id>`, skips the connect-time cap check) on
+  disconnected, error-state and legacy (no `external_account_id`) rows. PATCH success
   dispatches `upsertConnection`.
 - `_lib/accountSummary.ts` (+ test) — pure `platformHeading` (used by
-  `PlatformAccountsSection`) and `needsReconnectBanner` (used by `page.tsx`).
+  `PlatformAccountsSection`) and `needsReconnectBanner` (used by `page.tsx`
+  and by `PlatformAccountsSection` to disable "Add account" while a legacy
+  eBay row is pending).
+- `_lib/pre056Connection.ts` (+ test) — `withPre056Defaults`, used by
+  `dashboard/layout.tsx`'s fallback select when 056's columns don't exist yet.
 - `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
   accounts in a tab, first-seen order) and `filterByAccount` (`"all"` or one
   `connection_id`), used by `review/page.tsx`.
@@ -123,7 +128,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 - **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
   connected platforms (90-day lookback via `adapter.fetchOrders`), queries
   `sales` for existing `external_order_id` values, attaches `imported: boolean`
-  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, pausedAccounts? }`. Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by account display name and holds generic copy (raw errors are logged server-side).
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, pausedAccounts? }`. Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by connection id and holds generic copy naming the account (raw errors are logged server-side).
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
@@ -136,10 +141,12 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `connection_id` isn't an active account (`invalidImportItems`), and stamps
   `sales.connection_id`. Returns `{ imported: number }`.
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
-  resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 at the cap).
+  resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;
-  `[platform]/connect` returns 403 `INTEGRATION_ACCOUNT_LIMIT` at the cap
-  (`?reconnect=1` skips); the callback redirects with `account=<id>`.
+  `[platform]/connect` redirects back with `error=INTEGRATION_ACCOUNT_LIMIT`
+  at the cap (`?reconnect=<id>` skips; every refusal is a redirect, never
+  JSON — it's a full-page navigation); the
+  callback redirects with `account=<id>`.
 
 ## Plan gating
 
