@@ -9,6 +9,9 @@ gets the same behaviour.
 Every hook command `cd`s to the git toplevel first, so it behaves the same
 whether Claude was started at the repo root or in a subfolder, and ends with
 `|| true` so a broken hook degrades to a no-op instead of wedging the session.
+The one exception is `pr_review_gate.py`, which drops it so a broken gate is
+reported instead of silently waving PRs through (any exit code but 2 is still
+non-blocking).
 
 | Event | Script | Does |
 | --- | --- | --- |
@@ -48,16 +51,40 @@ whether Claude was started at the repo root or in a subfolder, and ends with
 - **`refresh_graphify.py`** — Stop hook. Runs `graphify update . --no-cluster`
   in the background when extractable source changed. Lock-guarded, with a
   15-minute staleness reclaim so a killed rebuild can't block future ones.
-- **`pr_review_gate.py`** — PreToolUse `Bash` gate. When a command runs
-  `gh pr create` (in command position — a commit message or heredoc that only
-  mentions it is ignored) and HEAD has no review marker, it denies the call and
-  tells Claude to run `/code-review` and the `pr-reviewer` agent, show you both
-  reports, fix blockers, then run `python3 .claude/hooks/pr_review_gate.py --mark`.
-  Markers are keyed by commit SHA under `<git-common-dir>/claude-pr-review/`
-  (outside the work tree, shared by worktrees), so any commit after the review
-  needs a fresh one. Plain `python3`, no `uv`, so the gate doesn't silently
-  vanish on a machine without `uv`. Only gates Claude's own Bash calls — a
-  PR you open from your own terminal is unaffected.
+- **`pr_review_gate.py`** — PreToolUse `Bash` gate. When a command opens a PR
+  (`gh pr create`/`gh pr new`, also behind `cd x &&`, `then`, `env`/`command`/
+  `time`, a full path to `gh`, global flags like `-R owner/repo`, or `$(…)`/
+  backticks) and the commit it would open from has no review marker, it denies
+  the call and tells Claude to run `/code-review` and the `pr-reviewer` agent,
+  show you both reports, fix blockers, then run the exact `--mark` command the
+  deny message prints.
+  - **What it checks:** HEAD of the directory the PR is opened from — the
+    hook's `cwd`, or the last `cd <dir>` before the command — or the
+    `--head <branch>` branch if given. Markers are keyed by commit SHA under
+    `<git-common-dir>/claude-pr-review/` (outside the work tree, shared by
+    worktrees), so any commit after the review needs a fresh one.
+  - **What it ignores:** heredoc bodies and quoted strings are blanked before
+    matching, so commit messages, `echo`, `grep` and test scripts that merely
+    *mention* `gh pr create` pass. `$(…)`/backticks inside double quotes do run,
+    so those are still checked.
+  - **It is a guardrail against forgetting the review, not a security
+    boundary.** `--mark` is trusted — the gate can't prove the reviews ran.
+    Uncommitted edits made after a review aren't covered. Deliberate evasion
+    (`bash -c '…'`, `gh api …/pulls`) isn't matched. It only gates Claude's
+    own Bash calls; a PR you open from your own terminal is unaffected.
+  - **Fails open, visibly.** If it can't resolve the target (not a git repo, an
+    unknown `--head` branch) it lets the command through with a
+    `systemMessage` warning. Unlike the other hooks it has no
+    `2>/dev/null || true`, so a missing `python3` or a crash shows as a hook
+    error rather than vanishing. Written for the macOS system Python (3.9) —
+    keep `from __future__ import annotations` if you touch the type hints.
+  - **Tests:** `python3 .claude/hooks/test_pr_review_gate.py` — a positive and
+    negative case per matching rule, plus end-to-end runs against throwaway
+    git repos.
+  - **New agents need a session restart.** Claude Code loads `.claude/agents/`
+    at session start, so a session that predates `pr-reviewer.md` can't call it
+    by `subagent_type`; the deny message tells Claude to fall back to a
+    general-purpose agent following that file.
 
 ### Why a dedicated API key variable
 

@@ -11,13 +11,16 @@ the user who invoked you explicitly asked for a GitHub comment in the task promp
 
 ## 1. Get the diff
 
-Work out the target from the task prompt:
+Work out the target from the task prompt. Always `git fetch origin main` first
+and diff against **`origin/main`**, never the local `main` — a stale local
+`main` makes other people's merged PRs show up as part of this diff.
 
 - **PR number** (`#124`, `124`): `gh pr view <n> --json title,body,baseRefName,headRefName,files,commits`
-  then `gh pr diff <n>`.
-- **Branch name**: `git diff main...<branch>` and `git log --oneline main..<branch>`.
-- **Nothing given**: the current branch — `git diff main...HEAD` plus
-  `git diff` (uncommitted work), and `git log --oneline main..HEAD`.
+  then `gh pr diff <n>` (diffs against the PR's real base — no fetch needed).
+- **Branch name**: `git diff origin/main...<branch>` and
+  `git log --oneline origin/main..<branch>`.
+- **Nothing given**: the current branch — `git diff origin/main...HEAD` plus
+  `git diff` (uncommitted work), and `git log --oneline origin/main..HEAD`.
 
 Ignore `graphify-out/**` and lockfiles in the diff — they are generated.
 If the diff is large, list changed files first (`--stat` / `--name-only`) and
