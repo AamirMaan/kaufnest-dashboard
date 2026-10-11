@@ -68,7 +68,12 @@ New shared code from the migration:
   mutating billing routes to `admin`/`super_admin` with Settings: Edit
   (rule in `src/lib/billing/billingAccess.ts`, shared with `/api/billing/status`)
 - `src/lib/integrations/` — eBay/Amazon OAuth adapters + order-sync pipeline
-  (server-only, never imported client-side — see its `SKILL.md`)
+  (server-only, never imported client-side — see its `SKILL.md`).
+  Multiple accounts per platform (2026-10-08, sub-project 1 of 4): see
+  `docs/superpowers/specs/2026-10-08-multi-account-integrations-design.md`.
+  Plan caps are `control.plans.max_accounts_per_platform` (→
+  `PlanEntitlements.maxAccountsPerPlatform`, `lib/plans/entitlements.ts`), active rule in
+  `lib/utils/activeAccounts.ts`.
 - `src/app/api/integrations/` — connect/callback/disconnect/review/import
   routes. Order sync is **manual only**, via the Integrations feature's
   "Review Orders" page — there is no scheduled/cron sync route (a
@@ -397,6 +402,7 @@ you left off instead of re-deriving everything from scratch.
 | `src/app/dashboard/sales/` | `/dashboard/sales`, `/dashboard/sales/[id]` | sales records ("Orders" in UI) + `salesSlice`; [id] is order-detail page |
 | `src/app/dashboard/expenses/` | `/dashboard/expenses` | expense records + `expensesSlice` |
 | `src/app/dashboard/purchases/` | `/dashboard/purchases` | inventory purchases + `purchasesSlice` |
+| `src/app/dashboard/payouts/` | `/dashboard/payouts` | recorded eBay/Amazon payout history + `payoutsSlice` (record ≥ 2, delete ≥ 3 on section `payouts`) |
 | `src/app/dashboard/inventory/` | `/dashboard/inventory` | product catalog + stock levels + `inventorySlice` (linked from Purchases/Sales; stock synced via DB triggers) |
 | `src/app/dashboard/users/` | `/dashboard/users` | user invites/roles/permission overrides/deactivation + `usersSlice` |
 | `src/app/dashboard/audit-logs/` | `/dashboard/audit-logs` | activity-trail viewer (slice is shared, see below) |
@@ -443,7 +449,8 @@ owns it. Current shared locations:
 - `src/store/{store.ts,hooks.ts,StoreProvider.tsx}` + `src/store/slices/{auditLogsSlice,currentUserSlice}`
   — `auditLogsSlice` is written to by every CRUD feature; `currentUserSlice` is
   read directly by Sales/Expenses/Purchases for role checks
-- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows}`
+- `src/lib/*` — Supabase clients, `utils/{audit,currency,date,filters,permissions,generateInvoice,fetchAllRows,activeAccounts,integrationErrors,platformAccounts}`
+  (`activeAccounts` = which connected eBay/Amazon accounts the plan cap leaves active; `integrationErrors` = client-safe `INTEGRATION_ACCOUNT_*` error copy; `platformAccounts` = account labels/options for Orders filters and pickers, `UNASSIGNED_ACCOUNT` sentinel)
   (`generateInvoice` is also used by the shared `InvoiceModal`, both read
   company/invoice settings from `src/store/slices/companyProfileSlice`;
   `fetchAllRows` pages a Supabase query past the project's PostgREST "Max

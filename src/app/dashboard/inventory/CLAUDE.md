@@ -214,7 +214,7 @@ pagination is active.
   validation and payload logic: `transferCostAddon(cost, qty)`, `fifoPreview(lots, qty, cost)`,
   `transferLocationOptions(locations)`, `emptyTransferDraft(defaultLocationId, today)`,
   `parseTransferQuantity`, `parseTransferCost`, `transferDraftError(draft, locations, available)`,
-  `transferInsertPayload(draft, userId)`, `pageAfterRemoval(page, pageSize, totalBefore)`.
+  `transferInsertPayload(draft, userId)`.
   Mirrors `inv_transfer_after_insert` (047) FIFO order, shortfall exclusion, and cost add-on formula.
 - `_store/transfersSlice.ts` (+ test, Phase 4 Task 2, 2026-09-26) — Redux slice for
   `state.stockTransfers` (paginated `stock_transfers` history). State:
@@ -314,7 +314,7 @@ pagination is active.
   delete the transfer.")`. Delete goes through the shared
   `<DeleteConfirmModal>` (`.select("id")` so an RLS no-op reads as a
   failure, matching `LocationsTab`'s pattern) and, on success, re-pages to
-  `pageAfterRemoval(page, pageSize, total)` (`_lib/transfers.ts`) so the last
+  `pageAfterRemoval(page, pageSize, total)` (`@/lib/utils/pagedQuery`) so the last
   page never ends up empty. Both a successful transfer (`onSaved`, wired
   from `<TransferStockModal onSaved={handleSaved}>`) and a successful delete
   call `onStockChanged()` — `page.tsx` wires this to `bumpStock`, which

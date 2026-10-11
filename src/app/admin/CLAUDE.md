@@ -57,6 +57,9 @@ not tenant roles.
 - `plans/_components/PlanForm.tsx` — the create/edit form. `<form
   id="plan-form">` with card sections Identity / Visibility (paid only) /
   Price (paid only) / Limits & features / Trial (trial only) / Display; the
+  "Accounts per platform" field (number + Unlimited) shows only while
+  Platform integrations is ticked — unticking it stores 0, like the AI
+  allowance; the
   footer (Cancel + `type="submit" form="plan-form"`, `disabled={saving ||
   !isFormValid}`, "Saving…") sits outside the form. Validation is
   `validatePlan` on every render; errors show per field once touched or

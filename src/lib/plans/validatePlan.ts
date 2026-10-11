@@ -33,6 +33,8 @@ export function parsePlanInput(body: unknown): PlanInput | null {
     monthlyEur: toNum(b.monthlyEur),
     maxUsers: toNum(b.maxUsers),
     platformIntegrations: b.platformIntegrations === true,
+    // Absent → 0 (no accounts); explicit null → unlimited.
+    maxAccountsPerPlatform: b.maxAccountsPerPlatform === undefined ? 0 : toNum(b.maxAccountsPerPlatform),
     aiFeatures: b.aiFeatures === true,
     aiGenerationsPerMonth: toNum(b.aiGenerationsPerMonth) ?? 0,
     messagingAndListings: b.messagingAndListings === true,
@@ -77,6 +79,13 @@ export function validatePlan(input: PlanInput, ctx: { isCreate: boolean; catalog
     e.maxUsers = "Max users must be a whole number of 1 or more, or Unlimited.";
   }
 
+  if (input.platformIntegrations) {
+    const n = input.maxAccountsPerPlatform;
+    if (n !== null && (!isInt(n) || n < 1)) {
+      e.maxAccountsPerPlatform = "Accounts per platform must be a whole number of 1 or more, or Unlimited.";
+    }
+  }
+
   if (!isInt(input.aiGenerationsPerMonth) || input.aiGenerationsPerMonth < 0) {
     e.aiGenerationsPerMonth = "AI generations must be a whole number of 0 or more.";
   } else if (!input.aiFeatures && input.aiGenerationsPerMonth !== 0) {
@@ -105,6 +114,15 @@ export function detectReductions(before: Plan, after: PlanInput): string[] {
   const b = before.maxUsers ?? Infinity;
   const a = after.maxUsers ?? Infinity;
   if (a < b) out.push(`Max users: ${fmtUsers(before.maxUsers)} → ${fmtUsers(after.maxUsers)}`);
+  if (before.platformIntegrations && after.platformIntegrations) {
+    const ba = before.maxAccountsPerPlatform ?? Infinity;
+    const aa = after.maxAccountsPerPlatform ?? Infinity;
+    if (aa < ba) {
+      out.push(
+        `Accounts per platform: ${fmtUsers(before.maxAccountsPerPlatform)} → ${fmtUsers(after.maxAccountsPerPlatform)}`
+      );
+    }
+  }
   for (const f of Object.keys(FEATURE_LABELS) as (keyof typeof FEATURE_LABELS)[]) {
     if (before[f] && !after[f]) out.push(`Removes ${FEATURE_LABELS[f]}`);
   }
@@ -116,7 +134,7 @@ export function detectReductions(before: Plan, after: PlanInput): string[] {
 
 const INPUT_KEYS: (keyof PlanInput)[] = [
   "key", "kind", "name", "tagline", "visibility", "monthlyEur", "maxUsers",
-  "platformIntegrations", "aiFeatures", "aiGenerationsPerMonth", "messagingAndListings",
+  "platformIntegrations", "maxAccountsPerPlatform", "aiFeatures", "aiGenerationsPerMonth", "messagingAndListings",
   "advancedInventory", "trialDays", "sortOrder", "highlighted",
 ];
 
@@ -145,6 +163,7 @@ export function planInputToRow(i: PlanInput): Record<string, unknown> {
     monthly_eur: i.kind === "paid" ? i.monthlyEur : null,
     max_users: i.maxUsers,
     platform_integrations: i.platformIntegrations,
+    max_accounts_per_platform: i.platformIntegrations ? i.maxAccountsPerPlatform : 0,
     ai_features: i.aiFeatures,
     ai_generations_per_month: i.aiFeatures ? i.aiGenerationsPerMonth : 0,
     messaging_and_listings: i.messagingAndListings,

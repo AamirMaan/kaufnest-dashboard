@@ -1,12 +1,14 @@
 import {
   NO_ENTITLEMENTS,
   availabilityLine,
+  canAddAccount,
   canAddUser,
   canPurchase,
   entitlementsOf,
   formatPlanList,
   fromWireEntitlements,
   getAiGenerationLimit,
+  getMaxAccountsPerPlatform,
   hasAdvancedInventory,
   hasAiFeatures,
   hasMessagingAndListings,
@@ -32,6 +34,7 @@ const plan = (over: Partial<Plan> = {}): Plan => ({
   stripePriceId: "price_1",
   maxUsers: 5,
   platformIntegrations: true,
+  maxAccountsPerPlatform: 2,
   aiFeatures: false,
   aiGenerationsPerMonth: 0,
   messagingAndListings: false,
@@ -47,7 +50,7 @@ describe("planFromRow", () => {
     const row: PlanRow = {
       key: "pro", kind: "paid", name: "Pro", tagline: "t", visibility: "public",
       monthly_eur: "30.00" as unknown as number, stripe_product_id: "prod_1", stripe_price_id: "price_1",
-      max_users: 5, platform_integrations: true, ai_features: false, ai_generations_per_month: 0,
+      max_users: 5, platform_integrations: true, max_accounts_per_platform: 2, ai_features: false, ai_generations_per_month: 0,
       messaging_and_listings: false, advanced_inventory: false, trial_days: null,
       sort_order: 2, highlighted: true,
     };
@@ -61,6 +64,7 @@ describe("entitlementsOf", () => {
     expect(NO_ENTITLEMENTS).toEqual({
       maxUsers: 1, platformIntegrations: false, aiFeatures: false,
       aiGenerationsPerMonth: 0, messagingAndListings: false, advancedInventory: false,
+      maxAccountsPerPlatform: 0,
     });
   });
   it("maps null max_users to Infinity", () => {
@@ -164,5 +168,27 @@ describe("toWireEntitlements / fromWireEntitlements", () => {
     expect(JSON.parse(JSON.stringify(wire)).maxUsers).toBe(-1);
     expect(fromWireEntitlements(wire).maxUsers).toBe(Infinity);
     expect(fromWireEntitlements(wire)).toEqual(ent);
+  });
+});
+
+describe("maxAccountsPerPlatform", () => {
+  it("maps null to Infinity and keeps a number", () => {
+    expect(getMaxAccountsPerPlatform(entitlementsOf(plan({ maxAccountsPerPlatform: null })))).toBe(Infinity);
+    expect(getMaxAccountsPerPlatform(entitlementsOf(plan({ maxAccountsPerPlatform: 2 })))).toBe(2);
+  });
+  it("is 0 without platform integrations, whatever the column says", () => {
+    expect(entitlementsOf(plan({ platformIntegrations: false, maxAccountsPerPlatform: null })).maxAccountsPerPlatform).toBe(0);
+  });
+  it("canAddAccount allows up to the cap", () => {
+    const ent = entitlementsOf(plan({ maxAccountsPerPlatform: 2 }));
+    expect(canAddAccount(ent, 1)).toBe(true);
+    expect(canAddAccount(ent, 2)).toBe(false);
+    expect(canAddAccount(entitlementsOf(plan({ maxAccountsPerPlatform: null })), 50)).toBe(true);
+    expect(canAddAccount(NO_ENTITLEMENTS, 0)).toBe(false);
+  });
+  it("round-trips unlimited through the wire format as -1", () => {
+    const ent = entitlementsOf(plan({ maxAccountsPerPlatform: null }));
+    expect(toWireEntitlements(ent).maxAccountsPerPlatform).toBe(-1);
+    expect(fromWireEntitlements(toWireEntitlements(ent))).toEqual(ent);
   });
 });

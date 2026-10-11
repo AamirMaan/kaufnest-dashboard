@@ -28,6 +28,9 @@ create table if not exists control.plans (
   ai_generations_per_month integer not null default 0 check (ai_generations_per_month >= 0),
   messaging_and_listings   boolean not null default false,
   advanced_inventory       boolean not null default false,
+  -- Connected seller accounts per platform (eBay/Amazon counted separately).
+  -- null = unlimited. Ignored (treated as 0) without platform_integrations.
+  max_accounts_per_platform integer check (max_accounts_per_platform is null or max_accounts_per_platform >= 0),
   trial_days               integer,
   sort_order               integer not null default 0,
   highlighted              boolean not null default false,
@@ -70,14 +73,14 @@ grant select, insert on control.plan_prices to service_role;
 insert into control.plans
   (key, kind, name, tagline, visibility, monthly_eur, max_users,
    platform_integrations, ai_features, ai_generations_per_month,
-   messaging_and_listings, advanced_inventory, trial_days, sort_order, highlighted)
+   messaging_and_listings, advanced_inventory, max_accounts_per_platform, trial_days, sort_order, highlighted)
 values
   ('trial',    'trial', 'Trial',    '',
-     'hidden', null, null, true,  true,  300, true,  true,  14,   0, false),
+     'hidden', null, null, true,  true,  300, true,  true,  null, 14,   0, false),
   ('starter',  'paid',  'Starter',  'Bookkeeping for a small team, entered by hand.',
-     'public', 20,   3,    false, false, 0,   false, false, null, 1, false),
+     'public', 20,   3,    false, false, 0,   false, false, 0,    null, 1, false),
   ('pro',      'paid',  'Pro',      'Pull your eBay and Amazon orders in automatically.',
-     'public', 30,   5,    true,  false, 0,   false, false, null, 2, true),
+     'public', 30,   5,    true,  false, 0,   false, false, 2,    null, 2, true),
   ('business', 'paid',  'Business', 'Run listings, messages and the whole operation in one place.',
-     'public', 50,   null, true,  true,  300, true,  true,  null, 3, false)
+     'public', 50,   null, true,  true,  300, true,  true,  null, null, 3, false)
 on conflict (key) do nothing;

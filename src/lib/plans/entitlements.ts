@@ -25,6 +25,8 @@ export interface Plan {
   aiGenerationsPerMonth: number;
   messagingAndListings: boolean;
   advancedInventory: boolean;
+  /** Connected seller accounts per platform (eBay and Amazon counted separately); null = unlimited */
+  maxAccountsPerPlatform: number | null;
   trialDays: number | null;
   sortOrder: number;
   highlighted: boolean;
@@ -46,6 +48,7 @@ export interface PlanRow {
   ai_generations_per_month: number;
   messaging_and_listings: boolean;
   advanced_inventory: boolean;
+  max_accounts_per_platform: number | null;
   trial_days: number | null;
   sort_order: number;
   highlighted: boolean;
@@ -69,6 +72,7 @@ export function planFromRow(r: PlanRow): Plan {
     aiGenerationsPerMonth: num(r.ai_generations_per_month) ?? 0,
     messagingAndListings: r.messaging_and_listings,
     advancedInventory: r.advanced_inventory,
+    maxAccountsPerPlatform: num(r.max_accounts_per_platform),
     trialDays: num(r.trial_days),
     sortOrder: num(r.sort_order) ?? 0,
     highlighted: r.highlighted,
@@ -86,6 +90,8 @@ export interface PlanEntitlements {
   messagingAndListings: boolean;
   /** Batches, locations and FIFO cost of goods (advanced inventory). */
   advancedInventory: boolean;
+  /** Connected seller accounts per platform. Infinity = unlimited; 0 without platformIntegrations. */
+  maxAccountsPerPlatform: number;
 }
 
 /** Unknown/missing plan: nothing unlocked. A typo'd key must never grant features. */
@@ -96,6 +102,7 @@ export const NO_ENTITLEMENTS: PlanEntitlements = Object.freeze({
   aiGenerationsPerMonth: 0,
   messagingAndListings: false,
   advancedInventory: false,
+  maxAccountsPerPlatform: 0,
 });
 
 export function entitlementsOf(plan: Plan | null | undefined): PlanEntitlements {
@@ -107,22 +114,36 @@ export function entitlementsOf(plan: Plan | null | undefined): PlanEntitlements 
     aiGenerationsPerMonth: plan.aiFeatures ? plan.aiGenerationsPerMonth : 0,
     messagingAndListings: plan.messagingAndListings,
     advancedInventory: plan.advancedInventory,
+    maxAccountsPerPlatform: !plan.platformIntegrations
+      ? 0
+      : plan.maxAccountsPerPlatform === null
+        ? Infinity
+        : plan.maxAccountsPerPlatform,
   };
 }
 
 /**
  * Entitlements as they cross the Server → Client Component boundary
  * (dashboard/layout.tsx → StoreProvider). `Infinity` does not survive RSC
- * serialization reliably, so unlimited `maxUsers` travels as -1.
+ * serialization reliably, so unlimited `maxUsers`/`maxAccountsPerPlatform`
+ * travel as -1.
  */
 export type WirePlanEntitlements = PlanEntitlements;
 
 export function toWireEntitlements(ent: PlanEntitlements): WirePlanEntitlements {
-  return { ...ent, maxUsers: Number.isFinite(ent.maxUsers) ? ent.maxUsers : -1 };
+  return {
+    ...ent,
+    maxUsers: Number.isFinite(ent.maxUsers) ? ent.maxUsers : -1,
+    maxAccountsPerPlatform: Number.isFinite(ent.maxAccountsPerPlatform) ? ent.maxAccountsPerPlatform : -1,
+  };
 }
 
 export function fromWireEntitlements(wire: WirePlanEntitlements): PlanEntitlements {
-  return { ...wire, maxUsers: wire.maxUsers === -1 ? Infinity : wire.maxUsers };
+  return {
+    ...wire,
+    maxUsers: wire.maxUsers === -1 ? Infinity : wire.maxUsers,
+    maxAccountsPerPlatform: wire.maxAccountsPerPlatform === -1 ? Infinity : wire.maxAccountsPerPlatform,
+  };
 }
 
 export const canAddUser = (ent: PlanEntitlements, currentUserCount: number): boolean =>
@@ -132,6 +153,9 @@ export const hasAiFeatures = (ent: PlanEntitlements): boolean => ent.aiFeatures;
 export const getAiGenerationLimit = (ent: PlanEntitlements): number => ent.aiGenerationsPerMonth;
 export const hasMessagingAndListings = (ent: PlanEntitlements): boolean => ent.messagingAndListings;
 export const hasAdvancedInventory = (ent: PlanEntitlements): boolean => ent.advancedInventory;
+export const getMaxAccountsPerPlatform = (ent: PlanEntitlements): number => ent.maxAccountsPerPlatform;
+export const canAddAccount = (ent: PlanEntitlements, connectedCount: number): boolean =>
+  connectedCount < ent.maxAccountsPerPlatform;
 
 export type PlanFeature = "platformIntegrations" | "aiFeatures" | "messagingAndListings" | "advancedInventory";
 export const PLAN_FEATURES: readonly PlanFeature[] = [

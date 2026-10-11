@@ -12,6 +12,7 @@ import {
   Boxes,
   ClipboardList,
   Users,
+  ArrowLeftRight,
   Settings,
   Shield,
   Plug,
@@ -72,6 +73,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/purchases",
     Icon: ShoppingCart,
     section: "purchases",
+  },
+  {
+    label: "Payouts",
+    href: "/dashboard/payouts",
+    Icon: ArrowLeftRight,
+    section: "payouts",
   },
   {
     label: "Inventory",

@@ -18,6 +18,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate, formatDateTime } from "@/lib/utils/date";
+import { accountName } from "@/lib/utils/platformAccounts";
 import { computeNetProceeds, resolveOrderCogs, grossProfitFromCogs } from "../_components/orderMath";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
@@ -54,6 +55,8 @@ export default function SaleDetailPage({ params }: PageProps) {
   // true, or the free plain PDF label when false. Same hooks-ordering
   // constraint as every other selector in this block — see SKILL.md.
   const shippingLabelsEnabled = useAppSelector((s) => s.currentUser.shippingLabelsEnabled);
+  // Marketplace accounts (056) — resolves sale.connection_id for the Details card.
+  const accounts = useAppSelector((s) => s.integrations.accounts);
   // Advanced inventory (Business plan, Phase 3 Task 6) — entitlement/active
   // state + locations for the "Fulfilled from" row and FIFO cost of goods.
   const advanced = useAdvancedInventory();
@@ -331,6 +334,7 @@ export default function SaleDetailPage({ params }: PageProps) {
   const cogs = resolveOrderCogs(sale, linkedPurchase);
   const grossProfit = grossProfitFromCogs(netProceeds, cogs);
 
+  const saleAccountName = accountName(accounts, sale.connection_id);
   const fulfillmentLocationName = sale.fulfillment_location_id
     ? (advanced.locations.find((l) => l.id === sale.fulfillment_location_id)?.name ?? "Unknown location")
     : null;
@@ -572,6 +576,8 @@ export default function SaleDetailPage({ params }: PageProps) {
             {advanced.active && sale.fulfillment_location_id && (
               <FinRow label="Fulfilled from" value={fulfillmentLocationName} />
             )}
+
+            {saleAccountName && <FinRow label="Account" value={saleAccountName} />}
 
             {sale.restock && (
               <div className="rounded-(--radius-btn) bg-(--color-success-bg) border border-green-200 px-3 py-2 text-xs text-(--color-success-text)">

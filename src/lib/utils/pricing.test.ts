@@ -12,6 +12,7 @@ const plan = (over: Partial<Plan> = {}): Plan => ({
   stripePriceId: "price_1",
   maxUsers: 5,
   platformIntegrations: true,
+  maxAccountsPerPlatform: 2,
   aiFeatures: false,
   aiGenerationsPerMonth: 0,
   messagingAndListings: false,

@@ -58,8 +58,10 @@ export interface TokenSet {
 }
 
 export interface ExchangeCodeResult extends TokenSet {
-  /** Seller's account id on the platform (eBay username, Amazon selling partner id) */
+  /** Seller's stable account id on the platform (eBay Identity userId, Amazon selling partner id) */
   externalAccountId?: string;
+  /** eBay username (display + legacy deletion-webhook matching); Amazon leaves this undefined */
+  externalUsername?: string;
   /** Amazon marketplace id from the OAuth redirect; eBay adapters leave this undefined */
   marketplaceId?: string;
 }

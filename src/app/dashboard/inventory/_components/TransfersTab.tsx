@@ -14,7 +14,7 @@ import { writeAuditLog } from "@/lib/utils/audit";
 import { formatDate } from "@/lib/utils/date";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import { fetchTransfersPage, type StockTransferRow } from "../_store/transfersSlice";
-import { pageAfterRemoval } from "../_lib/transfers";
+import { pageAfterRemoval } from "@/lib/utils/pagedQuery";
 import { TransferStockModal } from "./TransferStockModal";
 
 interface Props {

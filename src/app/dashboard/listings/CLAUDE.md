@@ -47,8 +47,11 @@ covers only Part 1; Part 2's design is
   (2026-08-27): renders an upgrade prompt when `usePlan().ent` lacks
   Messages & Listings (`hasMessagingAndListings`, `lib/plans/entitlements.ts`;
   copy from `availability("messagingAndListings", "eBay listing creation")`), an "eBay connection
-  required" prompt when `state.integrations.connections` has no `platform:
-  "ebay"` row with `status === "connected"`, or `children` otherwise. Used by
+  required" prompt when `firstUsableAccount(state.integrations.connections,
+  "ebay")` (`lib/utils/activeAccounts.ts`) is null — no connected, non-paused
+  eBay account, the same rule as the server's `getConnection` shim the publish
+  routes use (multi-account, 2026-10-10: a tenant can have several eBay rows, so
+  checking only the first row was wrong) — or `children` otherwise. Used by
   all three route files above — change the gate condition/copy here, not
   per-route.
 - `_components/ListingForm.tsx` (2026-09-02, replaced `ListingWizard.tsx`) —

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Pagination } from "@/components/ui/Pagination";
-import { PlatformBadge, StatusBadge } from "@/components/ui/Badge";
+import { Badge, PlatformBadge, StatusBadge } from "@/components/ui/Badge";
 import { SummaryTiles } from "@/components/ui/SummaryTiles";
 import { useToast } from "@/components/ui/Toast";
 import { Pencil, Trash2, FileDown, Download, Upload } from "lucide-react";
@@ -35,6 +35,7 @@ import {
 } from "@/lib/utils/filters";
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
+import { UNASSIGNED_ACCOUNT, accountLabel, accountName, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
 import { salesFilterParams } from "./_store/salesFilterParams";
@@ -57,6 +58,9 @@ export default function SalesPage() {
   const summaryLoading = useAppSelector((s) => s.sales.summaryLoading);
   const summaryError = useAppSelector((s) => s.sales.summaryError);
   const summaryVersion = useAppSelector((s) => s.sales.summaryVersion);
+  const accounts = useAppSelector((s) => s.integrations.accounts);
+  // Account filter/column only appear once a platform has 2+ accounts.
+  const showAccounts = hasMultipleAccounts(accounts);
   const { can } = useAccess();
   const canEdit = can("orders", 2);
   const canDelete = can("orders", 3);
@@ -180,6 +184,8 @@ export default function SalesPage() {
       if (p.p_platform) query = query.eq("platform", p.p_platform);
       if (p.p_marketplace === UNKNOWN_MARKETPLACE) query = query.is("marketplace", null);
       else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
+      if (p.p_connection_id === UNASSIGNED_ACCOUNT) query = query.is("connection_id", null);
+      else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
       if (p.p_currency) query = query.eq("currency", p.p_currency);
       if (p.p_status) query = query.eq("status", p.p_status);
       if (p.p_pattern) {
@@ -193,11 +199,12 @@ export default function SalesPage() {
 
     if (allRows.length === 0) return;
 
-    const headers = ["date", "product_name", "platform", "marketplace", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee"];
+    const headers = ["date", "product_name", "platform", "marketplace", "quantity", "unit_price", "total_amount", "currency", "vat_rate", "vat_amount", "status", "description", "shipping_cost", "shipping_charged", "advertising_fee", "platform_fee", "account"];
     const rows = allRows.map((s) => [
       s.date, s.product_name, s.platform, s.marketplace ?? "", s.quantity, s.unit_price, s.total_amount,
       s.currency, s.vat_rate ?? "", s.vat_amount ?? "", s.status, s.description ?? "",
       s.shipping_cost ?? "", s.shipping_charged ?? "", s.advertising_fee ?? "", s.platform_fee ?? "",
+      accountName(accounts, s.connection_id) ?? "",
     ]);
     exportToCsv(`sales-${new Date().toISOString().split("T")[0]}`, headers, rows);
   }
@@ -262,6 +269,18 @@ export default function SalesPage() {
         </div>
       ),
     },
+    ...(showAccounts
+      ? [
+          {
+            header: "Account",
+            sortValue: (s: Sale) => accountName(accounts, s.connection_id) ?? "",
+            render: (s: Sale) => {
+              const name = accountName(accounts, s.connection_id);
+              return name ? <Badge label={name} variant="info" /> : <span className="text-xs text-[var(--color-text-muted)]">—</span>;
+            },
+          },
+        ]
+      : []),
     {
       header: "Status",
       sortValue: (s: Sale) => s.status,
@@ -417,6 +436,18 @@ export default function SalesPage() {
             <option value={UNKNOWN_MARKETPLACE}>Unknown</option>
           </select>
         </div>
+        {showAccounts && (
+          <div>
+            <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Account</span>
+            <select value={filters.account} onChange={(e) => setFilter("account", e.target.value)} className={filterInputCls}>
+              <option value="all">All Accounts</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{`${a.platform === "ebay" ? "eBay" : "Amazon"} · ${accountLabel(a)}`}</option>
+              ))}
+              <option value={UNASSIGNED_ACCOUNT}>Unassigned</option>
+            </select>
+          </div>
+        )}
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Status</span>
           <select

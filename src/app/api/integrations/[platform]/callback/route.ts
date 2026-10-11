@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter, isIntegrationPlatform } from "@/lib/integrations/registry";
-import { upsertConnection } from "@/lib/integrations/tokenStore";
-
-function redirectToIntegrations(req: NextRequest, query: Record<string, string>): NextResponse {
-  // Use NEXT_PUBLIC_SITE_URL so the redirect always resolves to the public
-  // hostname — req.url can be an internal Vercel URL behind a reverse proxy.
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
-  const url = new URL("/dashboard/integrations", base);
-  for (const [key, value] of Object.entries(query)) {
-    url.searchParams.set(key, value);
-  }
-  return NextResponse.redirect(url);
-}
+import { insertConnection, listConnections, updateConnection } from "@/lib/integrations/tokenStore";
+import { decideConnectionSave, defaultDisplayName, displayNameForSave } from "@/lib/integrations/connectionSave";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
+import { OAUTH_TARGET_COOKIE, redirectToIntegrations } from "@/lib/integrations/redirect";
+import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ platform: string }> }) {
   const { platform } = await params;
@@ -22,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
 
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
-  const { client, userId } = auth.context;
+  const { client, userId, tenantSchema } = auth.context;
 
   // eBay returns the authorization code as the standard `code` param;
   // Amazon SP-API returns it as `spapi_oauth_code`.
@@ -40,34 +33,67 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
   try {
     const tokens = await adapter.exchangeCode(code);
 
-    // Amazon's SP-API redirect includes the seller's account id directly in
-    // the query string — eBay requires no equivalent extra call for this flow.
+    // Amazon's SP-API redirect includes the seller's account id in the query
+    // string; eBay's comes from the Identity API inside exchangeCode.
     const externalAccountId =
       tokens.externalAccountId ?? req.nextUrl.searchParams.get("selling_partner_id") ?? null;
+    if (!externalAccountId) {
+      return redirectToIntegrationsWithError(req, platform, INTEGRATION_ERRORS.INTEGRATION_ACCOUNT_UNIDENTIFIED);
+    }
 
-    await upsertConnection(client, platform, {
-      status: "connected",
+    const [ent, rows] = await Promise.all([getTenantEntitlements(tenantSchema), listConnections(client, platform)]);
+    // Set by the connect route for ?reconnect=<id>; absent for "Add account".
+    const targetId = req.cookies.get(OAUTH_TARGET_COOKIE)?.value ?? null;
+    const decision = decideConnectionSave(rows, platform, externalAccountId, ent, targetId);
+    if (decision.kind === "limit") {
+      return redirectToIntegrationsWithError(req, platform, INTEGRATION_ERRORS.INTEGRATION_ACCOUNT_LIMIT);
+    }
+    if (decision.kind === "legacy_pending") {
+      return redirectToIntegrationsWithError(req, platform, INTEGRATION_ERRORS.INTEGRATION_LEGACY_RECONNECT);
+    }
+
+    const fields = {
+      status: "connected" as const,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       token_expires_at: tokens.expires_at,
       external_account_id: externalAccountId,
+      external_username: tokens.externalUsername ?? null,
       marketplace_id: tokens.marketplaceId ?? null,
       last_sync_status: null,
       last_sync_error: null,
       connected_by: userId,
-    });
+    };
+    const name = defaultDisplayName(platform, externalAccountId, tokens.externalUsername);
 
-    const success = redirectToIntegrations(req, { connected: platform });
+    let connectionId: string;
+    if (decision.kind === "insert") {
+      connectionId = await insertConnection(client, platform, { ...fields, display_name: name, is_active: true });
+    } else {
+      connectionId = decision.id;
+      const existing = rows.find((r) => r.id === decision.id);
+      // Never overwrite an admin's rename; replace an empty name or 056's
+      // generic placeholder on adopted legacy rows.
+      const displayName = displayNameForSave(decision, existing?.display_name, name);
+      await updateConnection(client, connectionId, {
+        ...fields,
+        ...(displayName ? { display_name: displayName } : {}),
+      });
+    }
+
+    const success = redirectToIntegrations(req, { connected: platform, account: connectionId });
     success.cookies.delete("kn_oauth_state");
+    success.cookies.delete(OAUTH_TARGET_COOKIE);
     return success;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return redirectToIntegrationsWithError(req, platform, message);
+    console.error("[integrations/callback] connect failed:", err instanceof Error ? err.message : err);
+    return redirectToIntegrationsWithError(req, platform, "Connecting the account failed. Please try again.");
   }
 }
 
 function redirectToIntegrationsWithError(req: NextRequest, platform: string, message: string): NextResponse {
   const response = redirectToIntegrations(req, { error: message, platform });
   response.cookies.delete("kn_oauth_state");
+  response.cookies.delete(OAUTH_TARGET_COOKIE);
   return response;
 }

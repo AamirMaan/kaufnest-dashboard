@@ -25,9 +25,8 @@ import {
 } from "@/store/slices/currentUserSlice";
 import { fromWireEntitlements, type PlanEntitlements, type PlanFeature } from "@/lib/plans/entitlements";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
-import { hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
+import { hydrateAccounts, hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
-import { hydratePayouts } from "@/store/slices/platformPayoutsSlice";
 import { hydrateListingDrafts } from "@/app/dashboard/listings/_store/listingsSlice";
 import { hydrateMessages } from "@/app/dashboard/messages/_store/messagesSlice";
 import type {
@@ -39,9 +38,9 @@ import type {
   Profile,
   CompanyProfile,
   TenantPlan,
+  PlatformAccount,
   PlatformConnection,
   DropshipListing,
-  PlatformPayout,
   EbayListingDraft,
   EbayMessage,
 } from "@/types";
@@ -68,8 +67,8 @@ interface StoreProviderProps {
   shippingLabelsEnabled?: boolean;
   access?: AccessMap;
   platformConnections?: PlatformConnection[];
+  platformAccounts?: PlatformAccount[];
   dropshipListings?: DropshipListing[];
-  platformPayouts?: PlatformPayout[];
   listingDrafts?: { data: EbayListingDraft[]; count: number };
   messages?: { data: EbayMessage[]; count: number };
 }
@@ -92,8 +91,8 @@ export function StoreProvider({
   shippingLabelsEnabled,
   access,
   platformConnections,
+  platformAccounts,
   dropshipListings,
-  platformPayouts,
   listingDrafts,
   messages,
 }: StoreProviderProps) {
@@ -115,8 +114,8 @@ export function StoreProvider({
     if (shippingLabelsEnabled !== undefined) store.dispatch(setShippingLabelsEnabled(shippingLabelsEnabled));
     if (access)             store.dispatch(setAccess(access));
     if (platformConnections) store.dispatch(hydrateConnections(platformConnections));
+    if (platformAccounts) store.dispatch(hydrateAccounts(platformAccounts));
     if (dropshipListings)  store.dispatch(hydrateListings(dropshipListings));
-    if (platformPayouts)   store.dispatch(hydratePayouts(platformPayouts));
     if (listingDrafts)     store.dispatch(hydrateListingDrafts({ data: listingDrafts.data, count: listingDrafts.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     if (messages)          store.dispatch(hydrateMessages({ data: messages.data, count: messages.count, page: 1, pageSize: DEFAULT_PAGE_SIZE }));
     return store;

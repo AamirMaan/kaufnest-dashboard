@@ -34,28 +34,28 @@ for (const [key, value] of Object.entries(parsedEnv)) {
 const SEEDED: Record<string, Omit<Plan, "stripeProductId" | "stripePriceId">> = {
   trial: {
     key: "trial", kind: "trial", name: "Trial", tagline: "", visibility: "hidden",
-    monthlyEur: null, maxUsers: null, platformIntegrations: true, aiFeatures: true,
+    monthlyEur: null, maxUsers: null, platformIntegrations: true, maxAccountsPerPlatform: null, aiFeatures: true,
     aiGenerationsPerMonth: 300, messagingAndListings: true, advancedInventory: true,
     trialDays: 14, sortOrder: 0, highlighted: false,
   },
   starter: {
     key: "starter", kind: "paid", name: "Starter",
     tagline: "Bookkeeping for a small team, entered by hand.", visibility: "public",
-    monthlyEur: 20, maxUsers: 3, platformIntegrations: false, aiFeatures: false,
+    monthlyEur: 20, maxUsers: 3, platformIntegrations: false, maxAccountsPerPlatform: 0, aiFeatures: false,
     aiGenerationsPerMonth: 0, messagingAndListings: false, advancedInventory: false,
     trialDays: null, sortOrder: 1, highlighted: false,
   },
   pro: {
     key: "pro", kind: "paid", name: "Pro",
     tagline: "Pull your eBay and Amazon orders in automatically.", visibility: "public",
-    monthlyEur: 30, maxUsers: 5, platformIntegrations: true, aiFeatures: false,
+    monthlyEur: 30, maxUsers: 5, platformIntegrations: true, maxAccountsPerPlatform: 2, aiFeatures: false,
     aiGenerationsPerMonth: 0, messagingAndListings: false, advancedInventory: false,
     trialDays: null, sortOrder: 2, highlighted: true,
   },
   business: {
     key: "business", kind: "paid", name: "Business",
     tagline: "Run listings, messages and the whole operation in one place.", visibility: "public",
-    monthlyEur: 50, maxUsers: null, platformIntegrations: true, aiFeatures: true,
+    monthlyEur: 50, maxUsers: null, platformIntegrations: true, maxAccountsPerPlatform: null, aiFeatures: true,
     aiGenerationsPerMonth: 300, messagingAndListings: true, advancedInventory: true,
     trialDays: null, sortOrder: 3, highlighted: false,
   },

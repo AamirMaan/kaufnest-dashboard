@@ -213,3 +213,14 @@ describe("mergeImportedSale", () => {
     expect(mergeImportedSale({ ...existingSale, marketplace: "ebay.fr" }, incoming).marketplace).toBe("ebay.fr");
   });
 });
+
+describe("mergeImportedSale — connection_id is fill-only", () => {
+  it("fills connection_id on a row that had none", () => {
+    const merged = mergeImportedSale({ ...existingSale, connection_id: null }, { ...existingSale, connection_id: "conn-2" });
+    expect(merged.connection_id).toBe("conn-2");
+  });
+  it("never overwrites a stored connection_id", () => {
+    const merged = mergeImportedSale({ ...existingSale, connection_id: "conn-1" }, { ...existingSale, connection_id: "conn-2" });
+    expect(merged.connection_id).toBe("conn-1");
+  });
+});

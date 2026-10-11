@@ -11,7 +11,7 @@ import { currentUserSlice } from "./slices/currentUserSlice";
 import { companyProfileSlice } from "./slices/companyProfileSlice";
 import { integrationsSlice } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { dropshippingSlice } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
-import { platformPayoutsSlice } from "./slices/platformPayoutsSlice";
+import { payoutsSlice } from "@/app/dashboard/payouts/_store/payoutsSlice";
 import { listingsSlice } from "@/app/dashboard/listings/_store/listingsSlice";
 import { messagesSlice } from "@/app/dashboard/messages/_store/messagesSlice";
 import { notificationsSlice } from "./slices/notificationsSlice";
@@ -32,7 +32,7 @@ export const makeStore = () =>
       companyProfile: companyProfileSlice.reducer,
       integrations: integrationsSlice.reducer,
       dropshipping: dropshippingSlice.reducer,
-      platformPayouts: platformPayoutsSlice.reducer,
+      payouts: payoutsSlice.reducer,
       listings: listingsSlice.reducer,
       messages: messagesSlice.reducer,
       notifications: notificationsSlice.reducer,

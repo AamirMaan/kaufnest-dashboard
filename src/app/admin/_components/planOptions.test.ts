@@ -11,6 +11,7 @@ function plan(over: Partial<Plan> & Pick<Plan, "key" | "name" | "sortOrder">): P
     stripePriceId: null,
     maxUsers: null,
     platformIntegrations: false,
+    maxAccountsPerPlatform: 0,
     aiFeatures: false,
     aiGenerationsPerMonth: 0,
     messagingAndListings: false,

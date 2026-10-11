@@ -12,7 +12,7 @@ needs. It replaces the old hardcoded `PLAN_LIMITS` table in
 
 | File | Server-only? | Owns |
 | --- | --- | --- |
-| `entitlements.ts` | No — pure, client-safe | `Plan`/`PlanRow`/`PlanEntitlements` types, `planFromRow`, `entitlementsOf`, every gating helper (`canAddUser`, `hasPlatformIntegrations`, `hasAiFeatures`, `getAiGenerationLimit`, `hasMessagingAndListings`, `hasAdvancedInventory`), the feature-list helpers (`PLAN_FEATURES`, `sortPlans`, `plansWithFeature`, `planNamesByFeature`, `formatPlanList`, `availabilityLine`), the purchase/assignability rules (`canPurchase`, `isAssignablePlan`), and `toWireEntitlements`/`fromWireEntitlements` (unlimited `maxUsers` ↔ `-1` for the Server → Client Component hop in `dashboard/layout.tsx` → `StoreProvider`) |
+| `entitlements.ts` | No — pure, client-safe | `Plan`/`PlanRow`/`PlanEntitlements` types, `planFromRow`, `entitlementsOf`, every gating helper (`canAddUser`, `hasPlatformIntegrations`, `hasAiFeatures`, `getAiGenerationLimit`, `hasMessagingAndListings`, `hasAdvancedInventory`, `getMaxAccountsPerPlatform`, `canAddAccount` — the multi-account cap; `max_accounts_per_platform` null = unlimited, forced to 0 without `platform_integrations`), the feature-list helpers (`PLAN_FEATURES`, `sortPlans`, `plansWithFeature`, `planNamesByFeature`, `formatPlanList`, `availabilityLine`), the purchase/assignability rules (`canPurchase`, `isAssignablePlan`), and `toWireEntitlements`/`fromWireEntitlements` (unlimited `maxUsers`/`maxAccountsPerPlatform` ↔ `-1` for the Server → Client Component hop in `dashboard/layout.tsx` → `StoreProvider`) |
 | `entitlements.test.ts` | — | unit tests for the above |
 | `catalog.ts` | **Yes** | `getPlanCatalog()` (60 s in-memory cache per server instance), `invalidatePlanCatalog()`, `getPlan(key)`, `getEntitlements(key)`, `getTrialDays()`, `getPlanPriceMap()` — all read `control.plans`/`control.plan_prices` via `createControlClient()` (`src/lib/supabase/control.ts`) |
 | `catalog.test.ts` | — | unit tests, mocks `@/lib/supabase/control` |
@@ -45,7 +45,9 @@ Client Component calls a server route / thunk that goes through
   `src/store/usePlan.ts` (`usePlan(): { ent, availability }`), and
   `useAccess()`/`sections.ts`' `planAllows`/`applyPlanCeiling`/
   `effectiveAccess` take `PlanEntitlements | null`.
-- Server: integrations routes (`review`, `review/import`, `[platform]/connect`),
+- Server: integrations routes (`review`, `review/import`, `[platform]/connect`,
+  `[platform]/callback`, `connections/[id]` — all via `lib/integrations/tenantPlan.ts`
+  `getTenantEntitlements`),
   `lib/ai/authGuard.ts`, `api/listings/ai/usage`, `api/admin/ai-usage`,
   `lib/inventory/authGuard.ts`, `api/users/invite` (user limit) call
   `getEntitlements`/`getPlanCatalog`; `api/signup/provision`,

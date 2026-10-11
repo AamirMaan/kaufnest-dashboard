@@ -14,6 +14,7 @@ export function emptyPlanInput(): PlanInput {
     monthlyEur: null,
     maxUsers: null,
     platformIntegrations: false,
+    maxAccountsPerPlatform: 0,
     aiFeatures: false,
     aiGenerationsPerMonth: 0,
     messagingAndListings: false,
@@ -35,6 +36,7 @@ export function inputFromPlan(plan: Plan): PlanInput {
     monthlyEur: plan.monthlyEur,
     maxUsers: plan.maxUsers,
     platformIntegrations: plan.platformIntegrations,
+    maxAccountsPerPlatform: plan.maxAccountsPerPlatform,
     aiFeatures: plan.aiFeatures,
     aiGenerationsPerMonth: plan.aiGenerationsPerMonth,
     messagingAndListings: plan.messagingAndListings,
@@ -67,8 +69,8 @@ export function visibilityBadge(plan: Pick<Plan, "kind" | "visibility">): {
 }
 
 /**
- * A cleared number input for a field that must hold a number (max users when
- * not Unlimited, AI allowance, display order) becomes NaN, so validatePlan
+ * A cleared number input for a field that must hold a number (max users or
+ * accounts per platform when not Unlimited, AI allowance, display order) becomes NaN, so validatePlan
  * reports it instead of the form silently sending 0 or "unlimited".
  */
 export function parseNumberField(value: string): number {

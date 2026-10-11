@@ -19,6 +19,7 @@ const basePlan = (overrides: Partial<Plan> = {}): Plan => ({
   stripePriceId: "price_p",
   maxUsers: 5,
   platformIntegrations: true,
+  maxAccountsPerPlatform: 2,
   aiFeatures: false,
   aiGenerationsPerMonth: 0,
   messagingAndListings: false,
@@ -38,6 +39,7 @@ const baseInput = (overrides: Partial<PlanInput> = {}): PlanInput => ({
   monthlyEur: 30,
   maxUsers: 5,
   platformIntegrations: true,
+  maxAccountsPerPlatform: 2,
   aiFeatures: false,
   aiGenerationsPerMonth: 0,
   messagingAndListings: false,
@@ -278,7 +280,7 @@ describe("planDiff", () => {
     expect(Object.keys(diff).sort()).toEqual(
       [
         "key", "kind", "name", "tagline", "visibility", "monthlyEur", "maxUsers",
-        "platformIntegrations", "aiFeatures", "aiGenerationsPerMonth", "messagingAndListings",
+        "platformIntegrations", "maxAccountsPerPlatform", "aiFeatures", "aiGenerationsPerMonth", "messagingAndListings",
         "advancedInventory", "trialDays", "sortOrder", "highlighted",
       ].sort()
     );
@@ -297,6 +299,7 @@ describe("planInputToRow", () => {
       monthly_eur: 30,
       max_users: 5,
       platform_integrations: true,
+      max_accounts_per_platform: 2,
       ai_features: false,
       ai_generations_per_month: 0,
       messaging_and_listings: false,
@@ -318,5 +321,39 @@ describe("planInputToRow", () => {
 
     const paidRow = planInputToRow(baseInput());
     expect(paidRow.trial_days).toBeNull();
+  });
+});
+
+describe("maxAccountsPerPlatform", () => {
+  const ctx = { isCreate: false, catalog: [] as Plan[] };
+
+  it("parses absent as 0 and explicit null as unlimited", () => {
+    expect(parsePlanInput({})?.maxAccountsPerPlatform).toBe(0);
+    expect(parsePlanInput({ maxAccountsPerPlatform: null })?.maxAccountsPerPlatform).toBeNull();
+    expect(parsePlanInput({ maxAccountsPerPlatform: "3" })?.maxAccountsPerPlatform).toBe(3);
+  });
+
+  it("requires a whole number ≥ 1 or unlimited while integrations are on", () => {
+    expect(validatePlan(baseInput({ maxAccountsPerPlatform: 0 }), ctx).maxAccountsPerPlatform).toBeDefined();
+    expect(validatePlan(baseInput({ maxAccountsPerPlatform: 1.5 }), ctx).maxAccountsPerPlatform).toBeDefined();
+    expect(validatePlan(baseInput({ maxAccountsPerPlatform: NaN }), ctx).maxAccountsPerPlatform).toBeDefined();
+    expect(validatePlan(baseInput({ maxAccountsPerPlatform: 1 }), ctx).maxAccountsPerPlatform).toBeUndefined();
+    expect(validatePlan(baseInput({ maxAccountsPerPlatform: null }), ctx).maxAccountsPerPlatform).toBeUndefined();
+  });
+
+  it("is ignored without integrations and stored as 0", () => {
+    const input = baseInput({ platformIntegrations: false, maxAccountsPerPlatform: NaN });
+    expect(validatePlan(input, ctx).maxAccountsPerPlatform).toBeUndefined();
+    expect(planInputToRow(input).max_accounts_per_platform).toBe(0);
+  });
+
+  it("flags a cap decrease, including unlimited → a number", () => {
+    expect(detectReductions(basePlan({ maxAccountsPerPlatform: 5 }), baseInput({ maxAccountsPerPlatform: 2 }))).toEqual([
+      "Accounts per platform: 5 → 2",
+    ]);
+    expect(detectReductions(basePlan({ maxAccountsPerPlatform: null }), baseInput({ maxAccountsPerPlatform: 3 }))).toEqual([
+      "Accounts per platform: Unlimited → 3",
+    ]);
+    expect(detectReductions(basePlan({ maxAccountsPerPlatform: 2 }), baseInput({ maxAccountsPerPlatform: null }))).toEqual([]);
   });
 });

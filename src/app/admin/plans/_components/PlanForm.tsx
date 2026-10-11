@@ -96,6 +96,17 @@ export function PlanForm({ mode, original, catalog, tenantCount, onSaved }: Plan
     if (isCreate && !keyTouched) clearServerError("key");
   }
 
+  // Off → no accounts (stored as 0); on → keep a previous cap, else start at 1.
+  function handleIntegrationsToggle(on: boolean) {
+    setInput((prev) => ({
+      ...prev,
+      platformIntegrations: on,
+      maxAccountsPerPlatform: !on ? 0 : prev.maxAccountsPerPlatform === 0 ? 1 : prev.maxAccountsPerPlatform,
+    }));
+    clearServerError("platformIntegrations");
+    clearServerError("maxAccountsPerPlatform");
+  }
+
   function handleAiToggle(on: boolean) {
     setInput((prev) => ({
       ...prev,
@@ -145,6 +156,7 @@ export function PlanForm({ mode, original, catalog, tenantCount, onSaved }: Plan
     !isCreate && original !== null && !isTrial && input.monthlyEur !== original.monthlyEur;
   const newlyRetired = input.visibility === "retired" && original?.visibility !== "retired";
   const unlimited = input.maxUsers === null;
+  const unlimitedAccounts = input.maxAccountsPerPlatform === null;
 
   return (
     <>
@@ -272,11 +284,43 @@ export function PlanForm({ mode, original, catalog, tenantCount, onSaved }: Plan
                 label={label}
                 checked={input[field]}
                 onChange={(e) =>
-                  field === "aiFeatures" ? handleAiToggle(e.target.checked) : update(field, e.target.checked)
+                  field === "aiFeatures"
+                    ? handleAiToggle(e.target.checked)
+                    : field === "platformIntegrations"
+                      ? handleIntegrationsToggle(e.target.checked)
+                      : update(field, e.target.checked)
                 }
               />
             ))}
           </div>
+          {input.platformIntegrations && (
+            <Field label="Accounts per platform" error={errorFor("maxAccountsPerPlatform")}>
+              <div className="flex items-center gap-4">
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={numberFieldValue(input.maxAccountsPerPlatform)}
+                  onChange={(e) => update("maxAccountsPerPlatform", parseNumberField(e.target.value))}
+                  onBlur={() => touch("maxAccountsPerPlatform")}
+                  disabled={unlimitedAccounts}
+                  required={!unlimitedAccounts}
+                  className="max-w-[10rem]"
+                />
+                <Checkbox
+                  label="Unlimited"
+                  checked={unlimitedAccounts}
+                  onChange={(e) =>
+                    update(
+                      "maxAccountsPerPlatform",
+                      e.target.checked ? null : (original?.maxAccountsPerPlatform || 1)
+                    )
+                  }
+                />
+              </div>
+              <p className={helpCls}>Connected eBay and Amazon accounts, counted per platform.</p>
+            </Field>
+          )}
           {input.aiFeatures && (
             <Field label="AI generations per month" required error={errorFor("aiGenerationsPerMonth")}>
               <Input

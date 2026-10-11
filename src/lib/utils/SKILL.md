@@ -1,6 +1,6 @@
 ---
 name: lib-utils
-description: Reference for every shared utility module in src/lib/utils (audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, invoiceMath, localeParse, pagedQuery, permissions, pricing, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
+description: Reference for every shared utility module in src/lib/utils (activeAccounts, audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, integrationErrors, invoiceMath, localeParse, pagedQuery, permissions, pricing, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
 ---
 
 # Shared utilities (`src/lib/utils/`)
@@ -233,9 +233,30 @@ The shared contract for the server-side pagination architecture described in
 `AGENTS.md` — every paginated feature uses these rather than its own maths.
 
 - `DEFAULT_PAGE_SIZE = 50` — also the page size `dashboard/layout.tsx` hydrates.
+- `pageAfterRemoval(page, pageSize, totalBefore)` — page to refetch after deleting one row (steps back off an emptied last page). Used by Inventory Transfers and Payouts.
 - `PageRequest` — `{ page, pageSize }`; `page` is **1-indexed**.
 - `rangeFor({ page, pageSize }) → [from, to]` — inclusive bounds for Supabase
   `.range(from, to)`. `page=1, pageSize=50` → `[0, 49]`.
+
+## activeAccounts.ts
+
+Pure, client-safe rule deciding which connected eBay/Amazon accounts are usable
+under the plan cap (oldest-first, admin pause always holds). Shared by the
+Integrations page and server routes so they cannot disagree. Exports
+`resolveActiveAccounts`, `accountState`, `canResumeAccount`, `connectedCount`,
+`firstUsableAccount`. Colocated test. Ordering is by `Date.parse(created_at)`
+with a tie-break on `id`, so accounts sharing a timestamp resolve deterministically.
+The cap comes from `PlanEntitlements.maxAccountsPerPlatform`
+(`lib/plans/entitlements.ts`, `control.plans.max_accounts_per_platform`; null =
+unlimited, forced to 0 without `platform_integrations`) — callers pass the
+tenant's entitlements, not a plan key: client code via `usePlan().ent`, routes
+via `getTenantEntitlements()` (`lib/integrations/tenantPlan.ts`).
+
+## integrationErrors.ts
+
+Client-safe `INTEGRATION_ERRORS` copy keyed by `INTEGRATION_ACCOUNT_*` codes;
+`integrationErrorMessage(code, fallback)` maps a route's `{ error: code }` to
+copy. Colocated test.
 
 ## pricing.ts
 
