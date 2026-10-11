@@ -48,6 +48,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=$(cat); case \"$INPUT\" in *pr*create*|*pr*new*) cd \"$(git -C \"$PWD\" rev-parse --show-toplevel 2>/dev/null || echo \"$PWD\")\" && printf '%s' \"$INPUT\" | python3 .claude/hooks/pr_review_gate.py ;; esac",
+            "statusMessage": "Checking PR review gate"
+          }
+        ]
+      },
+      {
         "matcher": "Read|Glob",
         "hooks": [
           {
