@@ -15,6 +15,7 @@ whether Claude was started at the repo root or in a subfolder, and ends with
 | SessionStart | `hooks/session_start_context.py` | Branch (flagged if `main`), recent commits, which doc-governed areas have uncommitted work, any unread doc-drift review |
 | PreToolUse `Write\|Edit\|MultiEdit` | `verifiers/guard_edit.py` | **Denies** a write that breaks a documented invariant |
 | PreToolUse `Bash` | inline | Nudges toward `graphify query` before grep/find |
+| PreToolUse `Bash` | `hooks/pr_review_gate.py` | **Denies** `gh pr create` until HEAD has been reviewed by `/code-review` + the `pr-reviewer` agent |
 | PreToolUse `Read\|Glob` | inline | Nudges toward graphify before reading source |
 | Stop | `verifiers/verify_changes.py --hook` | Reports security/standards findings in the turn's diff |
 | Stop | `hooks/propose_claude_md.py` | Detects CLAUDE.md/SKILL.md drift, spawns the reflector |
@@ -25,6 +26,7 @@ whether Claude was started at the repo root or in a subfolder, and ends with
 | Path | What |
 | --- | --- |
 | `hooks/` | Session context, doc-drift detection, graphify refresh |
+| `agents/` | Project subagents — `pr-reviewer.md` reviews a PR/branch against AGENTS.md, the verifiers and feature docs |
 | `verifiers/` | Project-invariant rules + enforcement — see `verifiers/README.md` |
 | `settings.json` | Hook wiring (checked in) |
 | `settings.local.json` | Per-developer secrets and permissions (**gitignored**) |
@@ -46,6 +48,16 @@ whether Claude was started at the repo root or in a subfolder, and ends with
 - **`refresh_graphify.py`** — Stop hook. Runs `graphify update . --no-cluster`
   in the background when extractable source changed. Lock-guarded, with a
   15-minute staleness reclaim so a killed rebuild can't block future ones.
+- **`pr_review_gate.py`** — PreToolUse `Bash` gate. When a command runs
+  `gh pr create` (in command position — a commit message or heredoc that only
+  mentions it is ignored) and HEAD has no review marker, it denies the call and
+  tells Claude to run `/code-review` and the `pr-reviewer` agent, show you both
+  reports, fix blockers, then run `python3 .claude/hooks/pr_review_gate.py --mark`.
+  Markers are keyed by commit SHA under `<git-common-dir>/claude-pr-review/`
+  (outside the work tree, shared by worktrees), so any commit after the review
+  needs a fresh one. Plain `python3`, no `uv`, so the gate doesn't silently
+  vanish on a machine without `uv`. Only gates Claude's own Bash calls — a
+  PR you open from your own terminal is unaffected.
 
 ### Why a dedicated API key variable
 

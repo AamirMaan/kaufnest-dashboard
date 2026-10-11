@@ -48,6 +48,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$(git -C \"$PWD\" rev-parse --show-toplevel 2>/dev/null || echo \"$PWD\")\" && python3 .claude/hooks/pr_review_gate.py 2>/dev/null || true",
+            "statusMessage": "Checking PR review gate"
+          }
+        ]
+      },
+      {
         "matcher": "Read|Glob",
         "hooks": [
           {
