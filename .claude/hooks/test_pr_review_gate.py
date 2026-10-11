@@ -7,7 +7,8 @@ Run directly:
 
 Every matching rule needs a negative case next to its positive one: a gate that
 fires on commit messages and heredocs teaches Claude to `--mark` just to get an
-unrelated command through, which defeats the gate.
+unrelated command through, which defeats the gate. Cases marked (r1)/(r2) came
+from the first and second review rounds.
 """
 from __future__ import annotations
 
@@ -19,55 +20,88 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pr_review_gate import Target, find_target  # noqa: E402
+from pr_review_gate import blank_inert, classify  # noqa: E402
 
 GATE = Path(__file__).parent / "pr_review_gate.py"
+PLAIN, AMBIG = "plain", "ambiguous"
 
-# (name, command, expected Target or None)
-CASES: list[tuple[str, str, Target | None]] = [
-    # ---- opens a PR ----
-    ("plain", "gh pr create --title t", Target(None, None)),
-    ("after push", "git push -u origin x && gh pr create --fill", Target(None, None)),
-    ("env prefix", "GH_TOKEN=x gh pr create", Target(None, None)),
-    ("quoted env value", 'GH_TOKEN="a b" gh pr create', Target(None, None)),
-    ("env command", "env GH_TOKEN=x gh pr create", Target(None, None)),
-    ("command builtin", "command gh pr create", Target(None, None)),
-    ("time", "time gh pr create", Target(None, None)),
-    ("absolute path", "/opt/homebrew/bin/gh pr create", Target(None, None)),
-    ("global flag", "gh -R owner/repo pr create", Target(None, None)),
-    ("long global flag", "gh --repo owner/repo pr create", Target(None, None)),
-    ("pr new alias", "gh pr new --fill", Target(None, None)),
-    ("then", "if git push; then gh pr create; fi", Target(None, None)),
-    ("subshell", "(gh pr create)", Target(None, None)),
-    ("substitution", 'URL=$(gh pr create --fill)', Target(None, None)),
-    ("backticks", "URL=`gh pr create --fill`", Target(None, None)),
-    ("substitution in quotes", 'echo "$(gh pr create --fill)"', Target(None, None)),
-    ("next line", "git push\ngh pr create --fill", Target(None, None)),
-    ("body heredoc", "gh pr create --body \"$(cat <<'EOF'\nhi\nEOF\n)\"",
-     Target(None, None)),
-    ("cd first", "cd ../wt && gh pr create", Target("../wt", None)),
-    ("quoted cd", "cd '/tmp/my wt' && gh pr create", Target("/tmp/my wt", None)),
-    ("last cd wins", "cd a && cd b; gh pr create", Target("b", None)),
-    ("head flag", "gh pr create --head feat/x --fill", Target(None, "feat/x")),
-    ("head equals", "gh pr create --head=feat/x", Target(None, "feat/x")),
-    ("short head", "gh pr create -H owner:feat/x", Target(None, "owner:feat/x")),
+# (name, command, expected classify() result)
+CASES: list[tuple[str, str, str | None]] = [
+    # ---- opens a PR from HEAD of cwd ----
+    ("plain", "gh pr create --title t", PLAIN),
+    ("after push", "git push -u origin x && gh pr create --fill", PLAIN),
+    ("env prefix", "GH_TOKEN=x gh pr create", PLAIN),
+    ("quoted env value", 'GH_TOKEN="a b" gh pr create', PLAIN),
+    ("env command", "env GH_TOKEN=x gh pr create", PLAIN),
+    ("command builtin", "command gh pr create", PLAIN),
+    ("time", "time gh pr create", PLAIN),
+    ("sudo with flags (r2)", "sudo -u me gh pr create", PLAIN),
+    ("absolute path", "/opt/homebrew/bin/gh pr create", PLAIN),
+    ("global flag", "gh -R owner/repo pr create", PLAIN),
+    ("long global flag", "gh --repo owner/repo pr create", PLAIN),
+    ("pr new alias", "gh pr new --fill", PLAIN),
+    ("then", "if git push; then gh pr create; fi", PLAIN),
+    ("if (r2)", "if gh pr create --fill; then echo ok; fi", PLAIN),
+    ("if not (r2)", "if ! gh pr create --fill; then echo no; fi", PLAIN),
+    ("bang (r2)", "! gh pr create", PLAIN),
+    ("brace group (r2)", "{ gh pr create; }", PLAIN),
+    ("subshell", "(gh pr create)", PLAIN),
+    ("substitution", "URL=$(gh pr create --fill)", PLAIN),
+    ("backticks", "URL=`gh pr create --fill`", PLAIN),
+    ("substitution in quotes", 'echo "$(gh pr create --fill)"', PLAIN),
+    ("next line", "git push\ngh pr create --fill", PLAIN),
+    ("continuation", "gh \\\npr create --fill", PLAIN),
+    ("body heredoc", "gh pr create --body \"$(cat <<'EOF'\nhi\nEOF\n)\"", PLAIN),
+    ("after comment w/ apostrophe (r2)", "git push # it's pushed\ngh pr create", PLAIN),
+    ("after << in quotes (r2)", 'git commit -m "use <<EOF in docs"\ngh pr create', PLAIN),
+    ("after shift in quotes (r2)", "python3 -c 'print(1<<n)'\ngh pr create", PLAIN),
+    ("after arithmetic shift (r2)", "echo $((x<<y))\ngh pr create", PLAIN),
+    ("after <<- heredoc", "cat <<-EOF\n\tbody\n\tEOF\ngh pr create", PLAIN),
+    ("after two heredocs", "cat <<A <<B\na\nA\nb\nB\ngh pr create", PLAIN),
+    ("after here-string", "cat <<< 'x'\ngh pr create", PLAIN),
+    # ---- opens a PR, but the target commit isn't HEAD of cwd ----
+    ("cd first", "cd ../wt && gh pr create", AMBIG),
+    ("cd home (r2)", "cd && gh pr create", AMBIG),
+    ("chained cd (r2)", "cd a && cd b && gh pr create", AMBIG),
+    ("subshell cd (r2)", "(cd sub && make); gh pr create", AMBIG),
+    ("pushd", "pushd ../wt && gh pr create", AMBIG),
+    ("cd after", "gh pr create; cd ..", AMBIG),
+    ("head flag", "gh pr create --head feat/x --fill", AMBIG),
+    ("head equals", "gh pr create --head=feat/x", AMBIG),
+    ("short head", "gh pr create -H owner:feat/x", AMBIG),
+    ("attached short head (r2)", "gh pr create -Hfeat", AMBIG),
+    ("head after substitution (r2)",
+     'gh pr create --title "$(git log -1 --format=%s)" --head feat/x', AMBIG),
+    ("head after continuation (r2)", "gh pr create --fill \\\n  --head feat", AMBIG),
+    ("head after body heredoc (r2)",
+     "gh pr create --body \"$(cat <<'EOF'\nhi\nEOF\n)\" --head feat", AMBIG),
     # ---- does not open a PR ----
     ("unrelated", "ls -la", None),
+    ("apostrophe in comment (r2)", "git status # what's changed", None),
+    ("unterminated single quote (r2)", "echo 'oops", None),
+    ("unterminated double quote", 'echo "oops', None),
     ("other subcommand", "gh pr view 124", None),
     ("echo double", 'echo "gh pr create --title t"', None),
     ("echo single", "echo 'gh pr create'", None),
-    ("commit mention", "git commit -m 'gate blocks gh pr create'", None),
-    ("separator in quotes", 'git commit -m "docs; gh pr create is gated"', None),
-    ("pipe in quotes", "git commit -m 'x | gh pr create'", None),
-    ("commit heredoc", 'git commit -m "$(cat <<\'E\'\nfix\n\ngh pr create now gated\nE\n)"',
-     None),
-    ("cat heredoc", "cat <<E\ngh pr create\nE", None),
-    ("heredoc paren", "cat > t.py <<'EOF'\ncases = {\"(gh pr create)\": 1}\nEOF", None),
-    ("python string", 'python3 -c "print(\'cd wt && gh pr create\')"', None),
+    ("argument word do (r2)", "echo do gh pr create", None),
+    ("comment mention (r2)", "echo hi # see; gh pr create", None),
+    ("commit mention (r1)", "git commit -m 'gate blocks gh pr create'", None),
+    ("separator in quotes (r1)", 'git commit -m "docs; gh pr create is gated"', None),
+    ("pipe in quotes (r1)", "git commit -m 'x | gh pr create'", None),
+    ("commit heredoc (r1)",
+     'git commit -m "$(cat <<\'E\'\nfix\n\ngh pr create now gated\nE\n)"', None),
+    ("cat heredoc (r1)", "cat <<E\ngh pr create\nE", None),
+    ("heredoc paren (r1)", "cat > t.py <<'EOF'\ncases = {\"(gh pr create)\": 1}\nEOF", None),
+    ("tab-indented terminator only ends <<- (r2)",
+     "cat <<EOF\n\tEOF\ngh pr create\nEOF", None),
+    ("hyphenated quoted delimiter (r2)", "cat <<'END-OF'\ngh pr create\nEND-OF", None),
+    ("backslash delimiter (r2)", "cat <<\\EOF\ngh pr create\nEOF", None),
+    ("python string (r1)", 'python3 -c "print(\'cd wt && gh pr create\')"', None),
     ("grep for it", "grep -rn 'gh pr create' .claude", None),
     ("longer subcommand", "gh pr create-foo", None),
-    ("head of other cmd", "gh pr view --head x && git log", None),
 ]
+
+LENGTH_SAMPLES = [cmd for _, cmd, _ in CASES]
 
 
 def run_gate(payload: object) -> dict | None:
@@ -86,52 +120,41 @@ def decision(result: dict | None) -> str:
     return "warn"
 
 
-def make_repo(root: Path, name: str) -> Path:
-    repo = root / name
+def make_repo(root: Path) -> Path:
+    repo = root / "repo"
     repo.mkdir()
     git = ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t"]
     subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "a"], check=True)
-    subprocess.run([*git, "branch", "feat"], check=True)
-    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "b"], check=True)
     return repo
 
 
-def mark(repo: Path, *ref: str) -> None:
-    subprocess.run(["python3", str(GATE), "--mark", *ref], cwd=repo,
-                   capture_output=True, check=True)
-
-
-def end_to_end() -> list[str]:
-    failures = []
+def end_to_end() -> tuple[int, list[str]]:
+    ran, failures = 0, []
 
     def expect(name: str, payload: object, want: str) -> None:
+        nonlocal ran
+        ran += 1
         got = decision(run_gate(payload))
         if got != want:
-            failures.append(f"{name}: expected {want}, got {got}")
+            failures.append(f"e2e {name}: expected {want}, got {got}")
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        a, b = make_repo(root, "a"), make_repo(root, "b")
-        cmd = {"command": "gh pr create --fill"}
+        repo = make_repo(root)
 
-        expect("unreviewed HEAD", {"cwd": str(a), "tool_input": cmd}, "deny")
-        mark(a)
-        expect("reviewed HEAD", {"cwd": str(a), "tool_input": cmd}, "allow")
-        expect("cd into unreviewed repo",
-               {"cwd": str(a), "tool_input": {"command": "cd ../b && gh pr create"}},
-               "deny")
-        expect("--head unreviewed branch",
-               {"cwd": str(a), "tool_input": {"command": "gh pr create --head feat"}},
-               "deny")
-        mark(a, "feat")
-        expect("--head reviewed branch",
-               {"cwd": str(a), "tool_input": {"command": "gh pr create --head feat"}},
-               "allow")
-        expect("not a git repo warns",
-               {"cwd": str(root), "tool_input": cmd}, "warn")
-        expect("unrelated command", {"cwd": str(b), "tool_input": {"command": "ls"}},
-               "allow")
+        def at(path: Path, command: str) -> dict:
+            return {"cwd": str(path), "tool_input": {"command": command}}
+
+        expect("unreviewed HEAD", at(repo, "gh pr create --fill"), "deny")
+        expect("comment apostrophe passes quietly", at(repo, "ls # it's fine"), "allow")
+        subprocess.run(["python3", str(GATE), "--mark"], cwd=repo,
+                       capture_output=True, check=True)
+        expect("reviewed HEAD", at(repo, "gh pr create --fill"), "allow")
+        expect("ambiguous even when reviewed",
+               at(repo, "gh pr create --head main"), "deny")
+        expect("not a git repo warns", at(root, "gh pr create"), "warn")
+        expect("unrelated command", at(repo, "ls"), "allow")
 
     for name, payload in [
         ("null command", {"tool_input": {"command": None}}),
@@ -139,17 +162,24 @@ def end_to_end() -> list[str]:
         ("list payload", [1, 2]),
     ]:
         expect(name, payload, "allow")
-    return failures
+    return ran, failures
 
 
 def main() -> None:
     failures = []
     for name, cmd, want in CASES:
-        got = find_target(cmd)
+        try:
+            got = classify(cmd)
+        except Exception as exc:  # noqa: BLE001 — a crash is a failure, not an abort
+            got = f"{type(exc).__name__}: {exc}"
         if got != want:
             failures.append(f"{name}: {cmd!r}\n    expected {want}, got {got}")
-    failures += end_to_end()
-    total = len(CASES) + 10
+    for cmd in LENGTH_SAMPLES:
+        if len(blank_inert(cmd)) != len(cmd):
+            failures.append(f"length changed: {cmd!r}")
+    ran, e2e_failures = end_to_end()
+    failures += e2e_failures
+    total = len(CASES) + len(LENGTH_SAMPLES) + ran
     for f in failures:
         print(f"FAIL {f}")
     print(f"{total - len(failures)}/{total} passed")
