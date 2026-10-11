@@ -72,7 +72,9 @@ export function planFromRow(r: PlanRow): Plan {
     aiGenerationsPerMonth: num(r.ai_generations_per_month) ?? 0,
     messagingAndListings: r.messaging_and_listings,
     advancedInventory: r.advanced_inventory,
-    maxAccountsPerPlatform: num(r.max_accounts_per_platform),
+    // A column missing from the row (012 not fully applied) fails closed to
+    // 0; only an explicit null means unlimited.
+    maxAccountsPerPlatform: r.max_accounts_per_platform === undefined ? 0 : num(r.max_accounts_per_platform),
     trialDays: num(r.trial_days),
     sortOrder: num(r.sort_order) ?? 0,
     highlighted: r.highlighted,
@@ -128,21 +130,32 @@ export function entitlementsOf(plan: Plan | null | undefined): PlanEntitlements 
  * serialization reliably, so unlimited `maxUsers`/`maxAccountsPerPlatform`
  * travel as -1.
  */
-export type WirePlanEntitlements = PlanEntitlements;
+/**
+ * The limits travel under different names so a wire object is NOT
+ * assignable to PlanEntitlements — an undecoded -1 can never reach
+ * canAddUser/canAddAccount/resolveActiveAccounts (slice(0, -1) would pause
+ * the newest account).
+ */
+export type WirePlanEntitlements = Omit<PlanEntitlements, "maxUsers" | "maxAccountsPerPlatform"> & {
+  wireMaxUsers: number;
+  wireMaxAccountsPerPlatform: number;
+};
 
 export function toWireEntitlements(ent: PlanEntitlements): WirePlanEntitlements {
+  const { maxUsers, maxAccountsPerPlatform, ...rest } = ent;
   return {
-    ...ent,
-    maxUsers: Number.isFinite(ent.maxUsers) ? ent.maxUsers : -1,
-    maxAccountsPerPlatform: Number.isFinite(ent.maxAccountsPerPlatform) ? ent.maxAccountsPerPlatform : -1,
+    ...rest,
+    wireMaxUsers: Number.isFinite(maxUsers) ? maxUsers : -1,
+    wireMaxAccountsPerPlatform: Number.isFinite(maxAccountsPerPlatform) ? maxAccountsPerPlatform : -1,
   };
 }
 
 export function fromWireEntitlements(wire: WirePlanEntitlements): PlanEntitlements {
+  const { wireMaxUsers, wireMaxAccountsPerPlatform, ...rest } = wire;
   return {
-    ...wire,
-    maxUsers: wire.maxUsers === -1 ? Infinity : wire.maxUsers,
-    maxAccountsPerPlatform: wire.maxAccountsPerPlatform === -1 ? Infinity : wire.maxAccountsPerPlatform,
+    ...rest,
+    maxUsers: wireMaxUsers === -1 ? Infinity : wireMaxUsers,
+    maxAccountsPerPlatform: wireMaxAccountsPerPlatform === -1 ? Infinity : wireMaxAccountsPerPlatform,
   };
 }
 

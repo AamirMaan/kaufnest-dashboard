@@ -23,7 +23,7 @@ import {
   setShippingLabelsEnabled,
   setAccess,
 } from "@/store/slices/currentUserSlice";
-import { fromWireEntitlements, type PlanEntitlements, type PlanFeature } from "@/lib/plans/entitlements";
+import { fromWireEntitlements, type PlanFeature, type WirePlanEntitlements } from "@/lib/plans/entitlements";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateAccounts, hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
@@ -60,8 +60,8 @@ interface StoreProviderProps {
   currentUser?: Profile;
   companyProfile?: CompanyProfile;
   tenantPlan?: TenantPlan | null;
-  /** Wire form (`toWireEntitlements`: unlimited maxUsers = -1) — converted back here. */
-  planEntitlements?: PlanEntitlements | null;
+  /** Wire form (`toWireEntitlements`: unlimited limits = -1) — converted back here. */
+  planEntitlements?: WirePlanEntitlements | null;
   planNamesByFeature?: Record<PlanFeature, string[]> | null;
   aiEnabled?: boolean;
   shippingLabelsEnabled?: boolean;

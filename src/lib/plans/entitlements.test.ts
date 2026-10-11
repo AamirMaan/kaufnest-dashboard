@@ -158,14 +158,14 @@ describe("isAssignablePlan", () => {
 describe("toWireEntitlements / fromWireEntitlements", () => {
   it("round-trips a finite user limit unchanged", () => {
     const ent = entitlementsOf(plan({ maxUsers: 5 }));
-    expect(toWireEntitlements(ent).maxUsers).toBe(5);
+    expect(toWireEntitlements(ent).wireMaxUsers).toBe(5);
     expect(fromWireEntitlements(toWireEntitlements(ent))).toEqual(ent);
   });
   it("encodes unlimited (Infinity) as -1 and decodes it back", () => {
     const ent = entitlementsOf(plan({ maxUsers: null }));
     const wire = toWireEntitlements(ent);
-    expect(wire.maxUsers).toBe(-1);
-    expect(JSON.parse(JSON.stringify(wire)).maxUsers).toBe(-1);
+    expect(wire.wireMaxUsers).toBe(-1);
+    expect(JSON.parse(JSON.stringify(wire)).wireMaxUsers).toBe(-1);
     expect(fromWireEntitlements(wire).maxUsers).toBe(Infinity);
     expect(fromWireEntitlements(wire)).toEqual(ent);
   });
@@ -188,7 +188,26 @@ describe("maxAccountsPerPlatform", () => {
   });
   it("round-trips unlimited through the wire format as -1", () => {
     const ent = entitlementsOf(plan({ maxAccountsPerPlatform: null }));
-    expect(toWireEntitlements(ent).maxAccountsPerPlatform).toBe(-1);
+    expect(toWireEntitlements(ent).wireMaxAccountsPerPlatform).toBe(-1);
     expect(fromWireEntitlements(toWireEntitlements(ent))).toEqual(ent);
+  });
+});
+
+describe("planFromRow — max_accounts_per_platform", () => {
+  const row = (extra: Partial<PlanRow>): PlanRow => ({
+    key: "pro", kind: "paid", name: "Pro", tagline: "", visibility: "public",
+    monthly_eur: 30, stripe_product_id: null, stripe_price_id: null,
+    max_users: 5, platform_integrations: true, max_accounts_per_platform: 2, ai_features: false,
+    ai_generations_per_month: 0, messaging_and_listings: false, advanced_inventory: false,
+    trial_days: null, sort_order: 2, highlighted: false, ...extra,
+  });
+  it("fails closed to 0 when the column is missing from the row", () => {
+    const r = row({});
+    delete (r as Partial<PlanRow>).max_accounts_per_platform;
+    expect(planFromRow(r).maxAccountsPerPlatform).toBe(0);
+    expect(entitlementsOf(planFromRow(r)).maxAccountsPerPlatform).toBe(0);
+  });
+  it("keeps an explicit null as unlimited", () => {
+    expect(planFromRow(row({ max_accounts_per_platform: null })).maxAccountsPerPlatform).toBeNull();
   });
 });

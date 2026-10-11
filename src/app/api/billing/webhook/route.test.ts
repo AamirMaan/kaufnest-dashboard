@@ -78,6 +78,19 @@ it("refreshes the catalog and writes the plan from known metadata", async () => 
   expect(update).toHaveBeenCalledWith({ stripe_subscription_id: "sub_1", plan: "pro", status: "active" });
 });
 
+it("resolves the plan from the billed price before stale metadata", async () => {
+  getPlanCatalog.mockResolvedValue([
+    { key: "trial", kind: "trial" },
+    { key: "pro", kind: "paid" },
+    { key: "business", kind: "paid" },
+  ]);
+  getPlanPriceMap.mockResolvedValue(new Map([["price_p", "pro"], ["price_b", "business"]]));
+  event = subEvent("pro", "price_b");
+  const res = await POST(req);
+  expect(res.status).toBe(200);
+  expect(update).toHaveBeenCalledWith({ stripe_subscription_id: "sub_1", plan: "business", status: "active" });
+});
+
 it("returns 500 and writes nothing when an active subscription's plan is unresolved", async () => {
   event = subEvent("ghost", "price_unknown");
   const res = await POST(req);

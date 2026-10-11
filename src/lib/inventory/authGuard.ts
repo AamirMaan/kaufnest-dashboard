@@ -44,13 +44,15 @@ export async function requireAdvancedInventoryAdmin(): Promise<AdvancedInventory
   let ent: PlanEntitlements;
   try {
     const control = createControlClient();
-    const { data: tenant } = await control
+    const { data: tenant, error: tenantError } = await control
       .schema("control")
       .from("tenants")
       .select("plan")
       .eq("schema_name", tenantSchema)
-      .single();
-    plan = (tenant as { plan: TenantPlan } | null)?.plan ?? null;
+      .maybeSingle<{ plan: TenantPlan }>();
+    // A lookup failure is a 500 below, not a misleading "Tenant not found".
+    if (tenantError) throw new Error(`tenant lookup failed: ${tenantError.message}`);
+    plan = tenant?.plan ?? null;
     ent = await getEntitlements(plan);
   } catch (err) {
     console.error("requireAdvancedInventoryAdmin failed", err);

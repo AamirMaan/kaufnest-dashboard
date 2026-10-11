@@ -27,10 +27,10 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
-      // Which catalog plan this subscription is on: metadata.plan first
-      // (checkout/change-plan always write it), then the price id via
-      // control.plan_prices (grandfathered prices, subscriptions edited in
-      // the Stripe dashboard). Unknown → leave tenants.plan untouched rather
+      // Which catalog plan this subscription is on: the billed price id via
+      // control.plan_prices first (grandfathered prices, prices swapped in the
+      // Stripe dashboard), then metadata.plan (checkout/change-plan write it).
+      // Unknown → leave tenants.plan untouched rather
       // than guessing; the status/subscription-id update still applies —
       // EXCEPT for an active subscription (see below).
       let plan: string | null;

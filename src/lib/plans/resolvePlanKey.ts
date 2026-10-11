@@ -1,9 +1,11 @@
 /**
- * Which plan a Stripe subscription is on (billing webhook). Metadata first
- * (checkout/change-plan always write metadata.plan), then the price id via
- * control.plan_prices — covers grandfathered prices and subscriptions edited
- * in the Stripe dashboard. Null = unknown: the webhook then leaves
- * tenants.plan untouched instead of the old silent "starter" default.
+ * Which plan a Stripe subscription is on (billing webhook). The price id
+ * first, via control.plan_prices — it is what Stripe actually bills, so a
+ * price swapped in the Stripe dashboard (whose metadata.plan still names the
+ * old plan) resolves correctly, as do grandfathered prices. metadata.plan
+ * (written by checkout/change-plan) is the fallback for a price missing from
+ * the history. Null = unknown: the webhook then leaves tenants.plan untouched
+ * instead of the old silent "starter" default.
  */
 export function resolvePlanKey(input: {
   metadataPlan: string | null | undefined;
@@ -12,8 +14,8 @@ export function resolvePlanKey(input: {
   priceToPlan: ReadonlyMap<string, string>;
 }): string | null {
   const { metadataPlan, priceId, paidPlanKeys, priceToPlan } = input;
-  if (metadataPlan && paidPlanKeys.has(metadataPlan)) return metadataPlan;
   const fromPrice = priceId ? priceToPlan.get(priceId) : undefined;
   if (fromPrice && paidPlanKeys.has(fromPrice)) return fromPrice;
+  if (metadataPlan && paidPlanKeys.has(metadataPlan)) return metadataPlan;
   return null;
 }

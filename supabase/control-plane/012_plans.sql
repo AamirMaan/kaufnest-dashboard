@@ -28,9 +28,6 @@ create table if not exists control.plans (
   ai_generations_per_month integer not null default 0 check (ai_generations_per_month >= 0),
   messaging_and_listings   boolean not null default false,
   advanced_inventory       boolean not null default false,
-  -- Connected seller accounts per platform (eBay/Amazon counted separately).
-  -- null = unlimited. Ignored (treated as 0) without platform_integrations.
-  max_accounts_per_platform integer check (max_accounts_per_platform is null or max_accounts_per_platform >= 0),
   trial_days               integer,
   sort_order               integer not null default 0,
   highlighted              boolean not null default false,
@@ -50,6 +47,37 @@ create table if not exists control.plans (
       and trial_days between 1 and 90)
   )
 );
+
+-- Connected seller accounts per platform (eBay/Amazon counted separately;
+-- the multi-account cap from #124). null = unlimited; 0 without
+-- platform_integrations. Added outside the CREATE TABLE so a re-run on a
+-- database that already has an earlier 012 picks it up too — otherwise the
+-- column would be missing and the app would read it as unlimited. The
+-- backfill runs only when the column is first added, so a re-run never
+-- clobbers caps edited in /admin/plans. Existing rows get the seeded caps
+-- (pro 2, business/trial unlimited); any other plan with integrations gets
+-- Pro's 2.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'control' and table_name = 'plans'
+      and column_name = 'max_accounts_per_platform'
+  ) then
+    alter table control.plans add column max_accounts_per_platform integer;
+    update control.plans set max_accounts_per_platform = case
+      when not platform_integrations then 0
+      when key in ('business', 'trial') then null
+      else 2
+    end;
+    alter table control.plans alter column max_accounts_per_platform set default 0;
+    alter table control.plans add constraint plans_accounts_shape check (
+      (platform_integrations and (max_accounts_per_platform is null or max_accounts_per_platform >= 1))
+      or
+      (not platform_integrations and max_accounts_per_platform = 0)
+    );
+  end if;
+end $$;
 
 -- Every Stripe price a plan has ever had. Grandfathered subscriptions stay
 -- on an old price; the webhook resolves it back to its plan through here.

@@ -45,6 +45,21 @@ fail-closed empty-catalog throw live in `catalog.ts`.
 
 ## Gotchas
 
+- **`null` means unlimited, so a *missing* column must not.** `getPlanCatalog()`
+  selects `*`; if a column is absent (an older 012 applied), PostgREST simply
+  omits it and `num(undefined)` would read as `null` → `Infinity`.
+  `planFromRow` maps an `undefined` `max_accounts_per_platform` to 0. Do the
+  same for any future nullable "unlimited" limit, and add it to 012 (or a new
+  migration) with `add column if not exists`, never only inside
+  `create table if not exists`.
+- **Wire limits have their own names.** `WirePlanEntitlements` carries
+  `wireMaxUsers`/`wireMaxAccountsPerPlatform` (−1 = unlimited) so TypeScript
+  rejects passing an undecoded wire object to a gating helper. Add new
+  unlimited-capable limits the same way.
+- **The webhook trusts the price before metadata.** `resolvePlanKey` checks
+  the billed price id against `control.plan_prices` first; `metadata.plan` is
+  only a fallback. Every price a plan gets must therefore be written to
+  `plan_prices` (admin create/edit routes and the seed script do).
 - **Fail closed, always.** `NO_ENTITLEMENTS` (`maxUsers: 1`, every boolean
   `false`, `aiGenerationsPerMonth: 0`) is what `entitlementsOf(null)` and
   `getEntitlements()` on an unknown/typo'd key return. Never add a helper
