@@ -14,6 +14,7 @@ import { groupThreads, latestInboundMessage } from "./_lib/groupThreads";
 import { ThreadList } from "./_components/ThreadList";
 import { ThreadView } from "./_components/ThreadView";
 import { ReplyBox } from "./_components/ReplyBox";
+import { firstUsableAccount } from "@/lib/utils/activeAccounts";
 
 // Debounce so every keystroke doesn't fire its own query — long enough to
 // absorb normal typing speed, short enough that search still feels live.
@@ -44,8 +45,8 @@ export default function MessagesPage() {
   const [searchInput, setSearchInput] = useState("");
 
   const canManage = can("messages", 2);
-  const ebayConnection = connections.find((c) => c.platform === "ebay");
-  const isEbayConnected = ebayConnection?.status === "connected";
+  // Any connected, non-paused eBay account — same rule as the server's getConnection shim.
+  const isEbayConnected = firstUsableAccount(connections, "ebay") !== null;
   const isSearchActive = searchQuery.trim().length > 0;
   const threads = useMemo(
     () => groupThreads(isSearchActive ? searchResults : items),

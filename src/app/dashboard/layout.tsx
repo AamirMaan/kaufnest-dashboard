@@ -7,6 +7,7 @@ import { StoreProvider } from "@/store/StoreProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
 import { parseAccessMap } from "@/lib/permissions/sections";
+import { withPre056Defaults, type PlatformConnectionPre056 } from "./integrations/_lib/pre056Connection";
 import type {
   Profile,
   Sale,
@@ -16,6 +17,7 @@ import type {
   AuditLog,
   CompanyProfile,
   TenantPlan,
+  PlatformAccount,
   PlatformConnection,
   DropshipListing,
   EbayListingDraft,
@@ -73,10 +75,11 @@ export default async function DashboardLayout({
     { data: auditLogs, count: auditLogsCount },
     { data: users },
     { data: companyProfile },
-    { data: platformConnections },
+    { data: platformConnectionsData, error: platformConnectionsError },
     { data: dropshipListings },
     { data: listingDraftsData, count: listingDraftsCount },
     { data: messagesData, count: messagesCount },
+    { data: rawAccounts, error: accountsError },
   ] = await Promise.all([
     supabase
       .from("sales")
@@ -130,8 +133,9 @@ export default async function DashboardLayout({
     supabase
       .from("platform_connections")
       .select(
-        "id, platform, status, external_account_id, marketplace_id, last_synced_at, last_sync_status, last_sync_error, updated_at"
+        "id, platform, status, external_account_id, external_username, display_name, is_active, marketplace_id, last_synced_at, last_sync_status, last_sync_error, created_at, updated_at"
       )
+      .order("created_at", { ascending: true })
       .returns<PlatformConnection[]>(),
     supabase
       .from("dropship_listings")
@@ -150,7 +154,25 @@ export default async function DashboardLayout({
       .order("ebay_created_at", { ascending: false })
       .range(0, DEFAULT_PAGE_SIZE - 1)
       .returns<EbayMessage[]>(),
+    // Token-free account list for every member (056) — Orders' account filter
+    // and the order modals' account picker. Empty (not an error) before 056.
+    supabase.rpc("get_platform_accounts"),
   ]);
+
+  // Before 056 the account columns don't exist and the select above fails;
+  // fall back to the pre-056 columns so connections (and the eBay gates in
+  // Listings/Messages that read them) keep working until it's applied.
+  let platformConnections = platformConnectionsData;
+  if (platformConnectionsError) {
+    console.error("[dashboard/layout] platform_connections select failed, retrying pre-056 columns", platformConnectionsError);
+    const { data: legacyRows } = await supabase
+      .from("platform_connections")
+      .select(
+        "id, platform, status, external_account_id, marketplace_id, last_synced_at, last_sync_status, last_sync_error, created_at, updated_at"
+      )
+      .order("created_at", { ascending: true });
+    platformConnections = (legacyRows ?? []).map((r) => withPre056Defaults(r as PlatformConnectionPre056));
+  }
 
   // Read impersonation cookie — set by /api/admin/impersonate
   const cookieStore = await cookies();
@@ -193,6 +215,9 @@ export default async function DashboardLayout({
   if (accessError) console.error("[dashboard/layout] get_my_access failed", accessError);
   const access = parseAccessMap(accessError ? null : rawAccess, profile.role);
 
+  if (accountsError) console.error("[dashboard/layout] get_platform_accounts failed", accountsError);
+  const platformAccounts = (accountsError ? [] : (rawAccounts ?? [])) as PlatformAccount[];
+
   return (
     <StoreProvider
       sales={{ data: salesData ?? [], count: salesCount ?? 0 }}
@@ -209,6 +234,7 @@ export default async function DashboardLayout({
       shippingLabelsEnabled={shippingLabelsEnabled}
       access={access}
       platformConnections={platformConnections ?? []}
+      platformAccounts={platformAccounts}
       dropshipListings={isAdmin ? (dropshipListings ?? []) : []}
       listingDrafts={{ data: listingDraftsData ?? [], count: listingDraftsCount ?? 0 }}
       messages={{ data: messagesData ?? [], count: messagesCount ?? 0 }}

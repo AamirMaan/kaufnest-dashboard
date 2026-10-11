@@ -11,6 +11,7 @@ import { hasPlatformIntegrations } from "@/lib/utils/planGating";
 import { upsertListings, updateSupplierPrices } from "./_store/dropshippingSlice";
 import { ListingsTable, canCheckSupplierPrice } from "./_components/ListingsTable";
 import type { DropshipListing } from "@/types";
+import { firstUsableAccount } from "@/lib/utils/activeAccounts";
 
 export default function DropshippingPage() {
   const dispatch = useAppDispatch();
@@ -50,8 +51,8 @@ export default function DropshippingPage() {
   }
 
   // 2. eBay connection guard
-  const ebayConnection = connections.find((c) => c.platform === "ebay");
-  if (!ebayConnection || ebayConnection.status !== "connected") {
+  // Any connected, non-paused eBay account — same rule as the server's getConnection shim.
+  if (!firstUsableAccount(connections, "ebay")) {
     return (
       <div>
         <PageHeader

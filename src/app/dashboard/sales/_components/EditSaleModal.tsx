@@ -16,6 +16,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { formatCurrency, vatAmountFromGross } from "@/lib/utils/currency";
 import { normalizeMarketplace } from "@/lib/utils/marketplace";
+import { accountLabel, accountName, accountOptionsFor } from "@/lib/utils/platformAccounts";
 import { isEbayIntegrationSyncedSale } from "@/lib/utils/filters";
 import { selectableProducts, productNameFor } from "./productOptions";
 import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
@@ -42,6 +43,8 @@ interface Props {
 interface FormState {
   platform: Platform;
   marketplace: string;
+  /** Marketplace account (056); "" = unassigned. Reset when platform changes. */
+  connection_id: string;
   product_name: string;
   product_id: string;
   quantity: string;
@@ -77,6 +80,7 @@ function saleToForm(sale: Sale, defaultVatRate: number): FormState {
   return {
     platform: sale.platform,
     marketplace: sale.marketplace ?? "",
+    connection_id: sale.connection_id ?? "",
     product_name: sale.product_name,
     product_id: sale.product_id ?? "",
     quantity: String(sale.quantity),
@@ -109,7 +113,7 @@ function saleToForm(sale: Sale, defaultVatRate: number): FormState {
 }
 
 const blankForm: FormState = {
-  platform: "amazon", marketplace: "", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
+  platform: "amazon", marketplace: "", connection_id: "", product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
   date: "", description: "", vat_included: false, vat_rate: "0",
   status: "pending", customStatus: "", restock: false, reason: "",
   shipping_cost: "", shipping_charged: "", advertising_fee: "", platform_fee: "",
@@ -125,9 +129,12 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
   const { error: toastError, warning } = useToast();
   const products = useAppSelector((s) => s.inventory.selectorItems);
   const defaultVatRate = useAppSelector((s) => s.companyProfile.profile?.vat_rate ?? 19);
+  const accounts = useAppSelector((s) => s.integrations.accounts);
   const purchases = useAppSelector((s) => s.purchases.items);
   const linkedPurchase = purchases.find((p) => p.sale_id === sale?.id) ?? null;
   const [form, setForm] = useState<FormState>(() => (sale ? saleToForm(sale, defaultVatRate) : blankForm));
+  // Account picker only shows once this platform has 2+ accounts.
+  const accountOptions = accountOptionsFor(accounts, form.platform);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFees, setShowFees] = useState(() => {
@@ -263,6 +270,7 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
         .update({
           platform: form.platform,
           marketplace: normalizeMarketplace(form.marketplace),
+          connection_id: form.connection_id || null,
           product_name: form.product_name.trim(),
           product_id: form.product_id || null,
           quantity: qty,
@@ -320,8 +328,8 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
           entityType: "sale",
           entityId: sale.id,
           metadata: {
-            before: { platform: sale.platform, marketplace: sale.marketplace ?? null, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock, tracking_number: sale.tracking_number, shipping_carrier: sale.shipping_carrier, buyer_name: sale.buyer_name, shipping_address_line1: sale.shipping_address_line1, shipping_address_line2: sale.shipping_address_line2, shipping_city: sale.shipping_city, shipping_state: sale.shipping_state, shipping_postal_code: sale.shipping_postal_code, shipping_country: sale.shipping_country, buyer_phone: sale.buyer_phone, buyer_email: sale.buyer_email, fulfillment_location_id: sale.fulfillment_location_id ?? null },
-            after:  { platform: data.platform, marketplace: data.marketplace ?? null, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock, tracking_number: data.tracking_number, shipping_carrier: data.shipping_carrier, buyer_name: data.buyer_name, shipping_address_line1: data.shipping_address_line1, shipping_address_line2: data.shipping_address_line2, shipping_city: data.shipping_city, shipping_state: data.shipping_state, shipping_postal_code: data.shipping_postal_code, shipping_country: data.shipping_country, buyer_phone: data.buyer_phone, buyer_email: data.buyer_email, fulfillment_location_id: data.fulfillment_location_id ?? null },
+            before: { platform: sale.platform, marketplace: sale.marketplace ?? null, connection_id: sale.connection_id ?? null, product_name: sale.product_name, product_id: sale.product_id, quantity: sale.quantity, unit_price: sale.unit_price, currency: sale.currency, date: sale.date, description: sale.description, vat_rate: sale.vat_rate, vat_amount: sale.vat_amount, shipping_cost: sale.shipping_cost, shipping_charged: sale.shipping_charged, advertising_fee: sale.advertising_fee, platform_fee: sale.platform_fee, status: sale.status, restock: sale.restock, tracking_number: sale.tracking_number, shipping_carrier: sale.shipping_carrier, buyer_name: sale.buyer_name, shipping_address_line1: sale.shipping_address_line1, shipping_address_line2: sale.shipping_address_line2, shipping_city: sale.shipping_city, shipping_state: sale.shipping_state, shipping_postal_code: sale.shipping_postal_code, shipping_country: sale.shipping_country, buyer_phone: sale.buyer_phone, buyer_email: sale.buyer_email, fulfillment_location_id: sale.fulfillment_location_id ?? null },
+            after:  { platform: data.platform, marketplace: data.marketplace ?? null, connection_id: data.connection_id ?? null, product_name: data.product_name, product_id: data.product_id, quantity: data.quantity, unit_price: data.unit_price, currency: data.currency, date: data.date, description: data.description, vat_rate: data.vat_rate, vat_amount: data.vat_amount, shipping_cost: data.shipping_cost, shipping_charged: data.shipping_charged, advertising_fee: data.advertising_fee, platform_fee: data.platform_fee, status: data.status, restock: data.restock, tracking_number: data.tracking_number, shipping_carrier: data.shipping_carrier, buyer_name: data.buyer_name, shipping_address_line1: data.shipping_address_line1, shipping_address_line2: data.shipping_address_line2, shipping_city: data.shipping_city, shipping_state: data.shipping_state, shipping_postal_code: data.shipping_postal_code, shipping_country: data.shipping_country, buyer_phone: data.buyer_phone, buyer_email: data.buyer_email, fulfillment_location_id: data.fulfillment_location_id ?? null },
             reason: form.reason.trim(),
           },
         });
@@ -475,7 +483,10 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
 
         <Row>
           <Field label="Platform" required>
-            <Select value={form.platform} onChange={(e) => set("platform", e.target.value as Platform)}>
+            <Select
+              value={form.platform}
+              onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value as Platform, connection_id: "" }))}
+            >
               {PLATFORMS.map((p) => (
                 <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
               ))}
@@ -493,6 +504,21 @@ export function EditSaleModal({ sale, onClose, onSuccess }: Props) {
             placeholder="e.g. amazon.de, ebay.co.uk"
           />
         </Field>
+
+        {(accountOptions.length >= 2 || form.connection_id) && (
+          <Field label="Account">
+            <Select value={form.connection_id} onChange={(e) => set("connection_id", e.target.value)}>
+              <option value="">Unassigned</option>
+              {accountOptions.map((a) => (
+                <option key={a.id} value={a.id}>{accountLabel(a)}</option>
+              ))}
+              {/* Keep a removed/unknown account selectable so an edit doesn't silently drop it. */}
+              {form.connection_id && !accountOptions.some((a) => a.id === form.connection_id) && (
+                <option value={form.connection_id}>{accountName(accounts, form.connection_id) ?? "Removed account"}</option>
+              )}
+            </Select>
+          </Field>
+        )}
 
         {tracksStock && (
           <FulfillmentLocationField

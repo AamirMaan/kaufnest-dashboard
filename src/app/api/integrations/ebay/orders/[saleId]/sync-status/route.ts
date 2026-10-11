@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
-import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
+import { listConnections, ensureValidAccessToken, type ConnectionRow } from "@/lib/integrations/tokenStore";
+import { resolveSaleEbayAccount } from "@/lib/integrations/saleAccount";
+import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 import { ebayAdapter, createShippingFulfillment, cancelOrder } from "@/lib/integrations/ebay";
 import { isEbayIntegrationSyncedSale } from "@/lib/utils/filters";
 import type { Sale } from "@/types";
@@ -81,20 +83,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ saleId:
     );
   }
 
-  let conn;
+  // The sale's own account; an unassigned sale only when the tenant has a
+  // single eBay account (resolveSaleEbayAccount). Paused accounts still
+  // fulfil existing orders — deliberate, see src/lib/integrations/SKILL.md.
+  let conn: ConnectionRow;
   try {
-    conn = await getConnection(client, "ebay");
+    const resolved = resolveSaleEbayAccount(await listConnections(client), sale.connection_id);
+    if (!resolved.ok) {
+      // EditSaleModal / the order page show `error` as-is, so send the copy.
+      return NextResponse.json({ error: INTEGRATION_ERRORS[resolved.code] }, { status: 409 });
+    }
+    conn = resolved.account;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to look up eBay connection";
     console.error("[ebay/sync-status] getConnection failed:", message);
     await client.from("sales").update({ ebay_sync_error: message }).eq("id", saleId);
     return NextResponse.json({ error: message }, { status: 500 });
-  }
-  if (!conn || conn.status !== "connected") {
-    return NextResponse.json(
-      { error: "eBay is not connected. Connect it in Integrations first." },
-      { status: 400 }
-    );
   }
 
   let accessToken: string;

@@ -234,8 +234,10 @@ OAuth token.
 - `store/slices/currentUserSlice` (`tenantPlan`)
 - `store/useAccess` — `useAccess().can("messages", 2)` (Task 5 — replaced
   `lib/utils/permissions`' `hasPermission`)
-- `store/slices` — `s.integrations.connections` (the eBay-connected check;
-  hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
+- `store/slices` — `s.integrations.connections` (the eBay-connected check,
+  `firstUsableAccount(connections, "ebay")` from `lib/utils/activeAccounts` —
+  any connected, non-paused eBay account, matching the server's `getConnection`
+  shim; hydrated app-wide by `dashboard/layout.tsx`/`StoreProvider`, same slice
   Dropshipping/Listings use)
 - `lib/utils/{date, pagedQuery, currency}` — `planGating`'s
   `hasMessagingAndListings` specifically, not `hasPlatformIntegrations`

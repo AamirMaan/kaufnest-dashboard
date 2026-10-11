@@ -16,6 +16,8 @@ interface PlanLimits {
   // /api/inventory/enable-advanced; this gate decides who may switch it on
   // and who sees the UI.
   advancedInventory: boolean;
+  /** Connected seller accounts allowed per platform (eBay and Amazon counted separately). */
+  maxAccountsPerPlatform: number;
 }
 
 const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
@@ -23,10 +25,10 @@ const PLAN_LIMITS: Record<TenantPlan, PlanLimits> = {
   // bookkeeping, so a trial that cannot connect eBay/Amazon cannot
   // demonstrate the product. Safe only because proxy.ts enforces
   // trial_ends_at — see isTrialExpired in lib/utils/trial.ts.
-  trial:    { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true  },
-  starter:  { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false },
-  pro:      { maxUsers: 5,        platformIntegrations: true,  aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false },
-  business: { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true  },
+  trial:    { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true,  maxAccountsPerPlatform: Infinity },
+  starter:  { maxUsers: 3,        platformIntegrations: false, aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false, maxAccountsPerPlatform: 0 },
+  pro:      { maxUsers: 5,        platformIntegrations: true,  aiFeatures: false, aiGenerationsPerMonth: 0,   messagingAndListings: false, advancedInventory: false, maxAccountsPerPlatform: 2 },
+  business: { maxUsers: Infinity, platformIntegrations: true,  aiFeatures: true,  aiGenerationsPerMonth: 300, messagingAndListings: true,  advancedInventory: true,  maxAccountsPerPlatform: Infinity },
 };
 
 export function getPlanLimits(plan: TenantPlan): PlanLimits {
@@ -55,4 +57,12 @@ export function hasMessagingAndListings(plan: TenantPlan): boolean {
 
 export function hasAdvancedInventory(plan: TenantPlan): boolean {
   return PLAN_LIMITS[plan].advancedInventory;
+}
+
+export function getMaxAccountsPerPlatform(plan: TenantPlan): number {
+  return PLAN_LIMITS[plan].maxAccountsPerPlatform;
+}
+
+export function canAddAccount(plan: TenantPlan, connectedCount: number): boolean {
+  return connectedCount < PLAN_LIMITS[plan].maxAccountsPerPlatform;
 }

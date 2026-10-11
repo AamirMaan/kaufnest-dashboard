@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
-import { upsertConnection } from "@/lib/integrations/tokenStore";
+import { listConnections, updateConnection } from "@/lib/integrations/tokenStore";
+import { invalidImportItems } from "@/lib/integrations/reviewImport";
+import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
 import { mergeImportedSale } from "@/lib/integrations/mergeImportedSale";
-import { createControlClient } from "@/lib/supabase/control";
 import { hasPlatformIntegrations } from "@/lib/utils/planGating";
-import type { Currency, IntegrationPlatform, Purchase, Sale, TenantPlan } from "@/types";
+import type { Currency, IntegrationPlatform, Purchase, Sale } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
 export async function POST(req: NextRequest) {
@@ -13,14 +15,8 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
   const { client, userId, tenantSchema } = auth.context;
 
-  const control = createControlClient();
-  const { data: tenant } = await control
-    .schema("control")
-    .from("tenants")
-    .select("plan")
-    .eq("schema_name", tenantSchema)
-    .single();
-  if (!hasPlatformIntegrations((tenant?.plan ?? "trial") as TenantPlan)) {
+  const plan = await getTenantPlan(tenantSchema);
+  if (!hasPlatformIntegrations(plan)) {
     return NextResponse.json(
       { error: "Platform integrations require the Pro or Business plan." },
       { status: 403 }
@@ -28,13 +24,23 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json()) as {
-    items: { platform: IntegrationPlatform; order: NormalizedOrder }[];
+    items: { platform: IntegrationPlatform; order: NormalizedOrder & { connection_id?: string } }[];
     purchaseCosts?: Record<string, { price: string; vendor: string }>;
     orderFees?: Record<string, { advertisingFee: string; platformFee: string }>;
   };
 
   if (!body.items?.length) {
     return NextResponse.json({ imported: 0 });
+  }
+
+  const { active } = resolveActiveAccounts(await listConnections(client), plan);
+  const activeIds = new Map<IntegrationPlatform, Set<string>>();
+  for (const c of active) {
+    if (!activeIds.has(c.platform)) activeIds.set(c.platform, new Set());
+    activeIds.get(c.platform)!.add(c.id);
+  }
+  if (invalidImportItems(body.items, activeIds).length > 0) {
+    return NextResponse.json({ error: "INTEGRATION_ACCOUNT_PAUSED" }, { status: 409 });
   }
 
   const orderFees = body.orderFees ?? {};
@@ -45,7 +51,7 @@ export async function POST(req: NextRequest) {
     return normalizedOrderToSaleRow(order, platform, userId, {
       advertisingFee: isNaN(advertisingFee) ? null : advertisingFee,
       platformFee: isNaN(platformFee) ? null : platformFee,
-    });
+    }, order.connection_id ?? null);
   });
 
   // Fetch existing rows so we can preserve user-owned fields on re-import
@@ -81,10 +87,8 @@ export async function POST(req: NextRequest) {
     .select("id, external_order_id");
 
   if (error) {
-    return NextResponse.json(
-      { error: "Import failed", detail: error.message },
-      { status: 500 }
-    );
+    console.error("[integrations/import] upsert failed:", error.message);
+    return NextResponse.json({ error: "Import failed" }, { status: 500 });
   }
 
   // Create linked purchases for orders where the user filled in a cost
@@ -142,11 +146,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Update last_synced_at for each platform that had items imported
-  const platforms = [...new Set(body.items.map((i) => i.platform))];
+  const usedConnectionIds = [
+    ...new Set(body.items.map((i) => i.order.connection_id).filter((id): id is string => !!id)),
+  ];
   await Promise.all(
-    platforms.map((platform) =>
-      upsertConnection(client, platform, {
+    usedConnectionIds.map((id) =>
+      updateConnection(client, id, {
         last_synced_at: new Date().toISOString(),
         last_sync_status: "ok",
         last_sync_error: null,
