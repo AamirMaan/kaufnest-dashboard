@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
 
 // Shared helper: verify caller is a Boughtopia platform admin via session
-export async function verifyPlatformAdmin(): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+export async function verifyPlatformAdmin(): Promise<{ ok: true; email: string } | { ok: false; response: NextResponse }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -15,7 +15,7 @@ export async function verifyPlatformAdmin(): Promise<{ ok: true } | { ok: false;
     return { ok: false, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  return { ok: true };
+  return { ok: true, email: user.email ?? "" };
 }
 
 export async function GET() {

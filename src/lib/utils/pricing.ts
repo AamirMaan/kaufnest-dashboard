@@ -1,8 +1,4 @@
-import { getPlanLimits } from "@/lib/utils/planGating";
-import type { TenantPlan } from "@/types";
-
-/** The plans a visitor can actually buy — `trial` is granted, never sold. */
-export type PaidPlan = Exclude<TenantPlan, "trial">;
+import { entitlementsOf, sortPlans, type Plan } from "@/lib/plans/entitlements";
 
 export interface PlanFeature {
   label: string;
@@ -10,7 +6,7 @@ export interface PlanFeature {
 }
 
 export interface PricedPlan {
-  plan: PaidPlan;
+  plan: string;
   name: string;
   monthlyEur: number;
   tagline: string;
@@ -19,57 +15,37 @@ export interface PricedPlan {
   highlighted: boolean;
 }
 
-const ORDER: readonly PaidPlan[] = ["starter", "pro", "business"] as const;
-
-const MONTHLY_EUR: Record<PaidPlan, number> = {
-  starter: 20,
-  pro: 30,
-  business: 50,
-};
-
-const NAMES: Record<PaidPlan, string> = {
-  starter: "Starter",
-  pro: "Pro",
-  business: "Business",
-};
-
-const TAGLINES: Record<PaidPlan, string> = {
-  starter: "Bookkeeping for a small team, entered by hand.",
-  pro: "Pull your eBay and Amazon orders in automatically.",
-  business: "Run listings, messages and the whole operation in one place.",
-};
-
 /**
- * The pricing table's data.
- *
- * Prices live here; **feature ticks are derived from `PLAN_LIMITS`**
- * (`lib/utils/planGating.ts`) rather than written out by hand, so this page
- * physically cannot advertise a capability the application gates off. Change
- * the plan matrix and this page follows.
+ * Pricing cards for the given plans (control.plans rows). Callers choose
+ * which plans to show — the marketing page passes public plans,
+ * /api/billing/status passes the plans this tenant may buy. Feature ticks are
+ * derived from the same entitlements the app gates on, so a card cannot
+ * advertise a capability the app does not grant.
  */
-export function pricedPlans(): PricedPlan[] {
-  return ORDER.map((plan) => {
-    const limits = getPlanLimits(plan);
-
-    return {
-      plan,
-      name: NAMES[plan],
-      monthlyEur: MONTHLY_EUR[plan],
-      tagline: TAGLINES[plan],
-      users:
-        limits.maxUsers === Infinity
-          ? "Unlimited users"
-          : `Up to ${limits.maxUsers} users`,
-      features: [
-        { label: "Sales, expenses, purchases & inventory", included: true },
-        { label: "VAT tracking & PDF invoices", included: true },
-        { label: "CSV import & export", included: true },
-        { label: "Full audit trail", included: true },
-        { label: "eBay & Amazon order import", included: limits.platformIntegrations },
-        { label: "eBay listings & buyer messages", included: limits.messagingAndListings },
-        { label: "AI-assisted insights", included: limits.aiFeatures },
-      ],
-      highlighted: plan === "pro",
-    };
-  });
+export function pricedPlans(plans: readonly Plan[]): PricedPlan[] {
+  return sortPlans(plans)
+    .filter((p): p is Plan & { monthlyEur: number } => p.kind === "paid" && p.monthlyEur !== null)
+    .map((p) => {
+      const ent = entitlementsOf(p);
+      return {
+        plan: p.key,
+        name: p.name,
+        monthlyEur: p.monthlyEur,
+        tagline: p.tagline,
+        users:
+          ent.maxUsers === Infinity
+            ? "Unlimited users"
+            : `Up to ${ent.maxUsers} user${ent.maxUsers === 1 ? "" : "s"}`,
+        features: [
+          { label: "Sales, expenses, purchases & inventory", included: true },
+          { label: "VAT tracking & PDF invoices", included: true },
+          { label: "CSV import & export", included: true },
+          { label: "Full audit trail", included: true },
+          { label: "eBay & Amazon order import", included: ent.platformIntegrations },
+          { label: "eBay listings & buyer messages", included: ent.messagingAndListings },
+          { label: "AI-assisted insights", included: ent.aiFeatures },
+        ],
+        highlighted: p.highlighted,
+      };
+    });
 }

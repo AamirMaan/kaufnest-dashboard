@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useAppSelector } from "@/store/hooks";
-import { hasMessagingAndListings } from "@/lib/utils/planGating";
+import { hasMessagingAndListings } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { firstUsableAccount } from "@/lib/utils/activeAccounts";
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 }
 
 /**
- * Gates every Listings route (list, new, edit) behind the Business plan and
+ * Gates every Listings route (list, new, edit) behind the Messages & Listings plan feature and
  * a connected eBay account — not just the list page's "New Listing" button.
  * Without this, a Pro tenant (or one with no eBay connection) could bypass
  * the list page's gate entirely by navigating straight to
@@ -20,12 +21,12 @@ interface Props {
  * render the listing form directly and had no gate of their own.
  */
 export function BusinessEbayGate({ children }: Props) {
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const connections = useAppSelector((s) => s.integrations.connections);
   // Any connected, non-paused eBay account — same rule as the server's getConnection shim.
   const isEbayConnected = firstUsableAccount(connections, "ebay") !== null;
 
-  if (!tenantPlan || !hasMessagingAndListings(tenantPlan)) {
+  if (!ent || !hasMessagingAndListings(ent)) {
     return (
       <div>
         <PageHeader title="Listings" description="Publish products to eBay from your dashboard" />
@@ -34,7 +35,7 @@ export function BusinessEbayGate({ children }: Props) {
             Upgrade to unlock Listings
           </h2>
           <p className="mt-2 text-sm text-(--color-text-muted)">
-            eBay listing creation is available on the Business plan.
+            {availability("messagingAndListings", "eBay listing creation")}
           </p>
           <Link
             href="/dashboard/settings"

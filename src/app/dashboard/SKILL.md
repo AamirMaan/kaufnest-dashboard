@@ -221,6 +221,14 @@ bespoke component rather than the shared `FilterBar` — see
 `components/ui/SKILL.md`'s FilterBar entry for the shared version other
 features use. If you change the period-picking logic, check both places.
 
+### Gotcha: plan gates read entitlements via `usePlan()`, never a plan key
+
+Plan gates read `state.currentUser.planEntitlements` via `usePlan()` — null before hydration ⇒ not entitled; upgrade copy comes from `availability()`, never hardcode plan names. `layout.tsx` loads them from the `control.plans` catalog
+(`getPlanCatalog()`) and sends them through `toWireEntitlements` (unlimited
+`maxUsers` = `-1`, since `Infinity` doesn't survive the RSC boundary);
+`StoreProvider` decodes with `fromWireEntitlements`. `tenantPlan` is still
+hydrated, but only as the key for display/billing — never gate on it.
+
 ## Test command
 
 `npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`,

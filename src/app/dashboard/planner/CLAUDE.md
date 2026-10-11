@@ -30,18 +30,17 @@ only (`hasPlatformIntegrations`). Accessible to all roles.
 
 ## Data flow
 
-No Supabase. No Redux writes. `page.tsx` reads `state.currentUser.tenantPlan` for the
+No Supabase. No Redux writes. `page.tsx` reads `usePlan()` (`ent` + `availability()`) for the
 plan gate. All other state is local `useState` in `EbayPlanner` / `AmazonPlanner`.
 `calcEbayResult` / `calcAmazonResult` are called inside `useMemo` keyed on `form` state
 and return `CalcResult | null` (null when selling price or purchase cost is empty).
 
 ## Shared dependencies
 
-- `src/lib/utils/planGating` — `hasPlatformIntegrations`
+- `src/lib/plans/entitlements` — `hasPlatformIntegrations`
 - `src/lib/utils/currency` — `formatCurrency` (called with default EUR)
 - `src/components/layout/PageHeader`
-- `src/store/hooks` — `useAppSelector`
-- `src/store/slices/currentUserSlice` — `tenantPlan`
+- `src/store/usePlan` — `ent`, `availability`
 
 ## Tests
 

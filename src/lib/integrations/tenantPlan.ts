@@ -1,17 +1,20 @@
 import { createControlClient } from "@/lib/supabase/control";
-import type { TenantPlan } from "@/types";
+import { getEntitlements } from "@/lib/plans/catalog";
+import type { PlanEntitlements } from "@/lib/plans/entitlements";
 
 /**
- * The tenant's plan from control.tenants. Defaults to "trial" when the row is
- * missing — the same fallback every integrations route already used inline.
+ * The tenant's plan entitlements (control.tenants.plan → control.plans).
+ * A missing tenant row or unknown plan key resolves to NO_ENTITLEMENTS —
+ * never a default plan. Throws when the tenant or catalog lookup fails;
+ * callers answer "Could not check your plan" rather than guessing.
  */
-export async function getTenantPlan(tenantSchema: string): Promise<TenantPlan> {
-  const control = createControlClient();
-  const { data } = await control
+export async function getTenantEntitlements(tenantSchema: string): Promise<PlanEntitlements> {
+  const { data, error } = await createControlClient()
     .schema("control")
     .from("tenants")
     .select("plan")
     .eq("schema_name", tenantSchema)
-    .single();
-  return (data?.plan as TenantPlan | undefined) ?? "trial";
+    .maybeSingle<{ plan: string }>();
+  if (error) throw new Error(`tenant plan lookup failed: ${error.message}`);
+  return getEntitlements(data?.plan ?? null);
 }

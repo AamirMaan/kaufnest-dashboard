@@ -75,7 +75,8 @@ deactivate/reactivate a user's dashboard access.
   while `edited.integrations < 2`. Renders a table: rows =
   `SECTIONS` (`@/lib/permissions/sections`), columns = None/View/Edit/Delete
   radios (only for levels in that section's `levels`, else "─"). A section
-  not allowed on the tenant's plan (`!planAllows(key, tenantPlan)`) is
+  not allowed on the tenant's plan (`!planAllows(key, planEntitlements)`, from
+  `state.currentUser.planEntitlements`) is
   disabled with a "Not in your plan" `Badge` — this is **display-only**,
   mirroring how `useAccess()`'s `can()` applies the plan ceiling; this page
   doesn't enforce it itself, the DB/other pages do. A section in
@@ -171,6 +172,9 @@ deactivate/reactivate a user's dashboard access.
 
 1. Invite: `InviteUserModal` POSTs to `/api/users/invite` (uses the Supabase
    admin client server-side), then dispatches `addUser` with the returned profile.
+   The route 403s once the tenant is at its plan's user limit
+   (`control.plans.max_users` via `getEntitlements` + `canAddUser`; deactivated
+   users don't count) — see `SKILL.md`.
 2. Resend invite: `page.tsx` POSTs to `/api/users/resend-invite` with `{ email }`;
    no Redux dispatch needed (profile row unchanged). Shows a toast on success/error.
 3. Edit/role-change: write to Supabase (`profiles` table) via

@@ -2,25 +2,25 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
-import { getMaxAccountsPerPlatform, canAddAccount } from "@/lib/utils/planGating";
+import { getMaxAccountsPerPlatform, canAddAccount, type PlanEntitlements } from "@/lib/plans/entitlements";
 import { accountState, canResumeAccount, connectedCount } from "@/lib/utils/activeAccounts";
 import { ConnectionCard } from "./ConnectionCard";
 import { needsReconnectBanner, platformHeading } from "../_lib/accountSummary";
-import type { IntegrationPlatform, PlatformConnection, TenantPlan } from "@/types";
+import type { IntegrationPlatform, PlatformConnection } from "@/types";
 
 const LABELS: Record<IntegrationPlatform, string> = { ebay: "eBay", amazon: "Amazon" };
 
-export function PlatformAccountsSection({ platform, connections, plan, canManage }: {
+export function PlatformAccountsSection({ platform, connections, ent, canManage }: {
   platform: IntegrationPlatform;
   connections: PlatformConnection[];
-  plan: TenantPlan;
+  ent: PlanEntitlements;
   canManage: boolean;
 }) {
   const label = LABELS[platform];
   const mine = connections.filter((c) => c.platform === platform);
-  const cap = getMaxAccountsPerPlatform(plan);
+  const cap = getMaxAccountsPerPlatform(ent);
   const used = connectedCount(connections, platform);
-  const atCap = !canAddAccount(plan, used);
+  const atCap = !canAddAccount(ent, used);
   // A pre-056 row must be reconnected from its own card first; the connect
   // route refuses "Add account" until then (INTEGRATION_LEGACY_RECONNECT).
   const legacyPending = needsReconnectBanner(mine);
@@ -64,8 +64,8 @@ export function PlatformAccountsSection({ platform, connections, plan, canManage
             <ConnectionCard
               key={c.id}
               connection={c}
-              state={accountState(connections, c.id, plan)}
-              canResume={canResumeAccount(connections, c.id, plan)}
+              state={accountState(connections, c.id, ent)}
+              canResume={canResumeAccount(connections, c.id, ent)}
               canManage={canManage}
             />
           ))}

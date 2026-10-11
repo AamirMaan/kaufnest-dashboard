@@ -157,7 +157,7 @@ of which write this column) — a price update must never overwrite it.
   `aliExpressUrlFromSku(sku)` (single shared home for the "numeric SKU = AliExpress item ID"
   rule; used by `scrape.ts` server-side and by `ListingsTable.tsx`/`resolveInitialSourceUrl.ts`
   client-side)
-- `src/lib/utils/planGating` — `hasPlatformIntegrations`
+- `src/lib/plans/entitlements` — `hasPlatformIntegrations`; `src/store/usePlan` — `ent`, `availability`
 - `store/slices/currentUserSlice` — `profile.role` (plain admin/super_admin
   check, not `useAccess()` — see the "Refresh from eBay" bullet above)
 - `src/lib/utils/currency` — `formatCurrency(price, currency)`
@@ -170,7 +170,7 @@ of which write this column) — a price update must never overwrite it.
 - shadcn: `table`, `dialog`, `input` (in `src/components/ui/`)
 - `src/components/ui/Toast` — `useToast` (exposes `{ toast, success, warning, error, info }`)
 - `src/store/hooks` — `useAppSelector`, `useAppDispatch`
-- `src/store/slices/currentUserSlice` — `profile.role`, `tenantPlan`
+- `src/store/slices/currentUserSlice` — `profile.role`
 - `src/types` — `DropshipListing`, `SourcePlatform`, `Currency`
 
 ## Tests

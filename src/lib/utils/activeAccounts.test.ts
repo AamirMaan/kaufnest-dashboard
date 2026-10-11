@@ -8,6 +8,12 @@ import {
   type AccountLike,
 } from "./activeAccounts";
 
+import { NO_ENTITLEMENTS, type PlanEntitlements } from "@/lib/plans/entitlements";
+
+// The seeded control.plans caps (012): starter 0, pro 2, business/trial unlimited.
+const withCap = (n: number): PlanEntitlements => ({ ...NO_ENTITLEMENTS, platformIntegrations: n > 0, maxAccountsPerPlatform: n });
+const ENT = { starter: withCap(0), pro: withCap(2), business: withCap(Infinity), trial: withCap(Infinity) };
+
 const acc = (id: string, overrides: Partial<AccountLike> = {}): AccountLike => ({
   id,
   platform: "ebay",
@@ -19,46 +25,46 @@ const acc = (id: string, overrides: Partial<AccountLike> = {}): AccountLike => (
 
 describe("resolveActiveAccounts", () => {
   it("keeps every account active under the cap", () => {
-    const { active, paused } = resolveActiveAccounts([acc("a1"), acc("a2")], "pro");
+    const { active, paused } = resolveActiveAccounts([acc("a1"), acc("a2")], ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a1", "a2"]);
     expect(paused).toEqual([]);
   });
 
   it("over the cap, the oldest non-paused accounts stay active", () => {
     const rows = [acc("a3"), acc("a1"), acc("a4"), acc("a2")];
-    const { active, paused } = resolveActiveAccounts(rows, "pro");
+    const { active, paused } = resolveActiveAccounts(rows, ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a1", "a2"]);
     expect(paused.map((a) => a.id).sort()).toEqual(["a3", "a4"]);
   });
 
   it("an admin pause always holds, and frees a slot for the next oldest", () => {
     const rows = [acc("a1", { is_active: false }), acc("a2"), acc("a3"), acc("a4")];
-    const { active, paused } = resolveActiveAccounts(rows, "pro");
+    const { active, paused } = resolveActiveAccounts(rows, ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a2", "a3"]);
     expect(paused.map((a) => a.id).sort()).toEqual(["a1", "a4"]);
   });
 
   it("an admin pause holds even under the cap", () => {
-    const { active, paused } = resolveActiveAccounts([acc("a1", { is_active: false }), acc("a2")], "pro");
+    const { active, paused } = resolveActiveAccounts([acc("a1", { is_active: false }), acc("a2")], ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a2"]);
     expect(paused.map((a) => a.id)).toEqual(["a1"]);
   });
 
   it("is unlimited on business and trial", () => {
     const rows = [acc("a1"), acc("a2"), acc("a3"), acc("a4")];
-    expect(resolveActiveAccounts(rows, "business").active).toHaveLength(4);
-    expect(resolveActiveAccounts(rows, "trial").active).toHaveLength(4);
+    expect(resolveActiveAccounts(rows, ENT.business).active).toHaveLength(4);
+    expect(resolveActiveAccounts(rows, ENT.trial).active).toHaveLength(4);
   });
 
   it("starter has no active accounts", () => {
-    const { active, paused } = resolveActiveAccounts([acc("a1")], "starter");
+    const { active, paused } = resolveActiveAccounts([acc("a1")], ENT.starter);
     expect(active).toEqual([]);
     expect(paused.map((a) => a.id)).toEqual(["a1"]);
   });
 
   it("ignores disconnected and errored rows", () => {
     const rows = [acc("a1", { status: "disconnected" }), acc("a2", { status: "error" }), acc("a3")];
-    const { active, paused } = resolveActiveAccounts(rows, "pro");
+    const { active, paused } = resolveActiveAccounts(rows, ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a3"]);
     expect(paused).toEqual([]);
   });
@@ -68,7 +74,7 @@ describe("resolveActiveAccounts", () => {
       acc("a1"), acc("a2"), acc("a3"),
       acc("a4", { platform: "amazon" }), acc("a5", { platform: "amazon" }),
     ];
-    const { active } = resolveActiveAccounts(rows, "pro");
+    const { active } = resolveActiveAccounts(rows, ENT.pro);
     expect(active.map((a) => a.id)).toEqual(["a1", "a2", "a4", "a5"]);
   });
 });
@@ -82,23 +88,23 @@ describe("accountState", () => {
     ["a5", "disconnected"],
     ["a6", "error"],
   ])("%s is %s on pro", (id, expected) => {
-    expect(accountState(rows, id, "pro")).toBe(expected);
+    expect(accountState(rows, id, ENT.pro)).toBe(expected);
   });
 });
 
 describe("canResumeAccount", () => {
   it("allows resuming when the non-paused count is under the cap", () => {
-    expect(canResumeAccount([acc("a1"), acc("a2", { is_active: false })], "a2", "pro")).toBe(true);
+    expect(canResumeAccount([acc("a1"), acc("a2", { is_active: false })], "a2", ENT.pro)).toBe(true);
   });
   it("refuses resuming when the platform is already full", () => {
-    expect(canResumeAccount([acc("a1"), acc("a2"), acc("a3", { is_active: false })], "a3", "pro")).toBe(false);
+    expect(canResumeAccount([acc("a1"), acc("a2"), acc("a3", { is_active: false })], "a3", ENT.pro)).toBe(false);
   });
   it("only counts the target's platform", () => {
     const rows = [acc("a1"), acc("a2"), acc("a3", { platform: "amazon", is_active: false })];
-    expect(canResumeAccount(rows, "a3", "pro")).toBe(true);
+    expect(canResumeAccount(rows, "a3", ENT.pro)).toBe(true);
   });
   it("is false for an unknown id", () => {
-    expect(canResumeAccount([acc("a1")], "zzz", "pro")).toBe(false);
+    expect(canResumeAccount([acc("a1")], "zzz", ENT.pro)).toBe(false);
   });
 });
 
@@ -125,7 +131,7 @@ describe("ordering tie-break", () => {
     const rows = [acc("c", { created_at: same }), acc("b", { created_at: same }), acc("a", { created_at: same })];
     expect(firstUsableAccount(rows, "ebay")?.id).toBe("a");
     expect(firstUsableAccount([...rows].reverse(), "ebay")?.id).toBe("a");
-    expect(resolveActiveAccounts(rows, "pro").active.map((r) => r.id)).toEqual(["a", "b"]);
+    expect(resolveActiveAccounts(rows, ENT.pro).active.map((r) => r.id)).toEqual(["a", "b"]);
   });
 });
 

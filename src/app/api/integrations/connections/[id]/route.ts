@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getConnectionById, listConnections, updateConnection } from "@/lib/integrations/tokenStore";
 import { isConnectionId, parseConnectionPatch } from "@/lib/integrations/connectionPatch";
-import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { canResumeAccount } from "@/lib/utils/activeAccounts";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { PlatformConnection } from "@/types";
 
 const SAFE_COLUMNS =
@@ -17,9 +17,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (auth.error) return auth.error;
   const { client, tenantSchema } = auth.context;
 
-  const plan = await getTenantPlan(tenantSchema);
-  if (!hasPlatformIntegrations(plan)) {
-    return NextResponse.json({ error: "Platform integrations require the Pro or Business plan." }, { status: 403 });
+  let ent: PlanEntitlements;
+  try {
+    ent = await getTenantEntitlements(tenantSchema);
+  } catch (err) {
+    console.error("[integrations/connections] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   if (!isConnectionId(id)) return NextResponse.json({ error: "INTEGRATION_ACCOUNT_UNKNOWN" }, { status: 404 });
@@ -33,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (parsed.patch.is_active === true && !conn.is_active) {
       const rows = await listConnections(client, conn.platform);
-      if (!canResumeAccount(rows, id, plan)) {
+      if (!canResumeAccount(rows, id, ent)) {
         return NextResponse.json({ error: "INTEGRATION_RESUME_LIMIT" }, { status: 409 });
       }
     }

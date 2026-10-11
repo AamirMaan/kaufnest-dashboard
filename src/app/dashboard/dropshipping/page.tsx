@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { upsertListings, updateSupplierPrices } from "./_store/dropshippingSlice";
 import { ListingsTable, canCheckSupplierPrice } from "./_components/ListingsTable";
 import type { DropshipListing } from "@/types";
@@ -16,7 +17,7 @@ import { firstUsableAccount } from "@/lib/utils/activeAccounts";
 export default function DropshippingPage() {
   const dispatch = useAppDispatch();
   const { success, error: toastError } = useToast();
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const role = useAppSelector((s) => s.currentUser.profile?.role);
   const connections = useAppSelector((s) => s.integrations.connections);
   const listings = useAppSelector((s) => s.dropshipping.listings);
@@ -25,7 +26,7 @@ export default function DropshippingPage() {
   const [skuError, setSkuError] = useState(false);
 
   // 1. Plan gate
-  if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
+  if (!ent || !hasPlatformIntegrations(ent)) {
     return (
       <div>
         <PageHeader
@@ -37,7 +38,7 @@ export default function DropshippingPage() {
             Upgrade to unlock Dropshipping
           </h2>
           <p className="mt-2 text-sm text-(--color-text-muted)">
-            Dropshipping listing management is available on the Pro and Business plans.
+            {availability("platformIntegrations", "Dropshipping listing management")}
           </p>
           <Link
             href="/dashboard/settings"

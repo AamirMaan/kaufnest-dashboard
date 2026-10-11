@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Checkbox, Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
+import { usePlanOptions } from "./usePlanOptions";
 import type { Tenant, TenantPlan, TenantStatus } from "@/types";
 
 interface Props {
@@ -27,6 +28,7 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
   const [referral, setReferral] = useState(tenant.referral ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { options: planOpts, error: plansError } = usePlanOptions(open, tenant.plan, tenant.plan);
 
   const emailChanged = adminEmail !== (tenant.admin_email ?? "");
   const referralChanged = referral !== (tenant.referral ?? "");
@@ -139,14 +141,16 @@ export function EditTenantModal({ open, tenant, onClose }: Props) {
           <span className={labelCls}>Plan</span>
           <select
             value={plan}
-            onChange={(e) => setPlan(e.target.value as TenantPlan)}
+            onChange={(e) => setPlan(e.target.value)}
             className={selectCls}
           >
-            <option value="trial">Trial</option>
-            <option value="starter">Starter</option>
-            <option value="pro">Pro</option>
-            <option value="business">Business</option>
+            {planOpts.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
           </select>
+          {plansError && (
+            <p className="text-xs text-(--color-danger) mt-1">Couldn&apos;t load plans.</p>
+          )}
         </div>
 
         <div>

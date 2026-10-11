@@ -3,6 +3,7 @@ import { requireSectionAccess } from "@/lib/permissions/requireSectionAccess";
 import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { fetchActiveListings } from "@/lib/integrations/ebay/listings";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 // Supabase's PostgrestError/AuthError carry a `.message` but aren't always
 // `instanceof Error` — `err instanceof Error ? err.message : "generic
@@ -31,6 +32,8 @@ const PAGE_SIZE = 1000;
 export async function POST() {
   const auth = await requireSectionAccess("listings", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client, userId } = auth.context;
 
   const conn = await getConnection(client, "ebay");

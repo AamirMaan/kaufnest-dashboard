@@ -80,7 +80,7 @@ verify by reading the code, not as automatic findings — note any carrying a
 - Raw Postgres/Supabase `error.message` returned to the client.
 - Webhook signature verification weakened or skipped (Stripe, Trello, eBay).
 - Untrusted HTML (eBay listings/messages) rendered without sanitising.
-- Plan gating (`planGating.ts`) enforced only in the UI, not on the server.
+- Plan gating (`lib/plans/entitlements.ts`) enforced only in the UI, not on the server.
 
 **C. Correctness**
 - Logic errors, off-by-one, wrong null/undefined handling, missed edge cases

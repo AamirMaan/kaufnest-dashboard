@@ -8,7 +8,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { hasAiFeatures } from "@/lib/utils/planGating";
+import { hasAiFeatures } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
@@ -148,9 +149,9 @@ export function ListingForm({ draftId }: Props) {
    * (Quota exhaustion is the opposite: those controls stay visible and go
    * disabled with the 429's message — see `DescriptionEditor.tsx`.) This is
    * presentation only; `src/lib/ai/authGuard.ts` is the enforcement. */
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent } = usePlan();
   const aiEnabled = useAppSelector((s) => s.currentUser.aiEnabled);
-  const aiVisible = !!tenantPlan && hasAiFeatures(tenantPlan) && aiEnabled;
+  const aiVisible = !!ent && hasAiFeatures(ent) && aiEnabled;
 
   /* Bumped after every successful AI call so `AiUsageNote` re-reads
    * `/api/listings/ai/usage` — otherwise the count only ever reflects the

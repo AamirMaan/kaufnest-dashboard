@@ -110,7 +110,7 @@ pagination is active.
 - `_store/useAdvancedInventory.ts` (Task 2, 2026-09-26) — the one entry
   point for advanced-inventory state outside the slice itself:
   `useAdvancedInventory(): { entitled, active, view, settings, locations,
-  platformDefaults, loading, error, reload }`. Reads `tenantPlan` +
+  platformDefaults, loading, error, reload }`. Reads `usePlan().ent` +
   `state.advancedInventory`, computes `entitled` (`hasAdvancedInventory`)
   and `view` (`advancedInventoryView`) itself, dispatches
   `fetchAdvancedInventory()` on mount when entitled (a no-op while fresh —
@@ -345,9 +345,10 @@ pagination is active.
   success. Non-admins see the same form with every `Select` disabled and no
   Save button. See `SKILL.md`'s gotcha for the full two-write
   partial-success handling.
-- `_components/AdvancedInventoryUpsellCard.tsx` — Business-plan upsell card
-  shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; pure
-  presentational, links to `/dashboard/settings`.
+- `_components/AdvancedInventoryUpsellCard.tsx` — advanced-inventory upsell card
+  shown by `page.tsx` when `advancedInventoryView` returns `"upsell"`; plan
+  names from `usePlan().availability("advancedInventory", …)`, links to
+  `/dashboard/settings`.
 - `_store/inventorySlice.ts` — Redux slice for `state.inventory`.
   **Two data sets:**
   - Table data: `items`, `loaded`, `page`, `pageSize`, `total`, `isFetching` —

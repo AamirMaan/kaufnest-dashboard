@@ -3,7 +3,7 @@ import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter, isIntegrationPlatform } from "@/lib/integrations/registry";
 import { insertConnection, listConnections, updateConnection } from "@/lib/integrations/tokenStore";
 import { decideConnectionSave, defaultDisplayName, displayNameForSave } from "@/lib/integrations/connectionSave";
-import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { OAUTH_TARGET_COOKIE, redirectToIntegrations } from "@/lib/integrations/redirect";
 import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
@@ -41,10 +41,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
       return redirectToIntegrationsWithError(req, platform, INTEGRATION_ERRORS.INTEGRATION_ACCOUNT_UNIDENTIFIED);
     }
 
-    const [plan, rows] = await Promise.all([getTenantPlan(tenantSchema), listConnections(client, platform)]);
+    const [ent, rows] = await Promise.all([getTenantEntitlements(tenantSchema), listConnections(client, platform)]);
     // Set by the connect route for ?reconnect=<id>; absent for "Add account".
     const targetId = req.cookies.get(OAUTH_TARGET_COOKIE)?.value ?? null;
-    const decision = decideConnectionSave(rows, platform, externalAccountId, plan, targetId);
+    const decision = decideConnectionSave(rows, platform, externalAccountId, ent, targetId);
     if (decision.kind === "limit") {
       return redirectToIntegrationsWithError(req, platform, INTEGRATION_ERRORS.INTEGRATION_ACCOUNT_LIMIT);
     }

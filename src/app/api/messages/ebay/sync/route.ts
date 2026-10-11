@@ -4,6 +4,7 @@ import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenS
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { fetchMemberMessages } from "@/lib/integrations/ebay/messages";
 import type { EbayMessage } from "@/types";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 // Default lookback when no message has ever been synced (mirrors
 // REVIEW_LOOKBACK_MS in api/integrations/review/route.ts).
@@ -12,6 +13,8 @@ const DEFAULT_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000;
 export async function POST() {
   const auth = await requireSectionAccess("messages", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const conn = await getConnection(client, "ebay");

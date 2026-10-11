@@ -1,4 +1,5 @@
-import type { IntegrationPlatform, PlatformConnectionStatus, TenantPlan } from "@/types";
+import type { IntegrationPlatform, PlatformConnectionStatus } from "@/types";
+import type { PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationsClient, PlatformAdapter } from "./types";
 import { encryptToken, decryptToken } from "./tokenCrypto";
 import { firstUsableAccount, resolveActiveAccounts } from "@/lib/utils/activeAccounts";
@@ -110,12 +111,12 @@ export async function insertConnection(
 export async function requireActiveConnection(
   client: IntegrationsClient,
   id: string,
-  plan: TenantPlan
+  ent: PlanEntitlements
 ): Promise<ConnectionRow> {
   const rows = await listConnections(client);
   const row = rows.find((r) => r.id === id);
   if (!row) throw new IntegrationAccountError("INTEGRATION_ACCOUNT_UNKNOWN");
-  if (!resolveActiveAccounts(rows, plan).active.some((r) => r.id === id)) {
+  if (!resolveActiveAccounts(rows, ent).active.some((r) => r.id === id)) {
     throw new IntegrationAccountError("INTEGRATION_ACCOUNT_PAUSED");
   }
   return row;

@@ -3,10 +3,13 @@ import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenStore";
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { fetchBusinessPolicies } from "@/lib/integrations/ebay/publish";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 export async function GET() {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const conn = await getConnection(client, "ebay");

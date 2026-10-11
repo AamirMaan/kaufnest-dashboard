@@ -21,8 +21,15 @@ broadly when working on a specific feature.**
   Additionally, when `tenant_schema` is present, fetches the tenant's
   `plan, ai_enabled, shipping_labels_enabled` from `control.tenants` via
   `createControlClient()` and passes them to `<StoreProvider>` as
-  `tenantPlan` (hydrated into `currentUserSlice.tenantPlan`, read by the
-  Integrations page for plan gating via `hasPlatformIntegrations`),
+  `tenantPlan` (hydrated into `currentUserSlice.tenantPlan` — the plan key,
+  for display/billing only), plus — from `getPlanCatalog()`
+  (`src/lib/plans/catalog.ts`, control.plans) — `planEntitlements` (the
+  tenant's `PlanEntitlements`, sent through `toWireEntitlements` because
+  `Infinity` doesn't cross the RSC boundary; `StoreProvider` reverses it with
+  `fromWireEntitlements`) and `planNamesByFeature` (upgrade copy). Both land
+  in `currentUserSlice` and are read via `usePlan()` (`src/store/usePlan.ts`)
+  by every plan gate; a catalog read failure fails closed
+  (`NO_ENTITLEMENTS`),
   `aiEnabled` (hydrated into `currentUserSlice.aiEnabled`, read by the
   Listings page to decide whether AI controls render at all — `ai_enabled`
   is the platform-admin AI visibility switch, control-plane migration 007),

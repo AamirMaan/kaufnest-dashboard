@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, PLANS } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { createControlClient } from "@/lib/supabase/control";
 import { requireBillingAdmin } from "@/lib/billing/authGuard";
-import type { PaidPlan } from "@/lib/utils/pricing";
-
-const VALID_PLANS: readonly PaidPlan[] = ["starter", "pro", "business"] as const;
+import { getPlan, invalidatePlanCatalog } from "@/lib/plans/catalog";
+import { canPurchase } from "@/lib/plans/entitlements";
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -27,18 +26,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { plan } = body;
-  if (!plan || !VALID_PLANS.includes(plan as PaidPlan)) {
+  if (!plan || typeof plan !== "string") {
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
   }
-  const priceId = PLANS[plan as PaidPlan];
 
   const control = createControlClient();
   const { data: tenant, error: tenantError } = await control
     .schema("control")
     .from("tenants")
-    .select("stripe_subscription_id")
+    .select("plan, stripe_subscription_id")
     .eq("schema_name", tenantSchema)
-    .single<{ stripe_subscription_id: string | null }>();
+    .single<{ plan: string; stripe_subscription_id: string | null }>();
 
   if (tenantError && tenantError.code !== "PGRST116") {
     console.error("[billing/change-plan] tenant lookup failed:", tenantError.message);
@@ -52,6 +50,23 @@ export async function POST(req: NextRequest) {
   if (!subscriptionId) {
     return NextResponse.json({ error: "No active subscription to change." }, { status: 400 });
   }
+
+  // Resolved after the tenant lookup: a hidden (custom) plan is purchasable
+  // only by the tenant already on it (canPurchase). The catalog cache is
+  // dropped first so a stale instance never charges a price an /admin edit
+  // on another instance has just replaced or deactivated.
+  let target;
+  try {
+    invalidatePlanCatalog();
+    target = await getPlan(plan);
+  } catch (err) {
+    console.error("[billing/change-plan] plan catalog unavailable", err);
+    return NextResponse.json({ error: "Could not change plan. Please try again." }, { status: 500 });
+  }
+  if (!target || !canPurchase(target, tenant?.plan ?? null)) {
+    return NextResponse.json({ error: "Plan not available" }, { status: 400 });
+  }
+  const priceId = target.stripePriceId!;
 
   try {
     const stripe = getStripe();

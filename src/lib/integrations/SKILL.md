@@ -63,7 +63,11 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   `PATCH /api/integrations/connections/[id]`.
 - `reviewImport.ts` — pure `invalidImportItems`: the import route rejects any
   item whose `connection_id` is not an ACTIVE account of its platform.
-- `tenantPlan.ts` — server-only `getTenantPlan(schema)` (`"trial"` fallback).
+- `tenantPlan.ts` — server-only `getTenantEntitlements(schema)` → `PlanEntitlements`
+  (control.tenants.plan → control.plans via `lib/plans/catalog.ts`). No tenant row
+  or unknown plan → `NO_ENTITLEMENTS` (no `"trial"` fallback); throws on a lookup
+  failure, which the routes turn into 500 "Could not check your plan" (connect:
+  redirect with that message). Pass the result to `activeAccounts`/`connectionSave`.
 - `tokenCrypto.ts` — `encryptToken`/`decryptToken`/`isEncryptedToken`, AES-256-GCM
   helpers used exclusively by `tokenStore.ts`. Colocated `tokenCrypto.test.ts`.
 - `authGuard.ts` — `requireIntegrationAdmin()`, the shared
@@ -483,7 +487,7 @@ lookup against existing `sales` rows.
 - **`authGuard.requireIntegrationAdmin()`** is the only auth check in
   connect/callback/disconnect/sync — it 401s with no session, 400s with no
   `tenant_schema`, 403s if `current_user_access('integrations') < 2` (055).
-  The `connect` route additionally checks `hasPlatformIntegrations(tenantPlan)`
+  The `connect` route additionally checks `hasPlatformIntegrations(await getEntitlements(tenant.plan))`
   (403 if the plan doesn't include integrations) — that check is plan-based,
   not access-level-based, so it's not in the shared guard.
 - **Listings/messages API routes call `requireSectionAccess` directly**

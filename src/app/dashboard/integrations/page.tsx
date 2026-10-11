@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useToast } from "@/components/ui/Toast";
 import { useAppSelector } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { PlatformAccountsSection } from "./_components/PlatformAccountsSection";
 import { needsReconnectBanner } from "./_lib/accountSummary";
 import { accountState } from "@/lib/utils/activeAccounts";
@@ -25,7 +26,7 @@ function IntegrationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { can } = useAccess();
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const connections = useAppSelector((s) => s.integrations.connections);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ function IntegrationsContent() {
 
   const canManage = can("integrations", 2);
 
-  if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
+  if (!ent || !hasPlatformIntegrations(ent)) {
     return (
       <div>
         <PageHeader
@@ -55,7 +56,7 @@ function IntegrationsContent() {
             Upgrade to unlock integrations
           </h2>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            Automatic eBay and Amazon order syncing is available on the Pro and Business plans.
+            {availability("platformIntegrations", "Automatic eBay and Amazon order syncing")}
           </p>
           <Link
             href="/dashboard/settings"
@@ -84,7 +85,7 @@ function IntegrationsContent() {
     );
   }
 
-  const pausedCount = connections.filter((c) => accountState(connections, c.id, tenantPlan) === "plan_limit").length;
+  const pausedCount = connections.filter((c) => accountState(connections, c.id, ent) === "plan_limit").length;
 
   return (
     <div>
@@ -104,7 +105,7 @@ function IntegrationsContent() {
       )}
       <div className="space-y-8">
         {PLATFORMS.map((platform) => (
-          <PlatformAccountsSection key={platform} platform={platform} connections={connections} plan={tenantPlan} canManage={canManage} />
+          <PlatformAccountsSection key={platform} platform={platform} connections={connections} ent={ent} canManage={canManage} />
         ))}
       </div>
     </div>

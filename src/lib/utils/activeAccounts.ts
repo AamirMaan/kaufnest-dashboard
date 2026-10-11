@@ -1,5 +1,5 @@
-import type { IntegrationPlatform, PlatformAccount, TenantPlan } from "@/types";
-import { getMaxAccountsPerPlatform } from "./planGating";
+import type { IntegrationPlatform, PlatformAccount } from "@/types";
+import { getMaxAccountsPerPlatform, type PlanEntitlements } from "@/lib/plans/entitlements";
 
 /**
  * Which connected seller accounts are usable under the tenant's plan.
@@ -35,9 +35,9 @@ function eligible<T extends AccountLike>(rows: T[], platform: IntegrationPlatfor
 
 export function resolveActiveAccounts<T extends AccountLike>(
   rows: T[],
-  plan: TenantPlan
+  ent: PlanEntitlements
 ): { active: T[]; paused: T[] } {
-  const cap = getMaxAccountsPerPlatform(plan);
+  const cap = getMaxAccountsPerPlatform(ent);
   const active: T[] = [];
   const paused: T[] = [];
   for (const platform of PLATFORMS) {
@@ -51,20 +51,20 @@ export function resolveActiveAccounts<T extends AccountLike>(
   return { active, paused };
 }
 
-export function accountState(rows: AccountLike[], id: string, plan: TenantPlan): AccountState {
+export function accountState(rows: AccountLike[], id: string, ent: PlanEntitlements): AccountState {
   const row = rows.find((r) => r.id === id);
   if (!row || row.status === "disconnected") return "disconnected";
   if (row.status === "error") return "error";
   if (!row.is_active) return "paused";
-  return resolveActiveAccounts(rows, plan).active.some((r) => r.id === id) ? "active" : "plan_limit";
+  return resolveActiveAccounts(rows, ent).active.some((r) => r.id === id) ? "active" : "plan_limit";
 }
 
 /** Resuming is allowed only while the platform has fewer non-paused connected accounts than the cap. */
-export function canResumeAccount(rows: AccountLike[], id: string, plan: TenantPlan): boolean {
+export function canResumeAccount(rows: AccountLike[], id: string, ent: PlanEntitlements): boolean {
   const row = rows.find((r) => r.id === id);
   if (!row) return false;
   const others = eligible(rows, row.platform).filter((r) => r.id !== id);
-  return others.length < getMaxAccountsPerPlatform(plan);
+  return others.length < getMaxAccountsPerPlatform(ent);
 }
 
 /** Accounts that count against the cap when adding a new one: connected or errored (still holding tokens). */

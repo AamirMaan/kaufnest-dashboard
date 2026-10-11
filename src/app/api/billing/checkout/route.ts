@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, PLANS } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { requireBillingAdmin } from "@/lib/billing/authGuard";
 import { createControlClient } from "@/lib/supabase/control";
-import type { PaidPlan } from "@/lib/utils/pricing";
-
-const VALID_PLANS: readonly PaidPlan[] = ["starter", "pro", "business"] as const;
+import { getPlan, invalidatePlanCatalog } from "@/lib/plans/catalog";
+import { canPurchase } from "@/lib/plans/entitlements";
 
 // Subscription statuses that represent a still-live (or still-recoverable)
 // Stripe subscription — used to block a second checkout while one of these
@@ -51,10 +50,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
   const { plan } = body;
-  if (!plan || !VALID_PLANS.includes(plan as PaidPlan)) {
+  if (!plan || typeof plan !== "string") {
     return NextResponse.json({ error: "Unknown plan" }, { status: 400 });
   }
-  const priceId = PLANS[plan as PaidPlan];
 
   const control = createControlClient();
   const { data: tenant, error: tenantError } = await control
@@ -77,6 +75,23 @@ export async function POST(req: NextRequest) {
   if (!tenant) {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
+
+  // Resolved after the tenant lookup: a hidden (custom) plan is purchasable
+  // only by the tenant already on it (canPurchase). The catalog cache is
+  // dropped first so a stale instance never charges a price an /admin edit
+  // on another instance has just replaced or deactivated.
+  let target;
+  try {
+    invalidatePlanCatalog();
+    target = await getPlan(plan);
+  } catch (err) {
+    console.error("[billing/checkout] plan catalog unavailable", err);
+    return NextResponse.json({ error: "Could not start checkout. Please try again." }, { status: 500 });
+  }
+  if (!target || !canPurchase(target, tenant.plan as string)) {
+    return NextResponse.json({ error: "Plan not available" }, { status: 400 });
+  }
+  const priceId = target.stripePriceId!;
 
   try {
     const stripe = getStripe();
@@ -157,7 +172,7 @@ export async function POST(req: NextRequest) {
       // Stripe creates from it — `subscription_data.metadata` is what the
       // webhook's `sub.metadata.plan` read (customer.subscription.created/
       // updated) actually sees. Without this, every new subscription
-      // silently defaults to "starter" in the webhook.
+      // would fall back to the price-id lookup in the webhook.
       subscription_data: {
         metadata: { tenant_id: tenant.id as string, plan },
       },

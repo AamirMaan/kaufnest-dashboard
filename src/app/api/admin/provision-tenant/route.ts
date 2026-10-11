@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createControlClient, isPlatformAdmin } from "@/lib/supabase/control";
+import { getPlan, getTrialDays } from "@/lib/plans/catalog";
+import { isAssignablePlan } from "@/lib/plans/entitlements";
 import { createClient, createServiceClientForTenant } from "@/lib/supabase/server";
 import { addExposedSchema } from "@/lib/supabase/managementApi";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
@@ -33,6 +35,15 @@ export async function POST(req: NextRequest) {
 
   const safeSlug = sanitizeSlug(body.slug);
   const schemaName = schemaNameFor(safeSlug);
+
+  try {
+    if (!isAssignablePlan(await getPlan(plan), null)) {
+      return NextResponse.json({ error: "That plan can't be assigned." }, { status: 400 });
+    }
+  } catch (err) {
+    console.error("Plan lookup failed:", err);
+    return NextResponse.json({ error: "Provisioning failed" }, { status: 500 });
+  }
 
   const control = createControlClient();
 
@@ -119,8 +130,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Register in control plane
+    const trialDays = await getTrialDays();
     const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 14);
+    trialEnd.setDate(trialEnd.getDate() + trialDays);
 
     const { error: tenantInsertError } = await control.schema("control").from("tenants").insert({
       name,

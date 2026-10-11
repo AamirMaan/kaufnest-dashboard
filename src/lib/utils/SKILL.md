@@ -1,6 +1,6 @@
 ---
 name: lib-utils
-description: Reference for every shared utility module in src/lib/utils (audit, csv, currency, date, activeAccounts, audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, integrationErrors, invoiceMath, localeParse, pagedQuery, permissions, planGating, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
+description: Reference for every shared utility module in src/lib/utils (activeAccounts, audit, csv, currency, date, detectPlatform, excel, filters, generateInvoice, integrationErrors, invoiceMath, localeParse, pagedQuery, permissions, pricing, validation) — use this instead of opening the source files when you need to know what a helper does, its signature, or where it's used.
 ---
 
 # Shared utilities (`src/lib/utils/`)
@@ -238,26 +238,6 @@ The shared contract for the server-side pagination architecture described in
 - `rangeFor({ page, pageSize }) → [from, to]` — inclusive bounds for Supabase
   `.range(from, to)`. `page=1, pageSize=50` → `[0, 49]`.
 
-## planGating.ts
-
-Subscription-plan feature gates, keyed off `TenantPlan`. Pure lookups against
-`PLAN_LIMITS`; no Supabase calls.
-
-- `getPlanLimits(plan) → PlanLimits`
-- `canAddUser(plan, currentUserCount) → boolean` — backs the Users feature's
-  invite gate.
-- `hasPlatformIntegrations(plan) → boolean` — gates `/dashboard/integrations`,
-  `/dashboard/listings` and `/dashboard/messages` (Pro/Business only). Read the
-  plan from `currentUserSlice.tenantPlan`, hydrated by `dashboard/layout.tsx`.
-- `hasAiFeatures(plan) → boolean`
-- `getMaxAccountsPerPlatform(plan) → number` — connected seller accounts allowed
-  per platform (starter 0, pro 2, business/trial unlimited). `canAddAccount(plan,
-  connectedCount) → boolean` is the add gate built on it.
-
-**These are UI gates, not security boundaries.** `plan` itself is owned by the
-Stripe webhook (`AGENTS.md` key rule 4) — never write it from UI. Covered by
-`planGating.test.ts`.
-
 ## activeAccounts.ts
 
 Pure, client-safe rule deciding which connected eBay/Amazon accounts are usable
@@ -266,6 +246,11 @@ Integrations page and server routes so they cannot disagree. Exports
 `resolveActiveAccounts`, `accountState`, `canResumeAccount`, `connectedCount`,
 `firstUsableAccount`. Colocated test. Ordering is by `Date.parse(created_at)`
 with a tie-break on `id`, so accounts sharing a timestamp resolve deterministically.
+The cap comes from `PlanEntitlements.maxAccountsPerPlatform`
+(`lib/plans/entitlements.ts`, `control.plans.max_accounts_per_platform`; null =
+unlimited, forced to 0 without `platform_integrations`) — callers pass the
+tenant's entitlements, not a plan key: client code via `usePlan().ent`, routes
+via `getTenantEntitlements()` (`lib/integrations/tenantPlan.ts`).
 
 ## integrationErrors.ts
 
@@ -275,23 +260,28 @@ copy. Colocated test.
 
 ## pricing.ts
 
-`export function pricedPlans(): PricedPlan[]` — the three paid plans' prices
-and marketing copy. Every ✓/✗ feature mark is **derived from `PLAN_LIMITS`**
-(`planGating.ts`) rather than hand-written, so the page physically cannot
-advertise a capability the application gates off. If you change the plan
-matrix, the marketing page follows automatically. Colocated `pricing.test.ts`
-pins the two together (`pricedPlans()` must match `getPlanLimits()` — the test
-will fail if they drift). Moved here from the marketing page's private `_lib/`
-(2026-08-29) once Settings and `/trial-expired` became consumers too — 3+
-features is this project's own threshold for promoting a feature-private file
-to shared.
+`export function pricedPlans(plans: readonly Plan[]): PricedPlan[]` — pricing
+cards built from `control.plans` rows (`Plan` from
+`src/lib/plans/entitlements.ts`). Keeps only `kind === "paid"` plans with a
+non-null `monthlyEur`, sorted by `sortOrder` (`sortPlans`). It does **not**
+filter on visibility — callers choose: the marketing page passes public
+plans, `/api/billing/status` passes the plans the tenant may buy
+(`canPurchase`). Name, price, tagline and `highlighted` come from the row;
+the user cap and every ✓/✗ feature mark come from `entitlementsOf(plan)` —
+the same entitlements the app gates on — so a card cannot advertise a
+capability the app does not grant. Pure and client-safe (no Supabase); the
+catalog read happens in the server-side caller. Colocated `pricing.test.ts`
+builds from a local `plan()` fixture. Shared since 2026-08-29 (marketing,
+Settings, `/trial-expired`).
 
-- `export type PaidPlan` — `Exclude<TenantPlan, "trial">`, i.e. the three
-  purchasable plans.
-- `export interface PricedPlan` — one row in the pricing table: plan name, €
-  price, tagline, user cap, and feature ticks.
+- `export interface PricedPlan` — one card: `plan` (catalog key, `string`),
+  `name`, `monthlyEur`, `tagline`, `users` ("Up to N users" / "Up to 1 user" /
+  "Unlimited users"), `features`, `highlighted`.
 - `export interface PlanFeature` — a single ✓/✗ line item: `label: string` +
   `included: boolean`.
+
+The old `planGating.ts` (`PLAN_LIMITS`) and the `PaidPlan` type were deleted in
+plan-management Task 4 — every gate lives in `src/lib/plans/`.
 
 ## validation.ts
 
@@ -434,8 +424,9 @@ bundle — keep that pattern if you touch the imports.
 `csv.ts`/`excel.ts`/`localeParse.ts` are the import/export stack behind the
 `Import*Modal`/`export` buttons on Sales, Expenses and Purchases.
 `pagedQuery.ts` is used by every `fetch*Page` thunk plus
-`dashboard/layout.tsx`'s hydration query. `planGating.ts` is read by the
-Integrations, Listings and Messages pages and by the Users invite flow.
+`dashboard/layout.tsx`'s hydration query. `pricing.ts` is read by the
+marketing page, `/api/billing/status` and `components/billing/PlanPicker.tsx`
+(types only) — plan gates themselves live in `src/lib/plans/`.
 `validation.ts` backs the Settings company-profile form.
 `detectPlatform.ts` is used by Dropshipping and the listing wizard's Source step.
 

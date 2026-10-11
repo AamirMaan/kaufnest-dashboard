@@ -4,6 +4,7 @@ import { getConnection, ensureValidAccessToken } from "@/lib/integrations/tokenS
 import { ebayAdapter } from "@/lib/integrations/ebay";
 import { applyMarketingToDraft } from "@/lib/integrations/ebay/marketing";
 import type { EbayListingDraft } from "@/types";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 // Re-runs only the post-publish marketing steps (ad + multi-buy) for a live
 // listing. Safe to call repeatedly: runMarketingSteps skips any step whose
@@ -11,6 +12,8 @@ import type { EbayListingDraft } from "@/types";
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireSectionAccess("listings", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const { id } = await params;

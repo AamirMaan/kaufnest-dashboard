@@ -7,14 +7,14 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
 
 ## Minimal file set per change type
 
-- **Change a price**: `src/lib/utils/pricing.ts` → `MONTHLY_EUR`. Nothing else. The
-  cards read it.
-- **Change what a plan includes**: `src/lib/utils/planGating.ts` →
-  `PLAN_LIMITS`. Do **not** hand-edit the ✓/✗ list in `src/lib/utils/pricing.ts` —
-  it is derived, and `pricing.test.ts` will fail if the two disagree.
+- **Change a price, name, tagline, user cap or what a plan includes**:
+  not in code — edit the plan in `/admin` (it lives in `control.plans`).
+  `page.tsx` reads the public plans via `getPlanCatalog()` and
+  `pricedPlans()` (`src/lib/utils/pricing.ts`) turns them into cards; the
+  ✓/✗ marks are derived from `entitlementsOf(plan)`, so never hand-edit them.
 - **Add a feature bullet to the pricing cards**: add it to the `features`
-  array in `src/lib/utils/pricing.ts`, sourcing `included` from a `limits.*` field so
-  it stays derived. Add a matching assertion in `pricing.test.ts`.
+  array in `src/lib/utils/pricing.ts`, sourcing `included` from an `ent.*`
+  field so it stays derived. Add a matching assertion in `pricing.test.ts`.
 - **Add a page section**: a new component in `_components/`, composed into
   `page.tsx`. Keep it a Server Component unless it genuinely needs state.
 - **Change marketing copy**: the relevant `_components/*.tsx` — copy lives
@@ -39,9 +39,14 @@ description: Agent playbook for the public landing page at / (src/app/(marketing
   "opia" wordmark accent in `MarketingNav.tsx`, which stays indigo since
   it's the same brand mark used everywhere else.
 - **Never claim a feature the plan matrix gates off.** The ✓/✗ marks are
-  derived from `PLAN_LIMITS` precisely so this can't happen by accident, but
+  derived from the catalog entitlements (`entitlementsOf`) precisely so this can't happen by accident, but
   the hero and feature copy are free text — those you have to keep honest
   yourself.
+- **Pricing must render even when the catalog is unreadable.** `page.tsx`
+  catches a `getPlanCatalog()` failure and passes `plans={[]}`; `Pricing`
+  then shows "Pricing is temporarily unavailable." instead of the grid. The
+  grid's `lg:grid-cols-*` comes from a static `COLS` lookup keyed by plan
+  count (1–4) — Tailwind's JIT cannot see an interpolated class name.
 - **Uses the navy icon directly, not `BrandMark`.** `BrandMark` switches on
   `useTheme()`, which would force this Server Component to become a Client
   Component for no benefit — this page has a fixed light background and no

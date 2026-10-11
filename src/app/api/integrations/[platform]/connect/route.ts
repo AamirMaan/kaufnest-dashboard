@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter, isIntegrationPlatform } from "@/lib/integrations/registry";
 import { listConnections } from "@/lib/integrations/tokenStore";
-import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { connectPrecheck } from "@/lib/integrations/connectionSave";
 import { isConnectionId } from "@/lib/integrations/connectionPatch";
 import { OAUTH_TARGET_COOKIE, redirectToIntegrations } from "@/lib/integrations/redirect";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationErrorCode } from "@/lib/utils/integrationErrors";
 
 const PRECHECK_ERRORS: Record<"limit" | "legacy_pending" | "unknown_target", IntegrationErrorCode> = {
@@ -28,10 +28,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
 
   // A full-page navigation (window.location.assign), so every refusal
   // redirects back to Integrations with an error code the page toasts.
-  const plan = await getTenantPlan(tenantSchema);
-  if (!hasPlatformIntegrations(plan)) {
+  let ent: PlanEntitlements;
+  try {
+    ent = await getTenantEntitlements(tenantSchema);
+  } catch (err) {
+    console.error("[integrations/connect] plan lookup failed", err);
+    return redirectToIntegrations(req, { error: "Could not check your plan. Please try again.", platform });
+  }
+  if (!hasPlatformIntegrations(ent)) {
     return redirectToIntegrations(req, {
-      error: "Platform integrations require the Pro or Business plan.",
+      error: "Platform integrations are not included in your plan.",
       platform,
     });
   }
@@ -45,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ plat
     return redirectToIntegrations(req, { error: PRECHECK_ERRORS.unknown_target, platform });
   }
 
-  const check = connectPrecheck(await listConnections(client, platform), platform, plan, targetId);
+  const check = connectPrecheck(await listConnections(client, platform), platform, ent, targetId);
   if (check !== "ok") {
     return redirectToIntegrations(req, { error: PRECHECK_ERRORS[check], platform });
   }

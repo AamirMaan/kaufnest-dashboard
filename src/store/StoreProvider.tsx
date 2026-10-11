@@ -14,7 +14,16 @@ import {
 } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { hydrateAuditLogs } from "@/store/slices/auditLogsSlice";
 import { hydrateUsers } from "@/app/dashboard/users/_store/usersSlice";
-import { setCurrentUser, setTenantPlan, setAiEnabled, setShippingLabelsEnabled, setAccess } from "@/store/slices/currentUserSlice";
+import {
+  setCurrentUser,
+  setTenantPlan,
+  setPlanEntitlements,
+  setPlanNamesByFeature,
+  setAiEnabled,
+  setShippingLabelsEnabled,
+  setAccess,
+} from "@/store/slices/currentUserSlice";
+import { fromWireEntitlements, type PlanFeature, type WirePlanEntitlements } from "@/lib/plans/entitlements";
 import { hydrateCompanyProfile } from "@/store/slices/companyProfileSlice";
 import { hydrateAccounts, hydrateConnections } from "@/app/dashboard/integrations/_store/integrationsSlice";
 import { hydrateListings } from "@/app/dashboard/dropshipping/_store/dropshippingSlice";
@@ -51,6 +60,9 @@ interface StoreProviderProps {
   currentUser?: Profile;
   companyProfile?: CompanyProfile;
   tenantPlan?: TenantPlan | null;
+  /** Wire form (`toWireEntitlements`: unlimited limits = -1) — converted back here. */
+  planEntitlements?: WirePlanEntitlements | null;
+  planNamesByFeature?: Record<PlanFeature, string[]> | null;
   aiEnabled?: boolean;
   shippingLabelsEnabled?: boolean;
   access?: AccessMap;
@@ -73,6 +85,8 @@ export function StoreProvider({
   currentUser,
   companyProfile,
   tenantPlan,
+  planEntitlements,
+  planNamesByFeature,
   aiEnabled,
   shippingLabelsEnabled,
   access,
@@ -94,6 +108,8 @@ export function StoreProvider({
     if (currentUser)       store.dispatch(setCurrentUser(currentUser));
     if (companyProfile)    store.dispatch(hydrateCompanyProfile(companyProfile));
     if (tenantPlan)        store.dispatch(setTenantPlan(tenantPlan));
+    if (planEntitlements)  store.dispatch(setPlanEntitlements(fromWireEntitlements(planEntitlements)));
+    if (planNamesByFeature) store.dispatch(setPlanNamesByFeature(planNamesByFeature));
     if (aiEnabled !== undefined) store.dispatch(setAiEnabled(aiEnabled));
     if (shippingLabelsEnabled !== undefined) store.dispatch(setShippingLabelsEnabled(shippingLabelsEnabled));
     if (access)             store.dispatch(setAccess(access));

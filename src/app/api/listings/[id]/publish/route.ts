@@ -6,10 +6,13 @@ import { publishListing } from "@/lib/integrations/ebay/publish";
 import { generateListingSku } from "@/lib/integrations/ebay/generateSku";
 import { applyMarketingToDraft } from "@/lib/integrations/ebay/marketing";
 import type { EbayListingDraft } from "@/types";
+import { requireMessagingAndListings } from "@/lib/plans/requirePlanFeature";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireSectionAccess("listings", 2);
   if (auth.error) return auth.error;
+  const planError = await requireMessagingAndListings(auth.context.tenantSchema);
+  if (planError) return planError;
   const { client } = auth.context;
 
   const { id } = await params;

@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, listConnections, type ConnectionRow } from "@/lib/integrations/tokenStore";
-import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { accountLabel } from "@/lib/utils/platformAccounts";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
@@ -24,12 +24,15 @@ export async function GET(_req: NextRequest) {
   if (auth.error) return auth.error;
   const { client, tenantSchema } = auth.context;
 
-  const plan = await getTenantPlan(tenantSchema);
-  if (!hasPlatformIntegrations(plan)) {
-    return NextResponse.json(
-      { error: "Platform integrations require the Pro or Business plan." },
-      { status: 403 }
-    );
+  let ent: PlanEntitlements;
+  try {
+    ent = await getTenantEntitlements(tenantSchema);
+  } catch (err) {
+    console.error("[integrations/review] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   const since = new Date(Date.now() - REVIEW_LOOKBACK_MS).toISOString();
@@ -38,7 +41,7 @@ export async function GET(_req: NextRequest) {
   let paused: ConnectionRow[];
   let importedSet: Set<string>;
   try {
-    ({ active, paused } = resolveActiveAccounts(await listConnections(client), plan));
+    ({ active, paused } = resolveActiveAccounts(await listConnections(client), ent));
     if (active.length === 0) {
       return NextResponse.json(paused.length ? { pausedAccounts: paused.map(accountLabel) } : {});
     }

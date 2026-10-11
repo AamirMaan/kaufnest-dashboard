@@ -1,5 +1,5 @@
-import type { IntegrationPlatform, TenantPlan } from "@/types";
-import { canAddAccount } from "@/lib/utils/planGating";
+import type { IntegrationPlatform } from "@/types";
+import { canAddAccount, type PlanEntitlements } from "@/lib/plans/entitlements";
 import { connectedCount, type AccountLike } from "@/lib/utils/activeAccounts";
 
 export type ConnectionSummary = AccountLike & { external_account_id: string | null };
@@ -38,11 +38,11 @@ export function decideConnectionSave(
   rows: ConnectionSummary[],
   platform: IntegrationPlatform,
   externalAccountId: string,
-  plan: TenantPlan,
+  ent: PlanEntitlements,
   targetId: string | null = null
 ): SaveDecision {
   const samePlatform = rows.filter((r) => r.platform === platform);
-  const hasRoom = canAddAccount(plan, connectedCount(rows, platform));
+  const hasRoom = canAddAccount(ent, connectedCount(rows, platform));
 
   const existing = samePlatform.find((r) => r.external_account_id === externalAccountId);
   if (existing) {
@@ -71,13 +71,13 @@ export type ConnectPrecheck = "ok" | "limit" | "legacy_pending" | "unknown_targe
 export function connectPrecheck(
   rows: ConnectionSummary[],
   platform: IntegrationPlatform,
-  plan: TenantPlan,
+  ent: PlanEntitlements,
   targetId: string | null
 ): ConnectPrecheck {
   const samePlatform = rows.filter((r) => r.platform === platform);
   if (targetId) return samePlatform.some((r) => r.id === targetId) ? "ok" : "unknown_target";
   if (samePlatform.some(isPendingLegacy)) return "legacy_pending";
-  return canAddAccount(plan, connectedCount(rows, platform)) ? "ok" : "limit";
+  return canAddAccount(ent, connectedCount(rows, platform)) ? "ok" : "limit";
 }
 
 export function defaultDisplayName(

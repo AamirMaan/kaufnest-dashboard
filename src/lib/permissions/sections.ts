@@ -5,8 +5,8 @@
  * server guards. Parity with SQL is checked by
  * sectionPermissions.integration.test.ts.
  */
-import type { TenantPlan, UserRole } from "@/types";
-import { hasMessagingAndListings, hasPlatformIntegrations } from "@/lib/utils/planGating";
+import type { UserRole } from "@/types";
+import { hasMessagingAndListings, hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 
 export type Section =
   | "overview" | "analytics" | "orders" | "expenses" | "purchases" | "inventory"
@@ -59,16 +59,16 @@ export const ROLE_DEFAULTS: Record<UserRole, AccessMap> = {
   },
 };
 
-export function planAllows(section: Section, plan: TenantPlan | null): boolean {
-  if (!plan) return !["integrations", "listings", "messages"].includes(section);
-  if (section === "integrations") return hasPlatformIntegrations(plan);
-  if (section === "listings" || section === "messages") return hasMessagingAndListings(plan);
+export function planAllows(section: Section, ent: PlanEntitlements | null): boolean {
+  if (!ent) return !["integrations", "listings", "messages"].includes(section);
+  if (section === "integrations") return hasPlatformIntegrations(ent);
+  if (section === "listings" || section === "messages") return hasMessagingAndListings(ent);
   return true;
 }
 
-export function applyPlanCeiling(access: AccessMap, plan: TenantPlan | null): AccessMap {
+export function applyPlanCeiling(access: AccessMap, ent: PlanEntitlements | null): AccessMap {
   return Object.fromEntries(
-    SECTION_KEYS.map((k) => [k, planAllows(k, plan) ? access[k] : 0])
+    SECTION_KEYS.map((k) => [k, planAllows(k, ent) ? access[k] : 0])
   ) as AccessMap;
 }
 
@@ -85,7 +85,7 @@ export function applyDependencies(access: AccessMap): AccessMap {
 const isAllowed = (section: Section, v: unknown): v is AccessLevel =>
   typeof v === "number" && (SECTIONS.find((s) => s.key === section)!.levels as number[]).includes(v);
 
-export function effectiveAccess(role: UserRole, exceptions: Partial<AccessMap>, plan: TenantPlan | null): AccessMap {
+export function effectiveAccess(role: UserRole, exceptions: Partial<AccessMap>, ent: PlanEntitlements | null): AccessMap {
   const base = ROLE_DEFAULTS[role] ?? ROLE_DEFAULTS.accountant;
   const merged = Object.fromEntries(
     SECTION_KEYS.map((k) => {
@@ -94,7 +94,7 @@ export function effectiveAccess(role: UserRole, exceptions: Partial<AccessMap>, 
       return [k, isAllowed(k, e) ? e : base[k]];
     })
   ) as AccessMap;
-  return applyPlanCeiling(applyDependencies(merged), plan);
+  return applyPlanCeiling(applyDependencies(merged), ent);
 }
 
 /** Validate get_my_access() JSON; any missing/invalid key falls back to the role default. */

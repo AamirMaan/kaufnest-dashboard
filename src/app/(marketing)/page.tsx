@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getPlanCatalog, getTrialDays } from "@/lib/plans/catalog";
+import { pricedPlans, type PricedPlan } from "@/lib/utils/pricing";
 import { MarketingNav } from "./_components/MarketingNav";
 import { Hero } from "./_components/Hero";
 import { IntegrationsBar } from "./_components/IntegrationsBar";
@@ -22,15 +24,23 @@ export default async function HomePage() {
     redirect(!tenantSchema && pendingCompany ? "/welcome" : "/dashboard");
   }
 
+  const trialDays = await getTrialDays();
+  let pricing: PricedPlan[] = [];
+  try {
+    pricing = pricedPlans((await getPlanCatalog()).filter((p) => p.visibility === "public"));
+  } catch (err) {
+    console.error("[marketing] plan catalog unavailable", err);
+  }
+
   return (
     <>
       <MarketingNav />
       <main>
-        <Hero />
+        <Hero trialDays={trialDays} />
         <IntegrationsBar />
         <Features />
-        <Pricing />
-        <TrialInfo />
+        <Pricing plans={pricing} trialDays={trialDays} />
+        <TrialInfo trialDays={trialDays} />
       </main>
       <MarketingFooter />
     </>

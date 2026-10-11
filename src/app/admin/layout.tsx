@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/supabase/control";
 import { ToastProvider } from "@/components/ui/Toast";
 import { BrandMark } from "@/components/layout/BrandMark";
+import Link from "next/link";
+
+const navLinkCls =
+  "text-sm text-[var(--color-sidebar-text)] hover:text-[var(--color-sidebar-text-strong)] transition-colors";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -27,6 +31,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="text-xs font-medium px-2 py-0.5 rounded bg-[var(--color-danger-bg)] text-[var(--color-danger-text)]">
               Admin
             </span>
+            <nav className="flex items-center gap-4 ml-6">
+              <Link href="/admin" className={navLinkCls}>Tenants</Link>
+              <Link href="/admin/plans" className={navLinkCls}>Plans</Link>
+              <Link href="/admin/support" className={navLinkCls}>Support</Link>
+            </nav>
           </div>
           <a
             href="/dashboard"

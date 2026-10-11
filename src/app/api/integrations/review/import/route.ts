@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { listConnections, updateConnection } from "@/lib/integrations/tokenStore";
 import { invalidImportItems } from "@/lib/integrations/reviewImport";
-import { getTenantPlan } from "@/lib/integrations/tenantPlan";
+import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
 import { mergeImportedSale } from "@/lib/integrations/mergeImportedSale";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { Currency, IntegrationPlatform, Purchase, Sale } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 
@@ -15,12 +15,15 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
   const { client, userId, tenantSchema } = auth.context;
 
-  const plan = await getTenantPlan(tenantSchema);
-  if (!hasPlatformIntegrations(plan)) {
-    return NextResponse.json(
-      { error: "Platform integrations require the Pro or Business plan." },
-      { status: 403 }
-    );
+  let ent: PlanEntitlements;
+  try {
+    ent = await getTenantEntitlements(tenantSchema);
+  } catch (err) {
+    console.error("[import] plan lookup failed", err);
+    return NextResponse.json({ error: "Could not check your plan. Please try again." }, { status: 500 });
+  }
+  if (!hasPlatformIntegrations(ent)) {
+    return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
   const body = (await req.json()) as {
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ imported: 0 });
   }
 
-  const { active } = resolveActiveAccounts(await listConnections(client), plan);
+  const { active } = resolveActiveAccounts(await listConnections(client), ent);
   const activeIds = new Map<IntegrationPlatform, Set<string>>();
   for (const c of active) {
     if (!activeIds.has(c.platform)) activeIds.set(c.platform, new Set());

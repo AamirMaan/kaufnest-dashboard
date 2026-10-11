@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { useAppSelector } from "@/store/hooks";
-import { hasPlatformIntegrations } from "@/lib/utils/planGating";
+import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
+import { usePlan } from "@/store/usePlan";
 import { EbayPlanner } from "./_components/EbayPlanner";
 import { AmazonPlanner } from "./_components/AmazonPlanner";
 
@@ -16,10 +16,10 @@ const TABS: { key: PlatformTab; label: string }[] = [
 ];
 
 export default function PlannerPage() {
-  const tenantPlan = useAppSelector((s) => s.currentUser.tenantPlan);
+  const { ent, availability } = usePlan();
   const [activeTab, setActiveTab] = useState<PlatformTab>("ebay");
 
-  if (!tenantPlan || !hasPlatformIntegrations(tenantPlan)) {
+  if (!ent || !hasPlatformIntegrations(ent)) {
     return (
       <div>
         <PageHeader
@@ -31,7 +31,7 @@ export default function PlannerPage() {
             Upgrade to unlock the Planner
           </h2>
           <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-            The Profit Planner is available on the Pro and Business plans.
+            {availability("platformIntegrations", "The Profit Planner")}
           </p>
           <Link
             href="/dashboard/settings"

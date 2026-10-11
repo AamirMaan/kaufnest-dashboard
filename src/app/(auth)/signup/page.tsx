@@ -111,7 +111,7 @@ export default function SignupPage() {
         <span className="text-3xl font-bold text-[var(--color-text-strong)] tracking-tight">
           Bought<span className="text-[var(--color-primary-hover)]">opia</span>
         </span>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">14 days free · no credit card</p>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">Free trial · no credit card</p>
       </div>
 
       <form
