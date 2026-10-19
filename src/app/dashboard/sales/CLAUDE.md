@@ -252,7 +252,9 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `statusLabel`. See "Order status + returns" below.
 - `_components/LocationParamSync.tsx` (057) — reads `useSearchParams().get("location")` and calls `onLocation(id)` once per URL value; rendered by `page.tsx` inside `<Suspense fallback={null}>`.
 - `_components/fulfillmentLocation.ts` (+ colocated `.test.ts`, Phase 3 Task
-  5, 2026-09-26) — pure helpers behind the "Fulfilled from" field:
+  5, 2026-09-26) — pure helpers behind the "Fulfilled from" field (and,
+  since 057, `locationFilterOptions(locations, selected)` for the Orders
+  page's Location filter):
   `suggestedFulfillmentLocationId(platform, platformDefaults, locations,
   settings)` (mirrors the `inv_sale_before_write` DB trigger — platform
   default if active, else the tenant default, else `""`),

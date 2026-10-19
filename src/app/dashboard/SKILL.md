@@ -239,6 +239,14 @@ hydrated, but only as the key for display/billing — never gate on it.
 - The banner is live state, not stored notifications: it follows the
   location's *current* dispatcher and drops orders as soon as they leave
   `pending`/`processing`.
+- The flush fires on mount and on `summaryVersion` changes only — not on
+  every navigation (the queue refetch does) — tracked by a ref via
+  `shouldRequestFlush()` (`components/layout/dispatchQueue.ts`), and never for
+  users without Orders view (`useAccess().can("orders", 1)`; the route 403s).
+- **Dispatcher with Orders but no Inventory access sees an empty banner.**
+  `my_dispatch_queue()` is SECURITY INVOKER and reads `stock_locations`/
+  `inventory_settings`, whose 055 SELECT policies need Inventory >= 1. Their
+  emails and bell rows still arrive. Documented, not fixed.
 
 ## Test command
 

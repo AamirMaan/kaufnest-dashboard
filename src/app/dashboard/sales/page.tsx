@@ -19,6 +19,7 @@ import { AddSaleModal } from "./_components/AddSaleModal";
 import { EditSaleModal } from "./_components/EditSaleModal";
 import { ImportSalesModal } from "./_components/ImportSalesModal";
 import { LocationParamSync } from "./_components/LocationParamSync";
+import { locationFilterOptions } from "./_components/fulfillmentLocation";
 import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
@@ -456,12 +457,14 @@ export default function SalesPage() {
             </select>
           </div>
         )}
-        {advanced.active && advanced.locations.length > 0 && (
+        {/* Shown whenever a location filter is applied (e.g. from the dispatch
+            banner's ?location= link) so it can always be seen and cleared. */}
+        {((advanced.active && advanced.locations.length > 0) || filters.location !== "all") && (
           <div>
             <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Location</span>
             <select value={filters.location} onChange={(e) => setFilter("location", e.target.value)} className={filterInputCls}>
               <option value="all">All Locations</option>
-              {advanced.locations.map((l) => (
+              {locationFilterOptions(advanced.locations, filters.location).map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>

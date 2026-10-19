@@ -16,3 +16,16 @@ export function dispatchBannerLines(rows: DispatchQueueRow[]) {
       href: `/dashboard/sales?location=${encodeURIComponent(r.location_id)}`,
     }));
 }
+
+/**
+ * Whether DispatchBanner should nudge POST /api/dispatch/flush now: once on
+ * mount, then only when a sales write bumped summaryVersion — never on plain
+ * navigation — and never for users the route would 403 (no Orders view).
+ */
+export function shouldRequestFlush(
+  lastFlushedVersion: number | null,
+  summaryVersion: number,
+  canViewOrders: boolean,
+): boolean {
+  return canViewOrders && lastFlushedVersion !== summaryVersion;
+}

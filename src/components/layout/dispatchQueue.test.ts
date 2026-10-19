@@ -1,4 +1,4 @@
-import { dispatchBannerLines } from "./dispatchQueue";
+import { dispatchBannerLines, shouldRequestFlush } from "./dispatchQueue";
 
 describe("dispatchBannerLines", () => {
   it("pluralises and links each location", () => {
@@ -15,5 +15,24 @@ describe("dispatchBannerLines", () => {
 
   it("drops zero-count rows", () => {
     expect(dispatchBannerLines([{ location_id: "l1", location_name: "Berlin", open_count: 0 }])).toEqual([]);
+  });
+});
+
+describe("shouldRequestFlush", () => {
+  it("flushes on mount (nothing flushed yet)", () => {
+    expect(shouldRequestFlush(null, 0, true)).toBe(true);
+  });
+
+  it("does not re-flush on navigation when summaryVersion is unchanged", () => {
+    expect(shouldRequestFlush(3, 3, true)).toBe(false);
+  });
+
+  it("flushes again after a sales write bumps summaryVersion", () => {
+    expect(shouldRequestFlush(3, 4, true)).toBe(true);
+  });
+
+  it("never flushes for users without Orders view access", () => {
+    expect(shouldRequestFlush(null, 0, false)).toBe(false);
+    expect(shouldRequestFlush(3, 4, false)).toBe(false);
   });
 });

@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PackageCheck } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { usePlan } from "@/store/usePlan";
+import { useAccess } from "@/store/useAccess";
 import { hasAdvancedInventory } from "@/lib/plans/entitlements";
 import { createTenantClient } from "@/lib/supabase/client";
 import { requestDispatchFlush } from "@/lib/utils/dispatchFlush";
-import { dispatchBannerLines, type DispatchQueueRow } from "./dispatchQueue";
+import { dispatchBannerLines, shouldRequestFlush, type DispatchQueueRow } from "./dispatchQueue";
 
 const DEBOUNCE_MS = 2000;
 
@@ -17,7 +18,10 @@ const DEBOUNCE_MS = 2000;
  * Persistent "orders to dispatch" banner for a location's dispatcher (057).
  * Also the single place that nudges the dispatch email flush: on mount and,
  * debounced, whenever the sales slice records a write (summaryVersion is
- * bumped by addSale/updateSale/removeSale — every client write path).
+ * bumped by addSale/updateSale/removeSale — every client write path). The
+ * queue refetches on every navigation, but the flush does not (see
+ * shouldRequestFlush), and users without Orders view never flush (the route
+ * would 403).
  * Renders nothing for plans without advanced inventory or an empty queue.
  */
 export function DispatchBanner() {
@@ -25,13 +29,18 @@ export function DispatchBanner() {
   const entitled = !!ent && hasAdvancedInventory(ent);
   const summaryVersion = useAppSelector((s) => s.sales.summaryVersion);
   const pathname = usePathname();
+  const canViewOrders = useAccess().can("orders", 1);
+  const lastFlushedVersion = useRef<number | null>(null);
   const [rows, setRows] = useState<DispatchQueueRow[]>([]);
 
   useEffect(() => {
     if (!entitled) return;
     let cancelled = false;
     const t = setTimeout(async () => {
-      requestDispatchFlush();
+      if (shouldRequestFlush(lastFlushedVersion.current, summaryVersion, canViewOrders)) {
+        lastFlushedVersion.current = summaryVersion;
+        requestDispatchFlush();
+      }
       try {
         const supabase = await createTenantClient();
         const { data, error } = await supabase.rpc("my_dispatch_queue");
@@ -44,7 +53,7 @@ export function DispatchBanner() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [entitled, summaryVersion, pathname]);
+  }, [entitled, summaryVersion, pathname, canViewOrders]);
 
   const lines = dispatchBannerLines(rows);
   if (!entitled || lines.length === 0) return null;

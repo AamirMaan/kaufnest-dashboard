@@ -894,6 +894,6 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 
 ## Gotchas — location filter (057)
 
-- **`SalesFilters.location`** (`"all"` default) → `p_location_id` in `salesFilterParams` → `.eq("fulfillment_location_id", …)` in `fetchSalesPage` and `handleExport`. The Location select renders only when `useAdvancedInventory().active` and the tenant has locations.
+- **`SalesFilters.location`** (`"all"` default) → `p_location_id` in `salesFilterParams` → `.eq("fulfillment_location_id", …)` in `fetchSalesPage` and `handleExport`. The Location select renders when `useAdvancedInventory().active` and the tenant has locations, **or whenever `filters.location !== "all"`** (a `?location=` filter must stay visible and clearable even before/without advanced-inventory hydration). Its options come from `locationFilterOptions(locations, selected)` (`_components/fulfillmentLocation.ts`): active, non-dropship locations, plus the selected one even if inactive/dropship (suffixed "(inactive)"), plus an "Unknown location" placeholder for an id that matches nothing.
 - **`get_sales_summary`'s `p_location_id` must be omitted when unset** — `salesSummaryRpcArgs` drops it, same as `p_connection_id`. Sending it to a tenant not yet on 057 (8-arg function) 404s with PGRST202.
 - **`?location=<id>` (from `DispatchBanner`) is applied by `_components/LocationParamSync.tsx`**, rendered inside `<Suspense fallback={null}>` in `page.tsx` — Next requires a Suspense boundary around `useSearchParams`. Keep `useSearchParams` out of `page.tsx` itself.
