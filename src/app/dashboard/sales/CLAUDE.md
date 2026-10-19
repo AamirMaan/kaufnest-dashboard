@@ -33,6 +33,12 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   plus "Unassigned" = `UNASSIGNED_ACCOUNT`) and the table an "Account" column
   (`accountName(accounts, s.connection_id)` badge, "—" when unset). Hidden for
   single-account tenants. The export always appends an `account` column.
+  **Location (057, advanced inventory only)**: a "Location" select (each
+  stock location by name) filters on `fulfillment_location_id` via
+  `SalesFilters.location` → `p_location_id` (table, export, and
+  `get_sales_summary`'s trailing arg — sent only when set). A `?location=<id>`
+  URL param (linked from the shell's `DispatchBanner`) is applied on load by
+  `_components/LocationParamSync.tsx`, wrapped in `<Suspense>`.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -244,6 +250,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
+- `_components/LocationParamSync.tsx` (057) — reads `useSearchParams().get("location")` and calls `onLocation(id)` once per URL value; rendered by `page.tsx` inside `<Suspense fallback={null}>`.
 - `_components/fulfillmentLocation.ts` (+ colocated `.test.ts`, Phase 3 Task
   5, 2026-09-26) — pure helpers behind the "Fulfilled from" field:
   `suggestedFulfillmentLocationId(platform, platformDefaults, locations,

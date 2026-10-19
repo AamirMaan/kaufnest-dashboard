@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { removeSale, fetchSalesPage, fetchSalesSummary, fetchSalesMarketplaces } from "./_store/salesSlice";
@@ -18,6 +18,8 @@ import Link from "next/link";
 import { AddSaleModal } from "./_components/AddSaleModal";
 import { EditSaleModal } from "./_components/EditSaleModal";
 import { ImportSalesModal } from "./_components/ImportSalesModal";
+import { LocationParamSync } from "./_components/LocationParamSync";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createTenantClient } from "@/lib/supabase/client";
@@ -61,6 +63,8 @@ export default function SalesPage() {
   const accounts = useAppSelector((s) => s.integrations.accounts);
   // Account filter/column only appear once a platform has 2+ accounts.
   const showAccounts = hasMultipleAccounts(accounts);
+  // Location filter only exists for advanced-inventory tenants (057).
+  const advanced = useAdvancedInventory();
   const { can } = useAccess();
   const canEdit = can("orders", 2);
   const canDelete = can("orders", 3);
@@ -186,6 +190,7 @@ export default function SalesPage() {
       else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
       if (p.p_connection_id === UNASSIGNED_ACCOUNT) query = query.is("connection_id", null);
       else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
+      if (p.p_location_id) query = query.eq("fulfillment_location_id", p.p_location_id);
       if (p.p_currency) query = query.eq("currency", p.p_currency);
       if (p.p_status) query = query.eq("status", p.p_status);
       if (p.p_pattern) {
@@ -366,6 +371,9 @@ export default function SalesPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <LocationParamSync onLocation={(id) => setFilter("location", id)} />
+      </Suspense>
       <PageHeader
         title="Orders"
         description="Revenue from all platforms"
@@ -445,6 +453,17 @@ export default function SalesPage() {
                 <option key={a.id} value={a.id}>{`${a.platform === "ebay" ? "eBay" : "Amazon"} · ${accountLabel(a)}`}</option>
               ))}
               <option value={UNASSIGNED_ACCOUNT}>Unassigned</option>
+            </select>
+          </div>
+        )}
+        {advanced.active && advanced.locations.length > 0 && (
+          <div>
+            <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Location</span>
+            <select value={filters.location} onChange={(e) => setFilter("location", e.target.value)} className={filterInputCls}>
+              <option value="all">All Locations</option>
+              {advanced.locations.map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
             </select>
           </div>
         )}

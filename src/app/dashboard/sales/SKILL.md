@@ -891,3 +891,9 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **The account UI is conditional.** `hasMultipleAccounts` gates the filter, column and (Task 12) modal picker; single-account tenants see nothing new. The CSV export's `account` column is always present.
 - **`UNASSIGNED_ACCOUNT` (`__unassigned__`) must match the literal in 056's `get_sales_summary`** — the summary tiles get it straight through `salesFilterParams`, the table/export via `.is("connection_id", null)`.
 - **`state.integrations.accounts` is read by members, not `connections`** — `connections` is admin-only (RLS) and would be `[]` for an accountant. Before 056 is applied `accounts` is `[]`, so every account UI stays hidden.
+
+## Gotchas — location filter (057)
+
+- **`SalesFilters.location`** (`"all"` default) → `p_location_id` in `salesFilterParams` → `.eq("fulfillment_location_id", …)` in `fetchSalesPage` and `handleExport`. The Location select renders only when `useAdvancedInventory().active` and the tenant has locations.
+- **`get_sales_summary`'s `p_location_id` must be omitted when unset** — `salesSummaryRpcArgs` drops it, same as `p_connection_id`. Sending it to a tenant not yet on 057 (8-arg function) 404s with PGRST202.
+- **`?location=<id>` (from `DispatchBanner`) is applied by `_components/LocationParamSync.tsx`**, rendered inside `<Suspense fallback={null}>` in `page.tsx` — Next requires a Suspense boundary around `useSearchParams`. Keep `useSearchParams` out of `page.tsx` itself.
