@@ -366,6 +366,8 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 (`src/lib/utils/notifications.ts`) computes them at read time from the
 `products` table and merges them into the feed client-side — see
 `inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
+Dispatch notifications (057) are addressed to one user via `recipient_user_id`;
+RLS still decides visibility.
 `DeniedAccessToast` (2026-09-30 — rendered once by `DashboardShell`, right
 inside its own `<Suspense fallback={null}>`, so it sits inside the
 `<ToastProvider>` `layout.tsx` already wraps `DashboardShell` in): reads

@@ -2,7 +2,7 @@ import { suggestedFulfillmentLocationId, fulfillmentStockWarning, fulfillmentWar
 import type { InventorySettings, StockLocation } from "@/types";
 
 const loc = (id: string, overrides: Partial<StockLocation> = {}): StockLocation => ({
-  id, name: id.toUpperCase(), type: "own", is_active: true, created_by: null, created_at: "2026-09-26T00:00:00.000Z", ...overrides,
+  id, name: id.toUpperCase(), type: "own", is_active: true, dispatcher_id: null, created_by: null, created_at: "2026-09-26T00:00:00.000Z", ...overrides,
 });
 const settings: InventorySettings = { advanced_enabled: true, enabled_at: null, default_location_id: "main" };
 

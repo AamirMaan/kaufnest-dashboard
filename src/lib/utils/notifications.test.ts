@@ -216,3 +216,9 @@ describe("isSynthetic", () => {
     expect(isSynthetic("x-low-stock:p1")).toBe(false);
   });
 });
+
+describe("NOTIFICATION_LABELS dispatch", () => {
+  it("labels dispatch notifications", () => {
+    expect(NOTIFICATION_LABELS["inventory.dispatch_assigned"]).toBe("Dispatch");
+  });
+});
