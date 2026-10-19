@@ -28,14 +28,26 @@ shared secret per environment, hard to test locally).
 
 ## Data model
 
-New migration `supabase/migrations/057_location_dispatchers.sql`, all tenant
-DDL via `public.run_on_all_tenant_schemas`, and the same DDL added to
-`provision_tenant_schema()` in `005_tenant_provisioning.sql` (2-places rule —
-see `supabase/SKILL.md`). Because stock-location tables are only created by
-`install_advanced_inventory` (047), the 057 DDL is guarded the same way 047's
-dependants are: skip a schema whose `stock_locations` table does not exist,
-and add the columns inside the advanced-inventory installer too so tenants
-enabling it later get them.
+New migration `supabase/migrations/057_location_dispatchers.sql` follows the
+047/055 installer pattern: it defines
+`public.install_location_dispatchers(schema_name)` (idempotent; skips a
+schema missing `stock_locations` or `notifications`), runs it on every
+tenant via `run_on_all_tenant_schemas`, and `provision_tenant_schema()`
+(005) calls it — guarded by `to_regprocedure` — between the advanced
+inventory installer (step 9, which creates `stock_locations` for every
+tenant) and the section-permissions installer (step 10). The installer
+ends by calling `install_section_permissions()` so the rewritten
+`notifications_select` policy picks up the new column.
+
+`055_section_permissions.sql` is edited too: its `notifications_select`
+policy gains the recipient disjunct when the `recipient_user_id` column
+exists, and `notification_section()` maps `inventory.dispatch_assigned` →
+`orders`. This is required — 055 drops and recreates every
+`notifications` policy each time it runs (and 047 re-runs it), so a policy
+defined only in 057 would be silently reverted.
+
+**Apply order (live):** 056 (not yet applied) → re-apply 055 → 057 →
+re-apply 005.
 
 ### Changed tables
 
@@ -43,9 +55,9 @@ enabling it later get them.
 - `sales.dispatch_notified_at timestamptz NULL` — once-only flag, written only by the trigger.
 - `notifications.recipient_user_id uuid NULL REFERENCES profiles(id) ON DELETE CASCADE`
   - Index on `(recipient_user_id, created_at desc)`.
-  - `notifications_select` policy (current definition is 055's) is recreated
-    with an extra disjunct: `OR recipient_user_id = auth.uid()`.
-    `is_tenant_member()` still required.
+  - `notifications_select` policy (owned by 055, see above) gains a
+    disjunct: `recipient_user_id = auth.uid()` (still subject to
+    `is_tenant_member()` and the `notification_section` Orders check).
   - Dispatch notifications set `visible_to_roles = '{}'` and
     `required_permission = NULL`, so only the recipient matches.
 
@@ -153,23 +165,30 @@ Decided behaviours:
   (never hardcoded). No section/role requirement — it only drains the
   caller's own tenant's queue and returns counts.
 - Responds `{ sent, failed }`; errors map to a generic message.
-- Callers:
-  - `AddSaleModal` / `EditSaleModal`: fire-and-forget `fetch` after a
-    successful save (failure ignored; the queue persists).
-  - Integrations review/import route: calls `flushDispatchOutbox(schema)`
-    directly after inserting sales.
-  - Sales CSV import: fire-and-forget after the batch completes.
-  - `DispatchBanner` mount: one fire-and-forget call per page load as a
-    safety net for anything missed.
+- Caller (one place, not one per write path): `DispatchBanner` (always
+  mounted in the dashboard shell for advanced-inventory-entitled plans)
+  calls it fire-and-forget on mount and, debounced 2 s, whenever
+  `state.sales.summaryVersion` changes. `addSale`/`updateSale`/`removeSale`
+  already bump that counter, so every client write path — Add/Edit Sale
+  modals, the order-detail page, CSV import — triggers a flush without any
+  modal changes. The integrations import route is deliberately **not** a
+  caller: synced orders are always inserted with `product_id: null`
+  (`mapToSale.ts`), so they can never satisfy the trigger at insert time;
+  linking a product later goes through `EditSaleModal`.
 
 ## UI
 
 ### Location modal (`inventory/_components/LocationModal.tsx`)
 
-- New optional **Dispatcher** `Select`: "None" + active tenant users with
-  at least View (≥ 1) access to the `sales` section (`effectiveAccess` from
-  `lib/permissions/sections.ts`). Pure option builder
-  `dispatcherOptions(users)` in `inventory/_lib/` with a test.
+- New optional **Dispatcher** `Select`: "None" + active tenant users
+  (`state.users.items`) whose role default grants Orders ≥ 1
+  (`ROLE_DEFAULTS[role].orders`, `lib/permissions/sections.ts` — per-user
+  exceptions live server-side and aren't loaded here; a dispatcher whose
+  exception removes Orders simply sees an empty banner, since the banner RPC
+  runs under RLS). The current dispatcher stays listed even if since
+  deactivated ("(deactivated)"), so editing never silently drops it. Pure
+  option builder `dispatcherOptions(users, currentId)` in `inventory/_lib/`
+  with a test.
 - Hidden for `dropship` locations (they hold no stock).
 - `LocationsTab` gains a **Dispatcher** column (name or "—").
 - Saving follows existing form conventions (toast on success/failure,
@@ -186,18 +205,26 @@ Decided behaviours:
 - Renders nothing when the result is empty, the plan lacks advanced
   inventory, or advanced inventory is off.
 - Copy: "You have **3 orders** to dispatch from **Berlin Warehouse**" — one
-  line per location, each linking to
-  `/dashboard/sales?location=<id>&status=open`. Uses existing tokens
-  (warning-tinted, `lucide-react` `PackageCheck` icon). Not dismissible.
-- Refetches on route change and when the sales slice records a save.
+  line per location, each linking to `/dashboard/sales?location=<id>`.
+  Uses existing tokens (`--color-warning-bg`/`--color-warning-text`,
+  `lucide-react` `PackageCheck` icon). Not dismissible. Rendered at the top
+  of `<main>` so it inherits page padding.
+- Refetches on route change and (debounced, with the flush) on
+  `summaryVersion` change.
 
 ### Orders page (`dashboard/sales/`)
 
-- No location filter exists today. Add a `location` filter (URL param
-  `location`, applied as `.eq('fulfillment_location_id', …)` in
-  `fetchSalesPage`) and support `status=open` as shorthand for
-  `pending`+`processing`. Location filter only rendered when advanced
-  inventory is enabled.
+- No location filter exists today. Add `location` to `SalesFilters`
+  (`"all"` default) → `p_location_id` in `salesFilterParams`, applied as
+  `.eq('fulfillment_location_id', …)` in `fetchSalesPage` and the CSV
+  export, and as a new trailing `p_location_id text DEFAULT NULL` arg on
+  `get_sales_summary` (redefined by 057's installer; sent only when set,
+  same PGRST202 trick as `p_connection_id`). The Location select only
+  renders when advanced inventory is active. A `?location=<id>` URL param
+  (from the banner) is applied by a small `useSearchParams` child wrapped in
+  `<Suspense fallback={null}>` (Next requires the boundary for
+  `useSearchParams`). No "open status" shorthand — the dispatcher sees the
+  Status column and can filter by it (YAGNI).
 
 ### Bell
 
@@ -220,10 +247,9 @@ Jest (colocated):
 - `lib/email/dispatchEmail.test.ts` — content, escaping of hostile input, link.
 - `lib/dispatch/flushOutbox.test.ts` — mocked client + transport: SMTP not
   configured, success path, send failure (retry state), inactive recipient skip.
-- `lib/dispatch/openStatus.test.ts` — `isOpenDispatchStatus()` shared by the
-  banner link/filter and kept in sync with the SQL list.
-- `inventory/_lib/dispatcherOptions.test.ts` — filters inactive users and users without Orders access.
-- `salesSlice` test for the `location` and `status=open` filters.
+- `components/layout/dispatchBanner.test.ts` — banner line copy/pluralisation/links.
+- `inventory/_lib/dispatcherOptions.test.ts` — filters inactive users and users without Orders access, keeps the current dispatcher.
+- `sales/_store/salesFilterParams.test.ts` — `location` → `p_location_id`, omitted from RPC args when `"all"`.
 
 SQL: after applying 057 to Project B, a verification script (in the PR
 description) that inserts a sale with product + location in a transaction,
