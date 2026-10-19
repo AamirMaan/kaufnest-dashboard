@@ -229,6 +229,17 @@ Plan gates read `state.currentUser.planEntitlements` via `usePlan()` — null be
 `StoreProvider` decodes with `fromWireEntitlements`. `tenantPlan` is still
 hydrated, but only as the key for display/billing — never gate on it.
 
+## Gotchas — dispatch banner (057)
+
+- **Don't add per-modal dispatch-email flush calls.** `DispatchBanner` nudges
+  `POST /api/dispatch/flush` whenever `state.sales.summaryVersion` changes,
+  which `addSale`/`updateSale`/`removeSale` already bump on every client write
+  path. A new write path that bypasses those actions must bump it (or call
+  `requestDispatchFlush()` itself) or its dispatch emails wait for the next nudge.
+- The banner is live state, not stored notifications: it follows the
+  location's *current* dispatcher and drops orders as soon as they leave
+  `pending`/`processing`.
+
 ## Test command
 
 `npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`,

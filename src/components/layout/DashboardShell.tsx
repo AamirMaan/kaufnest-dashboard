@@ -8,6 +8,7 @@ import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
 import { BrandMark } from "./BrandMark";
 import { DeniedAccessToast } from "./DeniedAccessToast";
+import { DispatchBanner } from "./DispatchBanner";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import type { UserRole } from "@/types";
 
@@ -170,7 +171,10 @@ export function DashboardShell({ userId, role, fullName, email, children, impers
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
         />
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+          <DispatchBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -368,6 +368,17 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 `inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
 Dispatch notifications (057) are addressed to one user via `recipient_user_id`;
 RLS still decides visibility.
+`DispatchBanner` (057, `src/components/layout/DispatchBanner.tsx` + pure
+`dispatchQueue.ts`/test) — rendered at the top of `DashboardShell`'s `<main>`.
+Shows a location dispatcher "You have N orders to dispatch from <location>"
+lines from the `my_dispatch_queue()` RPC (runs under RLS; counts open
+`pending`/`processing` orders with a linked product at locations whose
+`dispatcher_id` is the viewer), each linking to `/dashboard/sales?location=<id>`.
+Entitlement-gated via `usePlan()` + `hasAdvancedInventory` (no RPC call for
+other plans; renders nothing on error or an empty queue). It is also the
+**single caller of `requestDispatchFlush()`** (`lib/utils/dispatchFlush.ts` →
+`POST /api/dispatch/flush`): on mount, on route change, and 2 s after any
+`state.sales.summaryVersion` bump.
 `DeniedAccessToast` (2026-09-30 — rendered once by `DashboardShell`, right
 inside its own `<Suspense fallback={null}>`, so it sits inside the
 `<ToastProvider>` `layout.tsx` already wraps `DashboardShell` in): reads
