@@ -15,6 +15,7 @@ import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import { fetchLocationStockTotals } from "../_store/stockByLocation";
 import { locationRemoved, locationSaved } from "../_store/advancedInventorySlice";
 import { LOCATION_TYPE_LABELS, locationDeactivationBlocker, sortLocations } from "../_lib/advancedInventory";
+import { dispatcherName } from "../_lib/dispatcherOptions";
 import { LocationModal } from "./LocationModal";
 import { FulfillmentDefaultsCard } from "./FulfillmentDefaultsCard";
 import type { StockLocation } from "@/types";
@@ -41,6 +42,7 @@ export function LocationsTab({ canManage, addOpen, onAddClose, hidden, stockVers
   const { success, error: toastError, warning } = useToast();
   const locations = useAppSelector((s) => s.advancedInventory.locations);
   const settings = useAppSelector((s) => s.advancedInventory.settings);
+  const users = useAppSelector((s) => s.users.items);
   const platformDefaults = useAppSelector((s) => s.advancedInventory.platformDefaults);
   const [editTarget, setEditTarget] = useState<StockLocation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StockLocation | null>(null);
@@ -174,6 +176,13 @@ export function LocationsTab({ canManage, addOpen, onAddClose, hidden, stockVers
       header: "Type",
       sortValue: (l: StockLocation) => LOCATION_TYPE_LABELS[l.type],
       render: (l: StockLocation) => <span className="text-sm text-(--color-text-base)">{LOCATION_TYPE_LABELS[l.type]}</span>,
+    },
+    {
+      header: "Dispatcher",
+      sortValue: (l: StockLocation) => dispatcherName(users, l.dispatcher_id) ?? "",
+      render: (l: StockLocation) => (
+        <span className="text-sm text-(--color-text-base)">{dispatcherName(users, l.dispatcher_id) ?? "—"}</span>
+      ),
     },
     {
       header: "On hand",

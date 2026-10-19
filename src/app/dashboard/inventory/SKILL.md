@@ -116,6 +116,8 @@ since modal dropdowns use a different state key than the table.
   (`pageAfterRemoval`). `page.tsx` only owns `tab`/`transferOpen`/
   `stockVersion` state and the "+ Transfer Stock" header button — see the
   "Add a tab" and `stockVersion` gotchas below.
+- **Change who can be a dispatcher** (057): `_lib/dispatcherOptions.ts` (+ test);
+  the field lives in `_components/LocationModal.tsx`, the column in `LocationsTab.tsx`.
 - **Add a tab**: `InventoryTabs.tsx`'s `InventoryTabId` union +
   `page.tsx`'s `tabs` array/header `action` switch + a panel id
   `inventory-panel-<id>` on the new tab component's root element (matching
@@ -575,3 +577,6 @@ since modal dropdowns use a different state key than the table.
   `useState` initializer) only exists while `addOpen` is true, so every open
   is a fresh mount with a fresh draft. Don't "fix" this back to the
   remount-key pattern without re-solving the staleness this avoids.
+- **Dispatcher eligibility uses role defaults only** (`ROLE_DEFAULTS`, orders >= 1);
+  per-user section exceptions are server-side and not loaded client-side.
+  Dropship locations always save `dispatcher_id: null` (and hide the field).
