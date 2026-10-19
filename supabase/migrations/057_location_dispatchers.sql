@@ -18,6 +18,10 @@
 -- after inv_sale_before_write (triggers fire alphabetically), so it sees the
 -- fulfillment_location_id that trigger defaults from platform/tenant defaults.
 --
+-- Notify rule: only on INSERT, when the product is first linked, or when the
+-- fulfillment location changes (and product+location set, open status,
+-- advanced inventory on, dispatcher active). Unrelated saves never notify.
+--
 -- RULE for editing: inside format($sql$ … $sql$, schema_name) strings never
 -- write a literal percent sign — format() consumes it.
 -- ============================================================
@@ -86,14 +90,21 @@ BEGIN
         NEW.dispatch_notified_at := NULL;
       ELSE
         NEW.dispatch_notified_at := OLD.dispatch_notified_at;
-        -- Moved to another warehouse: that warehouse's dispatcher must be told.
-        IF OLD.fulfillment_location_id IS NOT NULL
-           AND NEW.fulfillment_location_id IS DISTINCT FROM OLD.fulfillment_location_id THEN
+        -- ANY location change (incl. to/from NULL) re-arms the flag: the new
+        -- warehouse's dispatcher must be told.
+        IF NEW.fulfillment_location_id IS DISTINCT FROM OLD.fulfillment_location_id THEN
           NEW.dispatch_notified_at := NULL;
         END IF;
       END IF;
 
+      -- Rule: notify only on a qualifying transition — INSERT, product just
+      -- linked (OLD.product_id IS NULL), or location changed. An unrelated
+      -- save of an existing open order never notifies (no back-dated pings
+      -- after a dispatcher is assigned). Status changes alone never notify.
       IF NEW.dispatch_notified_at IS NULL
+         AND (TG_OP = 'INSERT'
+              OR OLD.product_id IS NULL
+              OR NEW.fulfillment_location_id IS DISTINCT FROM OLD.fulfillment_location_id)
          AND NEW.product_id IS NOT NULL
          AND NEW.fulfillment_location_id IS NOT NULL
          AND lower(coalesce(NEW.status, '')) IN ('pending', 'processing')
