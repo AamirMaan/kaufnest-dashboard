@@ -1,7 +1,7 @@
 # Location dispatchers & dispatch notifications — design
 
 **Date:** 2026-10-19
-**Status:** Approved (brainstorming), awaiting implementation plan
+**Status:** Implemented (PR pending), migration 057 not applied
 **Plan gating:** Business plan only — requires Advanced Inventory (`inventory_settings.advanced_enabled`), since stock locations only exist there (migration 047).
 
 ## Problem
@@ -108,7 +108,12 @@ would re-fire 047's inventory-ledger triggers on `sales`.
    - `NEW.fulfillment_location_id IS NOT NULL`
    - `NEW.dispatch_notified_at IS NULL` (after steps 1–2)
    - `inventory_settings.advanced_enabled`
-   - the location's `dispatcher_id` is set and that profile's status is active
+   - the location's `dispatcher_id` is set, that profile's status is active,
+     AND its effective Orders access is >= 1 (`user_section_level(p_user,
+     'orders')`, a SECURITY DEFINER helper in 057's installer mirroring 055's
+     `current_user_access_base` for an arbitrary user; EXECUTE revoked from
+     PUBLIC/anon/authenticated). The email carries buyer name and address,
+     so a dispatcher the Orders RLS would hide the order from never gets it.
    - `lower(NEW.status) IN ('pending', 'processing')`
 
 **`sales_dispatch_notify` — `AFTER INSERT OR UPDATE ON sales`:** fires when
@@ -135,7 +140,11 @@ Decided behaviours:
 
 ## Email delivery
 
-### `src/lib/email/` (server-only, `import "server-only"`)
+### `src/lib/email/` (server-only)
+
+Server-only by convention, not by an `import "server-only"` line — the repo
+relies on the project verifier (`.claude/verifiers/`), which denies importing
+these modules from a `"use client"` file.
 
 - `smtp.ts` — lazily creates and caches a nodemailer transport from
   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`.
@@ -152,8 +161,11 @@ Decided behaviours:
 `flushDispatchOutbox(schema)`:
 1. Return `{ sent: 0, failed: 0, skipped: true }` if SMTP is not configured
    (local/dev never break; rows stay pending).
-2. `claim_dispatch_emails(50)` via `createServiceClientForTenant(schema)`.
-3. For each row: if recipient inactive/missing email or sale gone → mark
+2. `claim_dispatch_emails(10)` via `createServiceClientForTenant(schema)`
+   (small batch; the transport uses `pool: true`).
+3. For each row: if recipient inactive, recipient can no longer view Orders
+   (`recipient_can_view_orders`, re-checked at claim time → `skipped: no
+   orders access`), missing email or sale gone → mark
    `sent_at = now()`, `last_error = 'skipped: …'`. Otherwise send; on success
    set `sent_at`, on failure set `last_error` (truncated, never returned to
    the client) and clear `claimed_at` so it is retried.
@@ -161,9 +173,9 @@ Decided behaviours:
 
 ### `POST /api/dispatch/flush`
 
-- Auth: signed-in tenant member; schema from `user.app_metadata.tenant_schema`
-  (never hardcoded). No section/role requirement — it only drains the
-  caller's own tenant's queue and returns counts.
+- Auth: `requireSectionAccess("orders", 1)` (signed-in tenant member with
+  Orders view); schema from `user.app_metadata.tenant_schema` (never
+  hardcoded). It only drains the caller's own tenant's queue and returns counts.
 - Responds `{ sent, failed }`; errors map to a generic message.
 - Caller (one place, not one per write path): `DispatchBanner` (always
   mounted in the dashboard shell for advanced-inventory-entitled plans)
@@ -209,8 +221,13 @@ Decided behaviours:
   Uses existing tokens (`--color-warning-bg`/`--color-warning-text`,
   `lucide-react` `PackageCheck` icon). Not dismissible. Rendered at the top
   of `<main>` so it inherits page padding.
-- Refetches on route change and (debounced, with the flush) on
-  `summaryVersion` change.
+- Refetches on route change and (debounced) on `summaryVersion` change. The
+  flush is requested only on mount and on `summaryVersion` change (not on
+  plain navigation), and never for users without Orders view.
+- Caveat: `my_dispatch_queue()` runs as the caller and reads
+  `stock_locations`/`inventory_settings`, whose SELECT policies need
+  Inventory >= 1. A dispatcher with Orders but no Inventory access sees an
+  empty banner (emails and bell rows still arrive). Accepted.
 
 ### Orders page (`dashboard/sales/`)
 
@@ -219,8 +236,10 @@ Decided behaviours:
   `.eq('fulfillment_location_id', …)` in `fetchSalesPage` and the CSV
   export, and as a new trailing `p_location_id text DEFAULT NULL` arg on
   `get_sales_summary` (redefined by 057's installer; sent only when set,
-  same PGRST202 trick as `p_connection_id`). The Location select only
-  renders when advanced inventory is active. A `?location=<id>` URL param
+  same PGRST202 trick as `p_connection_id`). The Location select renders
+  when advanced inventory is active with locations, or whenever a location
+  filter is applied (so a URL-applied filter can be cleared); it lists active,
+  non-dropship locations plus the selected one. A `?location=<id>` URL param
   (from the banner) is applied by a small `useSearchParams` child wrapped in
   `<Suspense fallback={null}>` (Next requires the boundary for
   `useSearchParams`). No "open status" shorthand — the dispatcher sees the

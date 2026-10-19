@@ -11,3 +11,4 @@
 - Never import from a `"use client"` file (verifier blocks it; env vars are server-only).
 - `secure` is derived from port 465; 587 uses STARTTLS.
 - Callers must check `isSmtpConfigured()` and no-op, so dev without SMTP never errors.
+- The transport is pooled (`pool: true`, cached per server instance) so a flush batch reuses one SMTP connection.

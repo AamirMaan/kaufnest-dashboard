@@ -32,7 +32,9 @@ export async function flushDispatchOutbox(schema: string) {
       if (error) console.error("[dispatch] markFailed failed", id, error.message);
     },
     send: sendMail,
-    appUrl: process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "",
+    // Same base-URL convention as the invite/provision emails: an empty
+    // fallback would put relative (dead) links into the email.
+    appUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.boughtopia.com",
   });
   return { ...result, configured: true };
 }

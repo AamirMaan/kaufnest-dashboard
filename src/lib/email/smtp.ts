@@ -21,6 +21,8 @@ function getTransporter(): Transporter {
   if (!transporter) {
     const port = Number(process.env.SMTP_PORT);
     transporter = nodemailer.createTransport({
+      // Reuse one connection across a flush batch instead of a TLS handshake per email.
+      pool: true,
       host: process.env.SMTP_HOST,
       port,
       secure: port === 465,

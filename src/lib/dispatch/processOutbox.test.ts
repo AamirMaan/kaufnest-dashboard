@@ -1,9 +1,15 @@
 import { processOutbox, type ClaimedDispatchEmail, type OutboxDeps } from "./processOutbox";
+import { buildDispatchEmail } from "@/lib/email/dispatchEmail";
+
+jest.mock("@/lib/email/dispatchEmail", () => {
+  const actual = jest.requireActual("@/lib/email/dispatchEmail");
+  return { ...actual, buildDispatchEmail: jest.fn(actual.buildDispatchEmail) };
+});
 
 function row(over: Partial<ClaimedDispatchEmail> = {}): ClaimedDispatchEmail {
   return {
     outbox_id: "o1", sale_id: "s1", recipient_email: "sam@example.com", recipient_name: "Sam",
-    recipient_active: true, location_name: "Berlin", product_name: "Mug", quantity: 1,
+    recipient_active: true, recipient_can_view_orders: true, location_name: "Berlin", product_name: "Mug", quantity: 1,
     platform: "ebay", marketplace: null, external_order_id: null, order_date: "2026-10-19",
     buyer_name: null, shipping_address_line1: null, shipping_address_line2: null,
     shipping_city: null, shipping_state: null, shipping_postal_code: null, shipping_country: null,
@@ -25,7 +31,7 @@ describe("processOutbox", () => {
   it("sends each claimed row and marks it sent", async () => {
     const d = deps([row(), row({ outbox_id: "o2", sale_id: "s2" })]);
     await expect(processOutbox(d)).resolves.toEqual({ sent: 2, failed: 0, skipped: 0 });
-    expect(d.claim).toHaveBeenCalledWith(50);
+    expect(d.claim).toHaveBeenCalledWith(10);
     expect(d.send).toHaveBeenCalledTimes(2);
     expect((d.send as jest.Mock).mock.calls[0][0].to).toBe("sam@example.com");
     expect(d.markSent).toHaveBeenCalledWith("o1", null);
@@ -52,5 +58,23 @@ describe("processOutbox", () => {
     const d = deps([row()], send);
     await processOutbox(d);
     expect((d.markFailed as jest.Mock).mock.calls[0][1]).toHaveLength(500);
+  });
+
+  it("skips recipients who can no longer view Orders", async () => {
+    const d = deps([row({ recipient_can_view_orders: false })]);
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 0, skipped: 1 });
+    expect(d.send).not.toHaveBeenCalled();
+    expect(d.markSent).toHaveBeenCalledWith("o1", "skipped: no orders access");
+  });
+
+  it("marks a row failed when building its email throws, and keeps going", async () => {
+    (buildDispatchEmail as jest.Mock).mockImplementationOnce(() => {
+      throw new Error("bad row");
+    });
+    const d = deps([row(), row({ outbox_id: "o2" })]);
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 1, failed: 1, skipped: 0 });
+    expect(d.markFailed).toHaveBeenCalledWith("o1", "bad row");
+    expect(d.send).toHaveBeenCalledTimes(1);
+    expect(d.markSent).toHaveBeenCalledWith("o2", null);
   });
 });

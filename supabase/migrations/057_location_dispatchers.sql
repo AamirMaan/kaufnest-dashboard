@@ -9,7 +9,9 @@
 -- install_section_permissions, guarded by to_regprocedure.
 --
 -- APPLY ORDER: 056 → re-apply 055 (adds the recipient disjunct to
--- notifications_select) → this file → re-apply 005.
+-- notifications_select) → this file → re-apply 005. 056 is a HARD
+-- prerequisite: step 5's get_sales_summary references s.connection_id
+-- (added by 056), so applying this before 056 fails.
 --
 -- Trigger design: sales_dispatch_flag (BEFORE) sets NEW.dispatch_notified_at;
 -- sales_dispatch_notify (AFTER) writes the notification + outbox rows. The
@@ -23,7 +25,14 @@
 -- advanced inventory on, dispatcher active). Unrelated saves never notify.
 --
 -- RULE for editing: inside format($sql$ … $sql$, schema_name) strings never
--- write a literal percent sign — format() consumes it.
+-- write a literal percent sign — format() consumes it. Where the inner body
+-- genuinely needs one (sales_dispatch_notify's RAISE WARNING placeholder),
+-- it is written doubled so format() emits a single one.
+--
+-- Dispatcher eligibility = profiles.status 'active' AND effective Orders
+-- access >= 1 (user_section_level, step 1b — mirrors 055 for any user).
+-- Checked when the flag is set AND again at claim time
+-- (recipient_can_view_orders), since access can be revoked in between.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.install_location_dispatchers(schema_name text)
@@ -76,6 +85,43 @@ BEGIN
     GRANT SELECT, INSERT, UPDATE, DELETE ON %1$I.dispatch_email_outbox TO service_role;
   $sql$, schema_name);
 
+  -- ── 1b. Effective section level for an ARBITRARY user ─────
+  -- Mirrors 055's current_user_access_base (exception row, else role
+  -- default; super_admin = section max; deactivated = 0) for p_user instead
+  -- of auth.uid(). Used by the dispatch trigger and claim_dispatch_emails to
+  -- check the dispatcher can view Orders. Does NOT apply 055's
+  -- listings/messages → integrations dependency rule (only 'orders' is
+  -- asked here). plpgsql, not sql, so it can be created before 055's
+  -- objects exist (provision_tenant_schema runs this installer before
+  -- install_section_permissions; step 6 below installs them in the same
+  -- call). If 055 is missing at call time it fails closed (0) rather than
+  -- erroring inside the sales BEFORE trigger. Service role / definer only.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.user_section_level(p_user uuid, p_section text)
+    RETURNS smallint LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = %1$I
+    AS $f$
+    BEGIN
+      IF to_regclass('user_section_access') IS NULL
+         OR to_regprocedure('role_section_default(text, text)') IS NULL THEN
+        RETURN 0::smallint;
+      END IF;
+      RETURN COALESCE((
+        SELECT CASE
+          WHEN p.status = 'deactivated' THEN 0::smallint
+          WHEN p.role = 'super_admin' THEN section_max_level(p_section)
+          ELSE COALESCE(
+            (SELECT a.level FROM user_section_access a WHERE a.user_id = p.id AND a.section = p_section),
+            role_section_default(p.role, p_section))
+        END
+        FROM profiles p WHERE p.id = p_user
+      ), 0::smallint);
+    END;
+    $f$;
+  $sql$, schema_name);
+  EXECUTE format('REVOKE ALL ON FUNCTION %I.user_section_level(uuid, text) FROM PUBLIC, anon, authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.user_section_level(uuid, text) TO service_role', schema_name);
+
   -- ── 2. Triggers ───────────────────────────────────────────
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.sales_dispatch_flag()
@@ -109,11 +155,16 @@ BEGIN
          AND NEW.fulfillment_location_id IS NOT NULL
          AND lower(coalesce(NEW.status, '')) IN ('pending', 'processing')
          AND coalesce((SELECT advanced_enabled FROM inventory_settings WHERE id), false) THEN
+        -- Eligible dispatcher: active AND effective Orders access >= 1 (the
+        -- email carries buyer name/address — never send it to someone the
+        -- Orders RLS would hide that order from). user_section_level (step 1b)
+        -- is resolved at call time.
         SELECT l.dispatcher_id INTO v_dispatcher
           FROM stock_locations l
           JOIN profiles p ON p.id = l.dispatcher_id
          WHERE l.id = NEW.fulfillment_location_id
-           AND p.status = 'active';
+           AND p.status = 'active'
+           AND user_section_level(p.id, 'orders') >= 1;
         IF v_dispatcher IS NOT NULL THEN
           NEW.dispatch_notified_at := now();
         END IF;
@@ -141,7 +192,12 @@ BEGIN
         RETURN NULL;
       END IF;
 
-      -- Notifications must never block a core business write (029's rule).
+      -- Notifications must never block a core business write (029's rule),
+      -- but a swallowed failure should still leave a trace in the Postgres
+      -- log. The RAISE WARNING format strings below are written as a
+      -- doubled percent sign because this body sits inside the installer's
+      -- format(...) call, which collapses it to the single placeholder
+      -- plpgsql RAISE expects.
       BEGIN
         INSERT INTO notifications
           (type, category, entity_type, entity_id, title, body, link,
@@ -163,14 +219,14 @@ BEGIN
           v_dispatcher
         );
       EXCEPTION WHEN others THEN
-        NULL;
+        RAISE WARNING 'sales_dispatch_notify (notification): %%', SQLERRM;
       END;
 
       BEGIN
         INSERT INTO dispatch_email_outbox (sale_id, recipient_user_id)
           VALUES (NEW.id, v_dispatcher);
       EXCEPTION WHEN others THEN
-        NULL;
+        RAISE WARNING 'sales_dispatch_notify (outbox): %%', SQLERRM;
       END;
       RETURN NULL;
     END;
@@ -185,11 +241,15 @@ BEGIN
   $sql$, schema_name);
 
   -- ── 3. Outbox claim (service role) ────────────────────────
+  -- recipient_can_view_orders is re-checked at claim time (access may have
+  -- been revoked since the row was queued); processOutbox skips the send.
+  -- DROP first: CREATE OR REPLACE cannot change a RETURNS TABLE column list.
+  EXECUTE format('DROP FUNCTION IF EXISTS %I.claim_dispatch_emails(int)', schema_name);
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.claim_dispatch_emails(p_limit int)
     RETURNS TABLE (
       outbox_id uuid, sale_id uuid, recipient_email text, recipient_name text,
-      recipient_active boolean, location_name text, product_name text, quantity int,
+      recipient_active boolean, recipient_can_view_orders boolean, location_name text, product_name text, quantity int,
       platform text, marketplace text, external_order_id text, order_date date,
       buyer_name text, shipping_address_line1 text, shipping_address_line2 text,
       shipping_city text, shipping_state text, shipping_postal_code text, shipping_country text
@@ -211,6 +271,7 @@ BEGIN
         RETURNING o.id, o.sale_id, o.recipient_user_id
       )
       SELECT c.id, c.sale_id, p.email, p.full_name, (p.status = 'active'),
+             (user_section_level(p.id, 'orders') >= 1),
              l.name, s.product_name, s.quantity, s.platform, s.marketplace,
              s.external_order_id, s.date, s.buyer_name,
              s.shipping_address_line1, s.shipping_address_line2, s.shipping_city,
