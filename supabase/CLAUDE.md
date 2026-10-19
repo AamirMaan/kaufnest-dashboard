@@ -435,6 +435,14 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   platform-tagged `expenses` (`strpos(lower(...))`, no literal percent sign
   for the 005 `format()` copy) and `transferred` payouts, all through
   `p_to`. Mirrored in `provision_tenant_schema()`. See `SKILL.md`'s file map.
+- `migrations/057_location_dispatchers.sql` — defines
+  `install_location_dispatchers(schema)` (run on every tenant, called from
+  `provision_tenant_schema()` step 9b): `stock_locations.dispatcher_id`,
+  `sales.dispatch_notified_at`, `notifications.recipient_user_id`, the
+  service-role-only `dispatch_email_outbox` + `claim_dispatch_emails(int)`,
+  `my_dispatch_queue()`, BEFORE/AFTER sales triggers that notify a location's
+  dispatcher once, and `get_sales_summary` + trailing `p_location_id`. Apply
+  order 056 → re-apply 055 → 057 → re-apply 005. Not applied; see `SKILL.md`.
 - `migrations/055_section_permissions.sql` — defines
   `public.install_section_permissions(schema_name)` and runs it on every
   tenant schema (also hooked into `install_advanced_inventory()`, 047, and
