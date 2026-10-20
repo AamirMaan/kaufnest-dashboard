@@ -9,8 +9,13 @@ describe("purchaseAmounts", () => {
     expect(purchaseAmounts("100", "3")).toEqual({ quantity: 3, total: 100, unitPrice: 33.33 });
   });
 
-  it("rounds the total itself to cents", () => {
+  it("rounds the total itself to cents, halves up", () => {
     expect(purchaseAmounts("10.005", "1").total).toBe(10.01);
+    expect(purchaseAmounts("1.005", "1").total).toBe(1.01);
+  });
+
+  it("gives a 0 unit price when the total is too small for the quantity", () => {
+    expect(purchaseAmounts("1", "300")).toEqual({ quantity: 300, total: 1, unitPrice: 0 });
   });
 
   it("treats empty, zero, negative or invalid totals as 0", () => {

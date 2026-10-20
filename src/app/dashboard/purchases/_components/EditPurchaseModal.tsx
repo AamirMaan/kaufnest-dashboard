@@ -91,7 +91,12 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     }));
   }
 
-  const { quantity: qty, total, unitPrice: price } = purchaseAmounts(form.total_amount, form.quantity);
+  const { quantity: qty, total, unitPrice: derivedPrice } = purchaseAmounts(form.total_amount, form.quantity);
+  // Keep the stored unit price unless an amount actually changed, so editing
+  // e.g. the vendor never rewrites unit_price on rows where it isn't total/qty.
+  const amountsChanged = !purchase || qty !== purchase.quantity || total !== Number(purchase.total_amount);
+  const price = amountsChanged ? derivedPrice : Number(purchase.unit_price);
+  const qtyChanged = !!purchase && qty !== purchase.quantity;
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
@@ -104,7 +109,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Save is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    total > 0 &&
+    price > 0 &&
     !!form.reason.trim() &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
@@ -113,6 +118,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     if (!purchase) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (total <= 0) return setError("Total must be greater than 0.");
+    if (price <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
@@ -265,6 +271,12 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           <p className="text-xs text-[var(--color-text-muted)]">
             Unit price: <span className="font-semibold text-[var(--color-warning)]">{form.currency} {price.toFixed(2)}</span>
             {qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
+          </p>
+        )}
+
+        {qtyChanged && total === Number(purchase.total_amount) && (
+          <p className="text-xs text-[var(--color-warning)]">
+            Quantity changed but Total Paid didn&apos;t — update the total if you paid a different amount.
           </p>
         )}
 

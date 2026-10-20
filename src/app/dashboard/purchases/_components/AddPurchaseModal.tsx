@@ -109,13 +109,14 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Add is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    total > 0 &&
+    price > 0 &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (total <= 0) return setError("Total must be greater than 0.");
+    if (price <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
     setSaving(true);

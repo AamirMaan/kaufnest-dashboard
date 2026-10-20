@@ -56,7 +56,18 @@ every mutation follows.
   `round(total / qty, 2)`, so on an uneven split (100 ÷ 3) `unit_price ×
   quantity` is off by a cent. That's expected — don't "fix" it by
   recomputing `total_amount` from `unit_price`.
-- The CSV importer still takes `unit_price` (unchanged).
+- **Changing only the quantity keeps the total** (the unit price drops/rises
+  instead, and so does the ledger's landed unit cost). `EditPurchaseModal`
+  shows a warning line when quantity changed but the total didn't.
+- `EditPurchaseModal` writes the **stored** `unit_price` back unchanged unless
+  quantity or total changed (`amountsChanged`) — editing only vendor/notes
+  must not rewrite `unit_price` on legacy/imported rows where it isn't
+  exactly `total / qty`.
+- A total too small for the quantity (1.00 ÷ 300) rounds `unit_price` to 0;
+  both forms treat that as invalid (button disabled + error).
+- The CSV importer still takes `unit_price` (unchanged), and Sales'
+  `AddSaleModal` linked-purchase path derives `unit_price` inline without
+  this helper — both are known divergences, not migrated here.
 
 ## Gotchas — "Specific period" date filter
 
