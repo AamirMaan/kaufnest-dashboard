@@ -47,6 +47,35 @@ every mutation follows.
 
 `npx jest dashboard/purchases`
 
+## Gotchas — total-first amount entry (2026-10-20)
+
+- The Add/Edit forms take **Total Paid** (`form.total_amount`) and derive the
+  unit price via `_lib/purchaseAmounts.ts` — never reintroduce a unit-price
+  input that multiplies up to the total. `total_amount` is authoritative
+  (VAT, landed cost and every summary read it); `unit_price` is
+  `round(total / qty, 2)`, so on an uneven split (100 ÷ 3) `unit_price ×
+  quantity` is off by a cent. That's expected — don't "fix" it by
+  recomputing `total_amount` from `unit_price`.
+- **Changing only the quantity keeps the total** (the unit price drops/rises
+  instead, and so does the ledger's landed unit cost). `EditPurchaseModal`
+  shows a warning line when quantity changed but the total didn't.
+- `EditPurchaseModal` writes the **stored** `unit_price` back unchanged unless
+  quantity or total changed (`amountsChanged`) — editing only vendor/notes
+  must not rewrite `unit_price` on legacy/imported rows where it isn't
+  exactly `total / qty`.
+- A total too small for the quantity (1.00 ÷ 300) rounds `unit_price` to 0;
+  both forms treat that as invalid (button disabled + error). Edit only
+  applies the check when quantity/total changed (`amountsChanged`), so a
+  legacy row with a stored `unit_price = 0` — or whose total ÷ qty rounds to
+  0 — stays editable for vendor/notes/etc. The "too small" reason is rendered inline
+  under the field (the disabled button can't trigger `handleSubmit`'s error).
+- Total Paid inputs use `step="any"` and no `min`: `purchaseAmounts` rounds
+  to cents itself and `isFormValid` is the real gate; a native step/min
+  mismatch (10.005, 0.005) would block submit while the button looked enabled.
+- The CSV importer still takes `unit_price` (unchanged), and Sales'
+  `AddSaleModal` linked-purchase path derives `unit_price` inline without
+  this helper — both are known divergences, not migrated here.
+
 ## Gotchas — "Specific period" date filter
 
 `page.tsx`'s `FilterBar` gets `earliestYear`/`onPeriodChange` props, which

@@ -21,6 +21,7 @@ import {
   purchaseInventoryFieldsFrom,
   purchaseInventoryPayload,
 } from "../_lib/purchaseInventoryFields";
+import { purchaseAmounts } from "../_lib/purchaseAmounts";
 import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -35,7 +36,7 @@ interface FormState {
   product_name: string;
   product_id: string;
   quantity: string;
-  unit_price: string;
+  total_amount: string;
   currency: Currency;
   vendor: string;
   date: string;
@@ -50,7 +51,7 @@ function purchaseToForm(p: Purchase, defaultVatRate: number): FormState {
     product_name: p.product_name,
     product_id: p.product_id ?? "",
     quantity: String(p.quantity),
-    unit_price: String(p.unit_price),
+    total_amount: String(p.total_amount),
     currency: p.currency,
     vendor: p.vendor ?? "",
     date: p.date,
@@ -62,7 +63,7 @@ function purchaseToForm(p: Purchase, defaultVatRate: number): FormState {
 }
 
 const blankForm: FormState = {
-  product_name: "", product_id: "", quantity: "1", unit_price: "", currency: "EUR",
+  product_name: "", product_id: "", quantity: "1", total_amount: "", currency: "EUR",
   vendor: "", date: "", description: "", vat_included: false, vat_rate: "0", reason: "",
 };
 
@@ -90,9 +91,12 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     }));
   }
 
-  const qty = Math.max(1, parseInt(form.quantity) || 1);
-  const price = parseFloat(form.unit_price) || 0;
-  const total = qty * price;
+  const { quantity: qty, total, unitPrice: derivedPrice } = purchaseAmounts(form.total_amount, form.quantity);
+  // Keep the stored unit price unless an amount actually changed, so editing
+  // e.g. the vendor never rewrites unit_price on rows where it isn't total/qty.
+  const amountsChanged = !purchase || qty !== purchase.quantity || total !== Number(purchase.total_amount);
+  const price = amountsChanged ? derivedPrice : Number(purchase.unit_price);
+  const qtyChanged = !!purchase && qty !== purchase.quantity;
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
@@ -105,7 +109,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Save is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    price > 0 &&
+    (!amountsChanged || derivedPrice > 0) &&
     !!form.reason.trim() &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
@@ -113,7 +117,8 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     e.preventDefault();
     if (!purchase) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
-    if (price <= 0) return setError("Unit price must be greater than 0.");
+    if (total <= 0) return setError("Total must be greater than 0.");
+    if (amountsChanged && derivedPrice <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
@@ -171,14 +176,14 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           metadata: {
             before: {
               product_name: purchase.product_name, product_id: purchase.product_id, quantity: purchase.quantity,
-              unit_price: purchase.unit_price, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date,
+              unit_price: purchase.unit_price, total_amount: purchase.total_amount, vendor: purchase.vendor, currency: purchase.currency, date: purchase.date,
               vat_rate: purchase.vat_rate, vat_amount: purchase.vat_amount,
               location_id: purchase.location_id ?? null, freight_cost: purchase.freight_cost ?? null,
               customs_cost: purchase.customs_cost ?? null, other_cost: purchase.other_cost ?? null,
             },
             after: {
               product_name: data.product_name, product_id: data.product_id, quantity: data.quantity,
-              unit_price: data.unit_price, vendor: data.vendor, currency: data.currency, date: data.date,
+              unit_price: data.unit_price, total_amount: data.total_amount, vendor: data.vendor, currency: data.currency, date: data.date,
               vat_rate: data.vat_rate, vat_amount: data.vat_amount,
               location_id: data.location_id ?? null, freight_cost: data.freight_cost ?? null,
               customs_cost: data.customs_cost ?? null, other_cost: data.other_cost ?? null,
@@ -258,13 +263,27 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           </Field>
         </Row>
 
-        <Field label="Unit Price" required>
-          <Input type="number" min="0.01" step="0.01" value={form.unit_price} onChange={(e) => set("unit_price", e.target.value)} required />
+        <Field label="Total Paid" required>
+          <Input type="number" step="any" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} required />
         </Field>
 
-        {price > 0 && (
+        {total > 0 && (
           <p className="text-xs text-[var(--color-text-muted)]">
-            Total: <span className="font-semibold text-[var(--color-warning)]">{form.currency} {total.toFixed(2)}</span>
+            Unit price: <span className="font-semibold text-[var(--color-warning)]">{form.currency} {price.toFixed(2)}</span>
+            {/* Unchanged amounts show the stored price, which may not be total ÷ qty. */}
+            {amountsChanged && qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
+          </p>
+        )}
+
+        {amountsChanged && total > 0 && derivedPrice <= 0 && (
+          <p className="text-xs text-[var(--color-danger-text)]">
+            Total is too small for this quantity — the unit price would round to {form.currency} 0.00.
+          </p>
+        )}
+
+        {qtyChanged && total === Number(purchase.total_amount) && (
+          <p className="text-xs text-[var(--color-warning)]">
+            Quantity changed but Total Paid didn&apos;t — update the total if you paid a different amount.
           </p>
         )}
 
