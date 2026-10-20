@@ -12,6 +12,7 @@ describe("purchaseAmounts", () => {
   it("rounds the total itself to cents, halves up", () => {
     expect(purchaseAmounts("10.005", "1").total).toBe(10.01);
     expect(purchaseAmounts("1.005", "1").total).toBe(1.01);
+    expect(purchaseAmounts("10.075", "1").total).toBe(10.08);
   });
 
   it("gives a 0 unit price when the total is too small for the quantity", () => {

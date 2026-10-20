@@ -15,8 +15,9 @@ export interface PurchaseAmounts {
   unitPrice: number;
 }
 
-// EPSILON nudges float-represented halves (1.005 → 100.4999…) up, as typed.
-const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+// toPrecision(15) strips float noise (1.005 * 100 = 100.4999…) so typed
+// halves round up at any magnitude; EPSILON alone only helps below ~8.
+const round2 = (n: number) => Math.round(Number((n * 100).toPrecision(15))) / 100;
 
 export function purchaseAmounts(totalInput: string, quantityInput: string): PurchaseAmounts {
   const quantity = Math.max(1, parseInt(quantityInput) || 1);

@@ -109,7 +109,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Save is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    price > 0 &&
+    derivedPrice > 0 &&
     !!form.reason.trim() &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
@@ -118,7 +118,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     if (!purchase) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (total <= 0) return setError("Total must be greater than 0.");
-    if (price <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
+    if (derivedPrice <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
