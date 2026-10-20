@@ -61,6 +61,11 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
 - `_components/AddPurchaseModal.tsx` / `EditPurchaseModal.tsx` — create/edit forms.
   Both also render `_components/PurchaseInventoryFields.tsx` (location +
   landed costs) — see "Advanced inventory: location & landed costs" below.
+- `_lib/purchaseAmounts.ts` (+ test, 2026-10-20) — `purchaseAmounts(totalInput,
+  quantityInput) → { quantity, total, unitPrice }`. Both modals ask for the
+  **Total Paid**, not the unit price; `unitPrice` is derived (`total /
+  quantity`, rounded to cents for `unit_price numeric(12,2)`) and shown as a
+  read-out under the field. `total` is stored exactly as entered.
 - `_lib/purchaseInventoryFields.ts` (+ test, Phase 3 Task 4, 2026-09-26) —
   pure state/validation/payload helpers for the advanced-inventory fields on
   the purchase form: `PurchaseInventoryFieldsState { locationId, freight,
@@ -200,7 +205,7 @@ insert/update payload gets `{}` spread in (i.e. nothing added) via
   preview while typing.
 - The submit button is `disabled={saving || !isFormValid}` (final-review
   F5), where `isFormValid` mirrors exactly what `handleSubmit` rejects —
-  Add: product name non-empty, unit price > 0, and
+  Add: product name non-empty, total > 0, and
   `isPurchaseInventoryFieldsValid(inv)` when `tracksStock`; Edit: the same
   plus a non-empty reason for edit — matches the "mutating button must
   never look clickable when it can't succeed" convention (AGENTS.md → Form
@@ -304,5 +309,5 @@ either file's CLAUDE.md section for the full two-pass row lifecycle.
 ## Tests
 
 `npx jest dashboard/purchases` runs `_store/purchasesSlice.test.ts`,
-`_components/purchaseImportFormats.test.ts`, and (Phase 3 Task 4)
-`_lib/purchaseInventoryFields.test.ts`.
+`_components/purchaseImportFormats.test.ts`, (Phase 3 Task 4)
+`_lib/purchaseInventoryFields.test.ts`, and `_lib/purchaseAmounts.test.ts`.

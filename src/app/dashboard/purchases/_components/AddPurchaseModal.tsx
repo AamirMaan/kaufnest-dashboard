@@ -20,6 +20,7 @@ import {
   isPurchaseInventoryFieldsValid,
   purchaseInventoryPayload,
 } from "../_lib/purchaseInventoryFields";
+import { purchaseAmounts } from "../_lib/purchaseAmounts";
 import type { Currency, Purchase, Product } from "@/types";
 
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
@@ -34,7 +35,7 @@ interface FormState {
   product_name: string;
   product_id: string;
   quantity: string;
-  unit_price: string;
+  total_amount: string;
   currency: Currency;
   vendor: string;
   date: string;
@@ -52,7 +53,7 @@ function makeDefaults(defaultVatRate: number): FormState {
     product_name: "",
     product_id: "",
     quantity: "1",
-    unit_price: "",
+    total_amount: "",
     currency: "EUR",
     vendor: "",
     date: today(),
@@ -98,9 +99,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
     form.product_name.trim().length > 1 &&
     !products.some((p) => p.name.toLowerCase() === form.product_name.trim().toLowerCase());
 
-  const qty = Math.max(1, parseInt(form.quantity) || 1);
-  const price = parseFloat(form.unit_price) || 0;
-  const total = qty * price;
+  const { quantity: qty, total, unitPrice: price } = purchaseAmounts(form.total_amount, form.quantity);
   const vatRate = parseFloat(form.vat_rate) || 0;
   const vatAmount = form.vat_included ? vatAmountFromGross(total, vatRate) : 0;
 
@@ -110,13 +109,13 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Add is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    price > 0 &&
+    total > 0 &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.product_name.trim()) return setError("Product name is required.");
-    if (price <= 0) return setError("Unit price must be greater than 0.");
+    if (total <= 0) return setError("Total must be greater than 0.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
     setSaving(true);
@@ -317,23 +316,24 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
           </Field>
         </Row>
 
-        <Field label="Unit Price" required>
+        <Field label="Total Paid" required>
           <Input
             type="number"
             min="0.01"
             step="0.01"
-            value={form.unit_price}
-            onChange={(e) => set("unit_price", e.target.value)}
+            value={form.total_amount}
+            onChange={(e) => set("total_amount", e.target.value)}
             placeholder="0.00"
             required
           />
         </Field>
 
-        {price > 0 && (
+        {total > 0 && (
           <p className="text-xs text-[var(--color-text-muted)]">
-            Total: <span className="font-semibold text-[var(--color-warning)]">
-              {form.currency} {total.toFixed(2)}
+            Unit price: <span className="font-semibold text-[var(--color-warning)]">
+              {form.currency} {price.toFixed(2)}
             </span>
+            {qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
           </p>
         )}
 

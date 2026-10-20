@@ -47,6 +47,17 @@ every mutation follows.
 
 `npx jest dashboard/purchases`
 
+## Gotchas — total-first amount entry (2026-10-20)
+
+- The Add/Edit forms take **Total Paid** (`form.total_amount`) and derive the
+  unit price via `_lib/purchaseAmounts.ts` — never reintroduce a unit-price
+  input that multiplies up to the total. `total_amount` is authoritative
+  (VAT, landed cost and every summary read it); `unit_price` is
+  `round(total / qty, 2)`, so on an uneven split (100 ÷ 3) `unit_price ×
+  quantity` is off by a cent. That's expected — don't "fix" it by
+  recomputing `total_amount` from `unit_price`.
+- The CSV importer still takes `unit_price` (unchanged).
+
 ## Gotchas — "Specific period" date filter
 
 `page.tsx`'s `FilterBar` gets `earliestYear`/`onPeriodChange` props, which
