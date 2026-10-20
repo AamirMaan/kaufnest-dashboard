@@ -321,7 +321,7 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
           <Input
             type="number"
             min="0.01"
-            step="0.01"
+            step="any"
             value={form.total_amount}
             onChange={(e) => set("total_amount", e.target.value)}
             placeholder="0.00"
@@ -335,6 +335,12 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
               {form.currency} {price.toFixed(2)}
             </span>
             {qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
+          </p>
+        )}
+
+        {total > 0 && price <= 0 && (
+          <p className="text-xs text-[var(--color-danger-text)]">
+            Total is too small for this quantity — the unit price would round to {form.currency} 0.00.
           </p>
         )}
 

@@ -264,13 +264,20 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
         </Row>
 
         <Field label="Total Paid" required>
-          <Input type="number" min="0.01" step="0.01" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} required />
+          <Input type="number" min="0.01" step="any" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} required />
         </Field>
 
         {total > 0 && (
           <p className="text-xs text-[var(--color-text-muted)]">
             Unit price: <span className="font-semibold text-[var(--color-warning)]">{form.currency} {price.toFixed(2)}</span>
-            {qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
+            {/* Unchanged amounts show the stored price, which may not be total ÷ qty. */}
+            {amountsChanged && qty > 1 && ` (${form.currency} ${total.toFixed(2)} ÷ ${qty})`}
+          </p>
+        )}
+
+        {total > 0 && derivedPrice <= 0 && (
+          <p className="text-xs text-[var(--color-danger-text)]">
+            Total is too small for this quantity — the unit price would round to {form.currency} 0.00.
           </p>
         )}
 
