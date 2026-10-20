@@ -34,6 +34,7 @@ import {
 import { dedupeImportRows } from "./dedupeImportRows";
 import { accountForImportRow, accountLabel, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { markExistingOrders, groupBackfills, type ExistingSaleRef } from "./marketplaceBackfill";
+import { IMPORT_DISPATCH_FIELDS, isMissingDispatchColumn, withoutDispatchFields } from "../_lib/importDispatch";
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
@@ -599,6 +600,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     //
     // The insert is built from `insertRows` only — a refund never enters
     // `payload`; refunds are applied via `update`, not `insert`, below.
+    // CSV imports never notify dispatchers (057); pre-057 tenants retry without the key.
     const payload = insertRows.map((r) => {
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       return {
@@ -606,12 +608,16 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         created_by: user.id,
         product_id: productId,
         connection_id: accountForImportRow(r.data!.platform, assignAccount),
+        ...IMPORT_DISPATCH_FIELDS,
       };
     });
 
     let inserted: Sale[] = [];
     if (payload.length > 0) {
-      const { data, error } = await supabase.from("sales").insert(payload).select();
+      let { data, error } = await supabase.from("sales").insert(payload).select();
+      if (isMissingDispatchColumn(error)) {
+        ({ data, error } = await supabase.from("sales").insert(withoutDispatchFields(payload)).select());
+      }
       if (error) {
         // Insert failed — do not run the refunds loop at all. Otherwise a
         // refund could be deducted from a batch whose sale rows never made

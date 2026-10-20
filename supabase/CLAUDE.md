@@ -435,6 +435,17 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   platform-tagged `expenses` (`strpos(lower(...))`, no literal percent sign
   for the 005 `format()` copy) and `transferred` payouts, all through
   `p_to`. Mirrored in `provision_tenant_schema()`. See `SKILL.md`'s file map.
+- `migrations/057_location_dispatchers.sql` — defines
+  `install_location_dispatchers(schema)` (run on every tenant, called from
+  `provision_tenant_schema()` step 9b): `stock_locations.dispatcher_id`,
+  `sales.dispatch_notified_at`, `notifications.recipient_user_id`, the
+  service-role-only `dispatch_email_outbox` + `claim_dispatch_emails(int)`,
+  `my_dispatch_queue()`, BEFORE/AFTER sales triggers that notify a location's
+  dispatcher once (only if active with Orders view, via the
+  `user_section_level(uuid, text)` helper, a wrapper over 055's
+  `user_access_base`), and `get_sales_summary` + trailing
+  `p_location_id`. Apply order 056 (hard prerequisite: `s.connection_id`) →
+  re-apply 055 → 057 → re-apply 005. Not applied; see `SKILL.md`.
 - `migrations/055_section_permissions.sql` — defines
   `public.install_section_permissions(schema_name)` and runs it on every
   tenant schema (also hooked into `install_advanced_inventory()`, 047, and
@@ -463,7 +474,9 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   nav entries (they had no access to them); profile role/status can only be
   changed by the super_admin or the server (`profiles_guard_privileged_fields`
   trigger). Listings/Messages are 0 unless Integrations ≥ 2
-  (`current_user_access` wraps `current_user_access_base`). See
+  (`current_user_access` wraps `current_user_access_base`, which calls
+  `user_access_base(auth.uid(), section)` — the per-user rule, also used by
+  057). See
   `SKILL.md`'s file map for apply-status and its Gotchas section for the
   `<name>__impl` editing rule.
 - `migrations/053_platform_balance_fees.sql` — `CREATE OR REPLACE`s 045's

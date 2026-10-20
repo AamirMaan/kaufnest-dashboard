@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { removeSale, fetchSalesPage, fetchSalesSummary, fetchSalesMarketplaces } from "./_store/salesSlice";
@@ -18,6 +18,9 @@ import Link from "next/link";
 import { AddSaleModal } from "./_components/AddSaleModal";
 import { EditSaleModal } from "./_components/EditSaleModal";
 import { ImportSalesModal } from "./_components/ImportSalesModal";
+import { LocationParamSync } from "./_components/LocationParamSync";
+import { locationFilterOptions } from "./_components/fulfillmentLocation";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
 import { InvoiceModal } from "@/components/modals/InvoiceModal";
 import { createTenantClient } from "@/lib/supabase/client";
@@ -36,7 +39,7 @@ import {
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { UNASSIGNED_ACCOUNT, accountLabel, accountName, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
-import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
+import { OPEN_ORDERS_STATUS, OPEN_ORDER_STATUSES, ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
 import { salesFilterParams } from "./_store/salesFilterParams";
 import type { Platform, Sale, Product } from "@/types";
@@ -61,6 +64,8 @@ export default function SalesPage() {
   const accounts = useAppSelector((s) => s.integrations.accounts);
   // Account filter/column only appear once a platform has 2+ accounts.
   const showAccounts = hasMultipleAccounts(accounts);
+  // Location filter only exists for advanced-inventory tenants (057).
+  const advanced = useAdvancedInventory();
   const { can } = useAccess();
   const canEdit = can("orders", 2);
   const canDelete = can("orders", 3);
@@ -119,11 +124,14 @@ export default function SalesPage() {
   // Status options built from current page + known preset statuses.
   // The "all" statuses dropdown is approximate — it only shows what's on the
   // current page plus presets — but this is acceptable for v1.
+  // "Open" (pending + processing) is a filter-only sentinel offered with the
+  // Location filter (057) — and always once applied, e.g. by the banner link.
   const statusOptions = useMemo(() => {
     const set = new Set<string>(ORDER_STATUSES);
     for (const s of sales) set.add(s.status);
-    return Array.from(set);
-  }, [sales]);
+    const list = Array.from(set);
+    return advanced.active || filters.status === OPEN_ORDERS_STATUS ? [OPEN_ORDERS_STATUS, ...list] : list;
+  }, [sales, advanced.active, filters.status]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Sale | null>(null);
@@ -186,8 +194,10 @@ export default function SalesPage() {
       else if (p.p_marketplace) query = query.eq("marketplace", p.p_marketplace);
       if (p.p_connection_id === UNASSIGNED_ACCOUNT) query = query.is("connection_id", null);
       else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
+      if (p.p_location_id) query = query.eq("fulfillment_location_id", p.p_location_id);
       if (p.p_currency) query = query.eq("currency", p.p_currency);
-      if (p.p_status) query = query.eq("status", p.p_status);
+      if (p.p_status === OPEN_ORDERS_STATUS) query = query.in("status", [...OPEN_ORDER_STATUSES]);
+      else if (p.p_status) query = query.eq("status", p.p_status);
       if (p.p_pattern) {
         query = query.or(
           `product_name.ilike."${p.p_pattern}",external_order_id.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
@@ -366,6 +376,16 @@ export default function SalesPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <LocationParamSync
+          onLocation={(id) => {
+            // The banner counts open orders only, so its link opens just those.
+            const next = { ...filters, location: id, status: OPEN_ORDERS_STATUS };
+            setFilters(next);
+            applyFilters(next);
+          }}
+        />
+      </Suspense>
       <PageHeader
         title="Orders"
         description="Revenue from all platforms"
@@ -445,6 +465,19 @@ export default function SalesPage() {
                 <option key={a.id} value={a.id}>{`${a.platform === "ebay" ? "eBay" : "Amazon"} · ${accountLabel(a)}`}</option>
               ))}
               <option value={UNASSIGNED_ACCOUNT}>Unassigned</option>
+            </select>
+          </div>
+        )}
+        {/* Shown whenever a location filter is applied (e.g. from the dispatch
+            banner's ?location= link) so it can always be seen and cleared. */}
+        {((advanced.active && advanced.locations.length > 0) || filters.location !== "all") && (
+          <div>
+            <span className="block text-[11px] font-medium uppercase tracking-wider text-[var(--color-text-faint)] mb-1">Location</span>
+            <select value={filters.location} onChange={(e) => setFilter("location", e.target.value)} className={filterInputCls}>
+              <option value="all">All Locations</option>
+              {locationFilterOptions(advanced.locations, filters.location).map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
             </select>
           </div>
         )}

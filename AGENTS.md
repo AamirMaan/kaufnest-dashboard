@@ -128,6 +128,8 @@ New shared code from the migration:
   `effectiveAccess`, `sectionForPath`, plan ceiling), `requireSectionAccess.ts`
   (server-only route guard via the `current_user_access` RPC). The database
   (055's `install_section_permissions`) is the enforcement.
+- `src/lib/email/` — server-only nodemailer SMTP transport (`SMTP_*` env, Mailgun) and pure email builders. See its `SKILL.md`.
+- `src/lib/dispatch/` + `src/app/api/dispatch/flush/` — dispatch email outbox drain (057). Rows are queued by the `sales_dispatch_notify` trigger only; `DispatchBanner` nudges the flush via `src/lib/utils/dispatchFlush.ts`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

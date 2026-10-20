@@ -16,6 +16,8 @@ export interface SalesSummaryParams {
   p_marketplace: string | null;
   /** Arg name matches get_sales_summary in 056; UNASSIGNED_ACCOUNT = connection_id IS NULL. */
   p_connection_id: string | null;
+  /** Arg name matches get_sales_summary in 057; fulfillment_location_id. */
+  p_location_id: string | null;
 }
 
 /**
@@ -34,18 +36,25 @@ export function salesFilterParams(f: SalesFilters): SalesSummaryParams {
     p_pattern: ilikePattern(f.search),
     p_marketplace: f.marketplace === "all" ? null : f.marketplace,
     p_connection_id: f.account === "all" ? null : f.account,
+    p_location_id: f.location === "all" ? null : f.location,
   };
 }
 
 /**
- * `get_sales_summary` RPC args. `p_connection_id` is sent only when the
- * account filter is set: it has a DEFAULT in 056, and leaving it out keeps the
- * call resolvable against the pre-056 7-arg function (PostgREST matches
- * functions by named args, so an extra key would 404 with PGRST202).
+ * `get_sales_summary` RPC args. `p_connection_id` (056) and `p_location_id`
+ * (057) are sent only when their filter is set: each has a DEFAULT, and
+ * leaving it out keeps the call resolvable against a tenant still on the
+ * older function (PostgREST matches functions by named args, so an extra key
+ * would 404 with PGRST202).
  */
-export function salesSummaryRpcArgs(f: SalesFilters): Omit<SalesSummaryParams, "p_connection_id"> & {
+export function salesSummaryRpcArgs(f: SalesFilters): Omit<SalesSummaryParams, "p_connection_id" | "p_location_id"> & {
   p_connection_id?: string;
+  p_location_id?: string;
 } {
-  const { p_connection_id, ...rest } = salesFilterParams(f);
-  return p_connection_id ? { ...rest, p_connection_id } : rest;
+  const { p_connection_id, p_location_id, ...rest } = salesFilterParams(f);
+  return {
+    ...rest,
+    ...(p_connection_id ? { p_connection_id } : {}),
+    ...(p_location_id ? { p_location_id } : {}),
+  };
 }

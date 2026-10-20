@@ -366,6 +366,23 @@ copies. Low-stock entries are not database rows: `synthesizeLowStock()`
 (`src/lib/utils/notifications.ts`) computes them at read time from the
 `products` table and merges them into the feed client-side — see
 `inventory/SKILL.md`'s gotcha for why there's no low-stock trigger.
+Dispatch notifications (057) are addressed to one user via `recipient_user_id`;
+RLS still decides visibility.
+`DispatchBanner` (057, `src/components/layout/DispatchBanner.tsx` + pure
+`dispatchQueue.ts`/test) — rendered at the top of `DashboardShell`'s `<main>`.
+Shows a location dispatcher "You have N new orders to dispatch from <location>"
+lines from the `my_dispatch_queue()` RPC (SECURITY DEFINER with explicit
+dispatcher/tenant-member/Orders >= 1 checks, so no Inventory access needed; counts open
+`pending`/`processing` orders with a linked product that the viewer was
+notified about (outbox row exists) at active, non-dropship locations whose
+`dispatcher_id` is the viewer), each linking to `/dashboard/sales?location=<id>`
+(Orders then applies that location + the "Open" status filter).
+Entitlement-gated via `usePlan()` + `hasAdvancedInventory` (no RPC call for
+other plans; renders nothing on error or an empty queue). It is also the
+**single caller of `requestDispatchFlush()`** (`lib/utils/dispatchFlush.ts` →
+`POST /api/dispatch/flush`): on mount and 2 s after any
+`state.sales.summaryVersion` bump (Orders view only). The queue itself
+refetches on those plus a 60 s poll, not on route change.
 `DeniedAccessToast` (2026-09-30 — rendered once by `DashboardShell`, right
 inside its own `<Suspense fallback={null}>`, so it sits inside the
 `<ToastProvider>` `layout.tsx` already wraps `DashboardShell` in): reads

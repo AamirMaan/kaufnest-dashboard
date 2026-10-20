@@ -229,6 +229,33 @@ Plan gates read `state.currentUser.planEntitlements` via `usePlan()` — null be
 `StoreProvider` decodes with `fromWireEntitlements`. `tenantPlan` is still
 hydrated, but only as the key for display/billing — never gate on it.
 
+## Gotchas — dispatch banner (057)
+
+- **Don't add per-modal dispatch-email flush calls.** `DispatchBanner` nudges
+  `POST /api/dispatch/flush` whenever `state.sales.summaryVersion` changes,
+  which `addSale`/`updateSale`/`removeSale` already bump on every client write
+  path. A new write path that bypasses those actions must bump it (or call
+  `requestDispatchFlush()` itself) or its dispatch emails wait for the next nudge.
+- The banner is live state over notified orders: it counts only open
+  orders the viewer was notified about (an outbox row for sale + viewer —
+  user ruling 2026-10-20), so CSV imports (suppressed) and the backlog from
+  before an assignment never show, and a reassigned location's old orders
+  stay with the old dispatcher. Orders drop off as soon as they leave
+  `pending`/`processing`, move location, or the location is deactivated.
+- The queue refetches on mount, on `summaryVersion` changes and every 60 s
+  (`POLL_MS`) — NOT on navigation (that ran the RPC for every
+  advanced-inventory user on every page change). The flush fires on mount
+  and on `summaryVersion` changes only — never on a poll — tracked by a ref via
+  `shouldRequestFlush()` (`components/layout/dispatchQueue.ts`), and never for
+  users without Orders view (`useAccess().can("orders", 1)`; the route 403s).
+- **The banner works without Inventory access.** `my_dispatch_queue()` is
+  SECURITY DEFINER (PR-gate review, 2026-10-20) and restricts explicitly:
+  `dispatcher_id = auth.uid()`, `is_tenant_member()`, effective Orders >= 1
+  (`user_section_level`), advanced inventory on. Any new column/filter added
+  to it must keep those checks — RLS no longer applies inside it. The Orders
+  page Location dropdown still reads `stock_locations` under RLS, so such a
+  dispatcher sees the applied `?location=` filter as "Unknown location".
+
 ## Test command
 
 `npx jest dashboard/_lib` (`aggregateSales`, `platformBalance`,

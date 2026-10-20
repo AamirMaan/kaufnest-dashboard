@@ -44,3 +44,22 @@ export function fulfillmentWarningText(warning: Exclude<StockWarning, null>, loc
   }
   return `Only ${warning.available} in stock at ${locationName}. The order will still be saved; the missing units are costed at the last known price until stock arrives.`;
 }
+
+/**
+ * Options for the Orders page's Location filter: active, non-dropship
+ * locations (where a dispatcher ships from), plus the currently selected one
+ * even if it is inactive/dropship/unknown — so a URL-applied filter is always
+ * shown and can be cleared. `selected` is "all" when no filter is applied.
+ */
+export function locationFilterOptions(
+  locations: StockLocation[],
+  selected: string,
+): { id: string; name: string }[] {
+  const options = locations
+    .filter((l) => (l.is_active && l.type !== "dropship") || l.id === selected)
+    .map((l) => ({ id: l.id, name: l.is_active ? l.name : `${l.name} (inactive)` }));
+  if (selected !== "all" && !options.some((o) => o.id === selected)) {
+    options.push({ id: selected, name: "Unknown location" });
+  }
+  return options;
+}

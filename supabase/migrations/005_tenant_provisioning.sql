@@ -1442,6 +1442,13 @@ BEGIN
     PERFORM public.install_advanced_inventory(schema_name);
   END IF;
 
+  -- ── 9b. Location dispatchers (057) ────────────────────────
+  -- Needs stock_locations (step 9) and notifications. Runs before step 10 so
+  -- section permissions rebuild notifications_select with the recipient column.
+  IF to_regprocedure('public.install_location_dispatchers(text)') IS NOT NULL THEN
+    PERFORM public.install_location_dispatchers(schema_name);
+  END IF;
+
   -- ── 10. Section permissions (055) ─────────────────────────
   -- Must run after every table/function above exists: it rewrites their
   -- RLS policies and wraps the totals RPCs. Guarded like the call above.

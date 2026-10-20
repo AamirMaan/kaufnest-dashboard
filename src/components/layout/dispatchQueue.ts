@@ -1,0 +1,31 @@
+/** One row of my_dispatch_queue() (057). */
+export interface DispatchQueueRow {
+  location_id: string;
+  location_name: string;
+  open_count: number;
+}
+
+/** Banner lines for DispatchBanner: one per location with notified open orders ("N new orders" — the link opens ALL open orders there), linking to Orders filtered by it. */
+export function dispatchBannerLines(rows: DispatchQueueRow[]) {
+  return rows
+    .filter((r) => r.open_count > 0)
+    .map((r) => ({
+      key: r.location_id,
+      count: `${r.open_count} new order${r.open_count === 1 ? "" : "s"}`,
+      location: r.location_name,
+      href: `/dashboard/sales?location=${encodeURIComponent(r.location_id)}`,
+    }));
+}
+
+/**
+ * Whether DispatchBanner should nudge POST /api/dispatch/flush now: once on
+ * mount, then only when a sales write bumped summaryVersion — never on plain
+ * navigation — and never for users the route would 403 (no Orders view).
+ */
+export function shouldRequestFlush(
+  lastFlushedVersion: number | null,
+  summaryVersion: number,
+  canViewOrders: boolean,
+): boolean {
+  return canViewOrders && lastFlushedVersion !== summaryVersion;
+}

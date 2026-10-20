@@ -5,11 +5,13 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { addAuditLog } from "@/store/slices/auditLogsSlice";
 import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
+import { dispatcherOptions } from "../_lib/dispatcherOptions";
+import { locationPayload } from "../_lib/locationPayload";
 import { locationSaved } from "../_store/advancedInventorySlice";
 import { LOCATION_TYPES, LOCATION_TYPE_LABELS, isLocationNameTaken } from "../_lib/advancedInventory";
 import type { StockLocation, StockLocationType } from "@/types";
@@ -29,6 +31,8 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
   const { success, error: toastError } = useToast();
   const [name, setName] = useState(location?.name ?? "");
   const [type, setType] = useState<StockLocationType>(location?.type ?? "own");
+  const users = useAppSelector((s) => s.users.items);
+  const [dispatcherId, setDispatcherId] = useState<string>(location?.dispatcher_id ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +48,8 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
     try {
       const supabase = await createTenantClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const values = { name: name.trim(), type };
+      // dispatcher_id only when changed — keeps pre-057 tenants working (see helper).
+      const values = locationPayload({ name, type, dispatcherId, current: location });
 
       const { data, error: dbError } = location
         ? await supabase.from("stock_locations").update(values).eq("id", location.id).select().single<StockLocation>()
@@ -74,7 +79,7 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
             action: location ? "update" : "create",
             entityType: "stock_location",
             entityId: data.id,
-            metadata: location ? { before: location, after: data } : { name: data.name, type: data.type },
+            metadata: location ? { before: location, after: data } : { name: data.name, type: data.type, dispatcher_id: data.dispatcher_id },
           });
           if (log) dispatch(addAuditLog(log));
         } catch {
@@ -124,6 +129,21 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
             ))}
           </Select>
         </Field>
+        {type !== "dropship" && (
+          <Field label="Dispatcher">
+            <Select value={dispatcherId} onChange={(e) => setDispatcherId(e.target.value)}>
+              <option value="">None</option>
+              {dispatcherOptions(users, location?.dispatcher_id ?? null).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {type !== "dropship" && (
+          <p className="text-xs text-(--color-text-muted)">
+            The dispatcher is emailed and sees a dashboard banner when an order linked to inventory is fulfilled from this location.
+          </p>
+        )}
         <p className="text-xs text-(--color-text-muted)">
           Dropship suppliers never hold stock: orders fulfilled from them use the linked purchase as their cost.
         </p>

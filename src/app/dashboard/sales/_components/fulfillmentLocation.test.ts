@@ -1,8 +1,8 @@
-import { suggestedFulfillmentLocationId, fulfillmentStockWarning, fulfillmentWarningText } from "./fulfillmentLocation";
+import { suggestedFulfillmentLocationId, fulfillmentStockWarning, fulfillmentWarningText, locationFilterOptions } from "./fulfillmentLocation";
 import type { InventorySettings, StockLocation } from "@/types";
 
 const loc = (id: string, overrides: Partial<StockLocation> = {}): StockLocation => ({
-  id, name: id.toUpperCase(), type: "own", is_active: true, created_by: null, created_at: "2026-09-26T00:00:00.000Z", ...overrides,
+  id, name: id.toUpperCase(), type: "own", is_active: true, dispatcher_id: null, created_by: null, created_at: "2026-09-26T00:00:00.000Z", ...overrides,
 });
 const settings: InventorySettings = { advanced_enabled: true, enabled_at: null, default_location_id: "main" };
 
@@ -52,5 +52,28 @@ describe("fulfillmentWarningText", () => {
     expect(fulfillmentWarningText({ kind: "dropship" }, "Supplier")).toBe(
       "Supplier is a dropship supplier: no stock is taken, so link a purchase to record the cost of goods.",
     );
+  });
+});
+
+describe("locationFilterOptions", () => {
+  const locations = [loc("main"), loc("drop", { type: "dropship" }), loc("old", { is_active: false })];
+
+  it("lists only active, non-dropship locations when no filter is applied", () => {
+    expect(locationFilterOptions(locations, "all")).toEqual([{ id: "main", name: "MAIN" }]);
+  });
+
+  it("keeps the selected location listed even if inactive or dropship", () => {
+    expect(locationFilterOptions(locations, "old")).toEqual([
+      { id: "main", name: "MAIN" },
+      { id: "old", name: "OLD (inactive)" },
+    ]);
+    expect(locationFilterOptions(locations, "drop").map((o) => o.id)).toEqual(["main", "drop"]);
+  });
+
+  it("adds a placeholder for a selected id that matches no location", () => {
+    expect(locationFilterOptions(locations, "gone")).toEqual([
+      { id: "main", name: "MAIN" },
+      { id: "gone", name: "Unknown location" },
+    ]);
   });
 });

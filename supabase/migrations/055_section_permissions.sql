@@ -23,6 +23,7 @@
 -- changed by the super_admin or the server.
 -- Cross-section rule: Listings/Messages are 0 unless Integrations >= 2
 -- (current_user_access wraps current_user_access_base).
+-- 2026-10-19: notifications_select gains a recipient_user_id disjunct (057) when that column exists; notification_section maps inventory.dispatch_assigned -> orders. Re-apply 055 before 057.
 -- Idempotent. Skips tables a tenant does not have (to_regclass).
 -- Called by: this migration (all tenants), provision_tenant_schema() (005)
 -- and install_advanced_inventory() (047), both guarded by to_regprocedure.
@@ -105,11 +106,12 @@ BEGIN
       END)::smallint
     $f$$q$, s);
 
-  -- Raw per-section level (exception row, else role default). Internal —
-  -- read current_user_access(), which layers the cross-section dependency
-  -- rule on top of this.
+  -- Raw per-section level of ANY user (exception row, else role default).
+  -- The single copy of this rule: current_user_access_base (below) and 057's
+  -- user_section_level (dispatcher checks) both call it. No tenant-member
+  -- check here — callers add it. Service role / definer only.
   EXECUTE format($q$
-    CREATE OR REPLACE FUNCTION %1$I.current_user_access_base(p_section text)
+    CREATE OR REPLACE FUNCTION %1$I.user_access_base(p_user uuid, p_section text)
     RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
       SELECT COALESCE((
         SELECT CASE
@@ -119,8 +121,18 @@ BEGIN
             (SELECT a.level FROM user_section_access a WHERE a.user_id = p.id AND a.section = p_section),
             role_section_default(p.role, p_section))
         END
-        FROM profiles p WHERE p.id = auth.uid() AND %1$I.is_tenant_member()
+        FROM profiles p WHERE p.id = p_user
       ), 0::smallint)
+    $f$$q$, s);
+
+  -- The caller's raw per-section level. Internal — read current_user_access(),
+  -- which layers the cross-section dependency rule on top of this.
+  EXECUTE format($q$
+    CREATE OR REPLACE FUNCTION %1$I.current_user_access_base(p_section text)
+    RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
+      SELECT CASE WHEN %1$I.is_tenant_member()
+        THEN user_access_base(auth.uid(), p_section)
+        ELSE 0::smallint END
     $f$$q$, s);
 
   -- Effective level. Dependency rule (user ruling 2026-09-30): Listings and
@@ -151,9 +163,12 @@ BEGIN
         WHEN 'sale.created' THEN 'orders'
         WHEN 'purchase.created' THEN 'purchases'
         WHEN 'message.received' THEN 'messages'
+        WHEN 'inventory.dispatch_assigned' THEN 'orders'
         ELSE NULL END
     $f$$q$, s);
 
+  EXECUTE format('REVOKE ALL ON FUNCTION %1$I.user_access_base(uuid, text) FROM PUBLIC, anon, authenticated', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.user_access_base(uuid, text) TO service_role', s);
   EXECUTE format('REVOKE ALL ON FUNCTION %1$I.current_user_access_base(text) FROM PUBLIC, anon', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO authenticated', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO service_role', s);
@@ -319,11 +334,24 @@ BEGIN
     WITH CHECK (%1$I.is_tenant_member() AND (SELECT %1$I.current_user_access('settings')) >= 2)$q$, s);
 
   IF to_regclass(format('%I.notifications', s)) IS NOT NULL THEN
-    EXECUTE format($q$CREATE POLICY notifications_select ON %1$I.notifications FOR SELECT
-      USING (%1$I.is_tenant_member()
-             AND %1$I.current_user_role() = ANY(visible_to_roles)
-             AND (%1$I.notification_section(type) IS NULL
-                  OR %1$I.current_user_access(%1$I.notification_section(type)) >= 1))$q$, s);
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = s AND table_name = 'notifications'
+                 AND column_name = 'recipient_user_id') THEN
+      -- 057: a row addressed to one user (recipient_user_id) is visible to
+      -- that user regardless of visible_to_roles. Same section check.
+      EXECUTE format($q$CREATE POLICY notifications_select ON %1$I.notifications FOR SELECT
+        USING (%1$I.is_tenant_member()
+               AND (%1$I.current_user_role() = ANY(visible_to_roles)
+                    OR recipient_user_id = auth.uid())
+               AND (%1$I.notification_section(type) IS NULL
+                    OR %1$I.current_user_access(%1$I.notification_section(type)) >= 1))$q$, s);
+    ELSE
+      EXECUTE format($q$CREATE POLICY notifications_select ON %1$I.notifications FOR SELECT
+        USING (%1$I.is_tenant_member()
+               AND %1$I.current_user_role() = ANY(visible_to_roles)
+               AND (%1$I.notification_section(type) IS NULL
+                    OR %1$I.current_user_access(%1$I.notification_section(type)) >= 1))$q$, s);
+    END IF;
   END IF;
 
   -- ── 4. totals RPCs: definer + guard, bodies untouched ───────────────

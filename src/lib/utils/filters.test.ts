@@ -169,6 +169,10 @@ describe("isDefaultFilters with search", () => {
     expect(isDefaultFilters({ ...DEFAULT_SALES_FILTERS, marketplace: "amazon.de" })).toBe(false);
     expect(isDefaultFilters(DEFAULT_SALES_FILTERS)).toBe(true);
   });
+
+  it("a set sales location is an active filter", () => {
+    expect(isDefaultFilters({ ...DEFAULT_SALES_FILTERS, location: "loc-1" })).toBe(false);
+  });
 });
 
 describe("isEbayIntegrationSyncedSale", () => {

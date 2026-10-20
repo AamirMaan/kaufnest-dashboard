@@ -32,6 +32,7 @@ const loc = (id: string, overrides: Partial<StockLocation> = {}): StockLocation 
   name: id,
   type: "own",
   is_active: true,
+  dispatcher_id: null,
   created_by: null,
   created_at: "2026-09-26T00:00:00.000Z",
   ...overrides,

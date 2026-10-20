@@ -72,6 +72,7 @@ The date-preset + entity-filter logic backing `FilterBar` (see
   Note `PurchaseFilters.vendor` defaults to `""` (free-text search) while
   Sales/Expenses use a `"all"`-sentinel dropdown (`platform`/`category`) —
   don't conflate the two when adding a new entity filter.
+  `SalesFilters.location` (057) is a fulfillment location id or `"all"`.
 - `filterSales`/`filterExpenses`/`filterPurchases` — apply a filter object to
   an array; each composes `resolveDateRange` + the entity-specific field
   checks. Add new filterable fields here, mirroring the existing per-field

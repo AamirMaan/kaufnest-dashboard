@@ -241,6 +241,8 @@ export interface Sale {
   // written ONLY by the FIFO trigger — never send it (the trigger discards
   // client-supplied values).
   fulfillment_location_id?: string | null;
+  /** 057: set once by the sales_dispatch_flag trigger when the dispatcher was notified. Read-only. */
+  dispatch_notified_at?: string | null;
   cogs_amount?: number | null;
 }
 
@@ -271,6 +273,8 @@ export interface StockLocation {
   name: string;
   type: StockLocationType;
   is_active: boolean;
+  /** 057: the user emailed/notified when an order lands here. Null = nobody. */
+  dispatcher_id: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -349,7 +353,8 @@ export type NotificationType =
   | "product.low_stock"
   | "message.received"
   | "support.status_changed"
-  | "support.replied";
+  | "support.replied"
+  | "inventory.dispatch_assigned";
 
 export type NotificationCategory = "orders" | "purchases" | "inventory" | "messages" | "support";
 
@@ -368,6 +373,8 @@ export interface Notification {
   /** Who caused the event. Null for externally-caused events (e.g. an inbound buyer message). */
   actor_id: string | null;
   visible_to_roles: UserRole[];
+  /** 057: when set, only this user sees the row (plus visible_to_roles, normally empty for these). */
+  recipient_user_id?: string | null;
   /** Permission-override key that also grants visibility, e.g. "manage_messages". */
   required_permission: string | null;
   created_at: string;
