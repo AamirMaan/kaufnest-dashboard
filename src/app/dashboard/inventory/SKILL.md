@@ -118,6 +118,7 @@ since modal dropdowns use a different state key than the table.
   "Add a tab" and `stockVersion` gotchas below.
 - **Change who can be a dispatcher** (057): `_lib/dispatcherOptions.ts` (+ test);
   the field lives in `_components/LocationModal.tsx`, the column in `LocationsTab.tsx`.
+- **Change what a location save writes**: `_lib/locationPayload.ts` (+ test), used by `LocationModal.tsx`.
 - **Add a tab**: `InventoryTabs.tsx`'s `InventoryTabId` union +
   `page.tsx`'s `tabs` array/header `action` switch + a panel id
   `inventory-panel-<id>` on the new tab component's root element (matching
@@ -580,3 +581,12 @@ since modal dropdowns use a different state key than the table.
 - **Dispatcher eligibility uses role defaults only** (`ROLE_DEFAULTS`, orders >= 1);
   per-user section exceptions are server-side and not loaded client-side.
   Dropship locations always save `dispatcher_id: null` (and hide the field).
+- **`dispatcher_id` is sent only when it changed** (`locationPayload`, PR-gate
+  review 2026-10-20): a pre-057 tenant has no such column and PostgREST
+  rejects any payload carrying it (PGRST204), which broke Add/Save Location
+  there. Such a tenant can never have a dispatcher, so unchanged/"None" saves
+  omit the key. Don't go back to always sending it.
+- **Ineligible current dispatcher keeps a labelled option**: "(deactivated)",
+  "(no Orders access)" (unknown/legacy role), or "Current dispatcher" when the
+  id isn't in `state.users.items` at all (non-admins only see their own
+  profile under RLS) — so the Select never misleadingly reads "None".

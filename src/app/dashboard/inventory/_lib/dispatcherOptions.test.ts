@@ -34,6 +34,17 @@ describe("dispatcherOptions", () => {
   it("keeps the current dispatcher even if deactivated", () => {
     expect(dispatcherOptions(users, "c")).toContainEqual({ value: "c", label: "Gone (deactivated)" });
   });
+
+  it("labels an active current dispatcher whose role lacks Orders", () => {
+    const withViewer = [...users, p({ id: "e", full_name: "Vic", role: "viewer" as Profile["role"] })];
+    const opts = dispatcherOptions(withViewer, "e");
+    expect(opts).toContainEqual({ value: "e", label: "Vic (no Orders access)" });
+    expect(dispatcherOptions(withViewer, null).some((o) => o.value === "e")).toBe(false);
+  });
+
+  it("keeps a current dispatcher missing from users as 'Current dispatcher'", () => {
+    expect(dispatcherOptions(users, "zzz")).toContainEqual({ value: "zzz", label: "Current dispatcher" });
+  });
 });
 
 describe("dispatcherName", () => {

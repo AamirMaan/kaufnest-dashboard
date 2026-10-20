@@ -11,6 +11,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { inventoryErrorMessage } from "@/lib/inventory/inventoryErrors";
 import { dispatcherOptions } from "../_lib/dispatcherOptions";
+import { locationPayload } from "../_lib/locationPayload";
 import { locationSaved } from "../_store/advancedInventorySlice";
 import { LOCATION_TYPES, LOCATION_TYPE_LABELS, isLocationNameTaken } from "../_lib/advancedInventory";
 import type { StockLocation, StockLocationType } from "@/types";
@@ -47,12 +48,8 @@ export function LocationModal({ open, location, locations, onClose }: Props) {
     try {
       const supabase = await createTenantClient();
       const { data: { user } } = await supabase.auth.getUser();
-      const values = {
-        name: name.trim(),
-        type,
-        // Dropship suppliers never hold stock, so never dispatch.
-        dispatcher_id: type === "dropship" ? null : dispatcherId || null,
-      };
+      // dispatcher_id only when changed — keeps pre-057 tenants working (see helper).
+      const values = locationPayload({ name, type, dispatcherId, current: location });
 
       const { data, error: dbError } = location
         ? await supabase.from("stock_locations").update(values).eq("id", location.id).select().single<StockLocation>()
