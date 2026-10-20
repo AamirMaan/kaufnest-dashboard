@@ -243,10 +243,13 @@ hydrated, but only as the key for display/billing — never gate on it.
   every navigation (the queue refetch does) — tracked by a ref via
   `shouldRequestFlush()` (`components/layout/dispatchQueue.ts`), and never for
   users without Orders view (`useAccess().can("orders", 1)`; the route 403s).
-- **Dispatcher with Orders but no Inventory access sees an empty banner.**
-  `my_dispatch_queue()` is SECURITY INVOKER and reads `stock_locations`/
-  `inventory_settings`, whose 055 SELECT policies need Inventory >= 1. Their
-  emails and bell rows still arrive. Documented, not fixed.
+- **The banner works without Inventory access.** `my_dispatch_queue()` is
+  SECURITY DEFINER (PR-gate review, 2026-10-20) and restricts explicitly:
+  `dispatcher_id = auth.uid()`, `is_tenant_member()`, effective Orders >= 1
+  (`user_section_level`), advanced inventory on. Any new column/filter added
+  to it must keep those checks — RLS no longer applies inside it. The Orders
+  page Location dropdown still reads `stock_locations` under RLS, so such a
+  dispatcher sees the applied `?location=` filter as "Unknown location".
 
 ## Test command
 

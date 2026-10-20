@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireSectionAccess } from "@/lib/permissions/requireSectionAccess";
 import { flushDispatchOutbox } from "@/lib/dispatch/flushOutbox";
 
+// The drain loop stops claiming after ~20 s; leave headroom for the last batch.
+export const maxDuration = 60;
+
 /**
  * Drains the caller's own tenant's dispatch email queue (057). Any user who
  * can see Orders may trigger it — it only sends emails the DB trigger already

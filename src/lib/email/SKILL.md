@@ -11,4 +11,4 @@
 - Never import from a `"use client"` file (verifier blocks it; env vars are server-only).
 - `secure` is derived from port 465; 587 uses STARTTLS.
 - Callers must check `isSmtpConfigured()` and no-op, so dev without SMTP never errors.
-- The transport is pooled (`pool: true`, cached per server instance) so a flush batch reuses one SMTP connection.
+- The transport is cached per server instance but deliberately **not pooled** (no `pool: true`): on Vercel a frozen instance keeps a pooled socket that is dead on thaw. One connection per message is fine at this volume.

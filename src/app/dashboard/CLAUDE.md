@@ -371,7 +371,8 @@ RLS still decides visibility.
 `DispatchBanner` (057, `src/components/layout/DispatchBanner.tsx` + pure
 `dispatchQueue.ts`/test) — rendered at the top of `DashboardShell`'s `<main>`.
 Shows a location dispatcher "You have N orders to dispatch from <location>"
-lines from the `my_dispatch_queue()` RPC (runs under RLS; counts open
+lines from the `my_dispatch_queue()` RPC (SECURITY DEFINER with explicit
+dispatcher/tenant-member/Orders >= 1 checks, so no Inventory access needed; counts open
 `pending`/`processing` orders with a linked product at locations whose
 `dispatcher_id` is the viewer), each linking to `/dashboard/sales?location=<id>`.
 Entitlement-gated via `usePlan()` + `hasAdvancedInventory` (no RPC call for

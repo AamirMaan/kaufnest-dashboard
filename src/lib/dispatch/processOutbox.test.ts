@@ -1,4 +1,4 @@
-import { processOutbox, type ClaimedDispatchEmail, type OutboxDeps } from "./processOutbox";
+import { processOutbox, processOutboxUntilDrained, type ClaimedDispatchEmail, type OutboxDeps } from "./processOutbox";
 import { buildDispatchEmail } from "@/lib/email/dispatchEmail";
 
 jest.mock("@/lib/email/dispatchEmail", () => {
@@ -13,6 +13,7 @@ function row(over: Partial<ClaimedDispatchEmail> = {}): ClaimedDispatchEmail {
     platform: "ebay", marketplace: null, external_order_id: null, order_date: "2026-10-19",
     buyer_name: null, shipping_address_line1: null, shipping_address_line2: null,
     shipping_city: null, shipping_state: null, shipping_postal_code: null, shipping_country: null,
+    still_relevant: true,
     ...over,
   };
 }
@@ -76,5 +77,57 @@ describe("processOutbox", () => {
     expect(d.markFailed).toHaveBeenCalledWith("o1", "bad row");
     expect(d.send).toHaveBeenCalledTimes(1);
     expect(d.markSent).toHaveBeenCalledWith("o2", null);
+  });
+
+  it("skips rows that are no longer relevant (order closed or moved)", async () => {
+    const d = deps([row({ still_relevant: false })]);
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 0, skipped: 1 });
+    expect(d.send).not.toHaveBeenCalled();
+    expect(d.markSent).toHaveBeenCalledWith("o1", "skipped: no longer relevant");
+  });
+});
+
+describe("processOutboxUntilDrained", () => {
+  const batch = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => row({ outbox_id: `${prefix}${i}`, sale_id: `${prefix}${i}` }));
+
+  function drainDeps(batches: ClaimedDispatchEmail[][]) {
+    const d = deps([]);
+    d.claim = jest.fn().mockImplementation(async () => batches.shift() ?? []);
+    return d;
+  }
+
+  it("stops after a short batch and aggregates counts", async () => {
+    const d = drainDeps([batch(10, "a"), batch(3, "b")]);
+    await expect(processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now: () => 0 })).resolves.toEqual({
+      sent: 13, failed: 0, skipped: 0, batches: 2,
+    });
+    expect(d.claim).toHaveBeenCalledTimes(2);
+    expect(d.claim).toHaveBeenCalledWith(10);
+  });
+
+  it("stops after an empty batch", async () => {
+    const d = drainDeps([batch(10, "a"), []]);
+    const r = await processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now: () => 0 });
+    expect(r).toMatchObject({ sent: 10, batches: 2 });
+  });
+
+  it("is bounded by maxBatches", async () => {
+    const d = drainDeps(Array.from({ length: 9 }, (_, i) => batch(10, `x${i}-`)));
+    const r = await processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now: () => 0 });
+    expect(r).toMatchObject({ sent: 50, batches: 5 });
+    expect(d.claim).toHaveBeenCalledTimes(5);
+  });
+
+  it("is bounded by the wall-clock deadline", async () => {
+    let t = 0;
+    const now = () => t;
+    const d = drainDeps(Array.from({ length: 9 }, (_, i) => batch(10, `x${i}-`)));
+    const claim = d.claim as jest.Mock;
+    const inner = claim.getMockImplementation()!;
+    claim.mockImplementation(async (n: number) => { t += 8_000; return inner(n); });
+    const r = await processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now });
+    // starts at 0, 8 s, 16 s; the 4th claim would start at 24 s > 20 s.
+    expect(r.batches).toBe(3);
   });
 });

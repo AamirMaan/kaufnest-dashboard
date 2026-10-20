@@ -21,6 +21,8 @@ an order lands on their location.
 | Banner | **Persistent**, dispatcher-only, live count of open orders per location; disappears on its own once the orders leave an open status. Plus one bell notification per order. |
 | Email transport | **SMTP via nodemailer** — the Mailgun SMTP account already used by Supabase auth, sender `noreply@mg.boughtopia.com`. |
 | Detection architecture | **DB trigger + outbox**, drained by a server API route. |
+| CSV imports | **CSV imports never notify** (PR-gate review, 2026-10-20). The Sales importer inserts with `sales.dispatch_suppressed = true`, which the trigger honours on INSERT only; later edits follow the normal UPDATE rules (a location change notifies, unrelated saves don't). The importer sends the key only when some location has a dispatcher (implies 057 applied), so pre-057 tenants never hit PGRST204. |
+| Stale queue rows | Skipped at send time: `claim_dispatch_emails` returns `still_relevant` (order still pending/processing AND its current location's dispatcher is the recipient). |
 
 Rejected: API-route-only detection (any write path that forgets to call it
 silently skips the notification); `pg_net` webhook (extension, public URL and
@@ -85,8 +87,10 @@ policies and no grants to `authenticated` — service role only.
 < now() - interval '5 minutes') ORDER BY created_at LIMIT p_limit FOR UPDATE
 SKIP LOCKED) RETURNING …`, joined to the sale (order fields, product name,
 quantity, shipping address), the location name, and the recipient profile
-(email, full name, status). Concurrent flushes therefore never double-send;
-a crashed flush's claim expires after 5 minutes.
+(email, full name, status), plus a trailing `still_relevant boolean` = the
+order is still pending/processing AND its CURRENT fulfillment location's
+dispatcher is the row's recipient. Concurrent flushes therefore never
+double-send; a crashed flush's claim expires after 5 minutes.
 
 ## Trigger
 
@@ -161,11 +165,15 @@ these modules from a `"use client"` file.
 `flushDispatchOutbox(schema)`:
 1. Return `{ sent: 0, failed: 0, skipped: true }` if SMTP is not configured
    (local/dev never break; rows stay pending).
-2. `claim_dispatch_emails(10)` via `createServiceClientForTenant(schema)`
-   (small batch; the transport uses `pool: true`).
+2. `claim_dispatch_emails(10)` via `createServiceClientForTenant(schema)`,
+   repeated while the previous claim returned a full batch, bounded by 5
+   batches AND ~20 s wall-clock (`processOutboxUntilDrained`). The SMTP
+   transport is **not** pooled (stale sockets on frozen serverless
+   instances).
 3. For each row: if recipient inactive, recipient can no longer view Orders
    (`recipient_can_view_orders`, re-checked at claim time → `skipped: no
-   orders access`), missing email or sale gone → mark
+   orders access`), no longer relevant (`still_relevant` false → `skipped:
+   no longer relevant`), missing email or sale gone → mark
    `sent_at = now()`, `last_error = 'skipped: …'`. Otherwise send; on success
    set `sent_at`, on failure set `last_error` (truncated, never returned to
    the client) and clear `claimed_at` so it is retried.
@@ -209,11 +217,14 @@ these modules from a `"use client"` file.
 ### `DispatchBanner` (`src/components/layout/DispatchBanner.tsx`)
 
 - Rendered in `DashboardShell` below the impersonation banner.
-- Data: one RPC `my_dispatch_queue()` (`SECURITY INVOKER`, returns
-  `location_id, location_name, open_count` for locations where
-  `dispatcher_id = auth.uid()`, counting sales with `product_id IS NOT NULL`
-  and `lower(status) IN ('pending','processing')`). Result is bounded by the
-  number of locations, so no pagination needed. RLS on `sales` still applies.
+- Data: one RPC `my_dispatch_queue()` (`SECURITY DEFINER`, search_path
+  pinned to the tenant schema, returns `location_id, location_name,
+  open_count` for locations where `dispatcher_id = auth.uid()`, counting
+  sales with `product_id IS NOT NULL` and `lower(status) IN
+  ('pending','processing')`). It bypasses RLS, so it restricts explicitly:
+  caller is the dispatcher, `is_tenant_member()`, `user_section_level(auth.uid(),
+  'orders') >= 1`, and advanced inventory on. EXECUTE: `authenticated` only.
+  Result is bounded by the number of locations, so no pagination needed.
 - Renders nothing when the result is empty, the plan lacks advanced
   inventory, or advanced inventory is off.
 - Copy: "You have **3 orders** to dispatch from **Berlin Warehouse**" — one
@@ -224,10 +235,11 @@ these modules from a `"use client"` file.
 - Refetches on route change and (debounced) on `summaryVersion` change. The
   flush is requested only on mount and on `summaryVersion` change (not on
   plain navigation), and never for users without Orders view.
-- Caveat: `my_dispatch_queue()` runs as the caller and reads
-  `stock_locations`/`inventory_settings`, whose SELECT policies need
-  Inventory >= 1. A dispatcher with Orders but no Inventory access sees an
-  empty banner (emails and bell rows still arrive). Accepted.
+- Inventory access is NOT needed for the banner (definer function, PR-gate
+  review 2026-10-20). It still matters for the Orders page Location
+  dropdown: its labels come from `stock_locations` (Inventory >= 1 RLS), so
+  a dispatcher without Inventory access sees the applied filter as
+  "Unknown location" — the filter itself still works.
 
 ### Orders page (`dashboard/sales/`)
 

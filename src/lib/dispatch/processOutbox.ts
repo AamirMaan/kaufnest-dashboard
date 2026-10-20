@@ -23,6 +23,12 @@ export interface ClaimedDispatchEmail {
   shipping_state: string | null;
   shipping_postal_code: string | null;
   shipping_country: string | null;
+  /**
+   * Computed at claim time (057): the order is still pending/processing AND
+   * its CURRENT fulfillment location's dispatcher is this row's recipient.
+   * False when the order was closed or moved after the row was queued.
+   */
+  still_relevant: boolean;
 }
 
 export interface OutboxDeps {
@@ -35,18 +41,20 @@ export interface OutboxDeps {
 
 const MAX_ERROR = 500;
 
+export const OUTBOX_BATCH_SIZE = 10;
+
 /**
  * I/O-free core of the flush: claim → send → mark. Tested with fakes.
- * Small default batch: one flush request is triggered from a page load and
- * sends serially over one pooled SMTP connection.
+ * Small batch: emails are sent serially; processOutboxUntilDrained loops.
  */
-export async function processOutbox(deps: OutboxDeps, limit = 10) {
+export async function processOutbox(deps: OutboxDeps, limit = OUTBOX_BATCH_SIZE) {
   const rows = await deps.claim(limit);
   let sent = 0, failed = 0, skipped = 0;
 
   for (const r of rows) {
     if (!r.recipient_active) { await deps.markSent(r.outbox_id, "skipped: recipient inactive"); skipped++; continue; }
     if (!r.recipient_can_view_orders) { await deps.markSent(r.outbox_id, "skipped: no orders access"); skipped++; continue; }
+    if (!r.still_relevant) { await deps.markSent(r.outbox_id, "skipped: no longer relevant"); skipped++; continue; }
     if (!r.recipient_email) { await deps.markSent(r.outbox_id, "skipped: no email"); skipped++; continue; }
     const to = r.recipient_email;
 
@@ -82,4 +90,39 @@ export async function processOutbox(deps: OutboxDeps, limit = 10) {
     }
   }
   return { sent, failed, skipped };
+}
+
+/**
+ * Claims batches until one comes back short (queue drained), bounded by
+ * `maxBatches` AND a wall-clock `deadlineMs` (checked before each further
+ * claim), whichever is hit first. `now` is injected for tests.
+ */
+export async function processOutboxUntilDrained(
+  deps: OutboxDeps,
+  opts: { maxBatches: number; deadlineMs: number; now?: () => number; batchSize?: number }
+) {
+  const now = opts.now ?? Date.now;
+  const size = opts.batchSize ?? OUTBOX_BATCH_SIZE;
+  const start = now();
+  const total = { sent: 0, failed: 0, skipped: 0, batches: 0 };
+
+  while (total.batches < opts.maxBatches) {
+    if (total.batches > 0 && now() - start >= opts.deadlineMs) break;
+    let claimed = 0;
+    const counting: OutboxDeps = {
+      ...deps,
+      async claim(n) {
+        const rows = await deps.claim(n);
+        claimed = rows.length;
+        return rows;
+      },
+    };
+    const r = await processOutbox(counting, size);
+    total.sent += r.sent;
+    total.failed += r.failed;
+    total.skipped += r.skipped;
+    total.batches++;
+    if (claimed < size) break;
+  }
+  return total;
 }

@@ -41,4 +41,21 @@ SELECT count(*) AS outbox_b_after_touch FROM dispatch_email_outbox o
 UPDATE sales SET fulfillment_location_id = (SELECT loc_a FROM v057) WHERE product_name = 'verify-057-b';
 SELECT count(*) AS outbox_b_after_move FROM dispatch_email_outbox o
   JOIN sales s ON s.id = o.sale_id WHERE s.product_name = 'verify-057-b';       -- expect 1
+
+-- Case 3: a suppressed (CSV-import) insert at the dispatched location never notifies.
+INSERT INTO sales (platform, product_name, product_id, quantity, unit_price, total_amount, currency, date, status, fulfillment_location_id, dispatch_suppressed)
+SELECT 'other', 'verify-057-c', (SELECT id FROM products LIMIT 1), 1, 1, 1, 'EUR', current_date, 'pending',
+       (SELECT loc_a FROM v057), true
+RETURNING id, dispatch_notified_at;            -- expect dispatch_notified_at NULL
+SELECT count(*) AS outbox_c FROM dispatch_email_outbox o
+  JOIN sales s ON s.id = o.sale_id WHERE s.product_name = 'verify-057-c';       -- expect 0
+-- ...but a later location change follows the normal rules and notifies.
+UPDATE sales SET fulfillment_location_id = (SELECT loc_b FROM v057) WHERE product_name = 'verify-057-c';
+SELECT count(*) AS outbox_c_after_move FROM dispatch_email_outbox o
+  JOIN sales s ON s.id = o.sale_id WHERE s.product_name = 'verify-057-c';       -- expect 1
+
+-- Case 4: still_relevant — case 1's order shipped after queueing -> false.
+UPDATE sales SET status = 'shipped' WHERE product_name = 'verify-057';
+SELECT c.still_relevant FROM claim_dispatch_emails(1000) c
+  JOIN sales s ON s.id = c.sale_id WHERE s.product_name = 'verify-057';         -- expect false
 ROLLBACK;

@@ -23,6 +23,15 @@
 -- Notify rule: only on INSERT, when the product is first linked, or when the
 -- fulfillment location changes (and product+location set, open status,
 -- advanced inventory on, dispatcher active). Unrelated saves never notify.
+-- CSV imports never notify: the Sales importer inserts with
+-- sales.dispatch_suppressed = true (only once 057 is applied — it sends the
+-- key only when some location has a dispatcher), which leaves the flag NULL
+-- on INSERT. Later edits follow the normal UPDATE rules (a location change
+-- notifies; unrelated saves don't). The column is ignored on UPDATE.
+--
+-- Stale outbox rows: claim_dispatch_emails returns still_relevant (order
+-- still open AND its CURRENT location's dispatcher is the recipient);
+-- processOutbox skips the send when false.
 --
 -- RULE for editing: inside format($sql$ … $sql$, schema_name) strings never
 -- write a literal percent sign — format() consumes it. Where the inner body
@@ -33,6 +42,11 @@
 -- access >= 1 (user_section_level, step 1b — mirrors 055 for any user).
 -- Checked when the flag is set AND again at claim time
 -- (recipient_can_view_orders), since access can be revoked in between.
+--
+-- my_dispatch_queue (banner) is SECURITY DEFINER with explicit checks
+-- (dispatcher = auth.uid(), tenant member, Orders >= 1, advanced on), so a
+-- dispatcher sees their banner even without Inventory access (stock_locations
+-- RLS needs Inventory >= 1).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.install_location_dispatchers(schema_name text)
@@ -56,6 +70,9 @@ BEGIN
       ADD COLUMN IF NOT EXISTS dispatcher_id uuid REFERENCES %1$I.profiles(id) ON DELETE SET NULL;
     ALTER TABLE %1$I.sales
       ADD COLUMN IF NOT EXISTS dispatch_notified_at timestamptz;
+    -- Set by the CSV importer: an INSERT with this true never notifies.
+    ALTER TABLE %1$I.sales
+      ADD COLUMN IF NOT EXISTS dispatch_suppressed boolean NOT NULL DEFAULT false;
     ALTER TABLE %1$I.notifications
       ADD COLUMN IF NOT EXISTS recipient_user_id uuid REFERENCES %1$I.profiles(id) ON DELETE CASCADE;
 
@@ -134,6 +151,11 @@ BEGIN
       -- Clients can never set or clear the flag themselves.
       IF TG_OP = 'INSERT' THEN
         NEW.dispatch_notified_at := NULL;
+        -- Bulk (CSV) import: never notify at insert time. The column is
+        -- ignored on UPDATE, so later edits follow the normal rules below.
+        IF NEW.dispatch_suppressed THEN
+          RETURN NEW;
+        END IF;
       ELSE
         NEW.dispatch_notified_at := OLD.dispatch_notified_at;
         -- ANY location change (incl. to/from NULL) re-arms the flag: the new
@@ -243,6 +265,10 @@ BEGIN
   -- ── 3. Outbox claim (service role) ────────────────────────
   -- recipient_can_view_orders is re-checked at claim time (access may have
   -- been revoked since the row was queued); processOutbox skips the send.
+  -- still_relevant (last column) = the order is still pending/processing AND
+  -- its CURRENT fulfillment location's dispatcher is this row's recipient —
+  -- false once the order was shipped/cancelled or moved. Keep the TS mirror
+  -- ClaimedDispatchEmail (src/lib/dispatch/processOutbox.ts) in sync.
   -- DROP first: CREATE OR REPLACE cannot change a RETURNS TABLE column list.
   EXECUTE format('DROP FUNCTION IF EXISTS %I.claim_dispatch_emails(int)', schema_name);
   EXECUTE format($sql$
@@ -252,7 +278,8 @@ BEGIN
       recipient_active boolean, recipient_can_view_orders boolean, location_name text, product_name text, quantity int,
       platform text, marketplace text, external_order_id text, order_date date,
       buyer_name text, shipping_address_line1 text, shipping_address_line2 text,
-      shipping_city text, shipping_state text, shipping_postal_code text, shipping_country text
+      shipping_city text, shipping_state text, shipping_postal_code text, shipping_country text,
+      still_relevant boolean
     )
     LANGUAGE sql SECURITY DEFINER
     SET search_path = %1$I
@@ -275,7 +302,9 @@ BEGIN
              l.name, s.product_name, s.quantity, s.platform, s.marketplace,
              s.external_order_id, s.date, s.buyer_name,
              s.shipping_address_line1, s.shipping_address_line2, s.shipping_city,
-             s.shipping_state, s.shipping_postal_code, s.shipping_country
+             s.shipping_state, s.shipping_postal_code, s.shipping_country,
+             (lower(coalesce(s.status, '')) IN ('pending', 'processing')
+              AND coalesce(l.dispatcher_id = c.recipient_user_id, false))
         FROM claimed c
         JOIN sales s    ON s.id = c.sale_id
         JOIN profiles p ON p.id = c.recipient_user_id
@@ -285,17 +314,24 @@ BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION %I.claim_dispatch_emails(int) FROM PUBLIC, anon, authenticated', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.claim_dispatch_emails(int) TO service_role', schema_name);
 
-  -- ── 4. Banner query (caller's RLS applies) ────────────────
+  -- ── 4. Banner query (definer, explicit checks) ─────────────
+  -- SECURITY DEFINER so a dispatcher without Inventory access (stock_locations
+  -- RLS) still sees their queue. Bypassing RLS is safe only because every
+  -- row is restricted explicitly: the caller is the dispatcher, a tenant
+  -- member, with effective Orders >= 1 (user_section_level, step 1b), and
+  -- advanced inventory is on. Returns counts + location names only.
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.my_dispatch_queue()
     RETURNS TABLE (location_id uuid, location_name text, open_count int)
-    LANGUAGE sql STABLE SECURITY INVOKER
+    LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = %1$I
     AS $f$
       SELECT l.id, l.name, count(s.id)::int
         FROM stock_locations l
         JOIN sales s ON s.fulfillment_location_id = l.id
        WHERE l.dispatcher_id = auth.uid()
+         AND is_tenant_member()
+         AND user_section_level(auth.uid(), 'orders') >= 1
          AND s.product_id IS NOT NULL
          AND lower(s.status) IN ('pending', 'processing')
          AND coalesce((SELECT advanced_enabled FROM inventory_settings WHERE id), false)
