@@ -109,7 +109,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
   // Mirrors exactly what handleSubmit rejects, so Save is never clickable when it can't succeed.
   const isFormValid =
     !!form.product_name.trim() &&
-    derivedPrice > 0 &&
+    (!amountsChanged || derivedPrice > 0) &&
     !!form.reason.trim() &&
     (!tracksStock || isPurchaseInventoryFieldsValid(inv));
 
@@ -118,7 +118,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
     if (!purchase) return;
     if (!form.product_name.trim()) return setError("Product name is required.");
     if (total <= 0) return setError("Total must be greater than 0.");
-    if (derivedPrice <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
+    if (amountsChanged && derivedPrice <= 0) return setError("Total is too small for this quantity — the unit price would round to 0.00.");
     if (!form.reason.trim()) return setError("Reason for edit is required.");
     if (tracksStock && !isPurchaseInventoryFieldsValid(inv)) return setError("Landed costs must be zero or a positive number.");
     setError(null);
@@ -264,7 +264,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
         </Row>
 
         <Field label="Total Paid" required>
-          <Input type="number" min="0.01" step="any" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} required />
+          <Input type="number" step="any" value={form.total_amount} onChange={(e) => set("total_amount", e.target.value)} required />
         </Field>
 
         {total > 0 && (
@@ -275,7 +275,7 @@ export function EditPurchaseModal({ purchase, onClose, onSuccess }: Props) {
           </p>
         )}
 
-        {total > 0 && derivedPrice <= 0 && (
+        {amountsChanged && total > 0 && derivedPrice <= 0 && (
           <p className="text-xs text-[var(--color-danger-text)]">
             Total is too small for this quantity — the unit price would round to {form.currency} 0.00.
           </p>

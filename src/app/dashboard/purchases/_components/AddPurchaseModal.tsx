@@ -320,7 +320,6 @@ export function AddPurchaseModal({ open, onClose, onSuccess }: Props) {
         <Field label="Total Paid" required>
           <Input
             type="number"
-            min="0.01"
             step="any"
             value={form.total_amount}
             onChange={(e) => set("total_amount", e.target.value)}

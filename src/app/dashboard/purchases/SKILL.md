@@ -64,13 +64,14 @@ every mutation follows.
   must not rewrite `unit_price` on legacy/imported rows where it isn't
   exactly `total / qty`.
 - A total too small for the quantity (1.00 ÷ 300) rounds `unit_price` to 0;
-  both forms treat that as invalid (button disabled + error). Edit validates
-  the **derived** price, not the stored one, so a legacy row with a stored
-  `unit_price = 0` stays editable. The "too small" reason is rendered inline
+  both forms treat that as invalid (button disabled + error). Edit only
+  applies the check when quantity/total changed (`amountsChanged`), so a
+  legacy row with a stored `unit_price = 0` — or whose total ÷ qty rounds to
+  0 — stays editable for vendor/notes/etc. The "too small" reason is rendered inline
   under the field (the disabled button can't trigger `handleSubmit`'s error).
-- Total Paid inputs use `step="any"`, not `step="0.01"`: `purchaseAmounts`
-  rounds to cents itself, and a native step mismatch (10.005) would block
-  submit while `isFormValid` left the button enabled.
+- Total Paid inputs use `step="any"` and no `min`: `purchaseAmounts` rounds
+  to cents itself and `isFormValid` is the real gate; a native step/min
+  mismatch (10.005, 0.005) would block submit while the button looked enabled.
 - The CSV importer still takes `unit_price` (unchanged), and Sales'
   `AddSaleModal` linked-purchase path derives `unit_price` inline without
   this helper — both are known divergences, not migrated here.

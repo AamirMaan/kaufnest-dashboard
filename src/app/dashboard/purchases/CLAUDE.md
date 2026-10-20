@@ -65,7 +65,7 @@ quantity, unit price), with add/edit/delete and PDF invoice generation.
   quantityInput) → { quantity, total, unitPrice }`. Both modals ask for the
   **Total Paid**, not the unit price; `unitPrice` is derived (`total /
   quantity`, rounded to cents for `unit_price numeric(12,2)`) and shown as a
-  read-out under the field. `total` is stored exactly as entered.
+  read-out under the field. `total` is stored as entered (rounded to cents).
 - `_lib/purchaseInventoryFields.ts` (+ test, Phase 3 Task 4, 2026-09-26) —
   pure state/validation/payload helpers for the advanced-inventory fields on
   the purchase form: `PurchaseInventoryFieldsState { locationId, freight,
