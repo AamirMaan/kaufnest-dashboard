@@ -103,36 +103,27 @@ BEGIN
   $sql$, schema_name);
 
   -- ── 1b. Effective section level for an ARBITRARY user ─────
-  -- Mirrors 055's current_user_access_base (exception row, else role
-  -- default; super_admin = section max; deactivated = 0) for p_user instead
-  -- of auth.uid(). Used by the dispatch trigger and claim_dispatch_emails to
-  -- check the dispatcher can view Orders. Does NOT apply 055's
-  -- listings/messages → integrations dependency rule (only 'orders' is
-  -- asked here). plpgsql, not sql, so it can be created before 055's
-  -- objects exist (provision_tenant_schema runs this installer before
-  -- install_section_permissions; step 6 below installs them in the same
-  -- call). If 055 is missing at call time it fails closed (0) rather than
-  -- erroring inside the sales BEFORE trigger. Service role / definer only.
+  -- Thin wrapper over 055's user_access_base(p_user, p_section) — the one
+  -- copy of the rule (exception row, else role default; super_admin =
+  -- section max; deactivated = 0). Used by the dispatch trigger,
+  -- claim_dispatch_emails and my_dispatch_queue to check the dispatcher can
+  -- view Orders. Does NOT apply 055's listings/messages → integrations
+  -- dependency rule (only 'orders' is asked here). plpgsql, not sql, so it
+  -- can be created before 055's objects exist (provision_tenant_schema runs
+  -- this installer before install_section_permissions; step 6 below
+  -- installs them in the same call). If 055 (re-applied with
+  -- user_access_base) is missing at call time it fails closed (0) rather
+  -- than erroring inside the sales BEFORE trigger. Service role / definer only.
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.user_section_level(p_user uuid, p_section text)
     RETURNS smallint LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = %1$I
     AS $f$
     BEGIN
-      IF to_regclass('user_section_access') IS NULL
-         OR to_regprocedure('role_section_default(text, text)') IS NULL THEN
+      IF to_regprocedure('user_access_base(uuid, text)') IS NULL THEN
         RETURN 0::smallint;
       END IF;
-      RETURN COALESCE((
-        SELECT CASE
-          WHEN p.status = 'deactivated' THEN 0::smallint
-          WHEN p.role = 'super_admin' THEN section_max_level(p_section)
-          ELSE COALESCE(
-            (SELECT a.level FROM user_section_access a WHERE a.user_id = p.id AND a.section = p_section),
-            role_section_default(p.role, p_section))
-        END
-        FROM profiles p WHERE p.id = p_user
-      ), 0::smallint);
+      RETURN user_access_base(p_user, p_section);
     END;
     $f$;
   $sql$, schema_name);
@@ -187,8 +178,12 @@ BEGIN
          WHERE l.id = NEW.fulfillment_location_id
            AND p.status = 'active'
            AND user_section_level(p.id, 'orders') >= 1;
+        -- clock_timestamp(), not now(): now() is fixed per transaction, so a
+        -- second location change in the same transaction would write the
+        -- same value back and sales_dispatch_notify (IS DISTINCT FROM OLD)
+        -- would miss the new dispatcher.
         IF v_dispatcher IS NOT NULL THEN
-          NEW.dispatch_notified_at := now();
+          NEW.dispatch_notified_at := clock_timestamp();
         END IF;
       END IF;
       RETURN NEW;
@@ -266,8 +261,9 @@ BEGIN
   -- recipient_can_view_orders is re-checked at claim time (access may have
   -- been revoked since the row was queued); processOutbox skips the send.
   -- still_relevant (last column) = the order is still pending/processing AND
-  -- its CURRENT fulfillment location's dispatcher is this row's recipient —
-  -- false once the order was shipped/cancelled or moved. Keep the TS mirror
+  -- its CURRENT fulfillment location's dispatcher is this row's recipient AND
+  -- advanced inventory is still on — false once the order was
+  -- shipped/cancelled or moved, or the feature was switched off. Keep the TS mirror
   -- ClaimedDispatchEmail (src/lib/dispatch/processOutbox.ts) in sync.
   -- DROP first: CREATE OR REPLACE cannot change a RETURNS TABLE column list.
   EXECUTE format('DROP FUNCTION IF EXISTS %I.claim_dispatch_emails(int)', schema_name);
@@ -304,7 +300,8 @@ BEGIN
              s.shipping_address_line1, s.shipping_address_line2, s.shipping_city,
              s.shipping_state, s.shipping_postal_code, s.shipping_country,
              (lower(coalesce(s.status, '')) IN ('pending', 'processing')
-              AND coalesce(l.dispatcher_id = c.recipient_user_id, false))
+              AND coalesce(l.dispatcher_id = c.recipient_user_id, false)
+              AND coalesce((SELECT advanced_enabled FROM inventory_settings WHERE id), false))
         FROM claimed c
         JOIN sales s    ON s.id = c.sale_id
         JOIN profiles p ON p.id = c.recipient_user_id

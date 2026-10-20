@@ -28,6 +28,11 @@ function getTransporter(): Transporter {
       port,
       secure: port === 465,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      // Bounded so a stalled server can't hold the flush route past its
+      // maxDuration (60 s); a timeout is a normal send failure (retried).
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
   return transporter;

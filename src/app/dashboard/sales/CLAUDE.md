@@ -38,7 +38,8 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `SalesFilters.location` → `p_location_id` (table, export, and
   `get_sales_summary`'s trailing arg — sent only when set). A `?location=<id>`
   URL param (linked from the shell's `DispatchBanner`) is applied on load by
-  `_components/LocationParamSync.tsx`, wrapped in `<Suspense>`.
+  `_components/LocationParamSync.tsx`, wrapped in `<Suspense>`, which then
+  strips it from the URL.
 - `[id]/page.tsx` — order-detail page (Client Component). Reads the sale from
   Redux first (`state.sales.items.find`); on direct-URL hit fetches from Supabase
   via `createTenantClient` and dispatches `addSale` to hydrate Redux. Displays
@@ -83,10 +84,11 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `p_connection_id` when it's `null` — PostgREST matches functions by named
   args, so always sending it 404s (PGRST202) against the pre-056 7-arg
   `get_sales_summary`.
-- `_lib/importDispatch.ts` (+ test, 057) — `importDispatchFields(locations)`:
-  `{ dispatch_suppressed: true }` when any location has a dispatcher, else
-  `{}`. Spread into every row `ImportSalesModal` inserts so CSV imports never
-  notify dispatchers; `ImportSalesModal` reads `useAdvancedInventory().locations` for it.
+- `_lib/importDispatch.ts` (+ test, 057) — `IMPORT_DISPATCH_FIELDS`
+  (`{ dispatch_suppressed: true }`, spread into every row `ImportSalesModal`
+  inserts so CSV imports never notify dispatchers), `isMissingDispatchColumn`
+  (PGRST204 on that column = pre-057 tenant) and `withoutDispatchFields`
+  (the one retry without the key).
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.
@@ -254,7 +256,7 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
 - `_components/orderStatus.ts` (+ colocated `.test.ts`) — pure helpers for the
   order-status field: `ORDER_STATUSES` (preset list), `isPresetStatus`,
   `statusLabel`. See "Order status + returns" below.
-- `_components/LocationParamSync.tsx` (057) — reads `useSearchParams().get("location")` and calls `onLocation(id)` once per URL value; rendered by `page.tsx` inside `<Suspense fallback={null}>`.
+- `_components/LocationParamSync.tsx` (057) — reads `useSearchParams().get("location")`, calls `onLocation(id)`, then `router.replace(pathname)` to strip the param (re-clicking the banner link re-applies; reload can't resurrect a cleared filter); rendered by `page.tsx` inside `<Suspense fallback={null}>`.
 - `_components/fulfillmentLocation.ts` (+ colocated `.test.ts`, Phase 3 Task
   5, 2026-09-26) — pure helpers behind the "Fulfilled from" field (and,
   since 057, `locationFilterOptions(locations, selected)` for the Orders

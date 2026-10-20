@@ -239,8 +239,10 @@ hydrated, but only as the key for display/billing — never gate on it.
 - The banner is live state, not stored notifications: it follows the
   location's *current* dispatcher and drops orders as soon as they leave
   `pending`/`processing`.
-- The flush fires on mount and on `summaryVersion` changes only — not on
-  every navigation (the queue refetch does) — tracked by a ref via
+- The queue refetches on mount, on `summaryVersion` changes and every 60 s
+  (`POLL_MS`) — NOT on navigation (that ran the RPC for every
+  advanced-inventory user on every page change). The flush fires on mount
+  and on `summaryVersion` changes only — never on a poll — tracked by a ref via
   `shouldRequestFlush()` (`components/layout/dispatchQueue.ts`), and never for
   users without Orders view (`useAccess().can("orders", 1)`; the route 403s).
 - **The banner works without Inventory access.** `my_dispatch_queue()` is

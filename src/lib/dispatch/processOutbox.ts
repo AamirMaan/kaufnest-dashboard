@@ -25,8 +25,9 @@ export interface ClaimedDispatchEmail {
   shipping_country: string | null;
   /**
    * Computed at claim time (057): the order is still pending/processing AND
-   * its CURRENT fulfillment location's dispatcher is this row's recipient.
-   * False when the order was closed or moved after the row was queued.
+   * its CURRENT fulfillment location's dispatcher is this row's recipient AND
+   * advanced inventory is still on. False when the order was closed or moved
+   * after the row was queued, or the feature was switched off.
    */
   still_relevant: boolean;
 }
@@ -95,7 +96,10 @@ export async function processOutbox(deps: OutboxDeps, limit = OUTBOX_BATCH_SIZE)
 /**
  * Claims batches until one comes back short (queue drained), bounded by
  * `maxBatches` AND a wall-clock `deadlineMs` (checked before each further
- * claim), whichever is hit first. `now` is injected for tests.
+ * claim), whichever is hit first. Also stops after any batch with a failed
+ * send: a failing SMTP server would otherwise burn every row's 5 attempts in
+ * one flush. Failed rows keep their claim, so the 5-minute lease is the
+ * retry backoff. `now` is injected for tests.
  */
 export async function processOutboxUntilDrained(
   deps: OutboxDeps,
@@ -122,7 +126,7 @@ export async function processOutboxUntilDrained(
     total.failed += r.failed;
     total.skipped += r.skipped;
     total.batches++;
-    if (claimed < size) break;
+    if (claimed < size || r.failed > 0) break;
   }
   return total;
 }

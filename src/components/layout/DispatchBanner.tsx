@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { PackageCheck } from "lucide-react";
 import { useAppSelector } from "@/store/hooks";
 import { usePlan } from "@/store/usePlan";
@@ -13,25 +12,34 @@ import { requestDispatchFlush } from "@/lib/utils/dispatchFlush";
 import { dispatchBannerLines, shouldRequestFlush, type DispatchQueueRow } from "./dispatchQueue";
 
 const DEBOUNCE_MS = 2000;
+/** Queue re-poll, same cadence as NotificationBell. */
+const POLL_MS = 60_000;
 
 /**
  * Persistent "orders to dispatch" banner for a location's dispatcher (057).
  * Also the single place that nudges the dispatch email flush: on mount and,
  * debounced, whenever the sales slice records a write (summaryVersion is
  * bumped by addSale/updateSale/removeSale — every client write path). The
- * queue refetches on every navigation, but the flush does not (see
- * shouldRequestFlush), and users without Orders view never flush (the route
- * would 403).
+ * queue refetches on mount, after those writes, and every POLL_MS (not on
+ * navigation — that ran the RPC for every advanced-inventory user on every
+ * page change); the poll never flushes (see shouldRequestFlush), and users
+ * without Orders view never flush (the route would 403).
  * Renders nothing for plans without advanced inventory or an empty queue.
  */
 export function DispatchBanner() {
   const { ent } = usePlan();
   const entitled = !!ent && hasAdvancedInventory(ent);
   const summaryVersion = useAppSelector((s) => s.sales.summaryVersion);
-  const pathname = usePathname();
+  const [pollTick, setPollTick] = useState(0);
   const canViewOrders = useAccess().can("orders", 1);
   const lastFlushedVersion = useRef<number | null>(null);
   const [rows, setRows] = useState<DispatchQueueRow[]>([]);
+
+  useEffect(() => {
+    if (!entitled) return;
+    const id = setInterval(() => setPollTick((t) => t + 1), POLL_MS);
+    return () => clearInterval(id);
+  }, [entitled]);
 
   useEffect(() => {
     if (!entitled) return;
@@ -53,7 +61,7 @@ export function DispatchBanner() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [entitled, summaryVersion, pathname, canViewOrders]);
+  }, [entitled, summaryVersion, pollTick, canViewOrders]);
 
   const lines = dispatchBannerLines(rows);
   if (!entitled || lines.length === 0) return null;

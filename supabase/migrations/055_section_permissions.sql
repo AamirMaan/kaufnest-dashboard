@@ -106,11 +106,12 @@ BEGIN
       END)::smallint
     $f$$q$, s);
 
-  -- Raw per-section level (exception row, else role default). Internal —
-  -- read current_user_access(), which layers the cross-section dependency
-  -- rule on top of this.
+  -- Raw per-section level of ANY user (exception row, else role default).
+  -- The single copy of this rule: current_user_access_base (below) and 057's
+  -- user_section_level (dispatcher checks) both call it. No tenant-member
+  -- check here — callers add it. Service role / definer only.
   EXECUTE format($q$
-    CREATE OR REPLACE FUNCTION %1$I.current_user_access_base(p_section text)
+    CREATE OR REPLACE FUNCTION %1$I.user_access_base(p_user uuid, p_section text)
     RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
       SELECT COALESCE((
         SELECT CASE
@@ -120,8 +121,18 @@ BEGIN
             (SELECT a.level FROM user_section_access a WHERE a.user_id = p.id AND a.section = p_section),
             role_section_default(p.role, p_section))
         END
-        FROM profiles p WHERE p.id = auth.uid() AND %1$I.is_tenant_member()
+        FROM profiles p WHERE p.id = p_user
       ), 0::smallint)
+    $f$$q$, s);
+
+  -- The caller's raw per-section level. Internal — read current_user_access(),
+  -- which layers the cross-section dependency rule on top of this.
+  EXECUTE format($q$
+    CREATE OR REPLACE FUNCTION %1$I.current_user_access_base(p_section text)
+    RETURNS smallint LANGUAGE sql STABLE SECURITY DEFINER SET search_path = %1$I AS $f$
+      SELECT CASE WHEN %1$I.is_tenant_member()
+        THEN user_access_base(auth.uid(), p_section)
+        ELSE 0::smallint END
     $f$$q$, s);
 
   -- Effective level. Dependency rule (user ruling 2026-09-30): Listings and
@@ -156,6 +167,8 @@ BEGIN
         ELSE NULL END
     $f$$q$, s);
 
+  EXECUTE format('REVOKE ALL ON FUNCTION %1$I.user_access_base(uuid, text) FROM PUBLIC, anon, authenticated', s);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.user_access_base(uuid, text) TO service_role', s);
   EXECUTE format('REVOKE ALL ON FUNCTION %1$I.current_user_access_base(text) FROM PUBLIC, anon', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO authenticated', s);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %1$I.current_user_access_base(text) TO service_role', s);

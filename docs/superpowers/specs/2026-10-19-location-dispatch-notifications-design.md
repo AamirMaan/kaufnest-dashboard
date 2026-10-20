@@ -276,9 +276,11 @@ these modules from a `"use client"` file.
 
 Jest (colocated):
 - `lib/email/dispatchEmail.test.ts` — content, escaping of hostile input, link.
-- `lib/dispatch/flushOutbox.test.ts` — mocked client + transport: SMTP not
-  configured, success path, send failure (retry state), inactive recipient skip.
-- `components/layout/dispatchBanner.test.ts` — banner line copy/pluralisation/links.
+- `lib/dispatch/processOutbox.test.ts` — injected fakes: success path, send/build
+  failure, skips (inactive, no email, no Orders access, no longer relevant),
+  drain loop bounds, stop-after-failure (no retry burn).
+- `components/layout/dispatchQueue.test.ts` — banner line copy/pluralisation/links, flush decision.
+- `sales/_lib/importDispatch.test.ts` — CSV imports always suppress; pre-057 PGRST204 retry.
 - `inventory/_lib/dispatcherOptions.test.ts` — filters inactive users and users without Orders access, keeps the current dispatcher.
 - `sales/_store/salesFilterParams.test.ts` — `location` → `p_location_id`, omitted from RPC args when `"all"`.
 

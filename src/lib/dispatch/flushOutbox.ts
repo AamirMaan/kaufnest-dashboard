@@ -33,7 +33,9 @@ export async function flushDispatchOutbox(schema: string) {
     async markFailed(id, message) {
       const { error } = await db
         .from("dispatch_email_outbox")
-        .update({ last_error: message, claimed_at: null })
+        // claimed_at is kept: the 5-minute claim lease is the retry backoff.
+        // Clearing it let the same flush re-claim the row at once.
+        .update({ last_error: message })
         .eq("id", id);
       if (error) console.error("[dispatch] markFailed failed", id, error.message);
     },

@@ -130,4 +130,16 @@ describe("processOutboxUntilDrained", () => {
     // starts at 0, 8 s, 16 s; the 4th claim would start at 24 s > 20 s.
     expect(r.batches).toBe(3);
   });
+
+  it("stops after a batch with a failed send, so an SMTP outage can't burn every retry in one flush", async () => {
+    // A claim that would hand back the rows it just failed (as an un-leased
+    // outbox does): the loop must not keep re-claiming them.
+    const rows = batch(10, "f");
+    const d = deps([], jest.fn().mockRejectedValue(new Error("smtp down")));
+    d.claim = jest.fn().mockResolvedValue(rows);
+    const r = await processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now: () => 0 });
+    expect(r).toMatchObject({ sent: 0, failed: 10, batches: 1 });
+    expect(d.claim).toHaveBeenCalledTimes(1);
+    expect(d.markFailed).toHaveBeenCalledTimes(10);
+  });
 });
