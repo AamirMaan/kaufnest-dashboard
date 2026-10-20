@@ -1,4 +1,11 @@
-import { ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
+import { OPEN_ORDERS_STATUS, ORDER_STATUSES, isPresetStatus, statusLabel } from "./orderStatus";
+
+describe("OPEN_ORDERS_STATUS", () => {
+  it("is a filter sentinel, not a storable preset, with its own label", () => {
+    expect(isPresetStatus(OPEN_ORDERS_STATUS)).toBe(false);
+    expect(statusLabel(OPEN_ORDERS_STATUS)).toBe("Open (pending + processing)");
+  });
+});
 
 describe("isPresetStatus", () => {
   it("returns true for every preset status", () => {

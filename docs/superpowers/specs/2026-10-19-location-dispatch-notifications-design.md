@@ -18,11 +18,11 @@ an order lands on their location.
 | --- | --- |
 | When does the dispatcher get notified? | The first moment an order row has **both** `product_id` and `fulfillment_location_id` set — whichever is set last. Covers manual orders created with a product and synced orders once a product is linked in Edit Sale. |
 | Users per location | **One** dispatcher per location (nullable). |
-| Banner | **Persistent**, dispatcher-only, live count of open orders per location; disappears on its own once the orders leave an open status. Plus one bell notification per order. |
+| Banner | **Persistent**, dispatcher-only, live count per location of open orders the dispatcher was notified about (user ruling, PR-gate round 3, 2026-10-20); disappears on its own once the orders leave an open status. Plus one bell notification per order. |
 | Email transport | **SMTP via nodemailer** — the Mailgun SMTP account already used by Supabase auth, sender `noreply@mg.boughtopia.com`. |
 | Detection architecture | **DB trigger + outbox**, drained by a server API route. |
-| CSV imports | **CSV imports never notify** (PR-gate review, 2026-10-20). The Sales importer inserts with `sales.dispatch_suppressed = true`, which the trigger honours on INSERT only; later edits follow the normal UPDATE rules (a location change notifies, unrelated saves don't). The importer sends the key only when some location has a dispatcher (implies 057 applied), so pre-057 tenants never hit PGRST204. |
-| Stale queue rows | Skipped at send time: `claim_dispatch_emails` returns `still_relevant` (order still pending/processing AND its current location's dispatcher is the recipient). |
+| CSV imports | **CSV imports never notify** (PR-gate review, 2026-10-20). The Sales importer inserts with `sales.dispatch_suppressed = true`, which the trigger honours on INSERT only; later edits follow the normal UPDATE rules (a location change notifies, unrelated saves don't). The importer ALWAYS sends the key; a pre-057 tenant rejects it with PGRST204 and the importer retries once without it (gating it on loaded client state failed open). |
+| Stale queue rows | Skipped at send time: `claim_dispatch_emails` returns `still_relevant` (order still pending/processing AND its current location — active, not dropship — has the recipient as dispatcher AND advanced inventory is on). |
 
 Rejected: API-route-only detection (any write path that forgets to call it
 silently skips the notification); `pg_net` webhook (extension, public URL and
@@ -135,9 +135,11 @@ Decided behaviours:
 - Unlinking and relinking the product does **not** re-notify (flag stays set).
 - Moving the order to a different location **does** notify the new dispatcher.
 - Assigning a dispatcher to a location with existing open orders sends **no**
-  back-dated emails or notifications; the banner (live query) shows them.
+  back-dated emails or notifications, and the banner does not show that
+  backlog either (it counts only orders the dispatcher was notified about).
 - Changing a location's dispatcher later does not re-notify past orders; the
-  banner follows the current dispatcher.
+  new dispatcher's banner starts empty for them.
+- Inactive and dropship locations never notify and never appear in the banner.
 - The actor is the dispatcher themself (e.g. they linked the product): the
   bell row is still written, but `isUnread()` suppresses self-caused rows, so
   it won't show as unread. The email is still sent. Accepted.
@@ -219,9 +221,10 @@ these modules from a `"use client"` file.
 - Rendered in `DashboardShell` below the impersonation banner.
 - Data: one RPC `my_dispatch_queue()` (`SECURITY DEFINER`, search_path
   pinned to the tenant schema, returns `location_id, location_name,
-  open_count` for locations where `dispatcher_id = auth.uid()`, counting
-  sales with `product_id IS NOT NULL` and `lower(status) IN
-  ('pending','processing')`). It bypasses RLS, so it restricts explicitly:
+  open_count` for active, non-dropship locations where `dispatcher_id =
+  auth.uid()`, counting sales with `product_id IS NOT NULL`, `lower(status) IN
+  ('pending','processing')` and an outbox row for (sale, caller) — i.e. the
+  caller was notified; CSV imports and pre-assignment backlog never count). It bypasses RLS, so it restricts explicitly:
   caller is the dispatcher, `is_tenant_member()`, `user_section_level(auth.uid(),
   'orders') >= 1`, and advanced inventory on. EXECUTE: `authenticated` only.
   Result is bounded by the number of locations, so no pagination needed.
@@ -232,9 +235,10 @@ these modules from a `"use client"` file.
   Uses existing tokens (`--color-warning-bg`/`--color-warning-text`,
   `lucide-react` `PackageCheck` icon). Not dismissible. Rendered at the top
   of `<main>` so it inherits page padding.
-- Refetches on route change and (debounced) on `summaryVersion` change. The
-  flush is requested only on mount and on `summaryVersion` change (not on
-  plain navigation), and never for users without Orders view.
+- Refetches on mount, (debounced) on `summaryVersion` change and every 60 s —
+  not on navigation. The flush is requested only on mount and on
+  `summaryVersion` change (never on a poll), and never for users without
+  Orders view.
 - Inventory access is NOT needed for the banner (definer function, PR-gate
   review 2026-10-20). It still matters for the Orders page Location
   dropdown: its labels come from `stock_locations` (Inventory >= 1 RLS), so
@@ -254,8 +258,11 @@ these modules from a `"use client"` file.
   non-dropship locations plus the selected one. A `?location=<id>` URL param
   (from the banner) is applied by a small `useSearchParams` child wrapped in
   `<Suspense fallback={null}>` (Next requires the boundary for
-  `useSearchParams`). No "open status" shorthand — the dispatcher sees the
-  Status column and can filter by it (YAGNI).
+  `useSearchParams`); it sets the location AND the Status filter to the
+  `OPEN_ORDERS_STATUS` sentinel (`__open__` = pending OR processing,
+  `sales/_components/orderStatus.ts`; `get_sales_summary` matches the same
+  literal), then strips `location` from the URL. The "Open" status option is
+  offered whenever advanced inventory is active.
 
 ### Bell
 

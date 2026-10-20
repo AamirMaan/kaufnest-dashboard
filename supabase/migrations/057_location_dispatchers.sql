@@ -22,16 +22,18 @@
 --
 -- Notify rule: only on INSERT, when the product is first linked, or when the
 -- fulfillment location changes (and product+location set, open status,
--- advanced inventory on, dispatcher active). Unrelated saves never notify.
--- CSV imports never notify: the Sales importer inserts with
--- sales.dispatch_suppressed = true (only once 057 is applied — it sends the
--- key only when some location has a dispatcher), which leaves the flag NULL
--- on INSERT. Later edits follow the normal UPDATE rules (a location change
+-- advanced inventory on, location active and not dropship, dispatcher
+-- active). Unrelated saves never notify.
+-- CSV imports never notify: the Sales importer ALWAYS inserts with
+-- sales.dispatch_suppressed = true (retrying once without the key on a
+-- pre-057 tenant's PGRST204), which leaves the flag NULL on INSERT. Later edits follow the normal UPDATE rules (a location change
 -- notifies; unrelated saves don't). The column is ignored on UPDATE.
 --
 -- Stale outbox rows: claim_dispatch_emails returns still_relevant (order
--- still open AND its CURRENT location's dispatcher is the recipient);
--- processOutbox skips the send when false.
+-- still open AND its CURRENT location — active, not dropship — has the
+-- recipient as dispatcher AND advanced inventory is on); processOutbox
+-- skips the send when false. release_dispatch_emails hands back claimed
+-- rows a flush never attempted (it stops at the first failed send).
 --
 -- RULE for editing: inside format($sql$ … $sql$, schema_name) strings never
 -- write a literal percent sign — format() consumes it. Where the inner body
@@ -46,7 +48,9 @@
 -- my_dispatch_queue (banner) is SECURITY DEFINER with explicit checks
 -- (dispatcher = auth.uid(), tenant member, Orders >= 1, advanced on), so a
 -- dispatcher sees their banner even without Inventory access (stock_locations
--- RLS needs Inventory >= 1).
+-- RLS needs Inventory >= 1). It counts only open orders the caller was
+-- notified about (an outbox row for that sale + recipient exists), so CSV
+-- imports and the backlog that predates an assignment never show.
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.install_location_dispatchers(schema_name text)
@@ -95,6 +99,9 @@ BEGIN
     );
     CREATE INDEX IF NOT EXISTS dispatch_email_outbox_pending_idx
       ON %1$I.dispatch_email_outbox (created_at) WHERE sent_at IS NULL;
+    -- my_dispatch_queue's "was I notified about this sale" lookup.
+    CREATE INDEX IF NOT EXISTS dispatch_email_outbox_sale_recipient_idx
+      ON %1$I.dispatch_email_outbox (sale_id, recipient_user_id);
 
     -- Service role only: no policies, no client grants.
     ALTER TABLE %1$I.dispatch_email_outbox ENABLE ROW LEVEL SECURITY;
@@ -176,6 +183,8 @@ BEGIN
           FROM stock_locations l
           JOIN profiles p ON p.id = l.dispatcher_id
          WHERE l.id = NEW.fulfillment_location_id
+           AND l.is_active
+           AND l.type <> 'dropship'
            AND p.status = 'active'
            AND user_section_level(p.id, 'orders') >= 1;
         -- clock_timestamp(), not now(): now() is fixed per transaction, so a
@@ -300,7 +309,8 @@ BEGIN
              s.shipping_address_line1, s.shipping_address_line2, s.shipping_city,
              s.shipping_state, s.shipping_postal_code, s.shipping_country,
              (lower(coalesce(s.status, '')) IN ('pending', 'processing')
-              AND coalesce(l.dispatcher_id = c.recipient_user_id, false)
+              AND coalesce(l.dispatcher_id = c.recipient_user_id
+                           AND l.is_active AND l.type <> 'dropship', false)
               AND coalesce((SELECT advanced_enabled FROM inventory_settings WHERE id), false))
         FROM claimed c
         JOIN sales s    ON s.id = c.sale_id
@@ -311,12 +321,30 @@ BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION %I.claim_dispatch_emails(int) FROM PUBLIC, anon, authenticated', schema_name);
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.claim_dispatch_emails(int) TO service_role', schema_name);
 
+  -- Hands back claimed-but-never-attempted rows (a flush stops sending at
+  -- its first failure): lease cleared and the claim's attempt refunded, so
+  -- an outage only costs the row that actually failed.
+  EXECUTE format($sql$
+    CREATE OR REPLACE FUNCTION %1$I.release_dispatch_emails(p_ids uuid[])
+    RETURNS void LANGUAGE sql SECURITY DEFINER
+    SET search_path = %1$I
+    AS $f$
+      UPDATE dispatch_email_outbox
+         SET claimed_at = NULL, attempts = greatest(attempts - 1, 0)
+       WHERE id = ANY(p_ids) AND sent_at IS NULL;
+    $f$;
+  $sql$, schema_name);
+  EXECUTE format('REVOKE ALL ON FUNCTION %I.release_dispatch_emails(uuid[]) FROM PUBLIC, anon, authenticated', schema_name);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION %I.release_dispatch_emails(uuid[]) TO service_role', schema_name);
+
   -- ── 4. Banner query (definer, explicit checks) ─────────────
   -- SECURITY DEFINER so a dispatcher without Inventory access (stock_locations
   -- RLS) still sees their queue. Bypassing RLS is safe only because every
   -- row is restricted explicitly: the caller is the dispatcher, a tenant
   -- member, with effective Orders >= 1 (user_section_level, step 1b), and
-  -- advanced inventory is on. Returns counts + location names only.
+  -- advanced inventory is on. Returns counts + location names only, for
+  -- active non-dropship locations and only orders the caller was notified
+  -- about (outbox row exists for sale + caller).
   EXECUTE format($sql$
     CREATE OR REPLACE FUNCTION %1$I.my_dispatch_queue()
     RETURNS TABLE (location_id uuid, location_name text, open_count int)
@@ -329,8 +357,12 @@ BEGIN
        WHERE l.dispatcher_id = auth.uid()
          AND is_tenant_member()
          AND user_section_level(auth.uid(), 'orders') >= 1
+         AND l.is_active
+         AND l.type <> 'dropship'
          AND s.product_id IS NOT NULL
          AND lower(s.status) IN ('pending', 'processing')
+         AND EXISTS (SELECT 1 FROM dispatch_email_outbox o
+                      WHERE o.sale_id = s.id AND o.recipient_user_id = auth.uid())
          AND coalesce((SELECT advanced_enabled FROM inventory_settings WHERE id), false)
        GROUP BY l.id, l.name
        ORDER BY l.name
@@ -340,7 +372,9 @@ BEGIN
   EXECUTE format('GRANT EXECUTE ON FUNCTION %I.my_dispatch_queue() TO authenticated', schema_name);
 
   -- ── 5. get_sales_summary gains trailing p_location_id ─────
-  -- Body identical to 056 plus one predicate. The client sends p_location_id
+  -- Body identical to 056 plus one predicate, and p_status '__open__'
+  -- (OPEN_ORDERS_STATUS, sales/_components/orderStatus.ts) = pending OR
+  -- processing — the banner link's filter. The client sends p_location_id
   -- only when set, so pre-057 8-arg resolution keeps working.
   EXECUTE format('DROP FUNCTION IF EXISTS %I.get_sales_summary(date, date, text, text, text, text, text, text)', schema_name);
   EXECUTE format($sql$
@@ -365,7 +399,8 @@ BEGIN
           AND (p_to IS NULL OR s.date <= p_to)
           AND (p_platform IS NULL OR s.platform = p_platform)
           AND (p_currency IS NULL OR s.currency = p_currency)
-          AND (p_status IS NULL OR s.status = p_status)
+          AND (p_status IS NULL OR s.status = p_status
+               OR (p_status = '__open__' AND s.status IN ('pending', 'processing')))
           AND (p_marketplace IS NULL
                OR (p_marketplace = '__unknown__' AND s.marketplace IS NULL)
                OR s.marketplace = p_marketplace)

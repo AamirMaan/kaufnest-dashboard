@@ -39,7 +39,7 @@ import {
 import { updateProduct } from "@/app/dashboard/inventory/_store/inventorySlice";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { UNASSIGNED_ACCOUNT, accountLabel, accountName, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
-import { ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
+import { OPEN_ORDERS_STATUS, OPEN_ORDER_STATUSES, ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
 import { salesFilterParams } from "./_store/salesFilterParams";
 import type { Platform, Sale, Product } from "@/types";
@@ -124,11 +124,14 @@ export default function SalesPage() {
   // Status options built from current page + known preset statuses.
   // The "all" statuses dropdown is approximate — it only shows what's on the
   // current page plus presets — but this is acceptable for v1.
+  // "Open" (pending + processing) is a filter-only sentinel offered with the
+  // Location filter (057) — and always once applied, e.g. by the banner link.
   const statusOptions = useMemo(() => {
     const set = new Set<string>(ORDER_STATUSES);
     for (const s of sales) set.add(s.status);
-    return Array.from(set);
-  }, [sales]);
+    const list = Array.from(set);
+    return advanced.active || filters.status === OPEN_ORDERS_STATUS ? [OPEN_ORDERS_STATUS, ...list] : list;
+  }, [sales, advanced.active, filters.status]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Sale | null>(null);
@@ -193,7 +196,8 @@ export default function SalesPage() {
       else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
       if (p.p_location_id) query = query.eq("fulfillment_location_id", p.p_location_id);
       if (p.p_currency) query = query.eq("currency", p.p_currency);
-      if (p.p_status) query = query.eq("status", p.p_status);
+      if (p.p_status === OPEN_ORDERS_STATUS) query = query.in("status", [...OPEN_ORDER_STATUSES]);
+      else if (p.p_status) query = query.eq("status", p.p_status);
       if (p.p_pattern) {
         query = query.or(
           `product_name.ilike."${p.p_pattern}",external_order_id.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`
@@ -373,7 +377,14 @@ export default function SalesPage() {
   return (
     <div>
       <Suspense fallback={null}>
-        <LocationParamSync onLocation={(id) => setFilter("location", id)} />
+        <LocationParamSync
+          onLocation={(id) => {
+            // The banner counts open orders only, so its link opens just those.
+            const next = { ...filters, location: id, status: OPEN_ORDERS_STATUS };
+            setFilters(next);
+            applyFilters(next);
+          }}
+        />
       </Suspense>
       <PageHeader
         title="Orders"

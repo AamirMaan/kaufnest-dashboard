@@ -373,8 +373,10 @@ RLS still decides visibility.
 Shows a location dispatcher "You have N orders to dispatch from <location>"
 lines from the `my_dispatch_queue()` RPC (SECURITY DEFINER with explicit
 dispatcher/tenant-member/Orders >= 1 checks, so no Inventory access needed; counts open
-`pending`/`processing` orders with a linked product at locations whose
-`dispatcher_id` is the viewer), each linking to `/dashboard/sales?location=<id>`.
+`pending`/`processing` orders with a linked product that the viewer was
+notified about (outbox row exists) at active, non-dropship locations whose
+`dispatcher_id` is the viewer), each linking to `/dashboard/sales?location=<id>`
+(Orders then applies that location + the "Open" status filter).
 Entitlement-gated via `usePlan()` + `hasAdvancedInventory` (no RPC call for
 other plans; renders nothing on error or an empty queue). It is also the
 **single caller of `requestDispatchFlush()`** (`lib/utils/dispatchFlush.ts` →

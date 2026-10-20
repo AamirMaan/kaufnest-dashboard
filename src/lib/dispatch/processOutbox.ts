@@ -36,6 +36,8 @@ export interface OutboxDeps {
   claim(limit: number): Promise<ClaimedDispatchEmail[]>;
   markSent(id: string, note: string | null): Promise<void>;
   markFailed(id: string, error: string): Promise<void>;
+  /** Hand back claimed rows that were never attempted (release_dispatch_emails, 057). */
+  release(ids: string[]): Promise<void>;
   send(msg: { to: string; subject: string; html: string; text: string }): Promise<void>;
   appUrl: string;
 }
@@ -47,20 +49,25 @@ export const OUTBOX_BATCH_SIZE = 10;
 /**
  * I/O-free core of the flush: claim → send → mark. Tested with fakes.
  * Small batch: emails are sent serially; processOutboxUntilDrained loops.
+ * Stops at the first failed SEND (not a per-row build error) and releases
+ * the rows it never attempted: with a dead SMTP server every send waits out
+ * its timeout, so carrying on would run the route past its maxDuration.
  */
 export async function processOutbox(deps: OutboxDeps, limit = OUTBOX_BATCH_SIZE) {
   const rows = await deps.claim(limit);
-  let sent = 0, failed = 0, skipped = 0;
+  let sent = 0, failed = 0, skipped = 0, sendFailed = false;
 
-  for (const r of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
     if (!r.recipient_active) { await deps.markSent(r.outbox_id, "skipped: recipient inactive"); skipped++; continue; }
     if (!r.recipient_can_view_orders) { await deps.markSent(r.outbox_id, "skipped: no orders access"); skipped++; continue; }
     if (!r.still_relevant) { await deps.markSent(r.outbox_id, "skipped: no longer relevant"); skipped++; continue; }
     if (!r.recipient_email) { await deps.markSent(r.outbox_id, "skipped: no email"); skipped++; continue; }
     const to = r.recipient_email;
 
-    // Build inside the try: a throw for one row must not abort the batch and
-    // strand the rest of the claimed rows until their lease expires.
+    // Build inside the try: a throw for one bad row is that row's failure
+    // only — the batch carries on. A send failure stops the batch (above).
+    let stage: "build" | "send" | "sent" = "build";
     try {
       const msg = buildDispatchEmail({
         saleId: r.sale_id,
@@ -81,23 +88,31 @@ export async function processOutbox(deps: OutboxDeps, limit = OUTBOX_BATCH_SIZE)
         recipientName: r.recipient_name,
         appUrl: deps.appUrl,
       });
+      stage = "send";
       await deps.send({ to, ...msg });
+      stage = "sent";
       await deps.markSent(r.outbox_id, null);
       sent++;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       await deps.markFailed(r.outbox_id, message.slice(0, MAX_ERROR));
       failed++;
+      if (stage === "send") {
+        sendFailed = true;
+        const rest = rows.slice(i + 1).map((x) => x.outbox_id);
+        if (rest.length > 0) await deps.release(rest);
+        break;
+      }
     }
   }
-  return { sent, failed, skipped };
+  return { sent, failed, skipped, sendFailed };
 }
 
 /**
  * Claims batches until one comes back short (queue drained), bounded by
  * `maxBatches` AND a wall-clock `deadlineMs` (checked before each further
- * claim), whichever is hit first. Also stops after any batch with a failed
- * send: a failing SMTP server would otherwise burn every row's 5 attempts in
+ * claim), whichever is hit first. Also stops after a batch whose send
+ * failed: a failing SMTP server would otherwise burn every row's 5 attempts in
  * one flush. Failed rows keep their claim, so the 5-minute lease is the
  * retry backoff. `now` is injected for tests.
  */
@@ -126,7 +141,7 @@ export async function processOutboxUntilDrained(
     total.failed += r.failed;
     total.skipped += r.skipped;
     total.batches++;
-    if (claimed < size || r.failed > 0) break;
+    if (claimed < size || r.sendFailed) break;
   }
   return total;
 }

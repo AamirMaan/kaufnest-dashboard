@@ -23,6 +23,7 @@ function deps(rows: ClaimedDispatchEmail[], send: OutboxDeps["send"] = jest.fn()
     claim: jest.fn().mockResolvedValue(rows),
     markSent: jest.fn().mockResolvedValue(undefined),
     markFailed: jest.fn().mockResolvedValue(undefined),
+    release: jest.fn().mockResolvedValue(undefined),
     send,
     appUrl: "https://app.example",
   };
@@ -31,7 +32,7 @@ function deps(rows: ClaimedDispatchEmail[], send: OutboxDeps["send"] = jest.fn()
 describe("processOutbox", () => {
   it("sends each claimed row and marks it sent", async () => {
     const d = deps([row(), row({ outbox_id: "o2", sale_id: "s2" })]);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 2, failed: 0, skipped: 0 });
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 2, failed: 0, skipped: 0, sendFailed: false });
     expect(d.claim).toHaveBeenCalledWith(10);
     expect(d.send).toHaveBeenCalledTimes(2);
     expect((d.send as jest.Mock).mock.calls[0][0].to).toBe("sam@example.com");
@@ -40,18 +41,26 @@ describe("processOutbox", () => {
 
   it("skips inactive recipients and missing emails without sending", async () => {
     const d = deps([row({ recipient_active: false }), row({ outbox_id: "o2", recipient_email: null })]);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 0, skipped: 2 });
+    await expect(processOutbox(d)).resolves.toMatchObject({ sent: 0, failed: 0, skipped: 2 });
     expect(d.send).not.toHaveBeenCalled();
     expect(d.markSent).toHaveBeenCalledWith("o1", "skipped: recipient inactive");
     expect(d.markSent).toHaveBeenCalledWith("o2", "skipped: no email");
   });
 
-  it("records a failure and keeps going", async () => {
-    const send = jest.fn().mockRejectedValueOnce(new Error("smtp down")).mockResolvedValue(undefined);
-    const d = deps([row(), row({ outbox_id: "o2" })], send);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 1, failed: 1, skipped: 0 });
+  it("stops at the first failed send and releases the rows it never attempted", async () => {
+    const send = jest.fn().mockRejectedValue(new Error("smtp down"));
+    const d = deps([row(), row({ outbox_id: "o2" }), row({ outbox_id: "o3" })], send);
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 1, skipped: 0, sendFailed: true });
+    expect(send).toHaveBeenCalledTimes(1);
     expect(d.markFailed).toHaveBeenCalledWith("o1", "smtp down");
-    expect(d.markSent).toHaveBeenCalledWith("o2", null);
+    expect(d.release).toHaveBeenCalledWith(["o2", "o3"]);
+    expect(d.markSent).not.toHaveBeenCalled();
+  });
+
+  it("does not release anything when the failed send was the last row", async () => {
+    const d = deps([row()], jest.fn().mockRejectedValue(new Error("smtp down")));
+    await processOutbox(d);
+    expect(d.release).not.toHaveBeenCalled();
   });
 
   it("truncates long error messages", async () => {
@@ -63,7 +72,7 @@ describe("processOutbox", () => {
 
   it("skips recipients who can no longer view Orders", async () => {
     const d = deps([row({ recipient_can_view_orders: false })]);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 0, skipped: 1 });
+    await expect(processOutbox(d)).resolves.toMatchObject({ sent: 0, failed: 0, skipped: 1 });
     expect(d.send).not.toHaveBeenCalled();
     expect(d.markSent).toHaveBeenCalledWith("o1", "skipped: no orders access");
   });
@@ -73,15 +82,16 @@ describe("processOutbox", () => {
       throw new Error("bad row");
     });
     const d = deps([row(), row({ outbox_id: "o2" })]);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 1, failed: 1, skipped: 0 });
+    await expect(processOutbox(d)).resolves.toEqual({ sent: 1, failed: 1, skipped: 0, sendFailed: false });
     expect(d.markFailed).toHaveBeenCalledWith("o1", "bad row");
+    expect(d.release).not.toHaveBeenCalled();
     expect(d.send).toHaveBeenCalledTimes(1);
     expect(d.markSent).toHaveBeenCalledWith("o2", null);
   });
 
   it("skips rows that are no longer relevant (order closed or moved)", async () => {
     const d = deps([row({ still_relevant: false })]);
-    await expect(processOutbox(d)).resolves.toEqual({ sent: 0, failed: 0, skipped: 1 });
+    await expect(processOutbox(d)).resolves.toMatchObject({ sent: 0, failed: 0, skipped: 1 });
     expect(d.send).not.toHaveBeenCalled();
     expect(d.markSent).toHaveBeenCalledWith("o1", "skipped: no longer relevant");
   });
@@ -138,8 +148,9 @@ describe("processOutboxUntilDrained", () => {
     const d = deps([], jest.fn().mockRejectedValue(new Error("smtp down")));
     d.claim = jest.fn().mockResolvedValue(rows);
     const r = await processOutboxUntilDrained(d, { maxBatches: 5, deadlineMs: 20_000, now: () => 0 });
-    expect(r).toMatchObject({ sent: 0, failed: 10, batches: 1 });
+    expect(r).toMatchObject({ sent: 0, failed: 1, batches: 1 });
     expect(d.claim).toHaveBeenCalledTimes(1);
-    expect(d.markFailed).toHaveBeenCalledTimes(10);
+    expect(d.markFailed).toHaveBeenCalledTimes(1);
+    expect(d.release).toHaveBeenCalledWith(rows.slice(1).map((x) => x.outbox_id));
   });
 });

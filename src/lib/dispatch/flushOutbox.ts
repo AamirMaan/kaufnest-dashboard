@@ -39,6 +39,11 @@ export async function flushDispatchOutbox(schema: string) {
         .eq("id", id);
       if (error) console.error("[dispatch] markFailed failed", id, error.message);
     },
+    async release(ids) {
+      const { error } = await db.rpc("release_dispatch_emails", { p_ids: ids });
+      // Not fatal: unreleased rows just wait out their 5-minute lease.
+      if (error) console.error("[dispatch] release failed", ids.length, error.message);
+    },
     send: sendMail,
     // Same base-URL convention as the invite/provision emails: an empty
     // fallback would put relative (dead) links into the email.

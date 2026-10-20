@@ -6,6 +6,7 @@ import type { SalesFilters } from "@/lib/utils/filters";
 import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { UNASSIGNED_ACCOUNT } from "@/lib/utils/platformAccounts";
 import { salesFilterParams, salesSummaryRpcArgs } from "./salesFilterParams";
+import { OPEN_ORDERS_STATUS, OPEN_ORDER_STATUSES } from "../_components/orderStatus";
 
 interface SalesState {
   items: Sale[];
@@ -60,7 +61,8 @@ export const fetchSalesPage = createAsyncThunk(
     else if (p.p_connection_id) query = query.eq("connection_id", p.p_connection_id);
     if (p.p_location_id) query = query.eq("fulfillment_location_id", p.p_location_id);
     if (p.p_currency) query = query.eq("currency", p.p_currency);
-    if (p.p_status) query = query.eq("status", p.p_status);
+    if (p.p_status === OPEN_ORDERS_STATUS) query = query.in("status", [...OPEN_ORDER_STATUSES]);
+    else if (p.p_status) query = query.eq("status", p.p_status);
     if (p.p_pattern) {
       query = query.or(
         `product_name.ilike."${p.p_pattern}",external_order_id.ilike."${p.p_pattern}",description.ilike."${p.p_pattern}"`

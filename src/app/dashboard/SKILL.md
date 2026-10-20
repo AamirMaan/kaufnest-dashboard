@@ -236,9 +236,12 @@ hydrated, but only as the key for display/billing — never gate on it.
   which `addSale`/`updateSale`/`removeSale` already bump on every client write
   path. A new write path that bypasses those actions must bump it (or call
   `requestDispatchFlush()` itself) or its dispatch emails wait for the next nudge.
-- The banner is live state, not stored notifications: it follows the
-  location's *current* dispatcher and drops orders as soon as they leave
-  `pending`/`processing`.
+- The banner is live state over notified orders: it counts only open
+  orders the viewer was notified about (an outbox row for sale + viewer —
+  user ruling 2026-10-20), so CSV imports (suppressed) and the backlog from
+  before an assignment never show, and a reassigned location's old orders
+  stay with the old dispatcher. Orders drop off as soon as they leave
+  `pending`/`processing`, move location, or the location is deactivated.
 - The queue refetches on mount, on `summaryVersion` changes and every 60 s
   (`POLL_MS`) — NOT on navigation (that ran the RPC for every
   advanced-inventory user on every page change). The flush fires on mount
