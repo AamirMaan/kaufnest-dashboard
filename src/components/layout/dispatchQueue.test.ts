@@ -8,8 +8,8 @@ describe("dispatchBannerLines", () => {
         { location_id: "l 2", location_name: "Hamburg", open_count: 3 },
       ])
     ).toEqual([
-      { key: "l1", count: "1 order", location: "Berlin", href: "/dashboard/sales?location=l1" },
-      { key: "l 2", count: "3 orders", location: "Hamburg", href: "/dashboard/sales?location=l%202" },
+      { key: "l1", count: "1 new order", location: "Berlin", href: "/dashboard/sales?location=l1" },
+      { key: "l 2", count: "3 new orders", location: "Hamburg", href: "/dashboard/sales?location=l%202" },
     ]);
   });
 

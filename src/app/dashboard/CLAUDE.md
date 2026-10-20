@@ -370,7 +370,7 @@ Dispatch notifications (057) are addressed to one user via `recipient_user_id`;
 RLS still decides visibility.
 `DispatchBanner` (057, `src/components/layout/DispatchBanner.tsx` + pure
 `dispatchQueue.ts`/test) — rendered at the top of `DashboardShell`'s `<main>`.
-Shows a location dispatcher "You have N orders to dispatch from <location>"
+Shows a location dispatcher "You have N new orders to dispatch from <location>"
 lines from the `my_dispatch_queue()` RPC (SECURITY DEFINER with explicit
 dispatcher/tenant-member/Orders >= 1 checks, so no Inventory access needed; counts open
 `pending`/`processing` orders with a linked product that the viewer was

@@ -230,7 +230,7 @@ these modules from a `"use client"` file.
   Result is bounded by the number of locations, so no pagination needed.
 - Renders nothing when the result is empty, the plan lacks advanced
   inventory, or advanced inventory is off.
-- Copy: "You have **3 orders** to dispatch from **Berlin Warehouse**" — one
+- Copy: "You have **3 new orders** to dispatch from **Berlin Warehouse**" — one
   line per location, each linking to `/dashboard/sales?location=<id>`.
   Uses existing tokens (`--color-warning-bg`/`--color-warning-text`,
   `lucide-react` `PackageCheck` icon). Not dismissible. Rendered at the top

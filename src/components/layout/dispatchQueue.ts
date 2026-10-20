@@ -5,13 +5,13 @@ export interface DispatchQueueRow {
   open_count: number;
 }
 
-/** Banner lines for DispatchBanner: one per location with open orders, linking to Orders filtered by it. */
+/** Banner lines for DispatchBanner: one per location with notified open orders ("N new orders" — the link opens ALL open orders there), linking to Orders filtered by it. */
 export function dispatchBannerLines(rows: DispatchQueueRow[]) {
   return rows
     .filter((r) => r.open_count > 0)
     .map((r) => ({
       key: r.location_id,
-      count: `${r.open_count} order${r.open_count === 1 ? "" : "s"}`,
+      count: `${r.open_count} new order${r.open_count === 1 ? "" : "s"}`,
       location: r.location_name,
       href: `/dashboard/sales?location=${encodeURIComponent(r.location_id)}`,
     }));
