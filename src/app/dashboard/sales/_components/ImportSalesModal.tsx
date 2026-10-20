@@ -34,6 +34,8 @@ import {
 import { dedupeImportRows } from "./dedupeImportRows";
 import { accountForImportRow, accountLabel, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { markExistingOrders, groupBackfills, type ExistingSaleRef } from "./marketplaceBackfill";
+import { importDispatchFields } from "../_lib/importDispatch";
+import { useAdvancedInventory } from "@/app/dashboard/inventory/_store/useAdvancedInventory";
 import type { Sale, Platform } from "@/types";
 
 const IN_CHUNK = 200; // Supabase .in() chunk size for the duplicate pre-check
@@ -130,6 +132,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const inventoryItems = useAppSelector((s) => s.inventory.items);
   const baseCurrency = useAppSelector((s) => s.companyProfile.profile?.currency) ?? "EUR";
   const accounts = useAppSelector((s) => s.integrations.accounts);
+  // Read for importDispatchFields: any location with a dispatcher ⇒ 057 is applied.
+  const advanced = useAdvancedInventory();
   // Optional "assign every row to this account" (056); applies only to rows of its platform.
   const [assignAccountId, setAssignAccountId] = useState("");
   const assignAccount = accounts.find((a) => a.id === assignAccountId) ?? null;
@@ -599,6 +603,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     //
     // The insert is built from `insertRows` only — a refund never enters
     // `payload`; refunds are applied via `update`, not `insert`, below.
+    // CSV imports never notify dispatchers (057) — key only sent once 057 is live.
+    const dispatchFields = importDispatchFields(advanced.locations);
     const payload = insertRows.map((r) => {
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       return {
@@ -606,6 +612,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         created_by: user.id,
         product_id: productId,
         connection_id: accountForImportRow(r.data!.platform, assignAccount),
+        ...dispatchFields,
       };
     });
 

@@ -83,6 +83,10 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   `p_connection_id` when it's `null` — PostgREST matches functions by named
   args, so always sending it 404s (PGRST202) against the pre-056 7-arg
   `get_sales_summary`.
+- `_lib/importDispatch.ts` (+ test, 057) — `importDispatchFields(locations)`:
+  `{ dispatch_suppressed: true }` when any location has a dispatcher, else
+  `{}`. Spread into every row `ImportSalesModal` inserts so CSV imports never
+  notify dispatchers; `ImportSalesModal` reads `useAdvancedInventory().locations` for it.
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.
