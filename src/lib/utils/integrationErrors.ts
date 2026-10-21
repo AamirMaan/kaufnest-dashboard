@@ -19,8 +19,13 @@ export const INTEGRATION_ERRORS = {
   INTEGRATION_ACCOUNT_PAUSED:
     "This account is paused. Resume it on the Integrations page, or upgrade your plan.",
   INTEGRATION_ACCOUNT_UNKNOWN: "That account no longer exists. Refresh the page and try again.",
+  // An active account's card has no Reconnect button; Disconnect brings it back.
   INTEGRATION_FINANCES_SCOPE:
-    "Reconnect this eBay account (Reconnect on its card) to import eBay fees and charges.",
+    "Reconnect this eBay account to import eBay fees and charges: on Integrations, Disconnect it, then Reconnect.",
+  // EU/UK sellers' Finances calls must be digitally signed; reconnecting won't help.
+  // Covers both "no key configured" and "key rejected" (expired, wrong JWE).
+  INTEGRATION_FINANCES_SIGNATURE:
+    "eBay rejected this app's request signature, which it requires to import fees for this account. Reconnecting won't help — please contact support.",
   INTEGRATION_FINANCES_DB_PENDING:
     "eBay charge import isn't available yet — a database update is pending. Please try again later.",
   INTEGRATION_ACCOUNT_UNIDENTIFIED:

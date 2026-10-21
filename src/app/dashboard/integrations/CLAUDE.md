@@ -147,7 +147,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 - **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
   connected platforms (90-day lookback via `adapter.fetchOrders`), queries
   `sales` for existing `external_order_id` values, attaches `imported: boolean`
-  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, warnings?, pausedAccounts? }` (`warnings`, keyed by connection id, holds the non-fatal `INTEGRATION_FINANCES_SCOPE` hint; eBay orders also carry `fees`). Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by connection id and holds generic copy naming the account (raw errors are logged server-side).
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, warnings?, pausedAccounts? }` (`warnings`, keyed by connection id, holds the non-fatal `INTEGRATION_FINANCES_SCOPE` / `INTEGRATION_FINANCES_SIGNATURE` hint; eBay orders also carry `fees`). Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by connection id and holds generic copy naming the account (raw errors are logged server-side).
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts

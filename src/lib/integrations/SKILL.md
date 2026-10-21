@@ -102,8 +102,13 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   See "eBay messages (Trading API)" below.
 - `ebay/finances.ts` — Finances API client (`apiz.ebay.com`, sandbox
   `apiz.sandbox.ebay.com`): paginated `SALE`/`REFUND`/charge transaction fetch over
-  the 90-day window; throws `FinancesScopeError` on a missing `sell.finances`
-  scope. `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
+  the 90-day window; signs requests via `ebay/signature.ts` when configured;
+  throws `FinancesSignatureError` on a 215xxx signature error and
+  `FinancesScopeError` on any other 403 (missing `sell.finances` scope).
+  `ebay/signature.ts` — `loadSigningConfig` (env; a malformed or non-Ed25519
+  key returns null and logs once without key material, so requests go out
+  unsigned rather than every Finances call throwing), `signatureBase`,
+  `signatureHeaders` (eBay digital signatures for EU/UK sellers). `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
   `prefillFeesFor`, `chargeToExpenseRow` (returns `{ ok, row }` or a skip
   `reason`), `CHARGE_TRANSACTION_TYPES`, `orderIdOf`, `orderChargeField`,
   `orderLinkedChargeFees`, `feeFieldFills` (the `[field, value]` pairs that
@@ -578,6 +583,7 @@ lookup against existing `sales` rows.
 ## Gotchas — Finances (fees + account charges, migration 058)
 
 - Finances lives on the **apiz** host (`https://apiz.ebay.com`), not `api.ebay.com`; needs the `https://api.ebay.com/oauth/api_scope/sell.finances` scope. Older connections get `FinancesScopeError` -> `INTEGRATION_FINANCES_SCOPE` until reconnected. Review treats it as a `warnings` entry (non-fatal); other failures are `errors`.
+- **EU/UK sellers' Finances calls must be digitally signed (2026-10-21).** Unsigned, eBay rejects them with an errorId in 215000–215999 — this was first misread as a missing scope (every 403 mapped to "reconnect", which can't fix it). `ebay/signature.ts` signs each request (RFC 9421, Ed25519, covered components `x-ebay-signature-key @method @path @authority`, no content-digest for GET) when `EBAY_SIGNING_PRIVATE_KEY` + `EBAY_SIGNING_JWE` are set; create them once per eBay app with `npm run ebay:create-signing-key` (Key Management API; eBay never shows the private key again). eBay ignores signatures for non-EU sellers, so we always sign when configured. `finances.ts` classifies any non-OK body with a 215xxx errorId as `FinancesSignatureError` (→ `INTEGRATION_FINANCES_SIGNATURE`, warning on Review, 409 on sync), checked **before** the 403 → scope rule, and logs the raw body server-side.
 - Ad-fee type names vary across responses; always classify with `isAdFeeType`, never a string compare.
 - Two different CREDITs: `bookingEntry: "CREDIT"` (a refund of a charge) and `transactionType: "CREDIT"` with **no** `bookingEntry`; `isCreditTxn` treats both as credits. A non-order-linked credit becomes a **negative** expense, not a skipped row.
 - **Order-linked charges never become expenses.** A charge (NON_SALE_CHARGE / SHIPPING_LABEL / CREDIT) whose `references` has `referenceType === "ORDER_ID"` fills the matching sale instead: ad fee -> `advertising_fee`, `SHIPPING_LABEL` -> `shipping_cost`, else `platform_fee`; several charges for one order+field are summed. Order-linked **credits** are skipped and counted (`orderLinkedCreditsSkipped`). `sales.external_order_id` is `<orderId>:<lineItemId>`, so the lookup is `.like("external_order_id", "<orderId>:%").order(...).limit(1)` and only the first line item is filled (an order-level charge is never multiplied). Orders not yet imported are counted in `orderLinkedUnmatched` and fill on a later sync.

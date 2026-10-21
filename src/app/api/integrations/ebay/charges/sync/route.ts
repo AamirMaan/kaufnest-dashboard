@@ -3,7 +3,7 @@ import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, IntegrationAccountError, requireActiveConnection } from "@/lib/integrations/tokenStore";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
-import { fetchFinanceTransactions, FinancesScopeError } from "@/lib/integrations/ebay/finances";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
 import { applyFinanceTransactions, ChargeSyncPermissionError, ChargeSyncSchemaError } from "@/lib/integrations/ebay/chargeSync";
 import { CHARGE_TRANSACTION_TYPES } from "@/lib/integrations/ebay/financesMap";
 import { accountLabel } from "@/lib/utils/platformAccounts";
@@ -52,6 +52,9 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     if (err instanceof IntegrationAccountError) {
       return NextResponse.json({ error: err.code }, { status: 409 });
+    }
+    if (err instanceof FinancesSignatureError) {
+      return NextResponse.json({ error: "INTEGRATION_FINANCES_SIGNATURE" }, { status: 409 });
     }
     if (err instanceof FinancesScopeError) {
       return NextResponse.json({ error: "INTEGRATION_FINANCES_SCOPE" }, { status: 409 });

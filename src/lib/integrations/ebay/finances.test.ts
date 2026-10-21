@@ -1,4 +1,5 @@
-import { fetchFinanceTransactions, FinancesScopeError } from "./finances";
+import { generateKeyPairSync } from "crypto";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "./finances";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
@@ -48,6 +49,40 @@ describe("fetchFinanceTransactions", () => {
   it("throws FinancesScopeError on 403", async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: () => Promise.resolve("insufficient scope") }) as unknown as typeof fetch;
     await expect(fetchFinanceTransactions("tok", opts)).rejects.toBeInstanceOf(FinancesScopeError);
+  });
+
+  it("signs the request when a signing key is configured", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(page(["a"], 1, 0));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { privateKey } = generateKeyPairSync("ed25519");
+
+    await fetchFinanceTransactions("tok", { ...opts, signing: { privateKey, jwe: "the-jwe" } });
+
+    const h = fetchMock.mock.calls[0][1].headers;
+    expect(h["x-ebay-signature-key"]).toBe("the-jwe");
+    expect(h["Signature-Input"]).toMatch(/^sig1=\("x-ebay-signature-key" "@method" "@path" "@authority"\);created=\d+$/);
+    expect(h.Signature).toMatch(/^sig1=:.+:$/);
+  });
+
+  it("sends no signature headers when signing is not configured", async () => {
+    const fetchMock = jest.fn().mockResolvedValue(page(["a"], 1, 0));
+    global.fetch = fetchMock as unknown as typeof fetch;
+    await fetchFinanceTransactions("tok", { ...opts, signing: null });
+    expect(fetchMock.mock.calls[0][1].headers["x-ebay-signature-key"]).toBeUndefined();
+  });
+
+  it.each([403, 400, 401])("throws FinancesSignatureError for a 215xxx signature error (HTTP %i), not a scope error", async (status) => {
+    const body = JSON.stringify({ errors: [{ errorId: 215111, message: "Missing signature header" }] });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status, text: () => Promise.resolve(body) }) as unknown as typeof fetch;
+    const err = await fetchFinanceTransactions("tok", { ...opts, signing: null }).catch((e) => e);
+    expect(err).toBeInstanceOf(FinancesSignatureError);
+    expect(err).not.toBeInstanceOf(FinancesScopeError);
+  });
+
+  it("keeps a 403 with a non-signature errorId (e.g. 1100 insufficient permissions) as a scope error", async () => {
+    const body = JSON.stringify({ errors: [{ errorId: 1100, message: "Access denied" }] });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: () => Promise.resolve(body) }) as unknown as typeof fetch;
+    await expect(fetchFinanceTransactions("tok", { ...opts, signing: null })).rejects.toBeInstanceOf(FinancesScopeError);
   });
 
   it("throws a plain Error on other failures", async () => {
