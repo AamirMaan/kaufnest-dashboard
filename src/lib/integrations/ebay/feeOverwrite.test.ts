@@ -1,4 +1,4 @@
-import { accountScope, applyFeeOverwrites, computeFeeOverwrites, lineCounts, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
+import { accountScope, applyFeeOverwrites, applyCounts, computeFeeOverwrites, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
 import type { EbayFinanceTransaction } from "./financesMap";
 
 const money = (value: string, currency = "EUR") => ({ value, currency });
@@ -206,11 +206,13 @@ describe("applyFeeOverwrites", () => {
   });
 });
 
-describe("lineCounts", () => {
-  it("counts a line once: applied if any fee wrote, stale only if nothing did", () => {
-    expect(lineCounts({
+describe("applyCounts", () => {
+  it("counts applied order lines, and stale/failed per fee (a partly written line still reports its skip)", () => {
+    expect(applyCounts({
       applied: [{ saleId: "a", field: "platform_fee", from: null, to: 1 }, { saleId: "b", field: "platform_fee", from: null, to: 1 }],
       stale: [{ saleId: "a", field: "advertising_fee", from: null, to: 1 }, { saleId: "c", field: "platform_fee", from: 1, to: 2 }],
-    })).toEqual({ applied: 2, stale: 1 });
+      failed: 1,
+      permissionDenied: false,
+    })).toEqual({ applied: 2, stale: 2, failed: 1 });
   });
 });

@@ -348,7 +348,7 @@ describe("orderLinkedNetFees", () => {
     amount: money(o.value, o.currency ?? "EUR"), ...o,
   });
 
-  it("nets fee-typed credits per field and excludes shipping labels", () => {
+  it("nets ad-fee credits, keeps platform charges gross, excludes shipping labels", () => {
     const out = orderLinkedNetFees([
       linked({ value: "1.00" }),
       linked({ value: "0.40", transactionType: "CREDIT", bookingEntry: undefined }),
@@ -356,6 +356,14 @@ describe("orderLinkedNetFees", () => {
       linked({ value: "4.00", transactionType: "SHIPPING_LABEL", feeType: undefined }),
     ]);
     expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: 0.6, platform_fee: 0.5 });
+  });
+
+  it("never nets a platform-fee credit (it may refund the SALE's own fee)", () => {
+    const out = orderLinkedNetFees([
+      linked({ value: "0.30", feeType: "REGULATORY_OPERATING_FEE" }),
+      linked({ value: "5.00", transactionType: "CREDIT", bookingEntry: undefined, feeType: "FINAL_VALUE_FEE" }),
+    ]);
+    expect(out.get("O1")?.get("EUR")).toEqual({ platform_fee: 0.3 });
   });
 
   it("ignores credits without a feeType and unsupported currencies", () => {
@@ -367,12 +375,17 @@ describe("orderLinkedNetFees", () => {
     expect([...(out.get("O1") ?? new Map()).entries()]).toEqual([["EUR", { advertising_fee: 1 }]]);
   });
 
-  it("keeps a negative net when a charge is in the window", () => {
-    const out = orderLinkedNetFees([linked({ value: "1.00" }), linked({ value: "1.50", bookingEntry: "CREDIT" })]);
-    expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: -0.5 });
+  it("nets a fully refunded ad fee to 0", () => {
+    const out = orderLinkedNetFees([linked({ value: "1.00" }), linked({ value: "1.00", bookingEntry: "CREDIT" })]);
+    expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: 0 });
   });
 
-  it("drops a field (and the order) when only credits are in the window", () => {
+  it("leaves the ad fee out when credits exceed in-window charges (one reverses an older charge)", () => {
+    const out = orderLinkedNetFees([linked({ value: "0.50" }), linked({ value: "2.00", bookingEntry: "CREDIT" })]);
+    expect(out.has("O1")).toBe(false);
+  });
+
+  it("drops the order when only credits are in the window", () => {
     expect(orderLinkedNetFees([linked({ value: "2.00", bookingEntry: "CREDIT" })]).has("O1")).toBe(false);
   });
 });

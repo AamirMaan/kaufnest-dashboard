@@ -136,22 +136,25 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
   return { fees, creditsSkipped, skippedCurrency, skippedInvalid };
 }
 
-/** One order's order-linked platform/ad fees in one currency, net of fee credits. */
+/** One order's order-linked platform/ad fees in one currency (see orderLinkedNetFees). */
 export type OrderNetFees = Partial<Record<"platform_fee" | "advertising_fee", number>>;
 
 /**
- * Fee overwrite only: order-linked charges NET of order-linked fee credits, per
- * order → currency → field. Unlike orderLinkedChargeFees (fill-only sync), a credit
- * with a feeType (eBay refunding that fee) is subtracted, so a refunded ad fee nets
- * to 0 instead of the gross charge. Credits without a feeType aren't fee refunds and
- * are ignored; shipping labels are left out (the overwrite doesn't touch
- * shipping_cost). A field is returned only when at least one CHARGE for it is in the
- * window — a credit alone means the charge fell before the window, so the net is
- * unknown. Results may be ≤ 0 — the caller clamps.
+ * Fee overwrite only: order-linked fees per order → currency → field.
+ * - advertising_fee: in-window AD_FEE charges MINUS in-window ad-fee credits (a refunded
+ *   ad fee nets to 0, not the gross charge). eBay doesn't say which charge a credit
+ *   reverses, so when credits exceed the in-window charges (one reverses a charge from
+ *   before the window) or there are no charges, the net is unknown and the field is left
+ *   out. Never negative.
+ * - platform_fee: in-window non-ad charges only. Platform-fee credits are NOT netted:
+ *   they can refund the SALE's own fees (not these charges), and charge sync already
+ *   books fee refunds as negative platform_fees expenses.
+ * Credits without a feeType aren't fee refunds; shipping labels are left out (the
+ * overwrite doesn't touch shipping_cost).
  */
 export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, Map<string, OrderNetFees>> {
-  const out = new Map<string, Map<string, OrderNetFees>>();
-  const charged = new Set<string>(); // `${orderId}|${currency}|${field}` with a debit in the window
+  type Acc = { platform: number; hasPlatform: boolean; adCharges: number; hasAd: boolean; adCredits: number };
+  const acc = new Map<string, Map<string, Acc>>();
   for (const txn of txns) {
     if (!(CHARGE_TRANSACTION_TYPES as readonly string[]).includes(txn.transactionType)) continue;
     const orderId = orderIdOf(txn);
@@ -164,21 +167,26 @@ export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, 
     if (value === null) continue;
     const field = orderChargeField(txn);
     if (field === "shipping_cost") continue;
-    const byCurrency = out.get(orderId) ?? new Map<string, OrderNetFees>();
-    const fees = byCurrency.get(currency) ?? {};
-    fees[field] = round2((fees[field] ?? 0) + (credit ? -value : value));
-    if (!credit) charged.add(`${orderId}|${currency}|${field}`);
-    byCurrency.set(currency, fees);
-    out.set(orderId, byCurrency);
+    if (field === "platform_fee" && credit) continue;
+    const byCurrency = acc.get(orderId) ?? new Map<string, Acc>();
+    const a = byCurrency.get(currency) ?? { platform: 0, hasPlatform: false, adCharges: 0, hasAd: false, adCredits: 0 };
+    if (field === "platform_fee") { a.platform += value; a.hasPlatform = true; }
+    else if (credit) a.adCredits += value;
+    else { a.adCharges += value; a.hasAd = true; }
+    byCurrency.set(currency, a);
+    acc.set(orderId, byCurrency);
   }
-  for (const [orderId, byCurrency] of out) {
-    for (const [currency, fees] of byCurrency) {
-      for (const field of ["platform_fee", "advertising_fee"] as const) {
-        if (fees[field] !== undefined && !charged.has(`${orderId}|${currency}|${field}`)) delete fees[field];
-      }
-      if (Object.keys(fees).length === 0) byCurrency.delete(currency);
+  const out = new Map<string, Map<string, OrderNetFees>>();
+  for (const [orderId, byCurrency] of acc) {
+    const fees = new Map<string, OrderNetFees>();
+    for (const [currency, a] of byCurrency) {
+      const f: OrderNetFees = {};
+      if (a.hasPlatform) f.platform_fee = round2(a.platform);
+      const net = round2(a.adCharges - a.adCredits);
+      if (a.hasAd && net >= 0) f.advertising_fee = net;
+      if (Object.keys(f).length > 0) fees.set(currency, f);
     }
-    if (byCurrency.size === 0) out.delete(orderId);
+    if (fees.size > 0) out.set(orderId, fees);
   }
   return out;
 }

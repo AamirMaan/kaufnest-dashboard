@@ -83,7 +83,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         const res = await fetch("/api/integrations/ebay/fees/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(applyPayload(connectionId, batch, selected)),
+          body: JSON.stringify(applyPayload(connectionId, batch)),
         });
         const json = (await res.json().catch(() => ({}))) as Partial<ApplyCounts> & { error?: string };
         totals = addApplyCounts(totals, json);

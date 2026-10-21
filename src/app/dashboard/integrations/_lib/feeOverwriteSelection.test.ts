@@ -16,9 +16,9 @@ describe("groupOverwriteRows", () => {
 });
 
 describe("applyPayload", () => {
-  it("includes only selected rows, one change per changed field", () => {
+  it("emits one change per changed field of the given rows", () => {
     const rows = groupOverwriteRows([c("a", "platform_fee", 2, 1.2), c("a", "advertising_fee", null, 0.5), c("b", "platform_fee", 1, 3)]);
-    expect(applyPayload("conn", rows, new Set(["a"]))).toEqual({
+    expect(applyPayload("conn", rows.filter((r) => r.saleId === "a"))).toEqual({
       connectionId: "conn",
       changes: [
         { saleId: "a", field: "platform_fee", from: 2, to: 1.2 },
@@ -37,7 +37,7 @@ describe("previewSkipNote", () => {
 describe("applySummary", () => {
   it("reports updated and skipped orders", () => {
     expect(applySummary({ applied: 1, stale: 0 })).toBe("Updated fees on 1 order line.");
-    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 order lines. 2 order lines were skipped — changed since the preview, or you can't edit orders.");
+    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 order lines. 2 fees were skipped — changed since the preview, or you can't edit orders.");
   });
 });
 

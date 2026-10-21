@@ -31,10 +31,9 @@ export function groupOverwriteRows(changes: FeeChangeDto[]): OverwriteRow[] {
   return [...rows.values()];
 }
 
-/** The apply request body for the ticked rows. */
-export function applyPayload(connectionId: string, rows: OverwriteRow[], selected: Set<string>) {
+/** The apply request body for these (already selected) rows. */
+export function applyPayload(connectionId: string, rows: OverwriteRow[]) {
   const changes = rows
-    .filter((r) => selected.has(r.saleId))
     .flatMap((r) => FIELDS.flatMap((field) => {
       const cell = r[field];
       return cell ? [{ saleId: r.saleId, field, from: cell.from, to: cell.to }] : [];
@@ -63,7 +62,7 @@ export function batchRows<T>(rows: T[], size = APPLY_BATCH_ROWS): T[][] {
   return out;
 }
 
-/** Apply route counts: `applied`/`stale` are order lines (sales), `failed` is fee writes. */
+/** Apply route counts: `applied` is order lines (sales); `stale`/`failed` are fee writes. */
 export interface ApplyCounts { applied: number; stale: number; failed: number }
 
 export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCounts {
@@ -73,6 +72,6 @@ export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCo
 export function applySummary(r: Pick<ApplyCounts, "applied" | "stale">): string {
   const head = `Updated fees on ${plural(r.applied, "order line", "order lines")}.`;
   return r.stale > 0
-    ? `${head} ${plural(r.stale, "order line was", "order lines were")} skipped — changed since the preview, or you can't edit orders.`
+    ? `${head} ${plural(r.stale, "fee was", "fees were")} skipped — changed since the preview, or you can't edit orders.`
     : head;
 }

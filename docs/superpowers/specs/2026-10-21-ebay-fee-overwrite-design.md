@@ -230,3 +230,21 @@ compare-and-set apply).
 12. Orders with only order-linked platform charges in the window are not
     counted as "not imported" (they're never loaded — their SALE fees are
     unknown).
+
+## Revisions (third review, 2026-10-21)
+
+13. Netting refined (eBay doesn't say which charge a credit reverses):
+    **ad fee** = in-window AD_FEE charges − in-window ad-fee credits; if credits
+    exceed the in-window charges, or there is no charge, nothing is proposed
+    (never forced to 0). **Platform** order-linked charges are summed gross —
+    platform-fee credits are never netted (they can refund the SALE's own fee,
+    and charge sync already books fee refunds as negative expenses). Supersedes
+    revision 10.
+14. The preview fetches `["SALE", "NON_SALE_CHARGE", "CREDIT"]` (no shipping
+    labels). Supersedes revision 9's list.
+15. Apply counts: `applied` in order lines, `stale`/`failed` in fee writes, so a
+    partly written line still reports its skipped fee. The request cap has one
+    name, `FEE_OVERWRITE_MAX_CHANGES` (original items 4/7 → see 11 and 15).
+16. Known gap: an un-imported order whose only in-window fee is an order-linked
+    platform charge is not counted in "not imported" (telling it apart from an
+    imported order would need a per-order lookup).

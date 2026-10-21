@@ -186,11 +186,10 @@ export async function applyFeeOverwrites(
 }
 
 /**
- * Apply counts in order lines (sales): `applied` = lines with at least one fee written,
- * `stale` = lines with nothing written and at least one stale fee (never both).
+ * Apply response counts: `applied` = order lines (sales) with at least one fee written;
+ * `stale` and `failed` = individual fee writes, so a line with one fee written and the
+ * other skipped/failed still reports the skip.
  */
-export function lineCounts(r: Pick<ApplyResult, "applied" | "stale">): { applied: number; stale: number } {
-  const applied = new Set(r.applied.map((c) => c.saleId));
-  const stale = new Set(r.stale.map((c) => c.saleId).filter((id) => !applied.has(id)));
-  return { applied: applied.size, stale: stale.size };
+export function applyCounts(r: ApplyResult): { applied: number; stale: number; failed: number } {
+  return { applied: new Set(r.applied.map((c) => c.saleId)).size, stale: r.stale.length, failed: r.failed };
 }

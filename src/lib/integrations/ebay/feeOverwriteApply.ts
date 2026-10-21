@@ -1,8 +1,6 @@
 import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
 import { OVERWRITE_FIELDS, type ApplyChange, type OverwriteField } from "./feeOverwrite";
 
-/** Upper bound on one apply request; the modal batches by the same shared constant. */
-export const MAX_APPLY_CHANGES = FEE_OVERWRITE_MAX_CHANGES;
 
 export type ParsedFeeOverwriteApply =
   | { ok: true; connectionId: string; changes: ApplyChange[] }
@@ -16,7 +14,7 @@ export function parseFeeOverwriteApply(body: unknown): ParsedFeeOverwriteApply {
   const b = (body ?? {}) as { connectionId?: unknown; changes?: unknown };
   if (typeof b.connectionId !== "string" || !b.connectionId) return { ok: false, error: "connectionId is required" };
   if (!Array.isArray(b.changes) || b.changes.length === 0) return { ok: false, error: "No changes to apply" };
-  if (b.changes.length > MAX_APPLY_CHANGES) return { ok: false, error: `At most ${MAX_APPLY_CHANGES} changes per request` };
+  if (b.changes.length > FEE_OVERWRITE_MAX_CHANGES) return { ok: false, error: `At most ${FEE_OVERWRITE_MAX_CHANGES} changes per request` };
   const seen = new Set<string>();
   const changes: ApplyChange[] = [];
   for (const raw of b.changes) {

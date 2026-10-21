@@ -1,4 +1,5 @@
-import { MAX_APPLY_CHANGES, parseFeeOverwriteApply } from "./feeOverwriteApply";
+import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
+import { parseFeeOverwriteApply } from "./feeOverwriteApply";
 
 const SALE = "8f14e45f-ceea-467a-9b36-2f3c1c6d2e10";
 const good = { connectionId: "conn-1", changes: [{ saleId: SALE, field: "platform_fee", from: 2, to: 1.2 }] };
@@ -23,8 +24,8 @@ describe("parseFeeOverwriteApply", () => {
     expect(parseFeeOverwriteApply(body).ok).toBe(false);
   });
 
-  it("rejects more than MAX_APPLY_CHANGES", () => {
-    const changes = Array.from({ length: MAX_APPLY_CHANGES + 1 }, (_, i) => ({
+  it("rejects more than FEE_OVERWRITE_MAX_CHANGES", () => {
+    const changes = Array.from({ length: FEE_OVERWRITE_MAX_CHANGES + 1 }, (_, i) => ({
       saleId: `8f14e45f-ceea-467a-9b36-${String(i).padStart(12, "0")}`, field: "platform_fee", from: null, to: 1,
     }));
     expect(parseFeeOverwriteApply({ connectionId: "c", changes }).ok).toBe(false);
