@@ -289,6 +289,11 @@ ROUTE_CASES: list[tuple[str, str, str | None]] = [
      "  const { data } = await supabase.auth.getUser();\n"
      '  await supabase.from("sales").select().limit(1);\n}',
      None),
+    ("route with integration super-admin guard",
+     'export async function POST() {\n'
+     "  const auth = await requireIntegrationSuperAdmin();\n"
+     '  await auth.context.client.from("audit_logs").insert([]);\n}',
+     None),
     ("route with platform-admin guard",
      'export async function POST() {\n'
      "  await verifyPlatformAdmin(req);\n"

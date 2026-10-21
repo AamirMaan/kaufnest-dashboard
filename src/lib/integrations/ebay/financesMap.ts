@@ -137,6 +137,70 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
 }
 
 /**
+ * One order's order-linked platform/ad fees in one currency (see orderLinkedNetFees).
+ * A number is the known net; `null` means eBay's data for that field is ambiguous in
+ * the window, so the overwrite must propose nothing for it.
+ */
+export type OrderNetFees = Partial<Record<"platform_fee" | "advertising_fee", number | null>>;
+
+/**
+ * Fee overwrite only: order-linked fees per order → currency → field, with credits
+ * matched to charges of the SAME feeType (eBay doesn't say which charge a credit
+ * reverses, but a credit can only reverse a charge of its own type):
+ * - per feeType: in-window charges minus in-window credits of that type;
+ * - a feeType with credits but no in-window charge is ignored (it refunds a fee booked
+ *   elsewhere — the SALE's own fees, or a charge from before the window);
+ * - a feeType whose credits exceed its in-window charges makes its whole field `null`
+ *   (part of the credit reverses an older charge, so the net is unknown).
+ * Known limit: a credit smaller than the in-window charge is always netted, even if it
+ * actually reverses an older charge of the same type. Credits without a feeType aren't
+ * fee refunds; shipping labels are left out (the overwrite doesn't touch shipping_cost).
+ */
+export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, Map<string, OrderNetFees>> {
+  type Acc = { field: "platform_fee" | "advertising_fee"; charges: number; credits: number; hasCharge: boolean };
+  const acc = new Map<string, Map<string, Map<string, Acc>>>(); // order → currency → feeType
+  for (const txn of txns) {
+    if (!(CHARGE_TRANSACTION_TYPES as readonly string[]).includes(txn.transactionType)) continue;
+    const orderId = orderIdOf(txn);
+    if (!orderId || !txn.amount) continue;
+    const credit = isCreditTxn(txn);
+    if (credit && !txn.feeType) continue;
+    const currency = txn.amount.currency as Currency;
+    if (!CURRENCIES.includes(currency)) continue;
+    const value = moneyValue(txn.amount);
+    if (value === null) continue;
+    const field = orderChargeField(txn);
+    if (field === "shipping_cost") continue;
+    const byCurrency = acc.get(orderId) ?? new Map<string, Map<string, Acc>>();
+    const byType = byCurrency.get(currency) ?? new Map<string, Acc>();
+    const key = txn.feeType ?? txn.transactionType;
+    const a = byType.get(key) ?? { field, charges: 0, credits: 0, hasCharge: false };
+    if (credit) a.credits += value; else { a.charges += value; a.hasCharge = true; }
+    byType.set(key, a);
+    byCurrency.set(currency, byType);
+    acc.set(orderId, byCurrency);
+  }
+  const out = new Map<string, Map<string, OrderNetFees>>();
+  for (const [orderId, byCurrency] of acc) {
+    const fees = new Map<string, OrderNetFees>();
+    for (const [currency, byType] of byCurrency) {
+      const f: OrderNetFees = {};
+      for (const a of byType.values()) {
+        if (!a.hasCharge || f[a.field] === null) continue;
+        const net = round2(a.charges - a.credits);
+        f[a.field] = net < 0 ? null : round2((f[a.field] ?? 0) + net);
+      }
+      if (Object.keys(f).length > 0) fees.set(currency, f);
+    }
+    if (fees.size > 0) out.set(orderId, fees);
+  }
+  return out;
+}
+
+/** Transaction types the fee overwrite preview fetches: SALE + order-linked charges and credits, no labels. */
+export const OVERWRITE_TRANSACTION_TYPES = ["SALE", ...CHARGE_TRANSACTION_TYPES.filter((t) => t !== "SHIPPING_LABEL")] as const;
+
+/**
  * Adds order-linked ad fee charges to the per-line fees. eBay books the Promoted
  * Listings fee as a NON_SALE_CHARGE referencing the order, not inside the SALE's
  * marketplaceFees, so feesByLineItem alone never sees it. Reuses chargeSync's
