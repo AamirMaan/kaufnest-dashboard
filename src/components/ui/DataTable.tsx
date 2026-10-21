@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Fragment, useId, useMemo, useState } from "react";
+import { ArrowUp, ArrowDown, ArrowUpDown, ChevronDown } from "lucide-react";
+import { isTableExpandable, pruneIds, splitColumns, toggleId, totalColSpan } from "./dataTableColumns";
 
-interface Column<T> {
+export interface Column<T> {
   header: string;
   /** Key of T, or a custom render function */
   accessor?: keyof T;
@@ -9,6 +10,8 @@ interface Column<T> {
   className?: string;
   /** When provided, the column header becomes clickable and rows can be sorted by this value */
   sortValue?: (row: T) => string | number;
+  /** Render this column in the expanded row panel instead of the main row (its sortValue is ignored) */
+  detail?: boolean;
 }
 
 type SortState = { key: string; direction: "asc" | "desc" } | null;
@@ -21,6 +24,16 @@ interface DataTableProps<T> {
   /** When provided, renders a checkbox column and calls back with selected rows */
   selectedIds?: Set<string>;
   onSelectionChange?: (ids: Set<string>) => void;
+  /** Extra content rendered below the detail-field grid in the expanded panel */
+  renderExpanded?: (row: T) => React.ReactNode;
+  /** Return false to hide the chevron for a row with nothing to show (default: every row expandable) */
+  isExpandable?: (row: T) => boolean;
+}
+
+function cellContent<T>(col: Column<T>, row: T): React.ReactNode {
+  if (col.render) return col.render(row);
+  if (col.accessor != null) return String(row[col.accessor] ?? "—");
+  return null;
 }
 
 export function DataTable<T>({
@@ -30,14 +43,21 @@ export function DataTable<T>({
   emptyMessage = "No records found.",
   selectedIds,
   onSelectionChange,
+  renderExpanded,
+  isExpandable,
 }: DataTableProps<T>) {
   const selectable = !!onSelectionChange;
+  const { inline, detail } = useMemo(() => splitColumns(columns), [columns]);
+  const expandable = isTableExpandable(columns, !!renderExpanded);
+  const colSpan = totalColSpan({ selectable, expandable, inlineCount: inline.length });
+  const baseId = useId();
 
   const [sort, setSort] = useState<SortState>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
-    const col = columns.find((c) => c.header === sort.key);
+    const col = inline.find((c) => c.header === sort.key);
     if (!col?.sortValue) return rows;
     const { sortValue, direction } = { sortValue: col.sortValue, direction: sort.direction };
     return [...rows].sort((a, b) => {
@@ -47,7 +67,7 @@ export function DataTable<T>({
       if (av > bv) return direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [rows, sort, columns]);
+  }, [rows, sort, inline]);
 
   function toggleSort(key: string) {
     setSort((prev) => {
@@ -59,6 +79,12 @@ export function DataTable<T>({
 
   const allIds = sortedRows.map((r) => String(r[keyField]));
   const allSelected = selectable && allIds.length > 0 && allIds.every((id) => selectedIds?.has(id));
+
+  // Prune ids from a previous page on every toggle so the set stays bounded
+  // without a sync effect.
+  function toggleRow(id: string) {
+    setExpandedIds((prev) => toggleId(pruneIds(prev, allIds), id));
+  }
 
   function toggleAll() {
     if (!onSelectionChange) return;
@@ -96,7 +122,8 @@ export function DataTable<T>({
                   />
                 </th>
               )}
-              {columns.map((col) => {
+              {expandable && <th className="px-2 py-3 w-10" aria-label="Row details" />}
+              {inline.map((col) => {
                 const isSorted = sort?.key === col.header;
                 const SortIcon = isSorted ? (sort!.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
                 return (
@@ -125,10 +152,7 @@ export function DataTable<T>({
           <tbody className="divide-y divide-(--color-border-subtle) bg-(--color-surface)">
             {sortedRows.length === 0 ? (
               <tr>
-                <td
-                  colSpan={selectable ? columns.length + 1 : columns.length}
-                  className="px-4 py-10 text-center text-sm text-(--color-text-faint)"
-                >
+                <td colSpan={colSpan} className="px-4 py-10 text-center text-sm text-(--color-text-faint)">
                   {emptyMessage}
                 </td>
               </tr>
@@ -136,31 +160,69 @@ export function DataTable<T>({
               sortedRows.map((row) => {
                 const id = String(row[keyField]);
                 const isSelected = selectedIds?.has(id) ?? false;
+                const canExpand = expandable && (isExpandable?.(row) ?? true);
+                const isOpen = canExpand && expandedIds.has(id);
+                const panelId = `${baseId}-detail-${id}`;
                 return (
-                  <tr
-                    key={id}
-                    className={`hover:bg-(--color-surface-subtle) transition-colors duration-150 ${isSelected ? "bg-(--color-info-bg)" : ""}`}
-                  >
-                    {selectable && (
-                      <td className="px-4 py-3 w-10">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleOne(id)}
-                          className="cursor-pointer accent-(--color-primary)"
-                        />
-                      </td>
+                  <Fragment key={id}>
+                    <tr
+                      className={`hover:bg-(--color-surface-subtle) transition-colors duration-150 ${isSelected ? "bg-(--color-info-bg)" : ""}`}
+                    >
+                      {selectable && (
+                        <td className="px-4 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleOne(id)}
+                            className="cursor-pointer accent-(--color-primary)"
+                          />
+                        </td>
+                      )}
+                      {expandable && (
+                        <td className="px-2 py-3 w-10">
+                          {canExpand && (
+                            <button
+                              type="button"
+                              onClick={() => toggleRow(id)}
+                              aria-expanded={isOpen}
+                              aria-controls={panelId}
+                              aria-label={isOpen ? "Collapse row" : "Expand row"}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-(--radius-btn) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text-strong) cursor-pointer transition-colors duration-150"
+                            >
+                              <ChevronDown
+                                size={16}
+                                className={`transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+                              />
+                            </button>
+                          )}
+                        </td>
+                      )}
+                      {inline.map((col) => (
+                        <td key={col.header} className={`px-4 py-3 ${col.className ?? ""}`}>
+                          {cellContent(col, row)}
+                        </td>
+                      ))}
+                    </tr>
+                    {isOpen && (
+                      <tr id={panelId} className="bg-(--color-surface-subtle)">
+                        <td colSpan={colSpan} className="px-4 py-4">
+                          {detail.length > 0 && (
+                            <dl className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                              {detail.map((col) => (
+                                <div key={col.header} className="min-w-0">
+                                  <dt className="text-xs text-(--color-text-muted)">{col.header}</dt>
+                                  <dd className="mt-1 text-sm text-(--color-text-base)">{cellContent(col, row)}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
+                          {renderExpanded && (
+                            <div className={detail.length > 0 ? "mt-4" : ""}>{renderExpanded(row)}</div>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                    {columns.map((col) => (
-                      <td key={col.header} className={`px-4 py-3 ${col.className ?? ""}`}>
-                        {col.render
-                          ? col.render(row)
-                          : col.accessor != null
-                          ? String(row[col.accessor] ?? "—")
-                          : null}
-                      </td>
-                    ))}
-                  </tr>
+                  </Fragment>
                 );
               })
             )}
