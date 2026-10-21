@@ -92,25 +92,26 @@ export async function GET(_req: NextRequest) {
         // order-linked NON_SALE_CHARGE, merged in once the order line ids are known.
         // Two fetches so the charge volume never eats into the SALE fetch's page cap.
         const financeOpts = { from: since, to: new Date().toISOString(), marketplaceId: conn.marketplace_id };
+        // allSettled: a failed charge fetch must not drop the SALE fees (platform-fee prefill).
         const financesPromise: Promise<{ txns: EbayFinanceTransaction[]; warning?: string }> =
           conn.platform !== "ebay"
             ? Promise.resolve({ txns: [] })
-            : Promise.all([
+            : Promise.allSettled([
                 fetchFinanceTransactions(token, { ...financeOpts, types: ["SALE"] }),
                 fetchFinanceTransactions(token, { ...financeOpts, types: ["NON_SALE_CHARGE"] }),
-              ]).then(
-                ([sales, charges]) => ({ txns: [...sales, ...charges] }),
-                (err: unknown) => {
-                  if (err instanceof FinancesSignatureError) {
-                    return { txns: [], warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
-                  }
-                  if (err instanceof FinancesScopeError) {
-                    return { txns: [], warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
-                  }
-                  console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
-                  return { txns: [] };
+              ]).then((results) => {
+                const txns = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+                const err = results.find((r): r is PromiseRejectedResult => r.status === "rejected")?.reason as unknown;
+                if (err === undefined) return { txns };
+                if (err instanceof FinancesSignatureError) {
+                  return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
                 }
-              );
+                if (err instanceof FinancesScopeError) {
+                  return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
+                }
+                console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
+                return { txns };
+              });
         const [orders, { txns, warning }] = await Promise.all([
           adapter.fetchOrders(token, since, conn.marketplace_id),
           financesPromise,

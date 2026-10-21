@@ -241,14 +241,11 @@ describe("withOrderLinkedAdFees", () => {
     expect(out.get("25-1:L1")?.advertisingFee).toBe(0.5);
   });
 
-  it("nets ad fee credits, and drops a fully refunded ad fee", () => {
-    const credit = (id: string, orderId: string, v: string): EbayFinanceTransaction => ({ ...adCharge(id, orderId, v), bookingEntry: "CREDIT" });
-    const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1"), eur("25-2:L1")], [
-      adCharge("a", "25-1", "2.00"), credit("b", "25-1", "0.50"),
-      adCharge("c", "25-2", "1.93"), credit("d", "25-2", "1.93"),
+  it("does not apply ad fee credits, like chargeSync's orderLinkedChargeFees", () => {
+    const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1")], [
+      adCharge("a", "25-1", "2.00"), { ...adCharge("b", "25-1", "0.50"), bookingEntry: "CREDIT" },
     ]);
-    expect(out.get("25-1:L1")?.advertisingFee).toBe(1.5);
-    expect(out.has("25-2:L1")).toBe(false);
+    expect(out.get("25-1:L1")?.advertisingFee).toBe(2);
   });
 
   it("uses the order's currency: prefills with no SALE fees yet, ignores charges in other currencies", () => {

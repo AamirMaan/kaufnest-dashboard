@@ -139,14 +139,13 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
 /**
  * Adds order-linked ad fee charges to the per-line fees. eBay books the Promoted
  * Listings fee as a NON_SALE_CHARGE referencing the order, not inside the SALE's
- * marketplaceFees, so feesByLineItem alone never sees it. Per order, ad charges in
- * the order's own currency are netted (a CREDIT refunds the fee) and the net goes on
- * the order's first line (sorted, like chargeSync's findOrderSale). Like sync's
- * fill-only-NULL rule, a line whose SALE already reports an ad fee keeps it, and a
- * line whose fees are in another currency or mixed is left alone. An order with any
- * line already imported is skipped: sync puts the charge on its first *imported* line.
- * Sorting by code unit matches Postgres' order here because eBay line item ids are
- * fixed-length digit strings under one order prefix.
+ * marketplaceFees, so feesByLineItem alone never sees it. Reuses chargeSync's
+ * orderLinkedChargeFees so Review and sync agree: credits are not applied, only the
+ * order's currency counts, and the fee goes on the order's first line (sorted, like
+ * findOrderSale — code-unit order matches Postgres here because eBay line item ids
+ * are fixed-length digit strings under one order prefix). A SALE-reported ad fee is
+ * kept (fill-only-NULL), and an order with any line already imported is skipped:
+ * sync puts the charge on its first *imported* line, so a second import would double-count.
  */
 export function withOrderLinkedAdFees(
   fees: Map<string, LineItemFees>,
@@ -163,24 +162,15 @@ export function withOrderLinkedAdFees(
     const cur = firstLine.get(orderId);
     if (cur === undefined || o.external_order_id < cur.key) firstLine.set(orderId, { key: o.external_order_id, currency: o.currency });
   }
-  for (const orderId of partlyImported) firstLine.delete(orderId);
-  const netAd = new Map<string, { net: number; currency: string }>();
-  for (const txn of txns) {
-    if (txn.transactionType !== "NON_SALE_CHARGE" || !isAdFeeType(txn.feeType)) continue;
-    const orderId = orderIdOf(txn);
-    const line = orderId ? firstLine.get(orderId) : undefined;
-    const value = moneyValue(txn.amount);
-    if (!line || value === null || txn.amount?.currency !== line.currency) continue;
-    const net = (netAd.get(line.key)?.net ?? 0) + (isCreditTxn(txn) ? -value : value);
-    netAd.set(line.key, { net, currency: line.currency });
-  }
   const out = new Map(fees);
-  for (const [key, { net, currency }] of netAd) {
-    const ad = round2(net);
-    const existing = out.get(key);
-    if (ad <= 0 || existing?.mixedCurrency || existing?.advertisingFee != null) continue;
-    if (existing?.currency != null && existing.currency !== currency) continue;
-    out.set(key, { platformFee: existing?.platformFee ?? null, advertisingFee: ad, currency, mixedCurrency: false });
+  for (const [orderId, byCurrency] of orderLinkedChargeFees(txns).fees) {
+    const line = firstLine.get(orderId);
+    if (!line || partlyImported.has(orderId)) continue;
+    const ad = byCurrency.get(line.currency)?.fields.advertising_fee;
+    const existing = out.get(line.key);
+    if (ad === undefined || existing?.mixedCurrency || existing?.advertisingFee != null) continue;
+    if (existing?.currency != null && existing.currency !== line.currency) continue;
+    out.set(line.key, { platformFee: existing?.platformFee ?? null, advertisingFee: ad, currency: line.currency, mixedCurrency: false });
   }
   return out;
 }
