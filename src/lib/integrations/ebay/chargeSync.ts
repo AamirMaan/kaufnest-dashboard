@@ -6,7 +6,7 @@ import {
   type ChargeExpenseRow, type EbayFinanceTransaction, type FeeField,
 } from "./financesMap";
 
-const IN_CHUNK = 200; // Supabase .in() chunk size (same as ImportSalesModal)
+export const IN_CHUNK = 200; // Supabase .in() chunk size (same as ImportSalesModal)
 /** Max sales lookups/updates in flight at once inside one IN_CHUNK batch. */
 export const WRITE_CONCURRENCY = 10;
 /** A sale in one of these states has its fees excluded by get_platform_running_balance/overview already. */
@@ -53,7 +53,7 @@ type SaleFeeRow = {
 };
 const SALE_COLS = "id, external_order_id, currency, status, platform_fee, advertising_fee, shipping_cost";
 
-function chunks<T>(xs: T[], n: number): T[][] {
+export function chunks<T>(xs: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
   return out;
