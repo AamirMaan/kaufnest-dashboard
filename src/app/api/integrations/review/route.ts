@@ -8,7 +8,7 @@ import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
-import { fetchFinanceTransactions, FinancesScopeError } from "@/lib/integrations/ebay/finances";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
 import { feesByLineItem, prefillFeesFor, type LineItemFees } from "@/lib/integrations/ebay/financesMap";
 import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
@@ -94,6 +94,9 @@ export async function GET(_req: NextRequest) {
               }).then(
                 (txns) => ({ fees: feesByLineItem(txns) }),
                 (err: unknown) => {
+                  if (err instanceof FinancesSignatureError) {
+                    return { fees: new Map<string, LineItemFees>(), warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
+                  }
                   if (err instanceof FinancesScopeError) {
                     return { fees: new Map<string, LineItemFees>(), warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
                   }

@@ -17,6 +17,7 @@
     "encrypt-existing-tokens": "node --env-file=.env.local scripts/encrypt-existing-tokens.mjs",
     "create-tenant-user": "node --env-file=.env.local scripts/create-tenant-user.mjs",
     "plans:seed-stripe": "node --env-file=.env.local scripts/plans-seed-stripe.mjs",
+    "ebay:create-signing-key": "node --env-file=.env.local scripts/ebay-create-signing-key.mjs",
     "prepare": "husky"
   },
   "dependencies": {
