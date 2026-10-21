@@ -22,6 +22,23 @@ describe("loadSigningConfig", () => {
   });
 });
 
+describe("loadSigningConfig with a bad key", () => {
+  let errorSpy: jest.SpyInstance;
+  beforeEach(() => { errorSpy = jest.spyOn(console, "error").mockImplementation(() => {}); });
+  afterEach(() => errorSpy.mockRestore());
+
+  it("returns null (unsigned) for a malformed key instead of throwing, and never logs the key", () => {
+    expect(loadSigningConfig({ EBAY_SIGNING_PRIVATE_KEY: "not-a-key", EBAY_SIGNING_JWE: "jwe" })).toBeNull();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(String(errorSpy.mock.calls[0][0])).not.toContain("not-a-key");
+  });
+
+  it("returns null for a non-Ed25519 key", () => {
+    const rsa = generateKeyPairSync("rsa", { modulusLength: 1024 }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    expect(loadSigningConfig({ EBAY_SIGNING_PRIVATE_KEY: rsa, EBAY_SIGNING_JWE: "jwe" })).toBeNull();
+  });
+});
+
 describe("signatureBase", () => {
   it("builds the RFC 9421 base eBay expects for a request without a body (path excludes the query)", () => {
     expect(signatureBase("GET", URL_, "the-jwe", 1700000000)).toBe(

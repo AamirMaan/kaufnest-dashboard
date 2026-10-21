@@ -14,7 +14,9 @@ const COVERED = '("x-ebay-signature-key" "@method" "@path" "@authority")';
 /**
  * Reads EBAY_SIGNING_PRIVATE_KEY (PEM, PEM with escaped \n, or the bare base64
  * PKCS#8 the Key Management API returns) and EBAY_SIGNING_JWE. Null when either
- * is unset — callers then send unsigned requests.
+ * is unset — callers then send unsigned requests. A malformed or non-Ed25519
+ * key is also null (logged once, without key material): a bad env var must not
+ * break Finances for sellers who don't need signing.
  */
 export function loadSigningConfig(
   env: Record<string, string | undefined> = process.env
@@ -25,7 +27,18 @@ export function loadSigningConfig(
   const pem = raw.includes("BEGIN")
     ? raw.replace(/\\n/g, "\n")
     : `-----BEGIN PRIVATE KEY-----\n${raw.replace(/\s+/g, "")}\n-----END PRIVATE KEY-----\n`;
-  return { privateKey: createPrivateKey(pem), jwe };
+  let privateKey: KeyObject;
+  try {
+    privateKey = createPrivateKey(pem);
+  } catch {
+    console.error("[ebay signing] EBAY_SIGNING_PRIVATE_KEY could not be parsed; sending unsigned requests");
+    return null;
+  }
+  if (privateKey.asymmetricKeyType !== "ed25519") {
+    console.error(`[ebay signing] EBAY_SIGNING_PRIVATE_KEY is ${privateKey.asymmetricKeyType}, not ed25519; sending unsigned requests`);
+    return null;
+  }
+  return { privateKey, jwe };
 }
 
 /** RFC 9421 signature base for a request without a body (no content-digest). */
