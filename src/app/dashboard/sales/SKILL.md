@@ -11,6 +11,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
 
 ## Minimal file set for common changes
 
+- **Move an Orders column between the main row and the expanded panel**:
+  `page.tsx` only. Toggle `detail: true` on the column object (and drop its
+  `sortValue` when it becomes detail, because detail columns aren't sortable).
+  Fee breakdown copy and maths: `_lib/feeBreakdown.ts` (+ test).
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
   or gross-profit formula changes also touch `_components/orderMath.ts` + its test.
 - **Change the Cost of Goods / Gross Profit / "Fulfilled from" block**
@@ -204,8 +208,9 @@ fixed — don't reintroduce them:
   `_components/importFormats.ts` (unit-tested in `importFormats.test.ts` and
   `ImportSalesModal.test.ts`); the modal only orchestrates file reading, the
   dedup query, and inserts.
-- The table "Fees" column sums `shipping_cost + advertising_fee + platform_fee`
-  (seller costs); `shipping_charged` is not in the computed sum — it's the
+- The Orders expanded-row "Fees" field (`_lib/feeBreakdown.ts`) lists
+  `shipping_cost`, `advertising_fee` and `platform_fee` separately, plus their
+  sum (seller costs). `shipping_charged` is not in the sum. It's the
   buyer-facing amount and appears only in the CSV export.
 - **`005_tenant_provisioning.sql`'s `sales` CREATE TABLE was missing all four
   fee columns until 2026-08-27, despite all four being live on every existing
@@ -613,7 +618,8 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 - **DataTable column sorting is page-local** (v1 deliberate limitation). Users
   who want a globally sorted view should use the date ordering already applied
   server-side. If full sort pushdown is added later, extend `fetchSalesPage`
-  with an `order` param.
+  with an `order` param. Detail (expanded-panel) columns — Qty, Unit Price,
+  VAT, Fees, Account, Marketplace — aren't sortable at all.
 - **`statusOptions` in `page.tsx`** is derived from the current page only.
   Custom statuses not on the current page won't appear in the filter dropdown
   until a matching page is loaded. This is an acceptable v1 trade-off.

@@ -41,6 +41,7 @@ import { UNKNOWN_MARKETPLACE } from "@/lib/utils/marketplace";
 import { UNASSIGNED_ACCOUNT, accountLabel, accountName, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { OPEN_ORDERS_STATUS, OPEN_ORDER_STATUSES, ORDER_STATUSES, statusLabel } from "./_components/orderStatus";
 import { buildSalesTiles } from "./_lib/salesSummaryTiles";
+import { feeBreakdown } from "./_lib/feeBreakdown";
 import { salesFilterParams } from "./_store/salesFilterParams";
 import type { Platform, Sale, Product } from "@/types";
 
@@ -272,18 +273,18 @@ export default function SalesPage() {
     {
       header: "Platform",
       sortValue: (s: Sale) => s.platform,
-      render: (s: Sale) => (
-        <div className="flex flex-col items-start gap-0.5">
-          <PlatformBadge platform={s.platform} />
-          {s.marketplace && <span className="text-xs text-[var(--color-text-muted)]">{s.marketplace}</span>}
-        </div>
-      ),
+      render: (s: Sale) => <PlatformBadge platform={s.platform} />,
+    },
+    {
+      header: "Marketplace",
+      detail: true,
+      render: (s: Sale) => s.marketplace ?? "—",
     },
     ...(showAccounts
       ? [
           {
             header: "Account",
-            sortValue: (s: Sale) => accountName(accounts, s.connection_id) ?? "",
+            detail: true,
             render: (s: Sale) => {
               const name = accountName(accounts, s.connection_id);
               return name ? <Badge label={name} variant="info" /> : <span className="text-xs text-[var(--color-text-muted)]">—</span>;
@@ -298,14 +299,14 @@ export default function SalesPage() {
     },
     {
       header: "Qty",
-      sortValue: (s: Sale) => s.quantity,
+      detail: true,
       render: (s: Sale) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{s.quantity}</span>
       ),
     },
     {
       header: "Unit Price",
-      sortValue: (s: Sale) => s.unit_price,
+      detail: true,
       render: (s: Sale) => (
         <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(s.unit_price, s.currency)}</span>
       ),
@@ -319,7 +320,7 @@ export default function SalesPage() {
     },
     {
       header: "VAT",
-      sortValue: (s: Sale) => s.vat_amount ?? -1,
+      detail: true,
       render: (s: Sale) =>
         s.vat_rate != null ? (
           <div className="tabular-nums">
@@ -332,13 +333,25 @@ export default function SalesPage() {
     },
     {
       header: "Fees",
-      sortValue: (s: Sale) => (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0) + (s.platform_fee ?? 0),
+      detail: true,
       render: (s: Sale) => {
-        const feesTotal = (s.shipping_cost ?? 0) + (s.advertising_fee ?? 0) + (s.platform_fee ?? 0);
-        return s.shipping_cost == null && s.advertising_fee == null && s.platform_fee == null ? (
-          <span className="text-sm text-[var(--color-text-muted)]">—</span>
-        ) : (
-          <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(feesTotal, s.currency)}</span>
+        const fees = feeBreakdown(s);
+        if (!fees) return <span className="text-sm text-[var(--color-text-muted)]">—</span>;
+        return (
+          <div className="space-y-0.5 text-sm tabular-nums">
+            {fees.lines.map((line) => (
+              <div key={line.label} className="flex justify-between gap-4">
+                <span className="text-[var(--color-text-muted)]">{line.label}</span>
+                <span className="text-[var(--color-text-base)]">
+                  {line.amount == null ? "—" : formatCurrency(line.amount, s.currency)}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between gap-4 border-t border-[var(--color-border-subtle)] pt-0.5 font-semibold">
+              <span className="text-[var(--color-text-base)]">Total</span>
+              <span className="text-[var(--color-text-strong)]">{formatCurrency(fees.total, s.currency)}</span>
+            </div>
+          </div>
         );
       },
     },
