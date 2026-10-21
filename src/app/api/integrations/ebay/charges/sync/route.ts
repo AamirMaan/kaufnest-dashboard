@@ -4,7 +4,7 @@ import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, IntegrationAccountError, requireActiveConnection } from "@/lib/integrations/tokenStore";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { fetchFinanceTransactions, FinancesScopeError } from "@/lib/integrations/ebay/finances";
-import { applyFinanceTransactions, ChargeSyncPermissionError } from "@/lib/integrations/ebay/chargeSync";
+import { applyFinanceTransactions, ChargeSyncPermissionError, ChargeSyncSchemaError } from "@/lib/integrations/ebay/chargeSync";
 import { CHARGE_TRANSACTION_TYPES } from "@/lib/integrations/ebay/financesMap";
 import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
@@ -52,6 +52,10 @@ export async function POST(req: NextRequest) {
     }
     if (err instanceof FinancesScopeError) {
       return NextResponse.json({ error: "INTEGRATION_FINANCES_SCOPE" }, { status: 409 });
+    }
+    if (err instanceof ChargeSyncSchemaError) {
+      console.error("[ebay/charges/sync] tenant schema missing migration 058:", err.message);
+      return NextResponse.json({ error: "INTEGRATION_FINANCES_DB_PENDING" }, { status: 409 });
     }
     if (err instanceof ChargeSyncPermissionError) {
       return NextResponse.json({ error: "You don't have permission to add expenses or edit orders." }, { status: 403 });
