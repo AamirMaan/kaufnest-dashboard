@@ -152,9 +152,13 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `connection_id` isn't an active account (`invalidImportItems`), and stamps
   `sales.connection_id`. Returns `{ imported: number }`.
 - **`/api/integrations/ebay/charges/sync/route.ts`** (`POST`) — `{ connectionId }`;
-  imports the account's eBay charges as `platform_fees` Expenses and fills
-  empty order fees. Returns `{ chargesImported, chargesAlreadyImported,
-  skippedCurrency, ordersFeesFilled }` or `{ error }`.
+  imports the account's non-order eBay charges as Expenses (category
+  `platform_fees`, `advertising` or `shipping`) and fills empty order fees;
+  charges tied to an order fill that order's fee fields instead of becoming
+  expenses. Returns `{ chargesImported, chargesAlreadyImported,
+  skippedCurrency, ordersFeesFilled, ordersFeesNotWritten,
+  orderLinkedCreditsSkipped, orderLinkedUnmatched }` or `{ error }`
+  (409 `INTEGRATION_FINANCES_DB_PENDING` before migration 058).
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
   resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;

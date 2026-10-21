@@ -179,3 +179,10 @@ sync returned a scope error, the card shows the reconnect hint.
 `dashboard/integrations/CLAUDE.md` (sync button, route),
 `dashboard/expenses/SKILL.md` (`platform_fees`, `external_ref`),
 `supabase/CLAUDE.md` + `supabase/SKILL.md` file map (058).
+
+## Revisions (2026-10-21)
+
+- **Warnings map:** a missing `sell.finances` scope on the Review Orders fetch is a non-fatal `warnings` entry (keyed by connection id), not a failed-account `errors` entry.
+- **Order-linked charges (user ruling):** charges whose `references` contain an `ORDER_ID` entry do not become expenses. A debit fills the matching order's empty fee field (ad fee -> `advertising_fee`, `SHIPPING_LABEL` -> `shipping_cost`, else `platform_fee`; first line item only; summed per order+field). Order-linked credits are skipped and counted. Orders not yet imported are counted as unmatched.
+- Fee writes are guarded per field with `.is(field, null)` and counted only when a row is returned; unwritten ones are reported.
+- A pre-058 tenant returns 409 `INTEGRATION_FINANCES_DB_PENDING`.

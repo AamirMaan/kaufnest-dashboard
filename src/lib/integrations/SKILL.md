@@ -104,9 +104,10 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   `apiz.sandbox.ebay.com`): paginated `SALE`/charge transaction fetch over
   the 90-day window; throws `FinancesScopeError` on a missing `sell.finances`
   scope. `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
-  `chargeToExpenseRow`, `fillEmptyFees`, `CHARGE_TRANSACTION_TYPES`).
+  `chargeToExpenseRow`, `fillEmptyFees`, `CHARGE_TRANSACTION_TYPES`,
+  `orderIdOf`, `orderChargeField`, `orderLinkedChargeFees`, `feeFieldFills`, `isCreditTxn`).
   `ebay/chargeSync.ts` — `applyFinanceTransactions` (upserts Expenses, fills
-  NULL order fees), `ChargeSyncPermissionError`. See "Gotchas — Finances".
+  NULL order fees), `ChargeSyncPermissionError`, `ChargeSyncSchemaError`. See "Gotchas — Finances".
 - `ebay/messages.ts` — `fetchMemberMessages()`/`replyToMessage()`, backs the
   Messages feature (`src/app/dashboard/messages/`). See "eBay messages
   (Trading API)" below.
@@ -574,7 +575,11 @@ lookup against existing `sales` rows.
 
 - Finances lives on the **apiz** host (`https://apiz.ebay.com`), not `api.ebay.com`; needs the `https://api.ebay.com/oauth/api_scope/sell.finances` scope. Older connections get `FinancesScopeError` -> `INTEGRATION_FINANCES_SCOPE` until reconnected. Review treats it as a `warnings` entry (non-fatal); other failures are `errors`.
 - Ad-fee type names vary across responses; always classify with `isAdFeeType`, never a string compare.
-- `bookingEntry: "CREDIT"` (a refund of a charge) becomes a **negative** expense, not a skipped row.
+- Two different CREDITs: `bookingEntry: "CREDIT"` (a refund of a charge) and `transactionType: "CREDIT"` with **no** `bookingEntry`; `isCreditTxn` treats both as credits. A non-order-linked credit becomes a **negative** expense, not a skipped row.
+- **Order-linked charges never become expenses.** A charge (NON_SALE_CHARGE / SHIPPING_LABEL / CREDIT) whose `references` has `referenceType === "ORDER_ID"` fills the matching sale instead: ad fee -> `advertising_fee`, `SHIPPING_LABEL` -> `shipping_cost`, else `platform_fee`; several charges for one order+field are summed. Order-linked **credits** are skipped and counted (`orderLinkedCreditsSkipped`). `sales.external_order_id` is `<orderId>:<lineItemId>`, so the lookup is `.like("external_order_id", "<orderId>:%").order(...).limit(1)` and only the first line item is filled (an order-level charge is never multiplied). Orders not yet imported are counted in `orderLinkedUnmatched` and fill on a later sync.
+- **Fee fills are guarded and honest.** One `update` per field with `.is(field, null).select("id")`; a sale counts in `ordersFeesFilled` only if a row came back. The 055 sales UPDATE policy gates on `current_user_access('orders') >= 2` in USING, so a user without Orders edit gets **0 rows, not 42501**; those are `ordersFeesNotWritten`. A missing marketplace fee `amount` is skipped, never stored as 0 (0 is sticky under fill-only-NULL).
+- Before migration 058 the expenses upsert fails with `PGRST204`/`42703`; `chargeSync` throws `ChargeSyncSchemaError` and the route returns 409 `INTEGRATION_FINANCES_DB_PENDING`.
+- Deleting an imported expense lets the next sync re-import it (its `external_ref` is gone). `finances.ts` fetches `PAGE_LIMIT` 1000 per page, `MAX_PAGES` 50 (a hard stop); the date window is provided by the caller (route / review), not by `finances.ts`.
 - Dedup is `expenses.external_ref = "ebay:<transactionId>"` with a **full** unique index (a partial index can't back `onConflict`). Fee map keys are `<orderId>:<lineItemId>`, same as `sales.external_order_id`.
 - `vendor: "eBay"` on the imported expenses is what feeds the running eBay balance; changing it breaks the balance.
 - Only `EUR`/`USD`/`GBP` are imported; other currencies are skipped and counted (`skippedCurrency`). `fillEmptyFees` only writes NULL `platform_fee`/`advertising_fee`.

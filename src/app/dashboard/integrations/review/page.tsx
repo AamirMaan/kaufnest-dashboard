@@ -293,6 +293,7 @@ export default function ReviewPage() {
 
       if (items.length === 0) {
         setData(fresh);
+        setOrderFees((prev) => seedOrderFees(fresh, prev));
         toast.info("Nothing to sync", "No previously-imported orders found.");
         return;
       }
@@ -312,6 +313,7 @@ export default function ReviewPage() {
       }
 
       setData(fresh);
+        setOrderFees((prev) => seedOrderFees(fresh, prev));
       const syncedCount = result.imported ?? 0;
       if (failedAccounts > 0) {
         toast.warning(

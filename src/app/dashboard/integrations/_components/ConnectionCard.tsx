@@ -137,15 +137,21 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
       });
       const json = (await res.json().catch(() => ({}))) as {
         error?: string; chargesImported?: number; chargesAlreadyImported?: number; skippedCurrency?: number; ordersFeesFilled?: number;
+        ordersFeesNotWritten?: number; orderLinkedCreditsSkipped?: number; orderLinkedUnmatched?: number;
       };
       if (!res.ok) {
         toastError("Couldn't sync eBay charges", integrationErrorMessage(json.error, json.error ?? "Please try again."));
         return;
       }
       const skipped = json.skippedCurrency ? `, ${json.skippedCurrency} skipped (unsupported currency)` : "";
+      const notes = [
+        json.ordersFeesNotWritten ? `${json.ordersFeesNotWritten} fees not written (no Orders edit access or already filled)` : "",
+        json.orderLinkedCreditsSkipped ? `${json.orderLinkedCreditsSkipped} order credits skipped` : "",
+        json.orderLinkedUnmatched ? `${json.orderLinkedUnmatched} charges waiting for their order to be imported` : "",
+      ].filter(Boolean).map((n) => `, ${n}`).join("");
       success(
         "eBay charges synced",
-        `${json.chargesImported ?? 0} new expenses, ${json.ordersFeesFilled ?? 0} orders got fees${skipped}.`
+        `${json.chargesImported ?? 0} new expenses, ${json.ordersFeesFilled ?? 0} orders got fees${skipped}${notes}.`
       );
     } catch {
       toastError("Couldn't sync eBay charges", "Please try again.");
