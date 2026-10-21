@@ -75,7 +75,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
 
   async function handleApply() {
     setApplying(true);
-    let totals: ApplyCounts = { applied: 0, stale: 0, failed: 0 };
+    let totals: ApplyCounts = { applied: 0, appliedFees: 0, stale: 0, failed: 0 };
     let failure: string | null = null;
     try {
       // The route caps changes per request; send the ticked rows in batches, in turn.
@@ -98,7 +98,8 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
       setApplying(false);
     }
     if (failure === null) {
-      success("Fees updated from eBay", applySummary(totals));
+      if (totals.appliedFees > 0) success("Fees updated from eBay", applySummary(totals));
+      else toastError("No fees updated", applySummary(totals));
       onClose();
     } else if (totals.applied > 0) {
       // Some fees were written: the preview is out of date, so a retry from it would

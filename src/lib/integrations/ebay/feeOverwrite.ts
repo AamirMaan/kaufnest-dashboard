@@ -1,5 +1,5 @@
 import type { IntegrationsClient } from "../types";
-import { feesByLineItem, orderLinkedNetFees, type EbayFinanceTransaction } from "./financesMap";
+import { feesByLineItem, orderLinkedNetFees, type EbayFinanceTransaction, type OrderNetFees } from "./financesMap";
 import { chunks, IN_CHUNK, mapLimit, WRITE_CONCURRENCY } from "./chargeSync";
 
 export type OverwriteField = "platform_fee" | "advertising_fee";
@@ -49,10 +49,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * What eBay says each imported sale's Platform/Ad fee should be, where that differs
  * from what is stored. A null from eBay is never proposed: this never clears.
  * - Platform fee: the line's SALE marketplace fees; the order's FIRST line also gets
- *   the order-linked non-ad charges (net of fee credits) — but only when that line's
- *   SALE fees are in the window, otherwise the total is unknown and nothing is proposed.
- * - Ad fee: a SALE ad fee on any line wins (per line); otherwise the order-linked
- *   AD_FEE charges net of AD_FEE credits go on the first line (clamped at 0).
+ *   the order-linked non-ad charges (credits netted per feeType — orderLinkedNetFees) —
+ *   but only when that line's SALE fees are in the window (otherwise the total is
+ *   unknown) and the order-linked net is known (not `null`); else nothing is proposed.
+ * - Ad fee: a SALE ad fee on any line wins (per line); otherwise the order-linked AD_FEE
+ *   net goes on the first line, unless it's `null` (ambiguous credits).
  */
 export function computeFeeOverwrites(sales: OverwriteSaleRow[], txns: EbayFinanceTransaction[]): FeeOverwritePreview {
   const lineFees = feesByLineItem(txns);
@@ -76,7 +77,7 @@ export function computeFeeOverwrites(sales: OverwriteSaleRow[], txns: EbayFinanc
     // Code-unit order matches findOrderSale's Postgres ORDER BY for eBay's fixed-length line ids.
     lines.sort((a, b) => (a.external_order_id < b.external_order_id ? -1 : a.external_order_id > b.external_order_id ? 1 : 0));
     const first = lines[0];
-    let orderNet: { platform_fee?: number; advertising_fee?: number } = {};
+    let orderNet: OrderNetFees = {};
     for (const [currency, fees] of linked.get(orderId) ?? []) {
       if (currency === first.currency) orderNet = fees;
       else currencyMismatch++;
@@ -87,13 +88,13 @@ export function computeFeeOverwrites(sales: OverwriteSaleRow[], txns: EbayFinanc
       const f = lineFees.get(s.external_order_id);
       if (!f) continue;
       if (f.mixedCurrency || (f.currency !== null && f.currency !== s.currency)) { currencyMismatch++; continue; }
-      if (f.platformFee !== null) {
+      if (f.platformFee !== null && !(s === first && orderNet.platform_fee === null)) {
         const extra = s === first ? (orderNet.platform_fee ?? 0) : 0;
-        emit(s, "platform_fee", Math.max(0, round2(f.platformFee + extra)));
+        emit(s, "platform_fee", round2(f.platformFee + extra));
       }
       if (f.advertisingFee !== null) { saleAd = true; emit(s, "advertising_fee", f.advertisingFee); }
     }
-    if (!saleAd && orderNet.advertising_fee !== undefined) emit(first, "advertising_fee", Math.max(0, orderNet.advertising_fee));
+    if (!saleAd) emit(first, "advertising_fee", orderNet.advertising_fee);
   }
 
   const withFees = new Set<string>();
@@ -186,10 +187,10 @@ export async function applyFeeOverwrites(
 }
 
 /**
- * Apply response counts: `applied` = order lines (sales) with at least one fee written;
- * `stale` and `failed` = individual fee writes, so a line with one fee written and the
- * other skipped/failed still reports the skip.
+ * Apply response counts: `applied` = order lines (sales) with at least one fee written,
+ * `appliedFees` = fee writes; `stale` and `failed` = fee writes, so a line with one fee
+ * written and the other skipped/failed still reports the skip.
  */
-export function applyCounts(r: ApplyResult): { applied: number; stale: number; failed: number } {
-  return { applied: new Set(r.applied.map((c) => c.saleId)).size, stale: r.stale.length, failed: r.failed };
+export function applyCounts(r: ApplyResult): { applied: number; appliedFees: number; stale: number; failed: number } {
+  return { applied: new Set(r.applied.map((c) => c.saleId)).size, appliedFees: r.applied.length, stale: r.stale.length, failed: r.failed };
 }

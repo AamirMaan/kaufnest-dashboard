@@ -59,7 +59,7 @@ tenant admin grants an exception via the Users feature).
   Fee as `current → eBay` (all rows start ticked; "—" = that fee isn't
   changing), the skip note, then "Apply N order lines" POSTs
   `/api/integrations/ebay/fees/apply` in batches of `APPLY_BATCH_ROWS` rows
-  (≤ the route's change cap). Counts are order lines. Success toasts `applySummary` and closes; a
+  (≤ the route's change cap). The toast counts fees and order lines (`applySummary`); "No fees updated" when nothing was written. Success toasts `applySummary` and closes; a
   failure with nothing written keeps the modal + selection for a retry; a
   partial failure closes (the preview is stale) and says to reopen. Escape/
   backdrop can't close it while applying.
@@ -202,8 +202,8 @@ upsert them into `sales` and update `last_synced_at` per platform.
   AND `profiles.role = super_admin`, else 403). Fetches 90 days of `SALE` +
   `NON_SALE_CHARGE` + `CREDIT` (ad-fee refunds arrive as `CREDIT`; shipping labels not fetched), reads the touched sales (`loadOverwriteSales`) and returns
   `computeFeeOverwrites`' `{ changes: { saleId, externalOrderId, currency,
-  date, field, from, to }[], currencyMismatch, notImported }` — fees net of
-  eBay fee credits, platform fee incl. order-linked charges (rules:
+  date, field, from, to }[], currencyMismatch, notImported }` — order-linked charges and credits matched per feeType (ambiguous → nothing
+  proposed), platform fee incl. order-linked charges (rules:
   `src/lib/integrations/SKILL.md`). **No writes.**
   Errors: 409 `INTEGRATION_ACCOUNT_*` / `INTEGRATION_FINANCES_SCOPE` /
   `INTEGRATION_FINANCES_SIGNATURE`, 502 generic.

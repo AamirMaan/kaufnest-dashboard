@@ -122,7 +122,7 @@ Body `{ connectionId, changes: { saleId, field, from, to }[] }`. Same guard
 and connection check (no eBay call). Validation in pure
 `parseFeeOverwriteApply(body)` (`src/lib/integrations/ebay/feeOverwriteApply.ts`):
 `field` ∈ the two fee fields, `to` finite and ≥ 0, `from` number or null,
-`saleId` a uuid, at most `MAX_APPLY_CHANGES = 2000` items, no duplicate
+`saleId` a uuid, at most `FEE_OVERWRITE_MAX_CHANGES = 2000` items (revision 15), no duplicate
 `(saleId, field)`; otherwise 400. Writes are compare-and-set, bounded
 concurrency (`mapLimit`, `WRITE_CONCURRENCY`):
 
@@ -210,7 +210,7 @@ compare-and-set apply).
    order-linked non-ad charges on the first line (only when that line's SALE
    fees are in the window). This intentionally differs from fill-only sync.
 7. Apply never stops midway; it audits every applied fee with one batched
-   insert even on partial failure, and reports `{ applied, stale }` in orders
+   insert even on partial failure, and reports `{ applied, stale }` (units per revision 15/17)
    plus `failed`. The modal sends batches of 2000, can't be dismissed while
    applying, and on a partial failure closes and asks the user to reopen.
 8. A 0-row update is reported as "changed since the preview, or you can't
@@ -248,3 +248,18 @@ compare-and-set apply).
 16. Known gap: an un-imported order whose only in-window fee is an order-linked
     platform charge is not counted in "not imported" (telling it apart from an
     imported order would need a per-order lookup).
+
+## Revisions (fourth review, 2026-10-21)
+
+17. Netting matches credits to charges **of the same feeType** (supersedes the
+    per-field rules of revision 13): a feeType with credits but no in-window
+    charge is ignored (it refunds a SALE fee or a pre-window charge); one whose
+    credits exceed its in-window charges makes the whole field unknown (`null`)
+    and nothing is proposed for it. This nets refunded order-linked platform
+    charges too (fill-only charge sync never books those credits anywhere).
+    Known limit: a smaller credit is always netted, even if it reversed an older
+    charge of the same type.
+18. The fetch list is `OVERWRITE_TRANSACTION_TYPES`, derived from
+    `CHARGE_TRANSACTION_TYPES` minus `SHIPPING_LABEL`, so it can't drift.
+19. The toast reports "Updated N fees on M order lines", plus skipped fees; when
+    nothing was written it's an error-styled "No fees updated".

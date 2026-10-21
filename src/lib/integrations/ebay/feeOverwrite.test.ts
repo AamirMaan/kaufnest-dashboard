@@ -115,6 +115,30 @@ describe("computeFeeOverwrites", () => {
     expect(r.notImported).toBe(0);
   });
 
+  it("nets a refunded order-linked platform charge of the same feeType", () => {
+    const r = computeFeeOverwrites(
+      [row("O1:L1", { platform_fee: 1.5 })],
+      [
+        saleTxn("O1", [{ lineItemId: "L1", marketplaceFees: [fvf("1.20")] }]),
+        orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE" }),
+        orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE", credit: true }),
+      ]
+    );
+    expect(r.changes.map((c) => [c.field, c.from, c.to])).toEqual([["platform_fee", 1.5, 1.2]]);
+  });
+
+  it("proposes no first-line platform fee when order-linked credits are ambiguous", () => {
+    const r = computeFeeOverwrites(
+      [row("O1:L1", { platform_fee: 9 })],
+      [
+        saleTxn("O1", [{ lineItemId: "L1", marketplaceFees: [fvf("1.20")] }]),
+        orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE" }),
+        orderCharge("O1", "1.00", { feeType: "REGULATORY_OPERATING_FEE", credit: true }),
+      ]
+    );
+    expect(r.changes).toEqual([]);
+  });
+
   it("counts an order-linked fee group in another currency as a mismatch", () => {
     const r = computeFeeOverwrites([row("O1:L1")], [adCharge("O1", "1.00", "GBP")]);
     expect(r.changes).toEqual([]);
@@ -213,6 +237,6 @@ describe("applyCounts", () => {
       stale: [{ saleId: "a", field: "advertising_fee", from: null, to: 1 }, { saleId: "c", field: "platform_fee", from: 1, to: 2 }],
       failed: 1,
       permissionDenied: false,
-    })).toEqual({ applied: 2, stale: 2, failed: 1 });
+    })).toEqual({ applied: 2, appliedFees: 2, stale: 2, failed: 1 });
   });
 });

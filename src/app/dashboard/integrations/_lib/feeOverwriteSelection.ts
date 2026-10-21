@@ -62,15 +62,20 @@ export function batchRows<T>(rows: T[], size = APPLY_BATCH_ROWS): T[][] {
   return out;
 }
 
-/** Apply route counts: `applied` is order lines (sales); `stale`/`failed` are fee writes. */
-export interface ApplyCounts { applied: number; stale: number; failed: number }
+/** Apply route counts: `applied` is order lines (sales); `appliedFees`/`stale`/`failed` are fee writes. */
+export interface ApplyCounts { applied: number; appliedFees: number; stale: number; failed: number }
 
 export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCounts {
-  return { applied: a.applied + (b.applied ?? 0), stale: a.stale + (b.stale ?? 0), failed: a.failed + (b.failed ?? 0) };
+  return {
+    applied: a.applied + (b.applied ?? 0), appliedFees: a.appliedFees + (b.appliedFees ?? 0),
+    stale: a.stale + (b.stale ?? 0), failed: a.failed + (b.failed ?? 0),
+  };
 }
 
-export function applySummary(r: Pick<ApplyCounts, "applied" | "stale">): string {
-  const head = `Updated fees on ${plural(r.applied, "order line", "order lines")}.`;
+export function applySummary(r: Pick<ApplyCounts, "applied" | "appliedFees" | "stale">): string {
+  const head = r.appliedFees === 0
+    ? "No fees were updated."
+    : `Updated ${plural(r.appliedFees, "fee", "fees")} on ${plural(r.applied, "order line", "order lines")}.`;
   return r.stale > 0
     ? `${head} ${plural(r.stale, "fee was", "fees were")} skipped — changed since the preview, or you can't edit orders.`
     : head;

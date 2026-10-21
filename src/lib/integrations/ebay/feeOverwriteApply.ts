@@ -1,7 +1,6 @@
 import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
 import { OVERWRITE_FIELDS, type ApplyChange, type OverwriteField } from "./feeOverwrite";
 
-
 export type ParsedFeeOverwriteApply =
   | { ok: true; connectionId: string; changes: ApplyChange[] }
   | { ok: false; error: string };

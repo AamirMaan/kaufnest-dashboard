@@ -348,7 +348,7 @@ describe("orderLinkedNetFees", () => {
     amount: money(o.value, o.currency ?? "EUR"), ...o,
   });
 
-  it("nets ad-fee credits, keeps platform charges gross, excludes shipping labels", () => {
+  it("nets ad-fee credits and excludes shipping labels", () => {
     const out = orderLinkedNetFees([
       linked({ value: "1.00" }),
       linked({ value: "0.40", transactionType: "CREDIT", bookingEntry: undefined }),
@@ -358,7 +358,7 @@ describe("orderLinkedNetFees", () => {
     expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: 0.6, platform_fee: 0.5 });
   });
 
-  it("never nets a platform-fee credit (it may refund the SALE's own fee)", () => {
+  it("ignores a credit whose feeType has no in-window order-linked charge (e.g. a SALE fee refund)", () => {
     const out = orderLinkedNetFees([
       linked({ value: "0.30", feeType: "REGULATORY_OPERATING_FEE" }),
       linked({ value: "5.00", transactionType: "CREDIT", bookingEntry: undefined, feeType: "FINAL_VALUE_FEE" }),
@@ -380,9 +380,18 @@ describe("orderLinkedNetFees", () => {
     expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: 0 });
   });
 
-  it("leaves the ad fee out when credits exceed in-window charges (one reverses an older charge)", () => {
+  it("marks the ad fee unknown (null) when credits exceed in-window charges (one reverses an older charge)", () => {
     const out = orderLinkedNetFees([linked({ value: "0.50" }), linked({ value: "2.00", bookingEntry: "CREDIT" })]);
-    expect(out.has("O1")).toBe(false);
+    expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: null });
+  });
+
+  it("matches credits to charges of the same feeType only", () => {
+    const out = orderLinkedNetFees([
+      linked({ value: "0.30", feeType: "REGULATORY_OPERATING_FEE" }),
+      linked({ value: "0.30", feeType: "REGULATORY_OPERATING_FEE", bookingEntry: "CREDIT" }),
+      linked({ value: "0.50", feeType: "INTERNATIONAL_FEE" }),
+    ]);
+    expect(out.get("O1")?.get("EUR")).toEqual({ platform_fee: 0.5 });
   });
 
   it("drops the order when only credits are in the window", () => {

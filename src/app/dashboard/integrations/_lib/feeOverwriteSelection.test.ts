@@ -36,8 +36,9 @@ describe("previewSkipNote", () => {
 
 describe("applySummary", () => {
   it("reports updated and skipped orders", () => {
-    expect(applySummary({ applied: 1, stale: 0 })).toBe("Updated fees on 1 order line.");
-    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 order lines. 2 fees were skipped — changed since the preview, or you can't edit orders.");
+    expect(applySummary({ applied: 1, appliedFees: 1, stale: 0 })).toBe("Updated 1 fee on 1 order line.");
+    expect(applySummary({ applied: 4, appliedFees: 6, stale: 2 })).toBe("Updated 6 fees on 4 order lines. 2 fees were skipped — changed since the preview, or you can't edit orders.");
+    expect(applySummary({ applied: 0, appliedFees: 0, stale: 3 })).toBe("No fees were updated. 3 fees were skipped — changed since the preview, or you can't edit orders.");
   });
 });
 
@@ -50,6 +51,7 @@ describe("batchRows / addApplyCounts", () => {
     expect(APPLY_BATCH_ROWS * 2).toBeLessThanOrEqual(FEE_OVERWRITE_MAX_CHANGES);
   });
   it("sums batch results, treating missing fields as 0", () => {
-    expect(addApplyCounts({ applied: 1, stale: 2, failed: 0 }, { applied: 3, failed: 1 })).toEqual({ applied: 4, stale: 2, failed: 1 });
+    expect(addApplyCounts({ applied: 1, appliedFees: 2, stale: 2, failed: 0 }, { applied: 3, appliedFees: 3, failed: 1 }))
+      .toEqual({ applied: 4, appliedFees: 5, stale: 2, failed: 1 });
   });
 });
