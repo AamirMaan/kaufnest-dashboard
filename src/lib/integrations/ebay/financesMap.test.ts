@@ -1,0 +1,99 @@
+import {
+  categoryForCharge, chargeToExpenseRow, feesByLineItem, fillEmptyFees, isAdFeeType,
+  type EbayFinanceTransaction,
+} from "./financesMap";
+
+const money = (value: string, currency = "EUR") => ({ value, currency });
+const ctx = { createdBy: "user-1", connectionId: "conn-1", accountLabel: "Main shop" };
+
+function sale(lines: EbayFinanceTransaction["orderLineItems"]): EbayFinanceTransaction {
+  return { transactionId: "t-sale", transactionType: "SALE", transactionDate: "2026-10-01T10:00:00.000Z", orderId: "12-345", orderLineItems: lines };
+}
+
+describe("isAdFeeType", () => {
+  it.each(["AD_FEE", "PREMIUM_AD_FEES", "PROMOTED_LISTING_FEE"])("%s is advertising", (t) => {
+    expect(isAdFeeType(t)).toBe(true);
+  });
+  it.each(["FINAL_VALUE_FEE", "INSERTION_FEE", "INTERNATIONAL_FEE", undefined])("%s is not", (t) => {
+    expect(isAdFeeType(t)).toBe(false);
+  });
+});
+
+describe("feesByLineItem", () => {
+  it("keys by orderId:lineItemId and buckets ad vs platform fees, summing and rounding", () => {
+    const map = feesByLineItem([
+      sale([
+        {
+          lineItemId: "L1",
+          marketplaceFees: [
+            { feeType: "FINAL_VALUE_FEE", amount: money("1.11") },
+            { feeType: "FINAL_VALUE_FEE_FIXED_PER_ORDER", amount: money("0.35") },
+            { feeType: "AD_FEE", amount: money("0.80") },
+          ],
+        },
+        { lineItemId: "L2", marketplaceFees: [{ feeType: "FINAL_VALUE_FEE", amount: money("2.00") }] },
+      ]),
+    ]);
+    expect(map.get("12-345:L1")).toEqual({ platformFee: 1.46, advertisingFee: 0.8 });
+    expect(map.get("12-345:L2")).toEqual({ platformFee: 2, advertisingFee: null });
+  });
+
+  it("ignores non-SALE transactions and SALEs without an orderId", () => {
+    const charge: EbayFinanceTransaction = { transactionId: "t1", transactionType: "NON_SALE_CHARGE", transactionDate: "2026-10-01T00:00:00Z" };
+    const noOrder = { ...sale([{ lineItemId: "L1", marketplaceFees: [] }]), orderId: undefined };
+    expect(feesByLineItem([charge, noOrder]).size).toBe(0);
+  });
+});
+
+describe("categoryForCharge", () => {
+  it("maps ad charges to advertising, labels to shipping, the rest to platform_fees", () => {
+    const base = { transactionId: "t", transactionDate: "2026-10-01T00:00:00Z" };
+    expect(categoryForCharge({ ...base, transactionType: "NON_SALE_CHARGE", feeType: "AD_FEE" })).toBe("advertising");
+    expect(categoryForCharge({ ...base, transactionType: "SHIPPING_LABEL" })).toBe("shipping");
+    expect(categoryForCharge({ ...base, transactionType: "NON_SALE_CHARGE", feeType: "INSERTION_FEE" })).toBe("platform_fees");
+    expect(categoryForCharge({ ...base, transactionType: "NON_SALE_CHARGE", feeType: "SUBSCRIPTION_FEE" })).toBe("platform_fees");
+    expect(categoryForCharge({ ...base, transactionType: "CREDIT" })).toBe("platform_fees");
+  });
+});
+
+describe("chargeToExpenseRow", () => {
+  const charge: EbayFinanceTransaction = {
+    transactionId: "abc123", transactionType: "NON_SALE_CHARGE", feeType: "INSERTION_FEE",
+    transactionDate: "2026-10-03T08:15:00.000Z", bookingEntry: "DEBIT", amount: money("0.35"),
+    transactionMemo: "Listing 1234",
+  };
+
+  it("builds a positive platform_fees expense with an ebay: external_ref", () => {
+    expect(chargeToExpenseRow(charge, ctx)).toEqual({
+      title: "eBay insertion fee", amount: 0.35, currency: "EUR", category: "platform_fees",
+      vendor: "eBay", date: "2026-10-03", description: "Main shop — Listing 1234",
+      created_by: "user-1", external_ref: "ebay:abc123", connection_id: "conn-1",
+    });
+  });
+
+  it("stores a CREDIT booking as a negative amount", () => {
+    const row = chargeToExpenseRow({ ...charge, bookingEntry: "CREDIT", amount: money("0.35") }, ctx);
+    expect(row?.amount).toBe(-0.35);
+  });
+
+  it("titles labels and bare credits sensibly", () => {
+    expect(chargeToExpenseRow({ ...charge, transactionType: "SHIPPING_LABEL", feeType: undefined }, ctx)?.title).toBe("eBay shipping label");
+    expect(chargeToExpenseRow({ ...charge, transactionType: "CREDIT", feeType: undefined }, ctx)?.title).toBe("eBay credit");
+  });
+
+  it("returns null for an unsupported currency or a missing amount", () => {
+    expect(chargeToExpenseRow({ ...charge, amount: money("1.00", "PLN") }, ctx)).toBeNull();
+    expect(chargeToExpenseRow({ ...charge, amount: undefined }, ctx)).toBeNull();
+  });
+});
+
+describe("fillEmptyFees", () => {
+  it("fills only NULL fields and never overwrites a user value", () => {
+    expect(fillEmptyFees({ platform_fee: null, advertising_fee: 1 }, { platformFee: 2, advertisingFee: 3 }))
+      .toEqual({ platform_fee: 2 });
+    expect(fillEmptyFees({ platform_fee: 0, advertising_fee: 5 }, { platformFee: 2, advertisingFee: 3 })).toBeNull();
+  });
+  it("returns null when eBay has nothing to add", () => {
+    expect(fillEmptyFees({ platform_fee: null, advertising_fee: null }, { platformFee: null, advertisingFee: null })).toBeNull();
+  });
+});
