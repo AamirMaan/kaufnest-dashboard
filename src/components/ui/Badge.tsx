@@ -58,6 +58,7 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   inventory: "Inventory",
   tax: "Tax",
   salary: "Salary",
+  platform_fees: "Platform fees",
   other: "Other",
 };
 

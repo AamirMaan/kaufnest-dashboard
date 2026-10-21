@@ -661,3 +661,8 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
   with an error), the blank tab must still be closed and the same "Couldn't
   open receipt" toast fired — a bare `await` chain would otherwise leave a
   dangling blank tab on an unhandled rejection.
+- **Categories live in `lib/utils/expenseCategories.ts`.** One list
+  (`EXPENSE_CATEGORIES`) and one label function (`expenseCategoryLabel`) serve
+  the page filter, Add/Edit modals and the import parser. `platform_fees` is
+  TS-only (`expenses.category` has no DB CHECK), and rows with `external_ref`
+  set (plus `connection_id`) were imported by the eBay charge sync (058).

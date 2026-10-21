@@ -42,6 +42,7 @@ export type ExpenseCategory =
   | "inventory"
   | "tax"
   | "salary"
+  | "platform_fees"
   | "other";
 
 /** One uploaded receipt image. `path` is a bare Storage object path — the
@@ -79,6 +80,9 @@ export interface Expense {
   fx_rate: number | null;
   fx_rate_date: string | null; // ISO date
   receipts: ExpenseReceipt[];
+  // Platform-imported charges (058): 'ebay:<transactionId>', and the account it came from.
+  external_ref: string | null;
+  connection_id: string | null;
 }
 
 /**

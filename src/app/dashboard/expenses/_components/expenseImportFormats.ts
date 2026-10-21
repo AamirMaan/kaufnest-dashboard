@@ -28,15 +28,14 @@ import {
 import { vatAmountFromGross } from "@/lib/utils/currency";
 import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
 import { categoryFor } from "../_lib/expenseCategory";
+import { EXPENSE_CATEGORIES } from "@/lib/utils/expenseCategories";
 
 // No re-export of `resolveHeaders`/`canonicalizeRow` here. Sales re-exports
 // them only because ImportSalesModal already imported them from its registry;
 // the expenses modal is new code and imports them straight from
 // @/lib/utils/importAliases.
 
-const VALID_CATEGORIES: ExpenseCategory[] = [
-  "shipping", "advertising", "software", "office", "inventory", "tax", "salary", "other",
-];
+const VALID_CATEGORIES = EXPENSE_CATEGORIES;
 
 export type ExpenseImportFormatId = "generic" | "vorsteuer";
 export type SkipReason = "blank row" | "summary row" | "zero amount" | "unsupported currency";
@@ -422,6 +421,8 @@ export function validateExpenseRow(
       fx_rate: null,
       fx_rate_date: null,
       receipts: [],
+      external_ref: null,
+      connection_id: null,
     },
     error: null,
     sheetCurrency,
