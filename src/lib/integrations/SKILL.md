@@ -105,7 +105,9 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   the 90-day window; signs requests via `ebay/signature.ts` when configured;
   throws `FinancesSignatureError` on a 215xxx signature error and
   `FinancesScopeError` on any other 403 (missing `sell.finances` scope).
-  `ebay/signature.ts` — `loadSigningConfig` (env), `signatureBase`,
+  `ebay/signature.ts` — `loadSigningConfig` (env; a malformed or non-Ed25519
+  key returns null and logs once without key material, so requests go out
+  unsigned rather than every Finances call throwing), `signatureBase`,
   `signatureHeaders` (eBay digital signatures for EU/UK sellers). `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
   `prefillFeesFor`, `chargeToExpenseRow` (returns `{ ok, row }` or a skip
   `reason`), `CHARGE_TRANSACTION_TYPES`, `orderIdOf`, `orderChargeField`,
