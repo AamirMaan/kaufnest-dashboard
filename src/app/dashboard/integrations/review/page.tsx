@@ -16,6 +16,8 @@ import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
+import { failedAccountCount } from "./_lib/failedAccountCount";
+import { seedOrderFees } from "./_lib/seedOrderFees";
 import { accountsInOrders, filterByAccount } from "./_lib/reviewAccounts";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
@@ -124,6 +126,7 @@ export default function ReviewPage() {
       .then((r) => r.json())
       .then((d: ReviewResponse) => {
         setData(d);
+        setOrderFees((prev) => seedOrderFees(d, prev));
         const first = ALL_PLATFORMS.find((p) => d[p]);
         if (first) {
           setActiveTab(first);
@@ -279,7 +282,7 @@ export default function ReviewPage() {
       }
 
       const fresh = (await freshRes.json()) as ReviewResponse;
-      const failedAccounts = Object.keys(fresh.errors ?? {}).length;
+      const failedAccounts = failedAccountCount(fresh);
 
       const items: { platform: IntegrationPlatform; order: ReviewOrder }[] = [];
       for (const platform of ALL_PLATFORMS) {
@@ -290,6 +293,7 @@ export default function ReviewPage() {
 
       if (items.length === 0) {
         setData(fresh);
+        setOrderFees((prev) => seedOrderFees(fresh, prev));
         toast.info("Nothing to sync", "No previously-imported orders found.");
         return;
       }
@@ -309,6 +313,7 @@ export default function ReviewPage() {
       }
 
       setData(fresh);
+      setOrderFees((prev) => seedOrderFees(fresh, prev));
       const syncedCount = result.imported ?? 0;
       if (failedAccounts > 0) {
         toast.warning(
@@ -367,6 +372,14 @@ export default function ReviewPage() {
       {data?.errors && Object.keys(data.errors).length > 0 && (
         <div className="rounded-[var(--radius-btn)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger)]">
           {Object.entries(data.errors).map(([connectionId, msg]) => (
+            <p key={connectionId}>{msg}</p>
+          ))}
+        </div>
+      )}
+
+      {data?.warnings && Object.keys(data.warnings).length > 0 && (
+        <div className="rounded-[var(--radius-btn)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-text)]">
+          {Object.entries(data.warnings).map(([connectionId, msg]) => (
             <p key={connectionId}>{msg}</p>
           ))}
         </div>

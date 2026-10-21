@@ -260,6 +260,10 @@ tenant hasn't had migration 046 applied yet.
 
 ## Shared dependencies (live outside this folder on purpose)
 
+- `lib/utils/expenseCategories.ts` — `EXPENSE_CATEGORIES` (single category list;
+  page, Add/Edit modals and the import parser alias it) and
+  `expenseCategoryLabel(c)` (use for every category label; never
+  `charAt(0).toUpperCase()`, which would render `Platform_fees`)
 - `components/ui/*` — `Modal`, `Button`, `FormFields` (incl. `Checkbox`),
   `DataTable`, `FilterBar`, `Badge` (`CategoryBadge`, and — 2026-09-26 —
   `CATEGORY_LABELS`, injected into `_lib/expensesSummaryTiles.ts`'s

@@ -13,11 +13,9 @@ import { vatAmountFromGross } from "@/lib/utils/currency";
 import { ReceiptUploader } from "./ReceiptUploader";
 import { useReceiptAutofill } from "./useReceiptAutofill";
 import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
+import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/utils/expenseCategories";
 
-const CATEGORIES: ExpenseCategory[] = [
-  "shipping", "advertising", "software", "office",
-  "inventory", "tax", "salary", "other",
-];
+const CATEGORIES = EXPENSE_CATEGORIES;
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
 interface Props {
@@ -234,7 +232,7 @@ export function AddExpenseModal({ open, onClose, onSuccess }: Props) {
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                  {expenseCategoryLabel(c)}
                 </option>
               ))}
             </Select>

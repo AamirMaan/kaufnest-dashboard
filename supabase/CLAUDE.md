@@ -446,6 +446,15 @@ schemas, JWT refresh, RLS helper functions, `CREATE INDEX CONCURRENTLY`).
   `user_access_base`), and `get_sales_summary` + trailing
   `p_location_id`. Apply order 056 (hard prerequisite: `s.connection_id`) →
   re-apply 055 → 057 → re-apply 005. Not applied; see `SKILL.md`.
+- `migrations/058_expenses_external_ref.sql` — adds nullable
+  `expenses.external_ref text` (dedup key for platform-imported charges,
+  `'ebay:<transactionId>'`) and `expenses.connection_id uuid` (FK
+  `platform_connections`, `ON DELETE SET NULL`) via
+  `run_on_all_tenant_schemas`, plus a FULL (non-partial) unique index
+  `idx_expenses_external_ref` so `.upsert({ onConflict })` can target it
+  (NULLs never conflict, so manual expenses are unaffected). Mirrored into
+  `provision_tenant_schema()` (005) in the same commit. No `category` change
+  (plain text, no CHECK). Not applied; see `SKILL.md`.
 - `migrations/055_section_permissions.sql` — defines
   `public.install_section_permissions(schema_name)` and runs it on every
   tenant schema (also hooked into `install_advanced_inventory()`, 047, and

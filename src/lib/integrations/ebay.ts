@@ -22,6 +22,7 @@ const EBAY_IDENTITY_URL = SANDBOX
 // authorised before any scope was added must be disconnected and
 // reconnected — a code deploy alone does not retroactively grant scopes to
 // an already-issued token/refresh-token pair.
+// sell.finances (2026-10-21) backs fee/charge import; older connections 403 on Finances until reconnected.
 // commerce.identity.readonly (2026-10-08) identifies WHICH eBay account was
 // connected, so a tenant can hold several (multi-account integrations spec).
 const EBAY_SCOPE =
@@ -29,6 +30,7 @@ const EBAY_SCOPE =
   " https://api.ebay.com/oauth/api_scope/sell.inventory" +
   " https://api.ebay.com/oauth/api_scope/sell.account" +
   " https://api.ebay.com/oauth/api_scope/sell.marketing" +
+  " https://api.ebay.com/oauth/api_scope/sell.finances" +
   " https://api.ebay.com/oauth/api_scope/commerce.identity.readonly";
 
 interface EbayTokenResponse {

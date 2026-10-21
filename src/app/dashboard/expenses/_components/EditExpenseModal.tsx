@@ -13,11 +13,9 @@ import { resolveVatAmount } from "../_lib/vatPreservation";
 import { ReceiptUploader } from "./ReceiptUploader";
 import { useReceiptAutofill } from "./useReceiptAutofill";
 import type { ExpenseCategory, Currency, Expense, ExpenseReceipt } from "@/types";
+import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/utils/expenseCategories";
 
-const CATEGORIES: ExpenseCategory[] = [
-  "shipping", "advertising", "software", "office",
-  "inventory", "tax", "salary", "other",
-];
+const CATEGORIES = EXPENSE_CATEGORIES;
 const CURRENCIES: Currency[] = ["EUR", "USD", "GBP"];
 
 interface Props {
@@ -221,7 +219,7 @@ export function EditExpenseModal({ expense, onClose, onSuccess }: Props) {
               className={autofill.highlight("category")}
             >
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                <option key={c} value={c}>{expenseCategoryLabel(c)}</option>
               ))}
             </Select>
           </Field>

@@ -34,12 +34,10 @@ import {
 } from "@/lib/utils/filters";
 import { buildExpensesTiles } from "./_lib/expensesSummaryTiles";
 import { expensesFilterParams } from "./_store/expensesFilterParams";
-import type { ExpenseCategory, Expense } from "@/types";
+import type { Expense } from "@/types";
+import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/utils/expenseCategories";
 
-const CATEGORIES: ExpenseCategory[] = [
-  "shipping", "advertising", "software", "office",
-  "inventory", "tax", "salary", "other",
-];
+const CATEGORIES = EXPENSE_CATEGORIES;
 
 const filterInputCls =
   "rounded-[var(--radius-btn)] border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-(--color-text-strong) focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] cursor-pointer";
@@ -351,7 +349,7 @@ export default function ExpensesPage() {
           >
             <option value="all">All Categories</option>
             {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              <option key={c} value={c}>{expenseCategoryLabel(c)}</option>
             ))}
           </select>
         </div>

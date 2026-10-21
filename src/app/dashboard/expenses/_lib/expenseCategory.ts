@@ -13,9 +13,10 @@ import type { ExpenseCategory } from "@/types";
  * `office` so a specific levy (e.g. "eco-contribution") or subscription isn't
  * accidentally caught by a broader logistics or office keyword.
  *
- * Selling fees and commissions deliberately fall through to "other", because
- * `ExpenseCategory` has no `fees` member — that is a documented, deliberate gap,
- * not an oversight.
+ * Selling fees and commissions deliberately still fall through to "other".
+ * `ExpenseCategory` has had a `platform_fees` member since 2026-10-21 (used by
+ * the eBay Finances charge sync), but this importer does not map to it yet —
+ * a deliberate, unchanged behaviour, not an oversight.
  *
  * Word boundaries are enforced so "rap" doesn't match "wrap" and "ads" doesn't
  * match "downloads". Pure module — no React/Supabase/Redux. The importer shows

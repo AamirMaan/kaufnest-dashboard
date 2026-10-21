@@ -100,6 +100,18 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   failure (added 2026-08-26 after a `GetMemberMessages` 502 took hours to
   diagnose with nothing in server logs — see `dashboard/messages/SKILL.md`).
   See "eBay messages (Trading API)" below.
+- `ebay/finances.ts` — Finances API client (`apiz.ebay.com`, sandbox
+  `apiz.sandbox.ebay.com`): paginated `SALE`/`REFUND`/charge transaction fetch over
+  the 90-day window; throws `FinancesScopeError` on a missing `sell.finances`
+  scope. `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
+  `prefillFeesFor`, `chargeToExpenseRow` (returns `{ ok, row }` or a skip
+  `reason`), `CHARGE_TRANSACTION_TYPES`, `orderIdOf`, `orderChargeField`,
+  `orderLinkedChargeFees`, `feeFieldFills` (the `[field, value]` pairs that
+  are NULL on the sale and set by eBay), `isCreditTxn`, `refundFeeCredits`,
+  `refundCreditToExpenseRow`).
+  `ebay/chargeSync.ts` — `applyFinanceTransactions` (upserts Expenses, fills
+  NULL order fees, stores refund fee credits), `mapLimit` +
+  `WRITE_CONCURRENCY` (10), `ChargeSyncPermissionError`, `ChargeSyncSchemaError`. See "Gotchas — Finances".
 - `ebay/messages.ts` — `fetchMemberMessages()`/`replyToMessage()`, backs the
   Messages feature (`src/app/dashboard/messages/`). See "eBay messages
   (Trading API)" below.
@@ -562,3 +574,23 @@ lookup against existing `sales` rows.
   tenant's eBay accounts (`deletesUnassignedOrders`) — matching the
   pre-multi-account behaviour. With other eBay accounts left, unassigned
   orders can't be attributed and are kept.
+
+## Gotchas — Finances (fees + account charges, migration 058)
+
+- Finances lives on the **apiz** host (`https://apiz.ebay.com`), not `api.ebay.com`; needs the `https://api.ebay.com/oauth/api_scope/sell.finances` scope. Older connections get `FinancesScopeError` -> `INTEGRATION_FINANCES_SCOPE` until reconnected. Review treats it as a `warnings` entry (non-fatal); other failures are `errors`.
+- Ad-fee type names vary across responses; always classify with `isAdFeeType`, never a string compare.
+- Two different CREDITs: `bookingEntry: "CREDIT"` (a refund of a charge) and `transactionType: "CREDIT"` with **no** `bookingEntry`; `isCreditTxn` treats both as credits. A non-order-linked credit becomes a **negative** expense, not a skipped row.
+- **Order-linked charges never become expenses.** A charge (NON_SALE_CHARGE / SHIPPING_LABEL / CREDIT) whose `references` has `referenceType === "ORDER_ID"` fills the matching sale instead: ad fee -> `advertising_fee`, `SHIPPING_LABEL` -> `shipping_cost`, else `platform_fee`; several charges for one order+field are summed. Order-linked **credits** are skipped and counted (`orderLinkedCreditsSkipped`). `sales.external_order_id` is `<orderId>:<lineItemId>`, so the lookup is `.like("external_order_id", "<orderId>:%").order(...).limit(1)` and only the first line item is filled (an order-level charge is never multiplied). Orders not yet imported are counted in `orderLinkedUnmatched` and fill on a later sync.
+- **Fee fills are guarded and honest.** One `update` per field with `.is(field, null).select("id")`; a sale counts in `ordersFeesFilled` only if a row came back. The 055 sales UPDATE policy gates on `current_user_access('orders') >= 2` in USING, so a user without Orders edit gets **0 rows, not 42501**; those are `ordersFeesNotWritten`. A missing marketplace fee `amount` is skipped, never stored as 0 (0 is sticky under fill-only-NULL).
+- Before migration 058 the expenses upsert fails with `PGRST204`/`42703`; `chargeSync` throws `ChargeSyncSchemaError` and the route returns 409 `INTEGRATION_FINANCES_DB_PENDING`.
+- Deleting an imported expense lets the next sync re-import it (its `external_ref` is gone). `finances.ts` fetches `PAGE_LIMIT` 1000 per page, `MAX_PAGES` 50 (a hard stop); the date window is provided by the caller (route / review), not by `finances.ts`.
+- Dedup is `expenses.external_ref = "ebay:<transactionId>"` with a **full** unique index (a partial index can't back `onConflict`). Fee map keys are `<orderId>:<lineItemId>`, same as `sales.external_order_id`.
+- `vendor: "eBay"` on the imported expenses is what feeds the running eBay balance; changing it breaks the balance.
+- Only `EUR`/`USD`/`GBP` are imported; other currencies are skipped and counted (`skippedCurrency`). `feeFieldFills` only returns fields that are NULL on the sale (`platform_fee`/`advertising_fee`/`shipping_cost`).
+- **Currency must match the sale (2026-10-21).** `LineItemFees.currency` is the one currency a line's fee entries share; mixed currencies give null fees, a null currency and `mixedCurrency: true` (never guessed; `prefillFeesFor` returns undefined for it, and step 2 counts it in `currencyMismatch` instead of taking the "no fees" early return). Step 2 fills only when it equals `sales.currency`; order-linked charges are grouped per order **and currency** (`orderLinkedChargeFees` → `orderId → currency → { fields, charges }`) and only the sale's currency group is used; a refund credit must match too. Every mismatch counts in `currencyMismatch` (per sale for SALE fees, per charge for order-linked charges, per refund for refund credits). Review prefill uses `prefillFeesFor`: fees only on a not-yet-imported order in the same currency.
+- **Zero is not a value.** A missing, non-numeric or **0** amount is never stored: a 0 fee entry is ignored by `feesByLineItem`/`refundFeeCredits`; a 0/invalid charge or order-linked charge counts in `skippedInvalid` (`chargeToExpenseRow` returns `reason: "invalid"`, separate from `"currency"`).
+- **CREDITs.** A `transactionType: "CREDIT"` not linked to an order is imported (negative) **only when it carries a `feeType`** (eBay's fee credit); any other is skipped as `reason: "nonFeeCredit"` and counted in `nonFeeCreditsSkipped`. A `NON_SALE_CHARGE`/`SHIPPING_LABEL` with `bookingEntry: "CREDIT"` is a fee/label refund and is still imported negative.
+- **Already-filled order-linked fields are counted.** When `feeFieldFills` drops an order-linked field because the sale already has a value, it counts in `orderLinkedAlreadyFilled` — counted per **field**, not per charge.
+- **Refund fee credits.** The sync also fetches `REFUND`. `refundFeeCredits` sums `|orderLineItems[].marketplaceFees|` per REFUND transaction; each becomes a **negative `platform_fees` expense** titled "eBay fee credit (refund)", description `<accountLabel> — order <orderId>`, `external_ref = "ebay:<refund transactionId>"` (idempotent via the same upsert). Only when the order's first line item exists (`like '<orderId>:%' limit 1`), its `status` is not `returned`/`cancelled` (those fees are already excluded by `get_platform_running_balance`/overview, so a credit would double-count) the currency matches, and the sale has a recorded `platform_fee` (NULL means the fee was never booked, e.g. its SALE fell outside the 90-day window, so there is nothing to credit). Otherwise `refundCreditsSkipped` (or `currencyMismatch`). Imported → `refundCreditsImported`; duplicates count in `chargesAlreadyImported`. **Known limitation:** a sale changed to returned/cancelled *after* its credit was stored keeps the credit (double-count until the expense is deleted by hand).
+- **Speed.** `mapLimit` stops starting new items once one has failed (in-flight items may finish). Inside each `IN_CHUNK` batch, sales lookups and guarded updates run through `mapLimit(items, WRITE_CONCURRENCY, fn)`; each task returns its outcome and counters are tallied only after the batch resolves (no counter writes from concurrent closures). Order-linked and refund lookups stay one bounded `.limit(1)` query per order. `charges/sync/route.ts` sets `export const maxDuration = 60`. The Review route runs the Finances `SALE` fetch in parallel with `fetchOrders`; the finance promise catches its own error and its warning is applied only once the orders loaded.
+- Verifier suppression: `// verifier:allow <rule> -- reason` does NOT work, because `ALLOW_RE` swallows the ASCII `--` into the rule id. Put an em dash before the justification (`// verifier:allow <rule> — reason`) and keep the comment on the offending line.

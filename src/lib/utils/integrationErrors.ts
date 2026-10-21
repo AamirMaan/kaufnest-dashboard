@@ -19,6 +19,10 @@ export const INTEGRATION_ERRORS = {
   INTEGRATION_ACCOUNT_PAUSED:
     "This account is paused. Resume it on the Integrations page, or upgrade your plan.",
   INTEGRATION_ACCOUNT_UNKNOWN: "That account no longer exists. Refresh the page and try again.",
+  INTEGRATION_FINANCES_SCOPE:
+    "Reconnect this eBay account (Reconnect on its card) to import eBay fees and charges.",
+  INTEGRATION_FINANCES_DB_PENDING:
+    "eBay charge import isn't available yet — a database update is pending. Please try again later.",
   INTEGRATION_ACCOUNT_UNIDENTIFIED:
     "We couldn't identify which seller account you signed in with. Please try connecting again.",
 } as const;

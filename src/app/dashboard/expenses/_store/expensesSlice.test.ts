@@ -31,6 +31,8 @@ const makeExpense = (overrides: Partial<Expense> = {}): Expense => ({
   fx_rate: null,
   fx_rate_date: null,
   receipts: [],
+  external_ref: null,
+  connection_id: null,
   ...overrides,
 });
 

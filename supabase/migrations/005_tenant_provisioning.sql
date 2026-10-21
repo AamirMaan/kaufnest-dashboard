@@ -910,6 +910,10 @@ BEGIN
   -- which is created above (~L311), so the FK can be added here, not inline.
   EXECUTE format('ALTER TABLE %1$I.sales ADD COLUMN IF NOT EXISTS connection_id uuid REFERENCES %1$I.platform_connections(id) ON DELETE SET NULL', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_sales_connection_id ON %1$I.sales (connection_id)', schema_name);
+  -- Platform-imported expenses (058): dedup key + source account.
+  EXECUTE format('ALTER TABLE %1$I.expenses ADD COLUMN IF NOT EXISTS external_ref text', schema_name);
+  EXECUTE format('ALTER TABLE %1$I.expenses ADD COLUMN IF NOT EXISTS connection_id uuid REFERENCES %1$I.platform_connections(id) ON DELETE SET NULL', schema_name);
+  EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_external_ref ON %1$I.expenses (external_ref)', schema_name);
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_platform_connections_platform_created ON %1$I.platform_connections (platform, created_at)', schema_name);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS idx_products_name ON %1$I.products (name)', schema_name);

@@ -41,10 +41,15 @@ to a known domain enum — they own the label text + color mapping):
 - `CategoryBadge({ category: ExpenseCategory })` — always `variant="default"`,
   maps the enum to a display label via `CATEGORY_LABELS[category] ?? category`
   (2026-09-27 final-review fix — `expenses.category` is unconstrained `text`
-  in the DB, so a value outside the known 8-entry enum falls back to itself
+  in the DB, so a value outside the known enum falls back to itself
   instead of rendering the literal word "undefined"; the Expenses feature's
   own summary-tile `categoryLabel` lambda in `page.tsx` needs the identical
   `?? c` fallback wherever it reads `CATEGORY_LABELS` directly)
+  `CATEGORY_LABELS` is derived (2026-10-21) from `EXPENSE_CATEGORIES` +
+  `expenseCategoryLabel` in `src/lib/utils/expenseCategories.ts` — add a
+  category or change a label there, never in `Badge.tsx`. `Badge.test.ts`
+  pins one label per category. The expense-report PDF (`generateInvoice.ts`)
+  uses the same `expenseCategoryLabel`.
 - `PlatformBadge({ platform: Platform })` — amazon→warning, ebay→danger, etsy→success, shopify→info, other→default
 - `StatusBadge({ status: string })` — generic (not typed to a specific enum,
   so adding a value needs no `Record<Enum,...>` TS enforcement — easy to
