@@ -47,7 +47,26 @@ export function previewSkipNote(p: { currencyMismatch: number; notImported: numb
   return parts.length ? `Not shown: ${parts.join(", ")}.` : null;
 }
 
-export function applySummary(r: { applied: number; staleSkipped: number }): string {
-  const head = `Updated ${plural(r.applied, "fee", "fees")}.`;
-  return r.staleSkipped > 0 ? `${head} ${r.staleSkipped} skipped because they changed since the preview.` : head;
+/** Mirrors MAX_APPLY_CHANGES in src/lib/integrations/ebay/feeOverwriteApply.ts (server-only). */
+export const APPLY_BATCH_SIZE = 2000;
+
+/** Splits changes into request-sized batches (the apply route rejects more than APPLY_BATCH_SIZE). */
+export function batchChanges<T>(changes: T[], size = APPLY_BATCH_SIZE): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < changes.length; i += size) out.push(changes.slice(i, i + size));
+  return out;
+}
+
+/** Apply route counts: `applied`/`stale` are orders (sales), `failed` is fee writes. */
+export interface ApplyCounts { applied: number; stale: number; failed: number }
+
+export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCounts {
+  return { applied: a.applied + (b.applied ?? 0), stale: a.stale + (b.stale ?? 0), failed: a.failed + (b.failed ?? 0) };
+}
+
+export function applySummary(r: Pick<ApplyCounts, "applied" | "stale">): string {
+  const head = `Updated fees on ${plural(r.applied, "order", "orders")}.`;
+  return r.stale > 0
+    ? `${head} ${plural(r.stale, "order was", "orders were")} skipped — changed since the preview, or you can't edit orders.`
+    : head;
 }

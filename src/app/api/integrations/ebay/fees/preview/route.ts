@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
-  const { connectionId } = (await req.json().catch(() => ({}))) as { connectionId?: string };
+  const body = (await req.json().catch(() => null)) as { connectionId?: unknown } | null;
+  const connectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
   if (!connectionId) return NextResponse.json({ error: "connectionId is required" }, { status: 400 });
 
   try {
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       types: ["SALE", "NON_SALE_CHARGE"],
       marketplaceId: conn.marketplace_id,
     });
-    const sales = await loadOverwriteSales(client, txns);
+    const sales = await loadOverwriteSales(client, txns, conn.id);
     return NextResponse.json(computeFeeOverwrites(sales, txns));
   } catch (err) {
     if (err instanceof IntegrationAccountError) return NextResponse.json({ error: err.code }, { status: 409 });

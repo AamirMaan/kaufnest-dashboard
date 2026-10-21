@@ -199,3 +199,19 @@ compare-and-set apply).
    `src/lib/integrations/`: the verifier blocks client imports of
    `@/lib/integrations/*`.
 4. The modal's primary button reads "Apply N orders" (N = ticked order lines).
+
+## Revisions (PR review, 2026-10-21)
+
+5. **Revision 2 reversed:** reads and writes are scoped to the previewed account
+   via `connection_id = <conn> OR connection_id IS NULL` (legacy rows still
+   match), so a payload can't touch another account's orders.
+6. **Fee derivation (user rulings):** the Ad Fee is **net of order-linked fee
+   credits** (refunded ad fee → 0); the Platform Fee is the SALE fees **plus**
+   order-linked non-ad charges on the first line (only when that line's SALE
+   fees are in the window). This intentionally differs from fill-only sync.
+7. Apply never stops midway; it audits every applied fee with one batched
+   insert even on partial failure, and reports `{ applied, stale }` in orders
+   plus `failed`. The modal sends batches of 2000, can't be dismissed while
+   applying, and on a partial failure closes and asks the user to reopen.
+8. A 0-row update is reported as "changed since the preview, or you can't
+   edit orders" (RLS can hide the row without a 42501).

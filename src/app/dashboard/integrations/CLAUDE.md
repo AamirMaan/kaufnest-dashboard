@@ -58,12 +58,16 @@ tenant admin grants an exception via the Users feature).
   eBay…" spinner), shows one `DataTable` row per order line with Platform/Ad
   Fee as `current → eBay` (all rows start ticked; "—" = that fee isn't
   changing), the skip note, then "Apply N orders" POSTs
-  `/api/integrations/ebay/fees/apply`. Success toasts `applySummary` and
-  closes; failure toasts and keeps the modal + selection for a retry.
+  `/api/integrations/ebay/fees/apply` in batches of `APPLY_BATCH_SIZE` (2000,
+  the route's cap). Success toasts `applySummary` (orders) and closes; a
+  failure with nothing written keeps the modal + selection for a retry; a
+  partial failure closes (the preview is stale) and says to reopen. Escape/
+  backdrop can't close it while applying.
 - `_lib/feeOverwriteSelection.ts` (+ test) — pure client half of the
   overwrite: mirrored response types (never imports the server module),
   `groupOverwriteRows`, `applyPayload` (ticked rows → changes),
-  `previewSkipNote`, `applySummary`.
+  `batchChanges`/`APPLY_BATCH_SIZE`, `addApplyCounts`, `previewSkipNote`,
+  `applySummary`.
 - `_lib/pre056Connection.ts` (+ test) — `withPre056Defaults`, used by
   `dashboard/layout.tsx`'s fallback select when 056's columns don't exist yet.
 - `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
@@ -198,15 +202,19 @@ upsert them into `sales` and update `last_synced_at` per platform.
   AND `profiles.role = super_admin`, else 403). Fetches 90 days of `SALE` +
   `NON_SALE_CHARGE`, reads the touched sales (`loadOverwriteSales`) and returns
   `computeFeeOverwrites`' `{ changes: { saleId, externalOrderId, currency,
-  date, field, from, to }[], currencyMismatch, notImported }`. **No writes.**
+  date, field, from, to }[], currencyMismatch, notImported }` — fees net of
+  eBay fee credits, platform fee incl. order-linked charges (rules:
+  `src/lib/integrations/SKILL.md`). **No writes.**
   Errors: 409 `INTEGRATION_ACCOUNT_*` / `INTEGRATION_FINANCES_SCOPE` /
   `INTEGRATION_FINANCES_SIGNATURE`, 502 generic.
 - **`/api/integrations/ebay/fees/apply/route.ts`** (`POST`, 2026-10-21) —
   `{ connectionId, changes: { saleId, field, from, to }[] }` validated by
   `parseFeeOverwriteApply` (400; max 2000). Same guard; checks the account is
-  active, then `applyFeeOverwrites` (compare-and-set per field) and one
-  `update`/`sale` audit entry per applied change (`metadata.source =
-  "ebay_fee_overwrite"`). Returns `{ applied, staleSkipped }`.
+  active, then `applyFeeOverwrites` (compare-and-set per field, scoped to
+  this account or legacy unassigned rows, never stops midway) and a batched
+  insert of one `update`/`sale` audit row per applied fee (`metadata.source =
+  "ebay_fee_overwrite"`) — also on partial failure. Returns `{ applied, stale }`
+  (orders) + `failed` (fee writes); 403/502 carry the same counts plus `error`.
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
   resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;

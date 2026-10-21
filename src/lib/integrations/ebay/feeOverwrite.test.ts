@@ -1,4 +1,4 @@
-import { applyFeeOverwrites, computeFeeOverwrites, FeeOverwritePermissionError, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
+import { accountScope, applyFeeOverwrites, computeFeeOverwrites, countSales, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
 import type { EbayFinanceTransaction } from "./financesMap";
 
 const money = (value: string, currency = "EUR") => ({ value, currency });
@@ -9,11 +9,15 @@ const row = (external_order_id: string, o: Partial<OverwriteSaleRow> = {}): Over
 const saleTxn = (orderId: string, lines: EbayFinanceTransaction["orderLineItems"]): EbayFinanceTransaction => ({
   transactionId: `s-${orderId}`, transactionType: "SALE", transactionDate: "2026-10-01T00:00:00Z", orderId, orderLineItems: lines,
 });
-const adCharge = (orderId: string, value: string, currency = "EUR"): EbayFinanceTransaction => ({
-  transactionId: `ad-${orderId}-${value}`, transactionType: "NON_SALE_CHARGE", feeType: "AD_FEE", bookingEntry: "DEBIT",
-  transactionDate: "2026-10-02T00:00:00Z", amount: money(value, currency),
+const orderCharge = (
+  orderId: string, value: string, o: { currency?: string; feeType?: string; credit?: boolean; type?: string } = {}
+): EbayFinanceTransaction => ({
+  transactionId: `c-${orderId}-${value}-${o.feeType ?? "AD_FEE"}-${o.credit ? "cr" : "db"}`,
+  transactionType: o.type ?? "NON_SALE_CHARGE", feeType: o.feeType ?? "AD_FEE", bookingEntry: o.credit ? "CREDIT" : "DEBIT",
+  transactionDate: "2026-10-02T00:00:00Z", amount: money(value, o.currency ?? "EUR"),
   references: [{ referenceId: orderId, referenceType: "ORDER_ID" }],
 });
+const adCharge = (orderId: string, value: string, currency = "EUR") => orderCharge(orderId, value, { currency });
 const fvf = (value: string, currency = "EUR") => ({ feeType: "FINAL_VALUE_FEE", amount: money(value, currency) });
 
 describe("computeFeeOverwrites", () => {
@@ -65,6 +69,33 @@ describe("computeFeeOverwrites", () => {
     ]);
   });
 
+  it("nets order-linked ad fee credits, so a refunded ad fee becomes 0", () => {
+    const r = computeFeeOverwrites([row("O1:L1", { advertising_fee: 1 })], [adCharge("O1", "1.00"), orderCharge("O1", "1.00", { credit: true })]);
+    expect(r.changes.map((c) => [c.field, c.from, c.to])).toEqual([["advertising_fee", 1, 0]]);
+  });
+
+  it("ignores order-linked credits without a feeType", () => {
+    const bare: EbayFinanceTransaction = { ...orderCharge("O1", "5.00", { credit: true, type: "CREDIT" }), feeType: undefined };
+    const r = computeFeeOverwrites([row("O1:L1")], [adCharge("O1", "1.00"), bare]);
+    expect(r.changes.map((c) => [c.field, c.to])).toEqual([["advertising_fee", 1]]);
+  });
+
+  it("adds order-linked platform charges to the first line's SALE platform fee", () => {
+    const r = computeFeeOverwrites(
+      [row("O1:L1", { platform_fee: 1.5 }), row("O1:L2")],
+      [
+        saleTxn("O1", [{ lineItemId: "L1", marketplaceFees: [fvf("1.20")] }, { lineItemId: "L2", marketplaceFees: [fvf("2.00")] }]),
+        orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE" }),
+      ]
+    );
+    expect(r.changes.map((c) => [c.externalOrderId, c.field, c.to])).toEqual([["O1:L2", "platform_fee", 2]]);
+  });
+
+  it("proposes no platform fee from order-linked charges alone (SALE fees unknown)", () => {
+    const r = computeFeeOverwrites([row("O1:L1", { platform_fee: 5 })], [orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE" })]);
+    expect(r.changes).toEqual([]);
+  });
+
   it("ignores the order-linked ad fee when any line has a SALE ad fee", () => {
     const r = computeFeeOverwrites(
       [row("O1:L1"), row("O1:L2", { advertising_fee: 0.4 })],
@@ -73,7 +104,7 @@ describe("computeFeeOverwrites", () => {
     expect(r.changes).toEqual([]);
   });
 
-  it("counts an order-linked ad fee in another currency as a mismatch", () => {
+  it("counts an order-linked fee group in another currency as a mismatch", () => {
     const r = computeFeeOverwrites([row("O1:L1")], [adCharge("O1", "1.00", "GBP")]);
     expect(r.changes).toEqual([]);
     expect(r.currencyMismatch).toBe(1);
@@ -85,73 +116,91 @@ describe("computeFeeOverwrites", () => {
   });
 });
 
-function fakeClient(opts: { sales?: OverwriteSaleRow[]; updateRows?: (id: string) => number; updateError?: { code?: string; message: string } }) {
-  const updates: { patch: unknown; filters: [string, string, unknown][] }[] = [];
-  const likes: string[] = [];
+type Recorded = { op: string; args: unknown[] };
+
+/** Chainable fake: records every builder call; terminal calls resolve per `resolve`. */
+function fakeClient(resolve: (calls: Recorded[]) => { data: unknown; error: { code?: string; message: string } | null }) {
+  const queries: Recorded[][] = [];
   const client = {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          in: (_c: string, ids: string[]) => Promise.resolve({ data: (opts.sales ?? []).filter((s) => ids.includes(s.external_order_id)), error: null }),
-          like: (_c: string, pattern: string) => ({
-            order: () => ({
-              limit: async (n: number) => {
-                likes.push(pattern);
-                const prefix = pattern.replace(/%$/, "");
-                return { data: (opts.sales ?? []).filter((s) => s.external_order_id.startsWith(prefix)).sort((a, b) => a.external_order_id.localeCompare(b.external_order_id)).slice(0, n), error: null };
-              },
-            }),
-          }),
-        }),
-      }),
-      update: (patch: unknown) => {
-        const filters: [string, string, unknown][] = [];
-        const q = {
-          eq: (c: string, v: unknown) => { filters.push(["eq", c, v]); return q; },
-          is: (c: string, v: unknown) => { filters.push(["is", c, v]); return q; },
-          select: () => {
-            updates.push({ patch, filters });
-            if (opts.updateError) return Promise.resolve({ data: null, error: opts.updateError });
-            const id = filters.find(([op, c]) => op === "eq" && c === "id")?.[2] as string;
-            const n = opts.updateRows ? opts.updateRows(id) : 1;
-            return Promise.resolve({ data: Array.from({ length: n }, () => ({ id })), error: null });
-          },
-        };
-        return q;
-      },
-    }),
+    from: (table: string) => {
+      const calls: Recorded[] = [{ op: "from", args: [table] }];
+      queries.push(calls);
+      const q: Record<string, unknown> = {};
+      for (const op of ["select", "update", "eq", "or", "is", "in", "like", "order"]) {
+        q[op] = (...args: unknown[]) => { calls.push({ op, args }); return q; };
+      }
+      q.limit = (...args: unknown[]) => { calls.push({ op: "limit", args }); return Promise.resolve(resolve(calls)); };
+      // .in(...) and update(...).select() are terminal in the code under test
+      q.then = (ok: (v: unknown) => unknown, err: (e: unknown) => unknown) => Promise.resolve(resolve(calls)).then(ok, err);
+      return q;
+    },
   };
-  return { client: client as never, updates, likes };
+  return { client: client as never, queries };
 }
+const arg = (calls: Recorded[], op: string, i = 0) => calls.find((c) => c.op === op)?.args[i];
 
 describe("loadOverwriteSales", () => {
-  it("reads SALE lines by id and looks up only uncovered order-linked orders", async () => {
-    const sales = [row("O1:L1"), row("O2:L2"), row("O2:L1")];
-    const { client, likes } = fakeClient({ sales });
+  it("scopes to the account, reads SALE lines by id and looks up only uncovered ad-fee orders", async () => {
+    const sales = [row("O1:L1"), row("O2:L2"), row("O2:L1"), row("O3:L1")];
+    const { client, queries } = fakeClient((calls) => {
+      const ids = arg(calls, "in", 1) as string[] | undefined;
+      if (ids) return { data: sales.filter((s) => ids.includes(s.external_order_id)), error: null };
+      const prefix = String(arg(calls, "like", 1)).replace(/%$/, "");
+      return { data: sales.filter((s) => s.external_order_id.startsWith(prefix)).sort((a, b) => a.external_order_id.localeCompare(b.external_order_id)).slice(0, 1), error: null };
+    });
     const out = await loadOverwriteSales(client, [
       saleTxn("O1", [{ lineItemId: "L1", marketplaceFees: [fvf("1.00")] }]),
       adCharge("O1", "0.50"),
       adCharge("O2", "0.50"),
-    ]);
-    expect(likes).toEqual(["O2:%"]);
+      orderCharge("O3", "0.30", { feeType: "REGULATORY_OPERATING_FEE" }), // non-ad only: not looked up
+    ], "conn-1");
+    expect(queries.map((c) => arg(c, "like", 1)).filter(Boolean)).toEqual(["O2:%"]);
+    expect(queries.every((c) => arg(c, "or") === accountScope("conn-1"))).toBe(true);
     expect(out.map((r) => r.external_order_id).sort()).toEqual(["O1:L1", "O2:L1"]);
   });
 });
 
 describe("applyFeeOverwrites", () => {
-  it("guards on the previewed value (eq) or emptiness (is null) and counts stale rows", async () => {
-    const { client, updates } = fakeClient({ updateRows: (id) => (id === "s2" ? 0 : 1) });
-    const r = await applyFeeOverwrites(client, [
-      { saleId: "s1", field: "platform_fee", from: 2, to: 1.2 },
-      { saleId: "s2", field: "advertising_fee", from: null, to: 0.5 },
+  const changes = [
+    { saleId: "s1", field: "platform_fee" as const, from: 2, to: 1.2 },
+    { saleId: "s2", field: "advertising_fee" as const, from: null, to: 0.5 },
+    { saleId: "s3", field: "platform_fee" as const, from: 1, to: 3 },
+  ];
+
+  it("guards on the previewed value (eq) or emptiness (is null), scopes to the account, and splits applied/stale", async () => {
+    const { client, queries } = fakeClient((calls) => {
+      const id = calls.find((c) => c.op === "eq" && c.args[0] === "id")?.args[1];
+      return { data: id === "s2" ? [] : [{ id }], error: null };
+    });
+    const r = await applyFeeOverwrites(client, changes, "conn-1");
+    expect(queries[0].map((c) => [c.op, ...c.args])).toEqual([
+      ["from", "sales"], ["update", { platform_fee: 1.2 }], ["eq", "id", "s1"], ["eq", "platform", "ebay"],
+      ["or", accountScope("conn-1")], ["eq", "platform_fee", 2], ["select", "id"],
     ]);
-    expect(updates[0]).toEqual({ patch: { platform_fee: 1.2 }, filters: [["eq", "id", "s1"], ["eq", "platform", "ebay"], ["eq", "platform_fee", 2]] });
-    expect(updates[1].filters).toContainEqual(["is", "advertising_fee", null]);
-    expect(r).toEqual({ applied: [{ saleId: "s1", field: "platform_fee", from: 2, to: 1.2 }], staleSkipped: 1 });
+    expect(queries[1].map((c) => [c.op, ...c.args])).toContainEqual(["is", "advertising_fee", null]);
+    expect(r).toEqual({ applied: [changes[0], changes[2]], stale: [changes[1]], failed: 0, permissionDenied: false });
   });
 
-  it("maps 42501 to FeeOverwritePermissionError", async () => {
-    const { client } = fakeClient({ updateError: { code: "42501", message: "denied" } });
-    await expect(applyFeeOverwrites(client, [{ saleId: "s1", field: "platform_fee", from: 1, to: 2 }])).rejects.toBeInstanceOf(FeeOverwritePermissionError);
+  it("keeps going past errors and reports what was applied, failed and denied", async () => {
+    const { client } = fakeClient((calls) => {
+      const id = calls.find((c) => c.op === "eq" && c.args[0] === "id")?.args[1];
+      if (id === "s1") return { data: null, error: { code: "42501", message: "denied" } };
+      if (id === "s2") return { data: null, error: { message: "boom" } };
+      return { data: [{ id }], error: null };
+    });
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const r = await applyFeeOverwrites(client, changes, "conn-1");
+    spy.mockRestore();
+    expect(r).toEqual({ applied: [changes[2]], stale: [], failed: 2, permissionDenied: true });
+  });
+});
+
+describe("countSales", () => {
+  it("counts distinct sales", () => {
+    expect(countSales([
+      { saleId: "a", field: "platform_fee", from: null, to: 1 },
+      { saleId: "a", field: "advertising_fee", from: null, to: 1 },
+      { saleId: "b", field: "platform_fee", from: null, to: 1 },
+    ])).toBe(2);
   });
 });

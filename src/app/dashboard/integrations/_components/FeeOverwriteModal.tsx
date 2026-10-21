@@ -11,8 +11,8 @@ import { formatDate } from "@/lib/utils/date";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency } from "@/types";
 import {
-  applyPayload, applySummary, groupOverwriteRows, previewSkipNote,
-  type FeeCell, type FeeOverwritePreviewDto, type OverwriteRow,
+  addApplyCounts, applyPayload, applySummary, batchChanges, groupOverwriteRows, previewSkipNote,
+  type ApplyCounts, type FeeCell, type FeeOverwritePreviewDto, type OverwriteRow,
 } from "../_lib/feeOverwriteSelection";
 
 interface FeeOverwriteModalProps {
@@ -75,24 +75,39 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
 
   async function handleApply() {
     setApplying(true);
+    let totals: ApplyCounts = { applied: 0, stale: 0, failed: 0 };
+    let failure: string | null = null;
     try {
-      const res = await fetch("/api/integrations/ebay/fees/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(applyPayload(connectionId, rows, selected)),
-      });
-      const json = (await res.json().catch(() => ({}))) as { applied?: number; staleSkipped?: number; error?: string };
-      if (!res.ok) {
-        // Keep the modal and selection so the user can retry.
-        toastError("Couldn't update fees", integrationErrorMessage(json.error, json.error ?? "Please try again."));
-        return;
+      // The route takes at most APPLY_BATCH_SIZE changes per request; send batches in turn.
+      for (const changes of batchChanges(applyPayload(connectionId, rows, selected).changes)) {
+        const res = await fetch("/api/integrations/ebay/fees/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ connectionId, changes }),
+        });
+        const json = (await res.json().catch(() => ({}))) as Partial<ApplyCounts> & { error?: string };
+        totals = addApplyCounts(totals, json);
+        if (!res.ok) {
+          failure = integrationErrorMessage(json.error, json.error ?? "Please try again.");
+          break;
+        }
       }
-      success("Fees updated from eBay", applySummary({ applied: json.applied ?? 0, staleSkipped: json.staleSkipped ?? 0 }));
-      onClose();
     } catch {
-      toastError("Couldn't update fees", "Please try again.");
+      failure = "Please try again.";
     } finally {
       setApplying(false);
+    }
+    if (failure === null) {
+      success("Fees updated from eBay", applySummary(totals));
+      onClose();
+    } else if (totals.applied > 0) {
+      // Some fees were written: the preview is out of date, so a retry from it would
+      // misreport them as changed. Close; reopening fetches what's left.
+      toastError("Some fees couldn't be updated", `${applySummary(totals)} ${failure} Reopen to review what's left.`);
+      onClose();
+    } else {
+      // Nothing written: keep the modal and selection so the user can retry.
+      toastError("Couldn't update fees", failure);
     }
   }
 
@@ -112,7 +127,8 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   );
 
   return (
-    <Modal title={`Overwrite fees from eBay — ${accountName}`} open={open} onClose={onClose} footer={footer}>
+    // Escape/backdrop can't dismiss the modal while a bulk write is in flight.
+    <Modal title={`Overwrite fees from eBay — ${accountName}`} open={open} onClose={applying ? () => {} : onClose} footer={footer}>
       {load.status === "loading" && (
         <p className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
           <Loader2 size={16} className="animate-spin" /> Checking eBay…

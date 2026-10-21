@@ -136,6 +136,40 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
   return { fees, creditsSkipped, skippedCurrency, skippedInvalid };
 }
 
+/** One order's order-linked platform/ad fees in one currency, net of fee credits. */
+export type OrderNetFees = Partial<Record<"platform_fee" | "advertising_fee", number>>;
+
+/**
+ * Fee overwrite only: order-linked charges NET of order-linked fee credits, per
+ * order → currency → field. Unlike orderLinkedChargeFees (fill-only sync), a credit
+ * with a feeType (eBay refunding that fee) is subtracted, so a refunded ad fee nets
+ * to 0 instead of the gross charge. Credits without a feeType aren't fee refunds and
+ * are ignored; shipping labels are left out (the overwrite doesn't touch
+ * shipping_cost). Results may be ≤ 0 — the caller clamps.
+ */
+export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, Map<string, OrderNetFees>> {
+  const out = new Map<string, Map<string, OrderNetFees>>();
+  for (const txn of txns) {
+    if (!(CHARGE_TRANSACTION_TYPES as readonly string[]).includes(txn.transactionType)) continue;
+    const orderId = orderIdOf(txn);
+    if (!orderId || !txn.amount) continue;
+    const credit = isCreditTxn(txn);
+    if (credit && !txn.feeType) continue;
+    const currency = txn.amount.currency as Currency;
+    if (!CURRENCIES.includes(currency)) continue;
+    const value = moneyValue(txn.amount);
+    if (value === null) continue;
+    const field = orderChargeField(txn);
+    if (field === "shipping_cost") continue;
+    const byCurrency = out.get(orderId) ?? new Map<string, OrderNetFees>();
+    const fees = byCurrency.get(currency) ?? {};
+    fees[field] = round2((fees[field] ?? 0) + (credit ? -value : value));
+    byCurrency.set(currency, fees);
+    out.set(orderId, byCurrency);
+  }
+  return out;
+}
+
 /**
  * Adds order-linked ad fee charges to the per-line fees. eBay books the Promoted
  * Listings fee as a NON_SALE_CHARGE referencing the order, not inside the SALE's

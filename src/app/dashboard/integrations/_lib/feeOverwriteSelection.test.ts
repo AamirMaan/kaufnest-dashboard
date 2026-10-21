@@ -1,4 +1,4 @@
-import { applyPayload, applySummary, groupOverwriteRows, previewSkipNote, type FeeChangeDto } from "./feeOverwriteSelection";
+import { addApplyCounts, applyPayload, applySummary, batchChanges, groupOverwriteRows, previewSkipNote, type FeeChangeDto } from "./feeOverwriteSelection";
 
 const c = (saleId: string, field: FeeChangeDto["field"], from: number | null, to: number): FeeChangeDto => ({
   saleId, externalOrderId: `${saleId}:L1`, currency: "EUR", date: "2026-10-01", field, from, to,
@@ -34,8 +34,18 @@ describe("previewSkipNote", () => {
 });
 
 describe("applySummary", () => {
-  it("reports applied fees and stale skips", () => {
-    expect(applySummary({ applied: 1, staleSkipped: 0 })).toBe("Updated 1 fee.");
-    expect(applySummary({ applied: 4, staleSkipped: 2 })).toBe("Updated 4 fees. 2 skipped because they changed since the preview.");
+  it("reports updated and skipped orders", () => {
+    expect(applySummary({ applied: 1, stale: 0 })).toBe("Updated fees on 1 order.");
+    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 orders. 2 orders were skipped — changed since the preview, or you can't edit orders.");
+  });
+});
+
+describe("batchChanges / addApplyCounts", () => {
+  it("splits into request-sized batches", () => {
+    expect(batchChanges([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+    expect(batchChanges([], 2)).toEqual([]);
+  });
+  it("sums batch results, treating missing fields as 0", () => {
+    expect(addApplyCounts({ applied: 1, stale: 2, failed: 0 }, { applied: 3, failed: 1 })).toEqual({ applied: 4, stale: 2, failed: 1 });
   });
 });
