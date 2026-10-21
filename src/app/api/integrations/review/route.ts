@@ -20,6 +20,8 @@ export type ReviewOrder = NormalizedOrder & {
 export type ReviewResponse = Partial<Record<IntegrationPlatform, { orders: ReviewOrder[] }>> & {
   /** Keyed by connection id (display names aren't unique); each message names its account. */
   errors?: Record<string, string>;
+  /** Non-fatal per-account notices keyed by connection id; that account's orders loaded fine. */
+  warnings?: Record<string, string>;
   /** Display names of connected accounts left out because they're paused. */
   pausedAccounts?: string[];
 };
@@ -74,6 +76,7 @@ export async function GET(_req: NextRequest) {
 
   const result: ReviewResponse = {};
   const errors: Record<string, string> = {};
+  const warnings: Record<string, string> = {};
 
   await Promise.all(
     active.map(async (conn) => {
@@ -90,7 +93,7 @@ export async function GET(_req: NextRequest) {
             }));
           } catch (err) {
             // Fee prefill must never block order review.
-            if (err instanceof FinancesScopeError) errors[conn.id] = `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}`;
+            if (err instanceof FinancesScopeError) warnings[conn.id] = `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}`;
             else console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
           }
         }
@@ -115,6 +118,7 @@ export async function GET(_req: NextRequest) {
   );
 
   if (Object.keys(errors).length > 0) result.errors = errors;
+  if (Object.keys(warnings).length > 0) result.warnings = warnings;
   if (paused.length > 0) result.pausedAccounts = paused.map(accountLabel);
   return NextResponse.json(result);
 }

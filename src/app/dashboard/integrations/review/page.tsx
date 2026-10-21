@@ -16,6 +16,7 @@ import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
+import { failedAccountCount } from "./_lib/failedAccountCount";
 import { seedOrderFees } from "./_lib/seedOrderFees";
 import { accountsInOrders, filterByAccount } from "./_lib/reviewAccounts";
 
@@ -281,7 +282,7 @@ export default function ReviewPage() {
       }
 
       const fresh = (await freshRes.json()) as ReviewResponse;
-      const failedAccounts = Object.keys(fresh.errors ?? {}).length;
+      const failedAccounts = failedAccountCount(fresh);
 
       const items: { platform: IntegrationPlatform; order: ReviewOrder }[] = [];
       for (const platform of ALL_PLATFORMS) {
@@ -369,6 +370,14 @@ export default function ReviewPage() {
       {data?.errors && Object.keys(data.errors).length > 0 && (
         <div className="rounded-[var(--radius-btn)] bg-[var(--color-danger-bg)] px-4 py-3 text-sm text-[var(--color-danger)]">
           {Object.entries(data.errors).map(([connectionId, msg]) => (
+            <p key={connectionId}>{msg}</p>
+          ))}
+        </div>
+      )}
+
+      {data?.warnings && Object.keys(data.warnings).length > 0 && (
+        <div className="rounded-[var(--radius-btn)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-warning-text)]">
+          {Object.entries(data.warnings).map(([connectionId, msg]) => (
             <p key={connectionId}>{msg}</p>
           ))}
         </div>
