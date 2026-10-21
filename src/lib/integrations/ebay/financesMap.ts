@@ -39,7 +39,9 @@ export function feesByLineItem(txns: EbayFinanceTransaction[]): Map<string, Line
     for (const line of txn.orderLineItems ?? []) {
       let platform = 0, ad = 0, hasPlatform = false, hasAd = false;
       for (const fee of line.marketplaceFees ?? []) {
-        const v = Math.abs(Number(fee.amount?.value ?? 0));
+        // A missing amount is "unknown", not a 0 fee — a stored 0 would be sticky under fill-only-NULL.
+        if (fee.amount?.value === undefined || fee.amount.value === null || fee.amount.value === "") continue;
+        const v = Math.abs(Number(fee.amount.value));
         if (!Number.isFinite(v)) continue;
         if (isAdFeeType(fee.feeType)) { ad += v; hasAd = true; } else { platform += v; hasPlatform = true; }
       }
@@ -48,6 +50,61 @@ export function feesByLineItem(txns: EbayFinanceTransaction[]): Map<string, Line
         advertisingFee: hasAd ? round2(ad) : null,
       });
     }
+  }
+  return out;
+}
+
+/** bookingEntry CREDIT, or a CREDIT transactionType that carries no bookingEntry. */
+export function isCreditTxn(txn: EbayFinanceTransaction): boolean {
+  return txn.bookingEntry === "CREDIT" || (!txn.bookingEntry && txn.transactionType === "CREDIT");
+}
+
+export type FeeField = "platform_fee" | "advertising_fee" | "shipping_cost";
+
+/** The eBay order id a charge is attached to (references entry of type ORDER_ID), else null. */
+export function orderIdOf(txn: EbayFinanceTransaction): string | null {
+  return txn.references?.find((r) => r.referenceType === "ORDER_ID" && r.referenceId)?.referenceId ?? null;
+}
+
+/** Which sales fee column an order-linked charge belongs in. */
+export function orderChargeField(txn: EbayFinanceTransaction): FeeField {
+  if (isAdFeeType(txn.feeType)) return "advertising_fee";
+  if (txn.transactionType === "SHIPPING_LABEL") return "shipping_cost";
+  return "platform_fee";
+}
+
+/** Order-linked charges summed per order+field; order-linked credits are counted, not applied. */
+export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
+  fees: Map<string, Partial<Record<FeeField, number>>>; creditsSkipped: number; skippedCurrency: number;
+} {
+  const fees = new Map<string, Partial<Record<FeeField, number>>>();
+  let creditsSkipped = 0, skippedCurrency = 0;
+  for (const txn of txns) {
+    if (!(CHARGE_TRANSACTION_TYPES as readonly string[]).includes(txn.transactionType)) continue;
+    const orderId = orderIdOf(txn);
+    if (!orderId) continue;
+    if (isCreditTxn(txn)) { creditsSkipped++; continue; }
+    const currency = txn.amount?.currency as Currency | undefined;
+    const value = Math.abs(Number(txn.amount?.value));
+    if (!currency || !CURRENCIES.includes(currency)) { if (txn.amount) skippedCurrency++; continue; }
+    if (!Number.isFinite(value)) continue;
+    const field = orderChargeField(txn);
+    const entry = fees.get(orderId) ?? {};
+    entry[field] = round2((entry[field] ?? 0) + value);
+    fees.set(orderId, entry);
+  }
+  return { fees, creditsSkipped, skippedCurrency };
+}
+
+/** Fields that are NULL on the sale and have a value from eBay: [field, value] pairs. */
+export function feeFieldFills(
+  existing: Record<FeeField, number | null>,
+  fees: Partial<Record<FeeField, number | null>>
+): [FeeField, number][] {
+  const out: [FeeField, number][] = [];
+  for (const f of ["platform_fee", "advertising_fee", "shipping_cost"] as const) {
+    const v = fees[f];
+    if (existing[f] === null && v !== undefined && v !== null) out.push([f, v]);
   }
   return out;
 }
@@ -73,7 +130,7 @@ export function chargeToExpenseRow(
   const currency = txn.amount?.currency as Currency | undefined;
   const value = Math.abs(Number(txn.amount?.value));
   if (!currency || !CURRENCIES.includes(currency) || !Number.isFinite(value)) return null;
-  const sign = txn.bookingEntry === "CREDIT" ? -1 : 1;
+  const sign = isCreditTxn(txn) ? -1 : 1;
   const memo = txn.transactionMemo ?? txn.references?.[0]?.referenceId ?? null;
   return {
     title: chargeTitle(txn),
