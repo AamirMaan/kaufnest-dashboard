@@ -48,8 +48,8 @@ export async function applyFinanceTransactions(
   const fees = feesByLineItem(txns);
   for (const ids of chunks([...fees.keys()], IN_CHUNK)) {
     const { data, error } = await client
-      .from("sales") // verifier:allow unpaginated-collection-read -- bounded: at most IN_CHUNK (200) ids per query, one sale per id
-      .select("id, external_order_id, platform_fee, advertising_fee") // verifier:allow unpaginated-collection-read -- bounded: at most IN_CHUNK (200) ids per query, one sale per external_order_id
+      .from("sales") // verifier:allow unpaginated-collection-read — bounded: at most IN_CHUNK (200) ids per query, one sale per external_order_id
+      .select("id, external_order_id, platform_fee, advertising_fee")
       .eq("platform", "ebay")
       .in("external_order_id", ids);
     if (error) throw new Error(`sales lookup failed: ${error.message}`);
