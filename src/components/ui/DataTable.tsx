@@ -185,9 +185,9 @@ export function DataTable<T>({
                               type="button"
                               onClick={() => toggleRow(id)}
                               aria-expanded={isOpen}
-                              aria-controls={panelId}
+                              aria-controls={isOpen ? panelId : undefined}
                               aria-label={isOpen ? "Collapse row" : "Expand row"}
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-(--radius-btn) text-(--color-text-muted) hover:bg-(--color-surface-subtle) hover:text-(--color-text-strong) cursor-pointer transition-colors duration-150"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-(--radius-btn) text-(--color-text-muted) hover:bg-(--color-border-subtle) hover:text-(--color-text-strong) cursor-pointer transition-colors duration-150"
                             >
                               <ChevronDown
                                 size={16}

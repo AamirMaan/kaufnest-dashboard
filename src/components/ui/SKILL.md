@@ -68,9 +68,9 @@ record here too (TS will error on the `Record<Enum, ...>` if you forget) — for
 
 ## DataTable.tsx
 
-`export function DataTable<T>({ columns, rows, keyField, emptyMessage?, selectedIds?, onSelectionChange? })`
+`export function DataTable<T>({ columns, rows, keyField, emptyMessage?, selectedIds?, onSelectionChange?, renderExpanded?: (row: T) => ReactNode, isExpandable?: (row: T) => boolean })`
 
-- `Column<T>`: `{ header, accessor?: keyof T, render?: (row: T) => ReactNode, className?, sortValue?: (row: T) => string | number }`
+- `Column<T>` (now exported): `{ header, accessor?: keyof T, render?: (row: T) => ReactNode, className?, sortValue?: (row: T) => string | number, detail?: boolean }`
   - Provide `render` for custom cell content (badges, formatted currency, actions);
     falls back to `String(row[accessor])` or `"—"`.
   - Provide `sortValue` to make a column header clickable/sortable (cycles
@@ -80,6 +80,20 @@ record here too (TS will error on the `Record<Enum, ...>` if you forget) — for
   to get a checkbox column (select-all + per-row), keyed by `String(row[keyField])`.
   Omit both for a plain read-only table.
 - `emptyMessage` defaults to `"No records found."`.
+- **Expandable rows**: the table is expandable iff any column has `detail: true`
+  or `renderExpanded` is passed (otherwise the markup is unchanged). It adds a
+  narrow chevron column after the selection checkbox. `detail` columns are
+  removed from the header/row cells and render as a label/value `<dl>` grid in
+  a full-width panel row beneath the row; `renderExpanded(row)` content renders
+  below that grid. `isExpandable(row) === false` hides that row's chevron.
+  Detail columns ignore `sortValue` and `className`. Expand state is per table
+  instance (local `useState`), keyed by `String(row[keyField])`, multiple rows
+  can be open, and it survives sorting. Pure logic lives in
+  `dataTableColumns.ts` (+ `dataTableColumns.test.ts`).
+  - Gotcha: stale ids are pruned only when a row is toggled, so paging back to
+    a previously viewed page can show rows still open (accepted).
+  - Gotcha: row ids (`String(row[keyField])`) must not contain whitespace; they
+    form the panel's HTML id / the chevron's `aria-controls`.
 
 ## FilterBar.tsx
 
@@ -314,5 +328,6 @@ re-trigger the fetch after an action the caller knows changed usage).
 `ThemeProvider` and `ToastProvider` are app-wide context providers — they're
 mounted once near the root (check `src/app/layout.tsx` or a providers wrapper
 before assuming you need to add them to a page). The rest (`Button`, `Badge`,
-`DataTable`, `FilterBar`, `FormFields`, `Modal`, `StatCard`) are stateless/
-controlled and imported directly wherever needed.
+`DataTable`, `FilterBar`, `FormFields`, `Modal`, `StatCard`) are controlled
+(`DataTable` owns its sort and expand state locally; selection stays
+controlled) and imported directly wherever needed.

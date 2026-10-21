@@ -278,7 +278,7 @@ export default function SalesPage() {
     {
       header: "Marketplace",
       detail: true,
-      render: (s: Sale) => s.marketplace ?? "—",
+      render: (s: Sale) => s.marketplace ? s.marketplace : <span className="text-sm text-[var(--color-text-muted)]">—</span>,
     },
     ...(showAccounts
       ? [
