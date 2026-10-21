@@ -35,8 +35,8 @@ describe("feesByLineItem", () => {
         { lineItemId: "L2", marketplaceFees: [{ feeType: "FINAL_VALUE_FEE", amount: money("2.00") }] },
       ]),
     ]);
-    expect(map.get("12-345:L1")).toEqual({ platformFee: 1.46, advertisingFee: 0.8, currency: "EUR" });
-    expect(map.get("12-345:L2")).toEqual({ platformFee: 2, advertisingFee: null, currency: "EUR" });
+    expect(map.get("12-345:L1")).toEqual({ platformFee: 1.46, advertisingFee: 0.8, currency: "EUR", mixedCurrency: false });
+    expect(map.get("12-345:L2")).toEqual({ platformFee: 2, advertisingFee: null, currency: "EUR", mixedCurrency: false });
   });
 
   it("ignores non-SALE transactions and SALEs without an orderId", () => {
@@ -50,7 +50,7 @@ describe("feesByLineItem", () => {
       { feeType: "FINAL_VALUE_FEE", amount: money("1.00", "EUR") },
       { feeType: "AD_FEE", amount: money("0.50", "GBP") },
     ] }])]);
-    expect(map.get("12-345:L1")).toEqual({ platformFee: null, advertisingFee: null, currency: null });
+    expect(map.get("12-345:L1")).toEqual({ platformFee: null, advertisingFee: null, currency: null, mixedCurrency: true });
   });
 
   it("treats a 0-valued fee entry as missing (P6)", () => {
@@ -58,17 +58,18 @@ describe("feesByLineItem", () => {
       { feeType: "FINAL_VALUE_FEE", amount: money("0.00") },
       { feeType: "AD_FEE", amount: money("0.40") },
     ] }])]);
-    expect(map.get("12-345:L1")).toEqual({ platformFee: null, advertisingFee: 0.4, currency: "EUR" });
+    expect(map.get("12-345:L1")).toEqual({ platformFee: null, advertisingFee: 0.4, currency: "EUR", mixedCurrency: false });
   });
 });
 
 describe("prefillFeesFor (P1/P2)", () => {
-  const fees = { platformFee: 1, advertisingFee: null, currency: "EUR" };
+  const fees = { platformFee: 1, advertisingFee: null, currency: "EUR", mixedCurrency: false };
   it("attaches fees only to a not-yet-imported order in the same currency", () => {
     expect(prefillFeesFor(fees, { currency: "EUR", imported: false })).toBe(fees);
     expect(prefillFeesFor(fees, { currency: "GBP", imported: false })).toBeUndefined();
     expect(prefillFeesFor(fees, { currency: "EUR", imported: true })).toBeUndefined();
     expect(prefillFeesFor({ ...fees, currency: null }, { currency: "EUR", imported: false })).toBeUndefined();
+    expect(prefillFeesFor({ ...fees, platformFee: null, currency: null, mixedCurrency: true }, { currency: "EUR", imported: false })).toBeUndefined();
     expect(prefillFeesFor(undefined, { currency: "EUR", imported: false })).toBeUndefined();
   });
 });
@@ -143,7 +144,7 @@ describe("F3/F4 edge cases", () => {
         { feeType: "FINAL_VALUE_FEE" }, { feeType: "AD_FEE", amount: { value: "abc", currency: "EUR" } },
       ] }],
     }]);
-    expect(m.get("O:L")).toEqual({ platformFee: null, advertisingFee: null, currency: null });
+    expect(m.get("O:L")).toEqual({ platformFee: null, advertisingFee: null, currency: null, mixedCurrency: false });
   });
 
   it("a fee-CREDIT transaction with no bookingEntry is stored negative", () => {

@@ -196,6 +196,22 @@ describe("applyFinanceTransactions", () => {
       expect(r.ordersFeesFilled).toBe(0);
     });
 
+    it("step 2 counts a mixed-currency SALE line in currencyMismatch and writes nothing", async () => {
+      const mixed: EbayFinanceTransaction = {
+        ...saleTxn,
+        orderLineItems: [{ lineItemId: "L1", marketplaceFees: [
+          { feeType: "FINAL_VALUE_FEE", amount: { value: "1.20", currency: "EUR" } },
+          { feeType: "FINAL_VALUE_FEE", amount: { value: "0.50", currency: "GBP" } },
+        ] }],
+      };
+      const { client, calls } = fakeClient({
+        sales: [{ id: "sale-1", external_order_id: "O1:L1", platform_fee: null, advertising_fee: null }],
+      });
+      const r = await applyFinanceTransactions(client, [mixed], ctx);
+      expect(calls.some((c) => c.op === "update")).toBe(false);
+      expect(r.currencyMismatch).toBe(1);
+    });
+
     it("step 3 keeps only the order-linked charges in the sale currency", async () => {
       const ref = [{ referenceId: "O1", referenceType: "ORDER_ID" }];
       const { client, calls } = fakeClient({
@@ -263,6 +279,14 @@ describe("applyFinanceTransactions", () => {
       expect(calls.some((c) => c.op === "upsert")).toBe(false);
     });
 
+    it("skips and counts a refund whose sale has no recorded platform_fee", async () => {
+      const { client, calls } = fakeClient({ sales: [{ id: "s1", external_order_id: "O1:L1", platform_fee: null, advertising_fee: null }] });
+      const r = await applyFinanceTransactions(client, [refund("O1")], ctx);
+      expect(r.refundCreditsSkipped).toBe(1);
+      expect(r.refundCreditsImported).toBe(0);
+      expect(calls.some((c) => c.op === "upsert")).toBe(false);
+    });
+
     it("skips a refund credit in another currency than the sale and counts currencyMismatch", async () => {
       const { client, calls } = fakeClient({ sales: [{ id: "s1", external_order_id: "O1:L1", platform_fee: 1, advertising_fee: null, currency: "GBP" }] });
       const r = await applyFinanceTransactions(client, [refund("O1", "EUR")], ctx);
@@ -296,6 +320,19 @@ describe("mapLimit", () => {
     });
     expect(out).toEqual([50, 10, 40, 20, 30]);
     expect(max).toBe(2);
+  });
+
+  it("starts no new item after one has failed", async () => {
+    const started: number[] = [];
+    await expect(mapLimit([1, 2, 3, 4, 5, 6], 2, async (x) => {
+      started.push(x);
+      await new Promise((r) => setTimeout(r, 1));
+      if (x === 2) throw new Error("boom");
+      return x;
+    })).rejects.toThrow("boom");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(started).not.toContain(5);
+    expect(started).not.toContain(6);
   });
 
   it("handles an empty list and rejects when a task throws", async () => {

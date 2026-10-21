@@ -39,7 +39,7 @@ export interface ChargeSyncResult {
   orderLinkedAlreadyFilled: number;
   /** Refund fee credits stored as negative platform_fees expenses. */
   refundCreditsImported: number;
-  /** Refund fee credits whose sale isn't imported, or is returned/cancelled (its fees already excluded). */
+  /** Refund fee credits whose sale isn't imported, is returned/cancelled (its fees already excluded), or has no recorded platform_fee. */
   refundCreditsSkipped: number;
 }
 /** RLS refused the write (Expenses or Orders below Edit). */
@@ -59,14 +59,20 @@ function chunks<T>(xs: T[], n: number): T[][] {
   return out;
 }
 
-/** Map with at most `limit` calls of `fn` in flight; results keep input order. Rejects on the first error. */
+/** Map with at most `limit` calls of `fn` in flight; results keep input order. Rejects on the first error and starts no new item after it. */
 export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
+  let failed = false;
   async function worker() {
-    while (next < items.length) {
+    while (!failed && next < items.length) {
       const i = next++;
-      out[i] = await fn(items[i]);
+      try {
+        out[i] = await fn(items[i]);
+      } catch (e) {
+        failed = true;
+        throw e;
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
@@ -173,7 +179,9 @@ export async function applyFinanceTransactions(
     if (error) throw new Error(`sales lookup failed: ${error.message}`);
     const outcomes = await mapLimit((data ?? []) as SaleFeeRow[], WRITE_CONCURRENCY, async (sale) => {
       const f = fees.get(sale.external_order_id);
-      if (!f || (f.platformFee === null && f.advertisingFee === null)) return { sale, mismatch: false, fill: null };
+      if (!f) return { sale, mismatch: false, fill: null };
+      if (f.mixedCurrency) return { sale, mismatch: true, fill: null };
+      if (f.platformFee === null && f.advertisingFee === null) return { sale, mismatch: false, fill: null };
       if (f.currency !== sale.currency) return { sale, mismatch: true, fill: null };
       const fills = feeFieldFills(sale, { platform_fee: f.platformFee, advertising_fee: f.advertisingFee });
       return { sale, mismatch: false, fill: await writeFills(sale, fills) };
@@ -214,7 +222,8 @@ export async function applyFinanceTransactions(
   for (const batch of chunks(refundFeeCredits(txns), IN_CHUNK)) {
     const outcomes = await mapLimit(batch, WRITE_CONCURRENCY, async (credit) => {
       const sale = await findOrderSale(credit.orderId);
-      if (!sale || FEES_EXCLUDED_STATUSES.has(sale.status)) return "skipped" as const;
+      // A refund credits a fee that was booked; with no recorded platform_fee there is nothing to credit.
+      if (!sale || FEES_EXCLUDED_STATUSES.has(sale.status) || sale.platform_fee === null) return "skipped" as const;
       if (credit.currency !== sale.currency) return "mismatch" as const;
       return refundCreditToExpenseRow(credit, sale.currency, ctx);
     });

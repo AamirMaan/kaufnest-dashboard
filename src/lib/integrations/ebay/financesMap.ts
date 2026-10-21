@@ -15,7 +15,11 @@ export interface EbayFinanceTransaction {
   references?: { referenceId: string; referenceType: string }[];
 }
 /** `currency` is the one currency all counted fee entries share; null when none counted or they mixed (then both fees are null). */
-export interface LineItemFees { platformFee: number | null; advertisingFee: number | null; currency: string | null }
+export interface LineItemFees {
+  platformFee: number | null; advertisingFee: number | null; currency: string | null;
+  /** True when the line's fees come in more than one currency (fees and currency are then null). */
+  mixedCurrency: boolean;
+}
 export interface ChargeExpenseRow {
   title: string; amount: number; currency: Currency; category: ExpenseCategory;
   vendor: string; date: string; description: string | null; created_by: string;
@@ -58,11 +62,12 @@ export function feesByLineItem(txns: EbayFinanceTransaction[]): Map<string, Line
         if (isAdFeeType(fee.feeType)) { ad += v; hasAd = true; } else { platform += v; hasPlatform = true; }
       }
       const key = `${txn.orderId}:${line.lineItemId}`;
-      if (currencies.size > 1) { out.set(key, { platformFee: null, advertisingFee: null, currency: null }); continue; }
+      if (currencies.size > 1) { out.set(key, { platformFee: null, advertisingFee: null, currency: null, mixedCurrency: true }); continue; }
       out.set(key, {
         platformFee: hasPlatform ? round2(platform) : null,
         advertisingFee: hasAd ? round2(ad) : null,
         currency: currencies.size === 1 ? [...currencies][0] : null,
+        mixedCurrency: false,
       });
     }
   }
