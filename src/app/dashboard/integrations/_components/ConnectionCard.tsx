@@ -13,6 +13,7 @@ import { formatDateTime } from "@/lib/utils/date";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { AccountState } from "@/lib/utils/activeAccounts";
 import { setConnectionStatus, upsertConnection } from "../_store/integrationsSlice";
+import { chargeSyncSummary, type ChargeSyncCounts } from "../_lib/chargeSyncSummary";
 import type { IntegrationPlatform, PlatformConnection } from "@/types";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
@@ -135,24 +136,12 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ connectionId: id }),
       });
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string; chargesImported?: number; chargesAlreadyImported?: number; skippedCurrency?: number; ordersFeesFilled?: number;
-        ordersFeesNotWritten?: number; orderLinkedCreditsSkipped?: number; orderLinkedUnmatched?: number;
-      };
+      const json = (await res.json().catch(() => ({}))) as ChargeSyncCounts & { error?: string };
       if (!res.ok) {
         toastError("Couldn't sync eBay charges", integrationErrorMessage(json.error, json.error ?? "Please try again."));
         return;
       }
-      const skipped = json.skippedCurrency ? `, ${json.skippedCurrency} skipped (unsupported currency)` : "";
-      const notes = [
-        json.ordersFeesNotWritten ? `${json.ordersFeesNotWritten} fees not written (no Orders edit access or already filled)` : "",
-        json.orderLinkedCreditsSkipped ? `${json.orderLinkedCreditsSkipped} order credits skipped` : "",
-        json.orderLinkedUnmatched ? `${json.orderLinkedUnmatched} charges waiting for their order to be imported` : "",
-      ].filter(Boolean).map((n) => `, ${n}`).join("");
-      success(
-        "eBay charges synced",
-        `${json.chargesImported ?? 0} new expenses, ${json.ordersFeesFilled ?? 0} orders got fees${skipped}${notes}.`
-      );
+      success("eBay charges synced", chargeSyncSummary(json));
     } catch {
       toastError("Couldn't sync eBay charges", "Please try again.");
     } finally {

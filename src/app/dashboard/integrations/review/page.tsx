@@ -313,7 +313,7 @@ export default function ReviewPage() {
       }
 
       setData(fresh);
-        setOrderFees((prev) => seedOrderFees(fresh, prev));
+      setOrderFees((prev) => seedOrderFees(fresh, prev));
       const syncedCount = result.imported ?? 0;
       if (failedAccounts > 0) {
         toast.warning(

@@ -34,8 +34,8 @@ tenant admin grants an exception via the Users feature).
   synced/error. `canManage`: inline rename form (PATCH `display_name`),
   Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
   orders link, eBay-only "Sync eBay charges" button (active accounts; POSTs
-  `{ connectionId }` to `/api/integrations/ebay/charges/sync`, toasts the
-  counts or the mapped error), Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
+  `{ connectionId }` to `/api/integrations/ebay/charges/sync`, toasts
+  `_lib/chargeSyncSummary.ts`'s text or the mapped error), Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
   dispatches `setConnectionStatus`), and Reconnect
   (`/connect?reconnect=<id>`, skips the connect-time cap check) on
   disconnected, error-state and legacy (no `external_account_id`) rows. PATCH success
@@ -44,6 +44,12 @@ tenant admin grants an exception via the Users feature).
   `PlatformAccountsSection`) and `needsReconnectBanner` (used by `page.tsx`
   and by `PlatformAccountsSection` to disable "Add account" while a legacy
   eBay row is pending).
+- `_lib/chargeSyncSummary.ts` (+ test) — pure `chargeSyncSummary(counts)`:
+  the "Sync eBay charges" toast text — one sentence (new expenses, orders
+  that got fees, refund fee credits when > 0) plus "Not applied: …" listing
+  only the non-zero skip counters (`orderLinkedUnmatched` reads "orders not
+  imported yet"). Declares its own `ChargeSyncCounts` type so the client
+  never imports the server-only `chargeSync.ts`.
 - `_lib/pre056Connection.ts` (+ test) — `withPre056Defaults`, used by
   `dashboard/layout.tsx`'s fallback select when 056's columns don't exist yet.
 - `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
@@ -97,7 +103,9 @@ tenant admin grants an exception via the Users feature).
   entry point here, unlike the Add/Edit Sale modals' per-field toggle
   (`dashboard/sales/_components/FeeAmountOrPercentField.tsx`).
   **eBay fee prefill (Finances API)**: for eBay orders the review route now
-  attaches `fees`; the page seeds the Ad/Platform Fee inputs from them via
+  attaches `fees` (only on not-yet-imported orders whose currency equals the
+  fees' currency — `prefillFeesFor`; the Finances fetch runs in parallel with
+  `fetchOrders`); the page seeds the Ad/Platform Fee inputs from them via
   `_lib/seedOrderFees.ts` (still hand-editable). A missing `sell.finances`
   scope is returned in the response's `warnings` map (yellow banner, NOT a
   failed account); real fetch failures stay in `errors`.
@@ -152,13 +160,20 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `connection_id` isn't an active account (`invalidImportItems`), and stamps
   `sales.connection_id`. Returns `{ imported: number }`.
 - **`/api/integrations/ebay/charges/sync/route.ts`** (`POST`) — `{ connectionId }`;
-  imports the account's non-order eBay charges as Expenses (category
-  `platform_fees`, `advertising` or `shipping`) and fills empty order fees;
-  charges tied to an order fill that order's fee fields instead of becoming
-  expenses. Returns `{ chargesImported, chargesAlreadyImported,
-  skippedCurrency, ordersFeesFilled, ordersFeesNotWritten,
-  orderLinkedCreditsSkipped, orderLinkedUnmatched }` or `{ error }`
-  (409 `INTEGRATION_FINANCES_DB_PENDING` before migration 058).
+  fetches `SALE`, `REFUND` and charge transactions; imports the account's
+  non-order eBay charges as Expenses (category `platform_fees`, `advertising`
+  or `shipping`; a bare `CREDIT` only when it has a `feeType`) and fills empty
+  order fees in the sale's own currency; charges tied to an order fill that
+  order's fee fields instead of becoming expenses; a REFUND's fee credit
+  becomes a negative `platform_fees` expense when its sale exists and is not
+  returned/cancelled. `maxDuration = 60`. Returns `{ chargesImported,
+  chargesAlreadyImported, skippedCurrency, skippedInvalid (missing/0 amount),
+  nonFeeCreditsSkipped, currencyMismatch, ordersFeesFilled,
+  ordersFeesNotWritten, orderLinkedCreditsSkipped, orderLinkedUnmatched (per
+  order), orderLinkedAlreadyFilled (per field), refundCreditsImported,
+  refundCreditsSkipped }` or `{ error }` (409
+  `INTEGRATION_FINANCES_DB_PENDING` before migration 058). Rules and the
+  refund-credit limitation: `src/lib/integrations/SKILL.md` "Gotchas — Finances".
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
   resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;
