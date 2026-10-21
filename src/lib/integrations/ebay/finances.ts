@@ -72,3 +72,21 @@ export async function fetchFinanceTransactions(
   }
   return out;
 }
+
+/**
+ * Joins settled Finances fetches: keeps every fetch that succeeded, and reports the
+ * most actionable failure — signature, then scope (both need user/admin action), then
+ * any other error (`other`, for the caller to log). `error` is null when all succeeded.
+ */
+export function settleFinanceFetches(results: PromiseSettledResult<EbayFinanceTransaction[]>[]): {
+  txns: EbayFinanceTransaction[];
+  error: { kind: "signature" | "scope" | "other"; cause: unknown } | null;
+} {
+  const txns = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+  const reasons = results.flatMap((r) => (r.status === "rejected" ? [r.reason as unknown] : []));
+  const signature = reasons.find((e) => e instanceof FinancesSignatureError);
+  if (signature !== undefined) return { txns, error: { kind: "signature", cause: signature } };
+  const scope = reasons.find((e) => e instanceof FinancesScopeError);
+  if (scope !== undefined) return { txns, error: { kind: "scope", cause: scope } };
+  return { txns, error: reasons.length ? { kind: "other", cause: reasons[0] } : null };
+}

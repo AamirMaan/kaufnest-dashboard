@@ -8,8 +8,10 @@ import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
-import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
-import { feesByLineItem, prefillFeesFor, type LineItemFees } from "@/lib/integrations/ebay/financesMap";
+import { fetchFinanceTransactions, settleFinanceFetches } from "@/lib/integrations/ebay/finances";
+import {
+  feesByLineItem, prefillFeesFor, withOrderLinkedAdFees, type EbayFinanceTransaction, type LineItemFees,
+} from "@/lib/integrations/ebay/financesMap";
 import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
 export type ReviewOrder = NormalizedOrder & {
@@ -86,33 +88,41 @@ export async function GET(_req: NextRequest) {
         const token = await ensureValidAccessToken(client, conn, adapter);
         // Fee prefill runs alongside the order fetch and must never block order review:
         // it catches its own errors and only reports a warning once the orders loaded.
-        const feesPromise: Promise<{ fees: Map<string, LineItemFees>; warning?: string }> =
+        // SALE carries the selling fees; the Promoted Listings ad fee is a separate
+        // order-linked NON_SALE_CHARGE, merged in once the order line ids are known.
+        // Two fetches so the charge volume never eats into the SALE fetch's page cap.
+        const financeOpts = { from: since, to: new Date().toISOString(), marketplaceId: conn.marketplace_id };
+        // allSettled: a failed charge fetch must not drop the SALE fees (platform-fee prefill).
+        const financesPromise: Promise<{ txns: EbayFinanceTransaction[]; warning?: string }> =
           conn.platform !== "ebay"
-            ? Promise.resolve({ fees: new Map<string, LineItemFees>() })
-            : fetchFinanceTransactions(token, {
-                from: since, to: new Date().toISOString(), types: ["SALE"], marketplaceId: conn.marketplace_id,
-              }).then(
-                (txns) => ({ fees: feesByLineItem(txns) }),
-                (err: unknown) => {
-                  if (err instanceof FinancesSignatureError) {
-                    return { fees: new Map<string, LineItemFees>(), warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
-                  }
-                  if (err instanceof FinancesScopeError) {
-                    return { fees: new Map<string, LineItemFees>(), warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
-                  }
-                  console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
-                  return { fees: new Map<string, LineItemFees>() };
+            ? Promise.resolve({ txns: [] })
+            : Promise.allSettled([
+                fetchFinanceTransactions(token, { ...financeOpts, types: ["SALE"] }),
+                fetchFinanceTransactions(token, { ...financeOpts, types: ["NON_SALE_CHARGE"] }),
+              ]).then((results) => {
+                const { txns, error } = settleFinanceFetches(results);
+                if (error?.kind === "signature") return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
+                if (error?.kind === "scope") return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
+                if (error) {
+                  console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, error.cause instanceof Error ? error.cause.message : error.cause);
                 }
-              );
-        const [orders, { fees, warning }] = await Promise.all([
+                return { txns };
+              });
+        const [orders, { txns, warning }] = await Promise.all([
           adapter.fetchOrders(token, since, conn.marketplace_id),
-          feesPromise,
+          financesPromise,
         ]);
+        const isImported = (o: NormalizedOrder) => importedSet.has(`${conn.platform}:${o.external_order_id}`);
+        const fees = withOrderLinkedAdFees(
+          feesByLineItem(txns),
+          orders.map((o) => ({ external_order_id: o.external_order_id, currency: o.currency, imported: isImported(o) })),
+          txns
+        );
         if (warning) warnings[conn.id] = warning;
         const bucket = (result[conn.platform] ??= { orders: [] });
         bucket.orders.push(
           ...orders.map((o) => {
-            const imported = importedSet.has(`${conn.platform}:${o.external_order_id}`);
+            const imported = isImported(o);
             return {
               ...o,
               imported,

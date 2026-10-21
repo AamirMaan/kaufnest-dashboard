@@ -136,6 +136,49 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
   return { fees, creditsSkipped, skippedCurrency, skippedInvalid };
 }
 
+/**
+ * Adds order-linked ad fee charges to the per-line fees. eBay books the Promoted
+ * Listings fee as a NON_SALE_CHARGE referencing the order, not inside the SALE's
+ * marketplaceFees, so feesByLineItem alone never sees it. Reuses chargeSync's
+ * orderLinkedChargeFees so Review and sync agree: credits are not applied, only the
+ * order's currency counts, and the fee goes on the order's first line (sorted, like
+ * findOrderSale — code-unit order matches Postgres here because eBay line item ids
+ * are fixed-length digit strings under one order prefix). A SALE-reported ad fee is
+ * kept (fill-only-NULL) — on any line of the order, not just the first — and an
+ * order with any line already imported is skipped:
+ * sync puts the charge on its first *imported* line, so a second import would double-count.
+ */
+export function withOrderLinkedAdFees(
+  fees: Map<string, LineItemFees>,
+  orders: readonly { external_order_id: string; currency: string; imported: boolean }[],
+  txns: EbayFinanceTransaction[]
+): Map<string, LineItemFees> {
+  const firstLine = new Map<string, { key: string; currency: string }>();
+  const partlyImported = new Set<string>();
+  const saleAd = new Set<string>(); // orders with a SALE ad fee (in the order's currency) on any line
+  for (const o of orders) {
+    const sep = o.external_order_id.indexOf(":");
+    if (sep <= 0) continue;
+    const orderId = o.external_order_id.slice(0, sep);
+    if (o.imported) partlyImported.add(orderId);
+    const lineFees = fees.get(o.external_order_id);
+    if (lineFees?.advertisingFee != null && lineFees.currency === o.currency) saleAd.add(orderId);
+    const cur = firstLine.get(orderId);
+    if (cur === undefined || o.external_order_id < cur.key) firstLine.set(orderId, { key: o.external_order_id, currency: o.currency });
+  }
+  const out = new Map(fees);
+  for (const [orderId, byCurrency] of orderLinkedChargeFees(txns).fees) {
+    const line = firstLine.get(orderId);
+    if (!line || partlyImported.has(orderId) || saleAd.has(orderId)) continue;
+    const ad = byCurrency.get(line.currency)?.fields.advertising_fee;
+    const existing = out.get(line.key);
+    if (ad === undefined || existing?.mixedCurrency) continue;
+    if (existing?.currency != null && existing.currency !== line.currency) continue;
+    out.set(line.key, { platformFee: existing?.platformFee ?? null, advertisingFee: ad, currency: line.currency, mixedCurrency: false });
+  }
+  return out;
+}
+
 /** Fields that are NULL on the sale and have a value from eBay: [field, value] pairs. */
 export function feeFieldFills(
   existing: Record<FeeField, number | null>,

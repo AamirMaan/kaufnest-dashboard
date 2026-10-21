@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "crypto";
-import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "./finances";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError, settleFinanceFetches } from "./finances";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
@@ -88,5 +88,26 @@ describe("fetchFinanceTransactions", () => {
   it("throws a plain Error on other failures", async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve("boom") }) as unknown as typeof fetch;
     await expect(fetchFinanceTransactions("tok", opts)).rejects.not.toBeInstanceOf(FinancesScopeError);
+  });
+});
+
+describe("settleFinanceFetches", () => {
+  const txn = { transactionId: "t1", transactionType: "SALE", transactionDate: "2026-10-01T00:00:00Z" };
+  const ok = (v = [txn]): PromiseSettledResult<typeof v> => ({ status: "fulfilled", value: v });
+  const fail = (reason: unknown): PromiseRejectedResult => ({ status: "rejected", reason });
+
+  it("keeps the fetch that succeeded when the other fails", () => {
+    const r = settleFinanceFetches([ok(), fail(new Error("500"))]);
+    expect(r.txns).toEqual([txn]);
+    expect(r.error?.kind).toBe("other");
+  });
+
+  it("prefers an actionable error over a generic one, signature before scope", () => {
+    expect(settleFinanceFetches([fail(new Error("500")), fail(new FinancesScopeError("x"))]).error?.kind).toBe("scope");
+    expect(settleFinanceFetches([fail(new FinancesScopeError("x")), fail(new FinancesSignatureError("y"))]).error?.kind).toBe("signature");
+  });
+
+  it("reports no error when every fetch succeeded", () => {
+    expect(settleFinanceFetches([ok(), ok([])])).toEqual({ txns: [txn], error: null });
   });
 });
