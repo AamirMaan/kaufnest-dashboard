@@ -8,8 +8,15 @@ import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
+import { fetchFinanceTransactions, FinancesScopeError } from "@/lib/integrations/ebay/finances";
+import { feesByLineItem, type LineItemFees } from "@/lib/integrations/ebay/financesMap";
+import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
-export type ReviewOrder = NormalizedOrder & { imported: boolean; connection_id: string; account_name: string };
+export type ReviewOrder = NormalizedOrder & {
+  imported: boolean; connection_id: string; account_name: string;
+  /** eBay-reported fees from the Finances API (eBay only; absent when unavailable). */
+  fees?: LineItemFees;
+};
 export type ReviewResponse = Partial<Record<IntegrationPlatform, { orders: ReviewOrder[] }>> & {
   /** Keyed by connection id (display names aren't unique); each message names its account. */
   errors?: Record<string, string>;
@@ -75,6 +82,18 @@ export async function GET(_req: NextRequest) {
         const adapter = getAdapter(conn.platform);
         const token = await ensureValidAccessToken(client, conn, adapter);
         const orders = await adapter.fetchOrders(token, since, conn.marketplace_id);
+        let fees = new Map<string, LineItemFees>();
+        if (conn.platform === "ebay") {
+          try {
+            fees = feesByLineItem(await fetchFinanceTransactions(token, {
+              from: since, to: new Date().toISOString(), types: ["SALE"], marketplaceId: conn.marketplace_id,
+            }));
+          } catch (err) {
+            // Fee prefill must never block order review.
+            if (err instanceof FinancesScopeError) errors[conn.id] = `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}`;
+            else console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
+          }
+        }
         const bucket = (result[conn.platform] ??= { orders: [] });
         bucket.orders.push(
           ...orders.map((o) => ({
@@ -82,6 +101,7 @@ export async function GET(_req: NextRequest) {
             imported: importedSet.has(`${conn.platform}:${o.external_order_id}`),
             connection_id: conn.id,
             account_name: name,
+            fees: fees.get(o.external_order_id),
           }))
         );
       } catch (err) {

@@ -16,6 +16,7 @@ import { formatCurrency, computeFeeFromPercent } from "@/lib/utils/currency";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency, IntegrationPlatform, Purchase } from "@/types";
 import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/route";
+import { seedOrderFees } from "./_lib/seedOrderFees";
 import { accountsInOrders, filterByAccount } from "./_lib/reviewAccounts";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
@@ -124,6 +125,7 @@ export default function ReviewPage() {
       .then((r) => r.json())
       .then((d: ReviewResponse) => {
         setData(d);
+        setOrderFees((prev) => seedOrderFees(d, prev));
         const first = ALL_PLATFORMS.find((p) => d[p]);
         if (first) {
           setActiveTab(first);
