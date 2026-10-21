@@ -219,45 +219,63 @@ describe("withOrderLinkedAdFees", () => {
   });
   const fvf: LineItemFees = { platformFee: 3.11, advertisingFee: null, currency: "EUR", mixedCurrency: false };
 
+  const eur = (id: string, imported = false) => ({ external_order_id: id, currency: "EUR", imported });
+
   it("adds the order's ad fee next to the SALE's platform fee (Anzeigengebühr Basis)", () => {
     const fees = new Map<string, LineItemFees>([["25-1:L1", fvf]]);
-    const out = withOrderLinkedAdFees(fees, ["25-1:L1"], [adCharge("a", "25-1", "-1.93")]);
+    const out = withOrderLinkedAdFees(fees, [eur("25-1:L1")], [adCharge("a", "25-1", "-1.93")]);
     expect(out.get("25-1:L1")).toEqual({ platformFee: 3.11, advertisingFee: 1.93, currency: "EUR", mixedCurrency: false });
     expect(fees.get("25-1:L1")?.advertisingFee).toBeNull(); // input not mutated
   });
 
-  it("puts it on the order's first line item only, summed with any SALE ad fee", () => {
-    const fees = new Map<string, LineItemFees>([
-      ["25-1:L2", fvf],
-      ["25-1:L1", { ...fvf, advertisingFee: 0.5 }],
-    ]);
-    const out = withOrderLinkedAdFees(fees, ["25-1:L2", "25-1:L1"], [adCharge("a", "25-1", "1.00"), adCharge("b", "25-1", "0.25")]);
-    expect(out.get("25-1:L1")?.advertisingFee).toBe(1.75);
+  it("sums the order's ad charges onto its first line item only", () => {
+    const fees = new Map<string, LineItemFees>([["25-1:L2", fvf], ["25-1:L1", fvf]]);
+    const out = withOrderLinkedAdFees(fees, [eur("25-1:L2"), eur("25-1:L1")], [adCharge("a", "25-1", "1.00"), adCharge("b", "25-1", "0.25")]);
+    expect(out.get("25-1:L1")?.advertisingFee).toBe(1.25);
     expect(out.get("25-1:L2")?.advertisingFee).toBeNull();
   });
 
-  it("prefills an order with no SALE fees yet when the charges share one currency", () => {
-    const out = withOrderLinkedAdFees(new Map(), ["25-1:L1"], [adCharge("a", "25-1", "2.00")]);
+  it("keeps an ad fee the SALE already reports (fill-only-NULL, like sync)", () => {
+    const fees = new Map<string, LineItemFees>([["25-1:L1", { ...fvf, advertisingFee: 0.5 }]]);
+    const out = withOrderLinkedAdFees(fees, [eur("25-1:L1")], [adCharge("a", "25-1", "1.00")]);
+    expect(out.get("25-1:L1")?.advertisingFee).toBe(0.5);
+  });
+
+  it("nets ad fee credits, and drops a fully refunded ad fee", () => {
+    const credit = (id: string, orderId: string, v: string): EbayFinanceTransaction => ({ ...adCharge(id, orderId, v), bookingEntry: "CREDIT" });
+    const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1"), eur("25-2:L1")], [
+      adCharge("a", "25-1", "2.00"), credit("b", "25-1", "0.50"),
+      adCharge("c", "25-2", "1.93"), credit("d", "25-2", "1.93"),
+    ]);
+    expect(out.get("25-1:L1")?.advertisingFee).toBe(1.5);
+    expect(out.has("25-2:L1")).toBe(false);
+  });
+
+  it("uses the order's currency: prefills with no SALE fees yet, ignores charges in other currencies", () => {
+    const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1")], [adCharge("a", "25-1", "2.00"), adCharge("b", "25-1", "9.00", "GBP")]);
     expect(out.get("25-1:L1")).toEqual({ platformFee: null, advertisingFee: 2, currency: "EUR", mixedCurrency: false });
   });
 
-  it("never mixes currencies, skips mixed lines, unknown orders, credits and non-ad charges", () => {
+  it("skips an order with any line already imported (sync fills its first imported line)", () => {
+    const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1"), eur("25-1:L2", true)], [adCharge("a", "25-1", "1.00")]);
+    expect(out.size).toBe(0);
+  });
+
+  it("skips mixed or other-currency lines, unknown orders, malformed keys and non-ad charges", () => {
     const fees = new Map<string, LineItemFees>([
-      ["25-1:L1", fvf],
+      ["25-1:L1", { ...fvf, currency: "GBP" }],
       ["25-2:L1", { platformFee: null, advertisingFee: null, currency: null, mixedCurrency: true }],
     ]);
-    const out = withOrderLinkedAdFees(fees, ["25-1:L1", "25-2:L1", "25-3:L1"], [
-      adCharge("a", "25-1", "1.00", "GBP"),
+    const out = withOrderLinkedAdFees(fees, [eur("25-1:L1"), eur("25-2:L1"), eur("25-3:L1"), eur("25-4")], [
+      adCharge("a", "25-1", "1.00"),
       adCharge("b", "25-2", "1.00"),
       adCharge("c", "99-9", "1.00"),
-      { ...adCharge("d", "25-1", "1.00"), bookingEntry: "CREDIT" },
-      { ...adCharge("e", "25-1", "1.00"), feeType: "INSERTION_FEE" },
-      adCharge("f", "25-3", "1.00"), adCharge("g", "25-3", "1.00", "GBP"),
+      { ...adCharge("d", "25-3", "1.00"), feeType: "INSERTION_FEE" },
+      adCharge("e", "25-4", "1.00"), adCharge("f", "25-", "1.00"),
     ]);
-    expect(out.get("25-1:L1")).toEqual(fvf);
+    expect(out.get("25-1:L1")?.advertisingFee).toBeNull();
     expect(out.get("25-2:L1")?.mixedCurrency).toBe(true);
-    expect(out.has("25-3:L1")).toBe(false);
-    expect(out.has("99-9:L1")).toBe(false);
+    expect(out.size).toBe(2);
   });
 });
 

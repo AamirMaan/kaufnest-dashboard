@@ -90,13 +90,16 @@ export async function GET(_req: NextRequest) {
         // it catches its own errors and only reports a warning once the orders loaded.
         // SALE carries the selling fees; the Promoted Listings ad fee is a separate
         // order-linked NON_SALE_CHARGE, merged in once the order line ids are known.
+        // Two fetches so the charge volume never eats into the SALE fetch's page cap.
+        const financeOpts = { from: since, to: new Date().toISOString(), marketplaceId: conn.marketplace_id };
         const financesPromise: Promise<{ txns: EbayFinanceTransaction[]; warning?: string }> =
           conn.platform !== "ebay"
             ? Promise.resolve({ txns: [] })
-            : fetchFinanceTransactions(token, {
-                from: since, to: new Date().toISOString(), types: ["SALE", "NON_SALE_CHARGE"], marketplaceId: conn.marketplace_id,
-              }).then(
-                (txns) => ({ txns }),
+            : Promise.all([
+                fetchFinanceTransactions(token, { ...financeOpts, types: ["SALE"] }),
+                fetchFinanceTransactions(token, { ...financeOpts, types: ["NON_SALE_CHARGE"] }),
+              ]).then(
+                ([sales, charges]) => ({ txns: [...sales, ...charges] }),
                 (err: unknown) => {
                   if (err instanceof FinancesSignatureError) {
                     return { txns: [], warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
@@ -112,12 +115,17 @@ export async function GET(_req: NextRequest) {
           adapter.fetchOrders(token, since, conn.marketplace_id),
           financesPromise,
         ]);
-        const fees = withOrderLinkedAdFees(feesByLineItem(txns), orders.map((o) => o.external_order_id), txns);
+        const isImported = (o: NormalizedOrder) => importedSet.has(`${conn.platform}:${o.external_order_id}`);
+        const fees = withOrderLinkedAdFees(
+          feesByLineItem(txns),
+          orders.map((o) => ({ external_order_id: o.external_order_id, currency: o.currency, imported: isImported(o) })),
+          txns
+        );
         if (warning) warnings[conn.id] = warning;
         const bucket = (result[conn.platform] ??= { orders: [] });
         bucket.orders.push(
           ...orders.map((o) => {
-            const imported = importedSet.has(`${conn.platform}:${o.external_order_id}`);
+            const imported = isImported(o);
             return {
               ...o,
               imported,
