@@ -33,7 +33,9 @@ tenant admin grants an exception via the Users feature).
   username subline, state `Badge` (`AccountState` from `accountState`), last
   synced/error. `canManage`: inline rename form (PATCH `display_name`),
   Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
-  orders link, Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
+  orders link, eBay-only "Sync eBay charges" button (active accounts; POSTs
+  `{ connectionId }` to `/api/integrations/ebay/charges/sync`, toasts the
+  counts or the mapped error), Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
   dispatches `setConnectionStatus`), and Reconnect
   (`/connect?reconnect=<id>`, skips the connect-time cap check) on
   disconnected, error-state and legacy (no `external_account_id`) rows. PATCH success
@@ -47,6 +49,10 @@ tenant admin grants an exception via the Users feature).
 - `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
   accounts in a tab, first-seen order) and `filterByAccount` (`"all"` or one
   `connection_id`), used by `review/page.tsx`.
+- `review/_lib/seedOrderFees.ts` (+ test) — pure seeding of the per-order fee
+  inputs from the `fees` the review route attaches to eBay orders (Finances
+  API); `review/_lib/failedAccountCount.ts` (+ test) — counts failed accounts
+  from `errors` only (never `warnings`).
 - `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
   Fetches `GET /api/integrations/review` on mount (only when eligible), renders
   platform tabs (eBay / Amazon), an order table with checkbox selection
@@ -90,6 +96,11 @@ tenant admin grants an exception via the Users feature).
   percent toggle per row (table space) — bulk-percent is the only percent
   entry point here, unlike the Add/Edit Sale modals' per-field toggle
   (`dashboard/sales/_components/FeeAmountOrPercentField.tsx`).
+  **eBay fee prefill (Finances API)**: for eBay orders the review route now
+  attaches `fees`; the page seeds the Ad/Platform Fee inputs from them via
+  `_lib/seedOrderFees.ts` (still hand-editable). A missing `sell.finances`
+  scope is returned in the response's `warnings` map (yellow banner, NOT a
+  failed account); real fetch failures stay in `errors`.
 - `_store/integrationsSlice.ts` — `state.integrations = { connections:
   PlatformConnection[]; accounts: PlatformAccount[] }`. `connections` is the
   admin view (`platform_connections` safe columns; RLS makes it `[]` for
@@ -128,7 +139,7 @@ upsert them into `sales` and update `last_synced_at` per platform.
 - **`/api/integrations/review/route.ts`** (`GET`) — fetches orders from all
   connected platforms (90-day lookback via `adapter.fetchOrders`), queries
   `sales` for existing `external_order_id` values, attaches `imported: boolean`
-  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, pausedAccounts? }`. Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by connection id and holds generic copy naming the account (raw errors are logged server-side).
+  to each `NormalizedOrder`, and returns `{ ebay?, amazon?, errors?, warnings?, pausedAccounts? }` (`warnings`, keyed by connection id, holds the non-fatal `INTEGRATION_FINANCES_SCOPE` hint; eBay orders also carry `fees`). Iterates every ACTIVE account (`resolveActiveAccounts`); each order carries `connection_id` + `account_name`; `errors` is keyed by connection id and holds generic copy naming the account (raw errors are logged server-side).
   Exports `ReviewOrder` and `ReviewResponse` types (used by `review/page.tsx`
   via `import type`).
 - **`/api/integrations/review/import/route.ts`** (`POST`) — accepts
@@ -140,6 +151,10 @@ upsert them into `sales` and update `last_synced_at` per platform.
   per account. Rejects (409 `INTEGRATION_ACCOUNT_PAUSED`) items whose
   `connection_id` isn't an active account (`invalidImportItems`), and stamps
   `sales.connection_id`. Returns `{ imported: number }`.
+- **`/api/integrations/ebay/charges/sync/route.ts`** (`POST`) — `{ connectionId }`;
+  imports the account's eBay charges as `platform_fees` Expenses and fills
+  empty order fees. Returns `{ chargesImported, chargesAlreadyImported,
+  skippedCurrency, ordersFeesFilled }` or `{ error }`.
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
   resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;

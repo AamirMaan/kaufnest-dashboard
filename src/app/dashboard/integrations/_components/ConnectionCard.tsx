@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Plug } from "lucide-react";
+import { Pencil, Plug, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormFields";
@@ -43,6 +43,7 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [syncingCharges, setSyncingCharges] = useState(false);
 
   const { id, platform } = connection;
   const label = PLATFORM_LABELS[platform];
@@ -123,6 +124,33 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
       setConfirmOpen(false);
     } catch {
       toastError("Failed to disconnect", "Please try again.");
+    }
+  }
+
+  async function handleSyncCharges() {
+    setSyncingCharges(true);
+    try {
+      const res = await fetch("/api/integrations/ebay/charges/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId: id }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string; chargesImported?: number; chargesAlreadyImported?: number; skippedCurrency?: number; ordersFeesFilled?: number;
+      };
+      if (!res.ok) {
+        toastError("Couldn't sync eBay charges", integrationErrorMessage(json.error, json.error ?? "Please try again."));
+        return;
+      }
+      const skipped = json.skippedCurrency ? `, ${json.skippedCurrency} skipped (unsupported currency)` : "";
+      success(
+        "eBay charges synced",
+        `${json.chargesImported ?? 0} new expenses, ${json.ordersFeesFilled ?? 0} orders got fees${skipped}.`
+      );
+    } catch {
+      toastError("Couldn't sync eBay charges", "Please try again.");
+    } finally {
+      setSyncingCharges(false);
     }
   }
 
@@ -214,6 +242,12 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
                   disabled={toggling || !canResume}
                 >
                   {toggling ? "Resuming…" : "Resume"}
+                </Button>
+              )}
+              {platform === "ebay" && state === "active" && (
+                <Button size="sm" variant="secondary" onClick={handleSyncCharges} disabled={syncingCharges}>
+                  <RefreshCw size={14} className={syncingCharges ? "animate-spin" : undefined} />
+                  {syncingCharges ? "Syncing…" : "Sync eBay charges"}
                 </Button>
               )}
               <Link

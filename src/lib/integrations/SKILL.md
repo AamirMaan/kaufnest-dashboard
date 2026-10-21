@@ -100,6 +100,13 @@ OAuth tokens). Consumed by `src/app/api/integrations/[platform]/*` and
   failure (added 2026-08-26 after a `GetMemberMessages` 502 took hours to
   diagnose with nothing in server logs — see `dashboard/messages/SKILL.md`).
   See "eBay messages (Trading API)" below.
+- `ebay/finances.ts` — Finances API client (`apiz.ebay.com`, sandbox
+  `apiz.sandbox.ebay.com`): paginated `SALE`/charge transaction fetch over
+  the 90-day window; throws `FinancesScopeError` on a missing `sell.finances`
+  scope. `ebay/financesMap.ts` — pure mapping (`isAdFeeType`, `feesByLineItem`,
+  `chargeToExpenseRow`, `fillEmptyFees`, `CHARGE_TRANSACTION_TYPES`).
+  `ebay/chargeSync.ts` — `applyFinanceTransactions` (upserts Expenses, fills
+  NULL order fees), `ChargeSyncPermissionError`. See "Gotchas — Finances".
 - `ebay/messages.ts` — `fetchMemberMessages()`/`replyToMessage()`, backs the
   Messages feature (`src/app/dashboard/messages/`). See "eBay messages
   (Trading API)" below.
@@ -562,3 +569,13 @@ lookup against existing `sales` rows.
   tenant's eBay accounts (`deletesUnassignedOrders`) — matching the
   pre-multi-account behaviour. With other eBay accounts left, unassigned
   orders can't be attributed and are kept.
+
+## Gotchas — Finances (fees + account charges, migration 058)
+
+- Finances lives on the **apiz** host (`https://apiz.ebay.com`), not `api.ebay.com`; needs the `https://api.ebay.com/oauth/api_scope/sell.finances` scope. Older connections get `FinancesScopeError` -> `INTEGRATION_FINANCES_SCOPE` until reconnected. Review treats it as a `warnings` entry (non-fatal); other failures are `errors`.
+- Ad-fee type names vary across responses; always classify with `isAdFeeType`, never a string compare.
+- `bookingEntry: "CREDIT"` (a refund of a charge) becomes a **negative** expense, not a skipped row.
+- Dedup is `expenses.external_ref = "ebay:<transactionId>"` with a **full** unique index (a partial index can't back `onConflict`). Fee map keys are `<orderId>:<lineItemId>`, same as `sales.external_order_id`.
+- `vendor: "eBay"` on the imported expenses is what feeds the running eBay balance; changing it breaks the balance.
+- Only `EUR`/`USD`/`GBP` are imported; other currencies are skipped and counted (`skippedCurrency`). `fillEmptyFees` only writes NULL `platform_fee`/`advertising_fee`.
+- Verifier suppression: `// verifier:allow <rule> -- reason` does NOT work, because `ALLOW_RE` swallows the ASCII `--` into the rule id. Put an em dash before the justification (`// verifier:allow <rule> — reason`) and keep the comment on the offending line.

@@ -73,7 +73,8 @@ New shared code from the migration:
   `docs/superpowers/specs/2026-10-08-multi-account-integrations-design.md`.
   Plan caps are `control.plans.max_accounts_per_platform` (→
   `PlanEntitlements.maxAccountsPerPlatform`, `lib/plans/entitlements.ts`), active rule in
-  `lib/utils/activeAccounts.ts`.
+  `lib/utils/activeAccounts.ts`. eBay Finances (fees + account charges →
+  Expenses, 058): `ebay/{finances,financesMap,chargeSync}.ts`.
 - `src/app/api/integrations/` — connect/callback/disconnect/review/import
   routes. Order sync is **manual only**, via the Integrations feature's
   "Review Orders" page — there is no scheduled/cron sync route (a
