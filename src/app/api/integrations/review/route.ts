@@ -8,7 +8,7 @@ import { accountLabel } from "@/lib/utils/platformAccounts";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
-import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
+import { fetchFinanceTransactions, settleFinanceFetches } from "@/lib/integrations/ebay/finances";
 import {
   feesByLineItem, prefillFeesFor, withOrderLinkedAdFees, type EbayFinanceTransaction, type LineItemFees,
 } from "@/lib/integrations/ebay/financesMap";
@@ -100,16 +100,12 @@ export async function GET(_req: NextRequest) {
                 fetchFinanceTransactions(token, { ...financeOpts, types: ["SALE"] }),
                 fetchFinanceTransactions(token, { ...financeOpts, types: ["NON_SALE_CHARGE"] }),
               ]).then((results) => {
-                const txns = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-                const err = results.find((r): r is PromiseRejectedResult => r.status === "rejected")?.reason as unknown;
-                if (err === undefined) return { txns };
-                if (err instanceof FinancesSignatureError) {
-                  return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
+                const { txns, error } = settleFinanceFetches(results);
+                if (error?.kind === "signature") return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SIGNATURE}` };
+                if (error?.kind === "scope") return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
+                if (error) {
+                  console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, error.cause instanceof Error ? error.cause.message : error.cause);
                 }
-                if (err instanceof FinancesScopeError) {
-                  return { txns, warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
-                }
-                console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
                 return { txns };
               });
         const [orders, { txns, warning }] = await Promise.all([

@@ -144,7 +144,8 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
  * order's currency counts, and the fee goes on the order's first line (sorted, like
  * findOrderSale — code-unit order matches Postgres here because eBay line item ids
  * are fixed-length digit strings under one order prefix). A SALE-reported ad fee is
- * kept (fill-only-NULL), and an order with any line already imported is skipped:
+ * kept (fill-only-NULL) — on any line of the order, not just the first — and an
+ * order with any line already imported is skipped:
  * sync puts the charge on its first *imported* line, so a second import would double-count.
  */
 export function withOrderLinkedAdFees(
@@ -162,13 +163,17 @@ export function withOrderLinkedAdFees(
     const cur = firstLine.get(orderId);
     if (cur === undefined || o.external_order_id < cur.key) firstLine.set(orderId, { key: o.external_order_id, currency: o.currency });
   }
+  const saleAd = new Set<string>();
+  for (const o of orders) {
+    if (fees.get(o.external_order_id)?.advertisingFee != null) saleAd.add(o.external_order_id.split(":")[0]);
+  }
   const out = new Map(fees);
   for (const [orderId, byCurrency] of orderLinkedChargeFees(txns).fees) {
     const line = firstLine.get(orderId);
-    if (!line || partlyImported.has(orderId)) continue;
+    if (!line || partlyImported.has(orderId) || saleAd.has(orderId)) continue;
     const ad = byCurrency.get(line.currency)?.fields.advertising_fee;
     const existing = out.get(line.key);
-    if (ad === undefined || existing?.mixedCurrency || existing?.advertisingFee != null) continue;
+    if (ad === undefined || existing?.mixedCurrency) continue;
     if (existing?.currency != null && existing.currency !== line.currency) continue;
     out.set(line.key, { platformFee: existing?.platformFee ?? null, advertisingFee: ad, currency: line.currency, mixedCurrency: false });
   }
