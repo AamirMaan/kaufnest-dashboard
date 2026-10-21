@@ -20,6 +20,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   inventory: "#F59E0B",
   tax: "#EF4444",
   salary: "#10B981",
+  platform_fees: "#6366F1", // indigo-500, from the fallback palette below
   other: "#64748B",
 };
 

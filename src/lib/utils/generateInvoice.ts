@@ -1,5 +1,6 @@
 import type { Sale, Expense, Purchase, CompanyProfile } from "@/types";
 import { computeOrderInvoiceTotals, computeBulkTotals, invoiceNumberFor } from "./invoiceMath";
+import { expenseCategoryLabel } from "./expenseCategories";
 
 export interface InvoiceOptions {
   customerName: string;
@@ -265,7 +266,7 @@ export async function generateExpensesInvoice(
       i + 1,
       formatDate(e.date),
       e.title,
-      e.category.charAt(0).toUpperCase() + e.category.slice(1),
+      expenseCategoryLabel(e.category),
       vendorCell,
       e.invoice_number ?? "—",
       formatMoney(e.amount, e.currency),

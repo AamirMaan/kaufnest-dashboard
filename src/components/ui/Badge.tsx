@@ -1,4 +1,5 @@
 import type { ExpenseCategory, Platform, UserRole, AuditAction } from "@/types";
+import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/utils/expenseCategories";
 
 type BadgeVariant = "default" | "success" | "warning" | "danger" | "info";
 
@@ -50,17 +51,10 @@ export function ActionBadge({ action }: { action: AuditAction }) {
   return <Badge label={action.replace("_", " ")} variant={ACTION_VARIANTS[action]} />;
 }
 
-export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  shipping: "Shipping",
-  advertising: "Advertising",
-  software: "Software",
-  office: "Office",
-  inventory: "Inventory",
-  tax: "Tax",
-  salary: "Salary",
-  platform_fees: "Platform fees",
-  other: "Other",
-};
+/** Labels come from expenseCategoryLabel so "Platform fees" is spelled in one place. */
+export const CATEGORY_LABELS = Object.fromEntries(
+  EXPENSE_CATEGORIES.map((c) => [c, expenseCategoryLabel(c)])
+) as Record<ExpenseCategory, string>;
 
 export function CategoryBadge({ category }: { category: ExpenseCategory }) {
   // `expenses.category` is unconstrained `text` in the DB — an imported or
