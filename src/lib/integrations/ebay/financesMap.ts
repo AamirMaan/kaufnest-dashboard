@@ -136,6 +136,44 @@ export function orderLinkedChargeFees(txns: EbayFinanceTransaction[]): {
   return { fees, creditsSkipped, skippedCurrency, skippedInvalid };
 }
 
+/**
+ * Adds order-linked ad fee charges to the per-line fees. eBay books the Promoted
+ * Listings fee as a NON_SALE_CHARGE referencing the order, not inside the SALE's
+ * marketplaceFees, so feesByLineItem alone never sees it. The fee goes on the
+ * order's first line item in `lineKeys` (sorted, like chargeSync's findOrderSale),
+ * only in that line's fee currency — a different currency is never guessed.
+ */
+export function withOrderLinkedAdFees(
+  fees: Map<string, LineItemFees>,
+  lineKeys: readonly string[],
+  txns: EbayFinanceTransaction[]
+): Map<string, LineItemFees> {
+  const out = new Map(fees);
+  const firstLine = new Map<string, string>();
+  for (const key of lineKeys) {
+    const orderId = key.slice(0, key.indexOf(":"));
+    if (!orderId) continue;
+    const cur = firstLine.get(orderId);
+    if (cur === undefined || key < cur) firstLine.set(orderId, key);
+  }
+  for (const [orderId, byCurrency] of orderLinkedChargeFees(txns).fees) {
+    const key = firstLine.get(orderId);
+    if (!key) continue;
+    const existing = out.get(key);
+    if (existing?.mixedCurrency) continue;
+    const currency = existing?.currency ?? (byCurrency.size === 1 ? [...byCurrency.keys()][0] : null);
+    const ad = currency === null ? undefined : byCurrency.get(currency)?.fields.advertising_fee;
+    if (ad === undefined || currency === null) continue;
+    out.set(key, {
+      platformFee: existing?.platformFee ?? null,
+      advertisingFee: round2((existing?.advertisingFee ?? 0) + ad),
+      currency,
+      mixedCurrency: false,
+    });
+  }
+  return out;
+}
+
 /** Fields that are NULL on the sale and have a value from eBay: [field, value] pairs. */
 export function feeFieldFills(
   existing: Record<FeeField, number | null>,

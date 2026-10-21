@@ -106,7 +106,11 @@ tenant admin grants an exception via the Users feature).
   attaches `fees` (only on not-yet-imported orders whose currency equals the
   fees' currency — `prefillFeesFor`; the Finances fetch runs in parallel with
   `fetchOrders`); the page seeds the Ad/Platform Fee inputs from them via
-  `_lib/seedOrderFees.ts` (still hand-editable). A missing `sell.finances`
+  `_lib/seedOrderFees.ts` (still hand-editable). The route fetches `SALE`
+  (selling fees) **and** `NON_SALE_CHARGE`, because eBay books the Promoted
+  Listings ad fee ("Anzeigengebühr") as a separate order-linked charge, not
+  in the SALE's `marketplaceFees`; `withOrderLinkedAdFees` merges it into the
+  Ad Fee prefill (2026-10-21). A missing `sell.finances`
   scope is returned in the response's `warnings` map (yellow banner, NOT a
   failed account); real fetch failures stay in `errors`.
 - `_store/integrationsSlice.ts` — `state.integrations = { connections:
