@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { DeleteConfirmModal } from "@/components/modals/DeleteConfirmModal";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { formatDateTime } from "@/lib/utils/date";
+import { canOverwriteEbayFees } from "@/lib/utils/feeOverwriteAccess";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { AccountState } from "@/lib/utils/activeAccounts";
 import { setConnectionStatus, upsertConnection } from "../_store/integrationsSlice";
 import { chargeSyncSummary, type ChargeSyncCounts } from "../_lib/chargeSyncSummary";
+import { FeeOverwriteModal } from "./FeeOverwriteModal";
 import type { IntegrationPlatform, PlatformConnection } from "@/types";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
@@ -45,6 +47,8 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
   const [toggling, setToggling] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [syncingCharges, setSyncingCharges] = useState(false);
+  const [overwriteOpen, setOverwriteOpen] = useState(false);
+  const canOverwriteFees = canOverwriteEbayFees(useAppSelector((s) => s.currentUser.profile?.role));
 
   const { id, platform } = connection;
   const label = PLATFORM_LABELS[platform];
@@ -245,6 +249,11 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
                   {syncingCharges ? "Syncing…" : "Sync eBay charges"}
                 </Button>
               )}
+              {platform === "ebay" && state === "active" && canOverwriteFees && (
+                <Button size="sm" variant="secondary" onClick={() => setOverwriteOpen(true)}>
+                  Overwrite fees from eBay
+                </Button>
+              )}
               <Link
                 href="/dashboard/integrations/review"
                 className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-btn)] font-semibold transition-colors cursor-pointer px-3 py-1.5 text-xs bg-[var(--color-surface)] hover:bg-[var(--color-surface-subtle)] text-[var(--color-text-base)] border border-[var(--color-border)]"
@@ -269,6 +278,11 @@ export function ConnectionCard({ connection, state, canResume, canManage }: Conn
         onConfirm={handleDisconnect}
         onClose={() => setConfirmOpen(false)}
       />
+
+      {/* Mounted only while open, so every opening fetches a fresh preview. */}
+      {overwriteOpen && (
+        <FeeOverwriteModal open connectionId={id} accountName={displayName} onClose={() => setOverwriteOpen(false)} />
+      )}
     </div>
   );
 }

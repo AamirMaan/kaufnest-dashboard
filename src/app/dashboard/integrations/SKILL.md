@@ -45,12 +45,29 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
 - **Add pagination to the review page**: `api/integrations/review/route.ts`
   (add `page`/`cursor` query param, thread through to `adapter.fetchOrders`)
   + `review/page.tsx` (add "Load more" button).
+- **Change the eBay fee overwrite** (super_admin, preview + approve):
+  which fees/how eBay's value is derived → `src/lib/integrations/ebay/feeOverwrite.ts`
+  (+ test); apply validation → `ebay/feeOverwriteApply.ts` (+ test); routes →
+  `api/integrations/ebay/fees/{preview,apply}/route.ts`; UI →
+  `_components/FeeOverwriteModal.tsx` + `_lib/feeOverwriteSelection.ts` (+ test);
+  who may use it → `src/lib/utils/feeOverwriteAccess.ts` (shared by
+  `ConnectionCard` and `requireIntegrationSuperAdmin`).
 
 ## Test command
 
 `npx jest dashboard/integrations`
 
 ## Gotchas
+
+- **The fee overwrite is the ONLY path that replaces a non-null order fee.**
+  "Sync eBay charges" and the Review prefill only fill empty fields. The
+  overwrite never *clears* a fee (an eBay `null` is never proposed) and its
+  apply is compare-and-set on the value shown in the preview — a fee edited in
+  between is skipped (`staleSkipped`), not overwritten. Only `super_admin`
+  (not `admin`) gets the button and passes the routes.
+- **The overwrite's role rule lives in `src/lib/utils/`, not `lib/integrations/`**,
+  because the verifier blocks any `@/lib/integrations/*` import from a
+  `"use client"` file and `ConnectionCard` needs `canOverwriteEbayFees`.
 
 - **No Supabase calls in this folder.** All reads come from Redux
   (hydrated by `dashboard/layout.tsx`); all writes go through

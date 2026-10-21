@@ -184,3 +184,18 @@ the write scoped to the account that was previewed.
 gotcha: overwrite is the only path that replaces a non-null fee) and
 `src/lib/integrations/SKILL.md` (Finances section: shared fee derivation,
 compare-and-set apply).
+
+## Revisions (planning, 2026-10-21)
+
+1. **No extraction from `chargeSync.ts`.** `feesByLineItem` and
+   `orderLinkedChargeFees` are already exported from `financesMap.ts` and are
+   exactly what charge sync uses; `computeFeeOverwrites` composes them
+   directly. Only `IN_CHUNK`/`chunks` were exported from `chargeSync.ts`.
+2. **Apply does not filter writes by `connection_id`.** Legacy rows may have
+   `connection_id = NULL` and would always count as stale. The write is scoped
+   by `id` + `platform = 'ebay'` + compare-and-set on the previewed value; the
+   route still requires the account to be active.
+3. **The role predicate lives at `src/lib/utils/feeOverwriteAccess.ts`**, not
+   `src/lib/integrations/`: the verifier blocks client imports of
+   `@/lib/integrations/*`.
+4. The modal's primary button reads "Apply N orders" (N = ticked order lines).

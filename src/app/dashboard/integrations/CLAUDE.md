@@ -35,7 +35,10 @@ tenant admin grants an exception via the Users feature).
   Pause/Resume (PATCH `is_active`; Resume disabled when `!canResume`), Review
   orders link, eBay-only "Sync eBay charges" button (active accounts; POSTs
   `{ connectionId }` to `/api/integrations/ebay/charges/sync`, toasts
-  `_lib/chargeSyncSummary.ts`'s text or the mapped error), Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
+  `_lib/chargeSyncSummary.ts`'s text or the mapped error), **super_admin-only**
+  "Overwrite fees from eBay" (active eBay accounts; `canOverwriteEbayFees` from
+  `lib/utils/feeOverwriteAccess.ts` on `currentUser.profile.role`; mounts
+  `FeeOverwriteModal` only while open), Disconnect via `DeleteConfirmModal` (POST `{ connectionId }`;
   dispatches `setConnectionStatus`), and Reconnect
   (`/connect?reconnect=<id>`, skips the connect-time cap check) on
   disconnected, error-state and legacy (no `external_account_id`) rows. PATCH success
@@ -50,6 +53,17 @@ tenant admin grants an exception via the Users feature).
   only the non-zero skip counters (`orderLinkedUnmatched` reads "orders not
   imported yet"). Declares its own `ChargeSyncCounts` type so the client
   never imports the server-only `chargeSync.ts`.
+- `_components/FeeOverwriteModal.tsx` (2026-10-21) — the eBay fee overwrite
+  review: POSTs `/api/integrations/ebay/fees/preview` on open ("Checking
+  eBay…" spinner), shows one `DataTable` row per order line with Platform/Ad
+  Fee as `current → eBay` (all rows start ticked; "—" = that fee isn't
+  changing), the skip note, then "Apply N orders" POSTs
+  `/api/integrations/ebay/fees/apply`. Success toasts `applySummary` and
+  closes; failure toasts and keeps the modal + selection for a retry.
+- `_lib/feeOverwriteSelection.ts` (+ test) — pure client half of the
+  overwrite: mirrored response types (never imports the server module),
+  `groupOverwriteRows`, `applyPayload` (ticked rows → changes),
+  `previewSkipNote`, `applySummary`.
 - `_lib/pre056Connection.ts` (+ test) — `withPre056Defaults`, used by
   `dashboard/layout.tsx`'s fallback select when 056's columns don't exist yet.
 - `review/_lib/reviewAccounts.ts` (+ test) — pure `accountsInOrders` (distinct
@@ -179,6 +193,20 @@ upsert them into `sales` and update `last_synced_at` per platform.
   refundCreditsSkipped }` or `{ error }` (409
   `INTEGRATION_FINANCES_DB_PENDING` before migration 058). Rules and the
   refund-credit limitation: `src/lib/integrations/SKILL.md` "Gotchas — Finances".
+- **`/api/integrations/ebay/fees/preview/route.ts`** (`POST`, 2026-10-21) —
+  `{ connectionId }`; guard `requireIntegrationSuperAdmin()` (integrations ≥ 2
+  AND `profiles.role = super_admin`, else 403). Fetches 90 days of `SALE` +
+  `NON_SALE_CHARGE`, reads the touched sales (`loadOverwriteSales`) and returns
+  `computeFeeOverwrites`' `{ changes: { saleId, externalOrderId, currency,
+  date, field, from, to }[], currencyMismatch, notImported }`. **No writes.**
+  Errors: 409 `INTEGRATION_ACCOUNT_*` / `INTEGRATION_FINANCES_SCOPE` /
+  `INTEGRATION_FINANCES_SIGNATURE`, 502 generic.
+- **`/api/integrations/ebay/fees/apply/route.ts`** (`POST`, 2026-10-21) —
+  `{ connectionId, changes: { saleId, field, from, to }[] }` validated by
+  `parseFeeOverwriteApply` (400; max 2000). Same guard; checks the account is
+  active, then `applyFeeOverwrites` (compare-and-set per field) and one
+  `update`/`sale` audit entry per applied change (`metadata.source =
+  "ebay_fee_overwrite"`). Returns `{ applied, staleSkipped }`.
 - **`/api/integrations/connections/[id]/route.ts`** (`PATCH`) — rename / pause /
   resume one account (`parseConnectionPatch`; resume gated by `canResumeAccount`, 409 `INTEGRATION_RESUME_LIMIT` at the cap).
 - `[platform]/disconnect` now takes `{ connectionId }` and keeps the row;
@@ -220,4 +248,6 @@ now fails closed — the old `?? "trial"` fallback is gone).
 ## Tests
 
 `npx jest dashboard/integrations` runs `_store/integrationsSlice.test.ts`,
-`_lib/accountSummary.test.ts` and `review/_lib/reviewAccounts.test.ts`.
+the `_lib/*.test.ts` files (incl. `feeOverwriteSelection`) and the
+`review/_lib/*.test.ts` files. Server half of the fee overwrite:
+`npx jest src/lib/integrations/ebay/feeOverwrite src/lib/utils/feeOverwriteAccess`.
