@@ -155,17 +155,16 @@ export function withOrderLinkedAdFees(
 ): Map<string, LineItemFees> {
   const firstLine = new Map<string, { key: string; currency: string }>();
   const partlyImported = new Set<string>();
+  const saleAd = new Set<string>(); // orders with a SALE ad fee (in the order's currency) on any line
   for (const o of orders) {
     const sep = o.external_order_id.indexOf(":");
     if (sep <= 0) continue;
     const orderId = o.external_order_id.slice(0, sep);
     if (o.imported) partlyImported.add(orderId);
+    const lineFees = fees.get(o.external_order_id);
+    if (lineFees?.advertisingFee != null && lineFees.currency === o.currency) saleAd.add(orderId);
     const cur = firstLine.get(orderId);
     if (cur === undefined || o.external_order_id < cur.key) firstLine.set(orderId, { key: o.external_order_id, currency: o.currency });
-  }
-  const saleAd = new Set<string>();
-  for (const o of orders) {
-    if (fees.get(o.external_order_id)?.advertisingFee != null) saleAd.add(o.external_order_id.split(":")[0]);
   }
   const out = new Map(fees);
   for (const [orderId, byCurrency] of orderLinkedChargeFees(txns).fees) {

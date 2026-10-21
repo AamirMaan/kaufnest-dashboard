@@ -248,6 +248,12 @@ describe("withOrderLinkedAdFees", () => {
     expect(out.get("25-1:L2")?.advertisingFee).toBe(1);
   });
 
+  it("ignores a SALE ad fee in another currency (prefillFeesFor drops it anyway)", () => {
+    const fees = new Map<string, LineItemFees>([["25-1:L2", { ...fvf, advertisingFee: 1, currency: "GBP" }]]);
+    const out = withOrderLinkedAdFees(fees, [eur("25-1:L1"), eur("25-1:L2")], [adCharge("a", "25-1", "1.00")]);
+    expect(out.get("25-1:L1")?.advertisingFee).toBe(1);
+  });
+
   it("does not apply ad fee credits, like chargeSync's orderLinkedChargeFees", () => {
     const out = withOrderLinkedAdFees(new Map(), [eur("25-1:L1")], [
       adCharge("a", "25-1", "2.00"), { ...adCharge("b", "25-1", "0.50"), bookingEntry: "CREDIT" },
