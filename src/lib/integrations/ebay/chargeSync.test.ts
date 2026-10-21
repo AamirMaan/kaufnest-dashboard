@@ -1,8 +1,11 @@
-import { applyFinanceTransactions, ChargeSyncPermissionError, ChargeSyncSchemaError } from "./chargeSync";
+import { applyFinanceTransactions, ChargeSyncPermissionError, ChargeSyncSchemaError, mapLimit, WRITE_CONCURRENCY } from "./chargeSync";
 import type { EbayFinanceTransaction } from "./financesMap";
 
 type Call = { table: string; op: string; args: unknown[] };
-type SaleRow = { id: string; external_order_id: string; platform_fee: number | null; advertising_fee: number | null; shipping_cost?: number | null };
+type SaleRow = {
+  id: string; external_order_id: string; platform_fee: number | null; advertising_fee: number | null;
+  shipping_cost?: number | null; currency?: string; status?: string;
+};
 
 function fakeClient(opts: {
   upsertReturns?: { data: { id: string }[] | null; error: { code?: string; message: string } | null };
@@ -11,7 +14,9 @@ function fakeClient(opts: {
   updateRows?: number;
 }) {
   const calls: Call[] = [];
-  const withNulls = (s: SaleRow) => ({ shipping_cost: null, ...s });
+  const withNulls = (s: SaleRow) => ({ shipping_cost: null, currency: "EUR", status: "pending", ...s });
+  /** Max concurrent order lookups seen (each resolves on a later tick). */
+  const stats = { inFlight: 0, maxInFlight: 0 };
   const client = {
     from(table: string) {
       return {
@@ -21,11 +26,14 @@ function fakeClient(opts: {
             in: (_c: string, ids: string[]) => Promise.resolve({ data: (opts.sales ?? []).filter((s) => ids.includes(s.external_order_id)).map(withNulls), error: null }),
             like: (_c: string, pattern: string) => ({
               order: () => ({
-                limit: (n: number) => {
+                limit: async (n: number) => {
                   calls.push({ table, op: "like", args: [pattern, n] });
+                  stats.inFlight++; stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
+                  await new Promise((r) => setTimeout(r, 1));
+                  stats.inFlight--;
                   const prefix = pattern.replace(/%$/, "");
                   const hit = (opts.sales ?? []).filter((x) => x.external_order_id.startsWith(prefix)).sort((x, y) => x.external_order_id.localeCompare(y.external_order_id)).slice(0, n);
-                  return Promise.resolve({ data: hit.map(withNulls), error: null });
+                  return { data: hit.map(withNulls), error: null };
                 },
               }),
             }),
@@ -45,7 +53,7 @@ function fakeClient(opts: {
       };
     },
   };
-  return { client: client as never, calls };
+  return { client: client as never, calls, stats };
 }
 
 const ctx = { createdBy: "u1", connectionId: "c1", accountLabel: "Shop" };
@@ -165,5 +173,133 @@ describe("applyFinanceTransactions", () => {
       expect(calls.some((c) => c.op === "update")).toBe(false);
       expect(r.ordersFeesFilled).toBe(0);
     });
+  });
+  describe("skip counters (P6/P7)", () => {
+    it("counts a 0 amount as skippedInvalid and a non-fee CREDIT as nonFeeCreditsSkipped, apart from skippedCurrency", async () => {
+      const { client, calls } = fakeClient({});
+      const zero = { ...charge("z"), amount: { value: "0.00", currency: "EUR" } };
+      const bareCredit: EbayFinanceTransaction = { transactionId: "cr", transactionType: "CREDIT", transactionDate: "2026-10-02T00:00:00Z", amount: { value: "5", currency: "EUR" } };
+      const r = await applyFinanceTransactions(client, [zero, bareCredit, charge("p", "PLN")], ctx);
+      expect(r).toMatchObject({ skippedInvalid: 1, nonFeeCreditsSkipped: 1, skippedCurrency: 1 });
+      expect(calls.some((c) => c.op === "upsert")).toBe(false);
+    });
+  });
+
+  describe("currency checks (P2)", () => {
+    it("step 2 fills only when the fee currency equals the sale currency", async () => {
+      const { client, calls } = fakeClient({
+        sales: [{ id: "sale-1", external_order_id: "O1:L1", platform_fee: null, advertising_fee: null, currency: "GBP" }],
+      });
+      const r = await applyFinanceTransactions(client, [saleTxn], ctx);
+      expect(calls.some((c) => c.op === "update")).toBe(false);
+      expect(r.currencyMismatch).toBe(1);
+      expect(r.ordersFeesFilled).toBe(0);
+    });
+
+    it("step 3 keeps only the order-linked charges in the sale currency", async () => {
+      const ref = [{ referenceId: "O1", referenceType: "ORDER_ID" }];
+      const { client, calls } = fakeClient({
+        sales: [{ id: "s-a", external_order_id: "O1:L1", platform_fee: null, advertising_fee: null, currency: "EUR" }],
+      });
+      const r = await applyFinanceTransactions(client, [
+        { ...charge("a"), references: ref },
+        { ...charge("b", "GBP"), references: ref },
+        { ...charge("c", "GBP"), references: ref },
+      ], ctx);
+      expect(calls.filter((c) => c.op === "update").map((c) => c.args[0])).toEqual([{ platform_fee: 0.35 }]);
+      expect(r.currencyMismatch).toBe(2);
+      expect(r.ordersFeesFilled).toBe(1);
+    });
+  });
+
+  describe("order-linked counters (P3/P6)", () => {
+    const ref = [{ referenceId: "O1", referenceType: "ORDER_ID" }];
+    it("counts a field dropped because it is already filled", async () => {
+      const { client } = fakeClient({ sales: [{ id: "s-a", external_order_id: "O1:L1", platform_fee: 9, advertising_fee: null }] });
+      const r = await applyFinanceTransactions(client, [{ ...charge("a"), references: ref }, { ...charge("b"), references: ref }], ctx);
+      expect(r.orderLinkedAlreadyFilled).toBe(1);
+    });
+    it("counts an order-linked charge with a missing or 0 amount as skippedInvalid", async () => {
+      const { client, calls } = fakeClient({ sales: [{ id: "s-a", external_order_id: "O1:L1", platform_fee: null, advertising_fee: null }] });
+      const r = await applyFinanceTransactions(client, [
+        { ...charge("a"), references: ref, amount: undefined },
+        { ...charge("b"), references: ref, amount: { value: "0", currency: "EUR" } },
+      ], ctx);
+      expect(r.skippedInvalid).toBe(2);
+      expect(calls.some((c) => c.op === "update")).toBe(false);
+    });
+  });
+
+  describe("refund fee credits (P4)", () => {
+    const refund = (orderId: string, currency = "EUR"): EbayFinanceTransaction => ({
+      transactionId: `r-${orderId}`, transactionType: "REFUND", transactionDate: "2026-10-05T00:00:00Z", orderId,
+      orderLineItems: [{ lineItemId: "L1", marketplaceFees: [{ feeType: "FINAL_VALUE_FEE", amount: { value: "-1.20", currency } }] }],
+    });
+
+    it("stores a negative platform_fees expense for a refund on a live sale, bounded by limit(1)", async () => {
+      const { client, calls } = fakeClient({
+        sales: [{ id: "s1", external_order_id: "O1:L1", platform_fee: 1.2, advertising_fee: null }],
+        upsertReturns: { data: [{ id: "e1" }], error: null },
+      });
+      const r = await applyFinanceTransactions(client, [refund("O1")], ctx);
+      expect(calls.find((c) => c.op === "like")!.args).toEqual(["O1:%", 1]);
+      const up = calls.find((c) => c.op === "upsert")!;
+      expect(up.args[0]).toEqual([expect.objectContaining({
+        title: "eBay fee credit (refund)", amount: -1.2, category: "platform_fees", external_ref: "ebay:r-O1",
+        description: "Shop — order O1",
+      })]);
+      expect(up.args[1]).toEqual({ onConflict: "external_ref", ignoreDuplicates: true });
+      expect(r.refundCreditsImported).toBe(1);
+      expect(r.refundCreditsSkipped).toBe(0);
+    });
+
+    it("skips refunds whose sale is returned, cancelled or not imported", async () => {
+      const { client, calls } = fakeClient({ sales: [
+        { id: "s1", external_order_id: "O1:L1", platform_fee: 1, advertising_fee: null, status: "returned" },
+        { id: "s2", external_order_id: "O2:L1", platform_fee: 1, advertising_fee: null, status: "cancelled" },
+      ] });
+      const r = await applyFinanceTransactions(client, [refund("O1"), refund("O2"), refund("O3")], ctx);
+      expect(r.refundCreditsSkipped).toBe(3);
+      expect(calls.some((c) => c.op === "upsert")).toBe(false);
+    });
+
+    it("skips a refund credit in another currency than the sale and counts currencyMismatch", async () => {
+      const { client, calls } = fakeClient({ sales: [{ id: "s1", external_order_id: "O1:L1", platform_fee: 1, advertising_fee: null, currency: "GBP" }] });
+      const r = await applyFinanceTransactions(client, [refund("O1", "EUR")], ctx);
+      expect(r.currencyMismatch).toBe(1);
+      expect(calls.some((c) => c.op === "upsert")).toBe(false);
+    });
+  });
+
+  describe("bounded concurrency (P1)", () => {
+    it("runs order lookups in parallel, never more than WRITE_CONCURRENCY at once, with exact counts", async () => {
+      const n = 25;
+      const sales: SaleRow[] = Array.from({ length: n }, (_, i) => ({ id: `s${i}`, external_order_id: `O${i}:L1`, platform_fee: null, advertising_fee: null }));
+      const txns = sales.map((s, i) => ({ ...charge(`c${i}`), references: [{ referenceId: `O${i}`, referenceType: "ORDER_ID" }] }));
+      const { client, stats } = fakeClient({ sales });
+      const r = await applyFinanceTransactions(client, txns, ctx);
+      expect(stats.maxInFlight).toBeGreaterThan(1);
+      expect(stats.maxInFlight).toBeLessThanOrEqual(WRITE_CONCURRENCY);
+      expect(r.ordersFeesFilled).toBe(n);
+    });
+  });
+});
+
+describe("mapLimit", () => {
+  it("preserves order and caps in-flight work at the limit", async () => {
+    let inFlight = 0, max = 0;
+    const out = await mapLimit([5, 1, 4, 2, 3], 2, async (x) => {
+      inFlight++; max = Math.max(max, inFlight);
+      await new Promise((r) => setTimeout(r, x));
+      inFlight--;
+      return x * 10;
+    });
+    expect(out).toEqual([50, 10, 40, 20, 30]);
+    expect(max).toBe(2);
+  });
+
+  it("handles an empty list and rejects when a task throws", async () => {
+    expect(await mapLimit([], 10, async (x: number) => x)).toEqual([]);
+    await expect(mapLimit([1, 2], 10, async (x) => { if (x === 2) throw new Error("boom"); return x; })).rejects.toThrow("boom");
   });
 });

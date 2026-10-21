@@ -11,6 +11,9 @@ import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/enti
 
 const LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000; // same window as Review Orders
 
+// Up to 50 Finances pages plus bounded-concurrency sales writes; the default limit is too short.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
   if (auth.error) return auth.error;
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
     const txns = await fetchFinanceTransactions(token, {
       from: new Date(to.getTime() - LOOKBACK_MS).toISOString(),
       to: to.toISOString(),
-      types: ["SALE", ...CHARGE_TRANSACTION_TYPES],
+      types: ["SALE", "REFUND", ...CHARGE_TRANSACTION_TYPES],
       marketplaceId: conn.marketplace_id,
     });
     const result = await applyFinanceTransactions(client, txns, {

@@ -9,7 +9,7 @@ import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/enti
 import type { IntegrationPlatform } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
 import { fetchFinanceTransactions, FinancesScopeError } from "@/lib/integrations/ebay/finances";
-import { feesByLineItem, type LineItemFees } from "@/lib/integrations/ebay/financesMap";
+import { feesByLineItem, prefillFeesFor, type LineItemFees } from "@/lib/integrations/ebay/financesMap";
 import { INTEGRATION_ERRORS } from "@/lib/utils/integrationErrors";
 
 export type ReviewOrder = NormalizedOrder & {
@@ -84,28 +84,41 @@ export async function GET(_req: NextRequest) {
       try {
         const adapter = getAdapter(conn.platform);
         const token = await ensureValidAccessToken(client, conn, adapter);
-        const orders = await adapter.fetchOrders(token, since, conn.marketplace_id);
-        let fees = new Map<string, LineItemFees>();
-        if (conn.platform === "ebay") {
-          try {
-            fees = feesByLineItem(await fetchFinanceTransactions(token, {
-              from: since, to: new Date().toISOString(), types: ["SALE"], marketplaceId: conn.marketplace_id,
-            }));
-          } catch (err) {
-            // Fee prefill must never block order review.
-            if (err instanceof FinancesScopeError) warnings[conn.id] = `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}`;
-            else console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
-          }
-        }
+        // Fee prefill runs alongside the order fetch and must never block order review:
+        // it catches its own errors and only reports a warning once the orders loaded.
+        const feesPromise: Promise<{ fees: Map<string, LineItemFees>; warning?: string }> =
+          conn.platform !== "ebay"
+            ? Promise.resolve({ fees: new Map<string, LineItemFees>() })
+            : fetchFinanceTransactions(token, {
+                from: since, to: new Date().toISOString(), types: ["SALE"], marketplaceId: conn.marketplace_id,
+              }).then(
+                (txns) => ({ fees: feesByLineItem(txns) }),
+                (err: unknown) => {
+                  if (err instanceof FinancesScopeError) {
+                    return { fees: new Map<string, LineItemFees>(), warning: `${name}: ${INTEGRATION_ERRORS.INTEGRATION_FINANCES_SCOPE}` };
+                  }
+                  console.error(`[integrations/review] finances fetch failed (connection=${conn.id}):`, err instanceof Error ? err.message : err);
+                  return { fees: new Map<string, LineItemFees>() };
+                }
+              );
+        const [orders, { fees, warning }] = await Promise.all([
+          adapter.fetchOrders(token, since, conn.marketplace_id),
+          feesPromise,
+        ]);
+        if (warning) warnings[conn.id] = warning;
         const bucket = (result[conn.platform] ??= { orders: [] });
         bucket.orders.push(
-          ...orders.map((o) => ({
-            ...o,
-            imported: importedSet.has(`${conn.platform}:${o.external_order_id}`),
-            connection_id: conn.id,
-            account_name: name,
-            fees: fees.get(o.external_order_id),
-          }))
+          ...orders.map((o) => {
+            const imported = importedSet.has(`${conn.platform}:${o.external_order_id}`);
+            return {
+              ...o,
+              imported,
+              connection_id: conn.id,
+              account_name: name,
+              // Only not-yet-imported orders, and only fees in the order's own currency.
+              fees: prefillFeesFor(fees.get(o.external_order_id), { currency: o.currency, imported }),
+            };
+          })
         );
       } catch (err) {
         console.error(
