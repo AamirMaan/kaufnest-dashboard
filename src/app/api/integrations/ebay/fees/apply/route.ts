@@ -3,7 +3,7 @@ import { requireIntegrationSuperAdmin } from "@/lib/integrations/authGuard";
 import { IntegrationAccountError, requireActiveConnection } from "@/lib/integrations/tokenStore";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { chunks, IN_CHUNK } from "@/lib/integrations/ebay/chargeSync";
-import { applyFeeOverwrites, countSales } from "@/lib/integrations/ebay/feeOverwrite";
+import { applyFeeOverwrites, lineCounts } from "@/lib/integrations/ebay/feeOverwrite";
 import { parseFeeOverwriteApply } from "@/lib/integrations/ebay/feeOverwriteApply";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 /**
  * Writes the approved preview rows, each only if the fee still holds the previewed
  * value. Partial failures still audit what was written. Response (also on 403/502):
- * `{ applied, stale }` in orders (sales), `failed` in fee writes, plus `error`.
+ * `{ applied, stale }` in order lines (sales), `failed` in fee writes, plus `error`.
  */
 export async function POST(req: NextRequest) {
   const auth = await requireIntegrationSuperAdmin();
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (error) console.error("[ebay/fees/apply] audit insert failed:", error.message, { rows: batch.length });
   }
 
-  const counts = { applied: countSales(result.applied), stale: countSales(result.stale), failed: result.failed };
+  const counts = { ...lineCounts(result), failed: result.failed };
   if (result.failed > 0) {
     return NextResponse.json(
       {

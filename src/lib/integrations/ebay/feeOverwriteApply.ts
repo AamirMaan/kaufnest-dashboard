@@ -1,7 +1,8 @@
+import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
 import { OVERWRITE_FIELDS, type ApplyChange, type OverwriteField } from "./feeOverwrite";
 
-/** Upper bound on one apply request (≈ 90 days of a busy account, both fields). */
-export const MAX_APPLY_CHANGES = 2000;
+/** Upper bound on one apply request; the modal batches by the same shared constant. */
+export const MAX_APPLY_CHANGES = FEE_OVERWRITE_MAX_CHANGES;
 
 export type ParsedFeeOverwriteApply =
   | { ok: true; connectionId: string; changes: ApplyChange[] }

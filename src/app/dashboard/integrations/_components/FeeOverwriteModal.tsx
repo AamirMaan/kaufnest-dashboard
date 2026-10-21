@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/utils/date";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency } from "@/types";
 import {
-  addApplyCounts, applyPayload, applySummary, batchChanges, groupOverwriteRows, previewSkipNote,
+  addApplyCounts, applyPayload, applySummary, batchRows, groupOverwriteRows, previewSkipNote,
   type ApplyCounts, type FeeCell, type FeeOverwritePreviewDto, type OverwriteRow,
 } from "../_lib/feeOverwriteSelection";
 
@@ -78,12 +78,12 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
     let totals: ApplyCounts = { applied: 0, stale: 0, failed: 0 };
     let failure: string | null = null;
     try {
-      // The route takes at most APPLY_BATCH_SIZE changes per request; send batches in turn.
-      for (const changes of batchChanges(applyPayload(connectionId, rows, selected).changes)) {
+      // The route caps changes per request; send the ticked rows in batches, in turn.
+      for (const batch of batchRows(rows.filter((r) => selected.has(r.saleId)))) {
         const res = await fetch("/api/integrations/ebay/fees/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ connectionId, changes }),
+          body: JSON.stringify(applyPayload(connectionId, batch, selected)),
         });
         const json = (await res.json().catch(() => ({}))) as Partial<ApplyCounts> & { error?: string };
         totals = addApplyCounts(totals, json);
@@ -120,7 +120,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
       </Button>
       {hasChanges && (
         <Button onClick={handleApply} disabled={applying || selected.size === 0}>
-          {applying ? "Applying…" : `Apply ${selected.size} ${selected.size === 1 ? "order" : "orders"}`}
+          {applying ? "Applying…" : `Apply ${selected.size} ${selected.size === 1 ? "order line" : "order lines"}`}
         </Button>
       )}
     </>
@@ -139,7 +139,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         <div className="space-y-4">
           {rows.length > 0 && (
             <p className="text-sm">
-              These orders&apos; fees differ from eBay (last 90 days). Ticked orders get eBay&apos;s values; untick any
+              These order lines&apos; fees differ from eBay (last 90 days). Ticked lines get eBay&apos;s values; untick any
               you want to keep.
             </p>
           )}

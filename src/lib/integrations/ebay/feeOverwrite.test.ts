@@ -1,4 +1,4 @@
-import { accountScope, applyFeeOverwrites, computeFeeOverwrites, countSales, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
+import { accountScope, applyFeeOverwrites, computeFeeOverwrites, lineCounts, loadOverwriteSales, type OverwriteSaleRow } from "./feeOverwrite";
 import type { EbayFinanceTransaction } from "./financesMap";
 
 const money = (value: string, currency = "EUR") => ({ value, currency });
@@ -104,6 +104,17 @@ describe("computeFeeOverwrites", () => {
     expect(r.changes).toEqual([]);
   });
 
+  it("proposes nothing from a credit whose charge fell before the window", () => {
+    const r = computeFeeOverwrites([row("O1:L1", { advertising_fee: 3 })], [orderCharge("O1", "2.00", { credit: true })]);
+    expect(r.changes).toEqual([]);
+    expect(r.notImported).toBe(0);
+  });
+
+  it("doesn't count an imported order with only order-linked platform charges as not imported", () => {
+    const r = computeFeeOverwrites([], [orderCharge("O1", "0.30", { feeType: "REGULATORY_OPERATING_FEE" })]);
+    expect(r.notImported).toBe(0);
+  });
+
   it("counts an order-linked fee group in another currency as a mismatch", () => {
     const r = computeFeeOverwrites([row("O1:L1")], [adCharge("O1", "1.00", "GBP")]);
     expect(r.changes).toEqual([]);
@@ -195,12 +206,11 @@ describe("applyFeeOverwrites", () => {
   });
 });
 
-describe("countSales", () => {
-  it("counts distinct sales", () => {
-    expect(countSales([
-      { saleId: "a", field: "platform_fee", from: null, to: 1 },
-      { saleId: "a", field: "advertising_fee", from: null, to: 1 },
-      { saleId: "b", field: "platform_fee", from: null, to: 1 },
-    ])).toBe(2);
+describe("lineCounts", () => {
+  it("counts a line once: applied if any fee wrote, stale only if nothing did", () => {
+    expect(lineCounts({
+      applied: [{ saleId: "a", field: "platform_fee", from: null, to: 1 }, { saleId: "b", field: "platform_fee", from: null, to: 1 }],
+      stale: [{ saleId: "a", field: "advertising_fee", from: null, to: 1 }, { saleId: "c", field: "platform_fee", from: 1, to: 2 }],
+    })).toEqual({ applied: 2, stale: 1 });
   });
 });

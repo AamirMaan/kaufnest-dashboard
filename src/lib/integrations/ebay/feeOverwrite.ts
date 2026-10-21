@@ -98,7 +98,11 @@ export function computeFeeOverwrites(sales: OverwriteSaleRow[], txns: EbayFinanc
 
   const withFees = new Set<string>();
   for (const [key, f] of lineFees) if (f.platformFee !== null || f.advertisingFee !== null) withFees.add(orderOf(key));
-  for (const orderId of linked.keys()) withFees.add(orderId);
+  // Same rule as loadOverwriteSales: an order with only order-linked platform charges in
+  // the window is never loaded (its SALE fees are unknown), so it isn't "not imported".
+  for (const [orderId, byCurrency] of linked) {
+    if ([...byCurrency.values()].some((f) => f.advertising_fee !== undefined)) withFees.add(orderId);
+  }
   let notImported = 0;
   for (const o of withFees) if (!byOrder.has(o)) notImported++;
 
@@ -181,7 +185,12 @@ export async function applyFeeOverwrites(
   };
 }
 
-/** Distinct sales (order lines) among the changes. */
-export function countSales(changes: ApplyChange[]): number {
-  return new Set(changes.map((c) => c.saleId)).size;
+/**
+ * Apply counts in order lines (sales): `applied` = lines with at least one fee written,
+ * `stale` = lines with nothing written and at least one stale fee (never both).
+ */
+export function lineCounts(r: Pick<ApplyResult, "applied" | "stale">): { applied: number; stale: number } {
+  const applied = new Set(r.applied.map((c) => c.saleId));
+  const stale = new Set(r.stale.map((c) => c.saleId).filter((id) => !applied.has(id)));
+  return { applied: applied.size, stale: stale.size };
 }

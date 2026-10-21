@@ -3,6 +3,8 @@
  * shapes of src/lib/integrations/ebay/feeOverwrite.ts without importing that
  * server-only module. Pure.
  */
+import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
+
 export type OverwriteFeeField = "platform_fee" | "advertising_fee";
 export interface FeeChangeDto {
   saleId: string; externalOrderId: string; currency: string; date: string;
@@ -47,17 +49,21 @@ export function previewSkipNote(p: { currencyMismatch: number; notImported: numb
   return parts.length ? `Not shown: ${parts.join(", ")}.` : null;
 }
 
-/** Mirrors MAX_APPLY_CHANGES in src/lib/integrations/ebay/feeOverwriteApply.ts (server-only). */
-export const APPLY_BATCH_SIZE = 2000;
+/**
+ * Rows per apply request. A row carries at most 2 fee changes, so this keeps every
+ * request within the route's FEE_OVERWRITE_MAX_CHANGES, and a line's two fees always
+ * travel in the same request (so the line counts add up across batches).
+ */
+export const APPLY_BATCH_ROWS = Math.floor(FEE_OVERWRITE_MAX_CHANGES / 2);
 
-/** Splits changes into request-sized batches (the apply route rejects more than APPLY_BATCH_SIZE). */
-export function batchChanges<T>(changes: T[], size = APPLY_BATCH_SIZE): T[][] {
+/** Splits rows into request-sized batches. */
+export function batchRows<T>(rows: T[], size = APPLY_BATCH_ROWS): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < changes.length; i += size) out.push(changes.slice(i, i + size));
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
   return out;
 }
 
-/** Apply route counts: `applied`/`stale` are orders (sales), `failed` is fee writes. */
+/** Apply route counts: `applied`/`stale` are order lines (sales), `failed` is fee writes. */
 export interface ApplyCounts { applied: number; stale: number; failed: number }
 
 export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCounts {
@@ -65,8 +71,8 @@ export function addApplyCounts(a: ApplyCounts, b: Partial<ApplyCounts>): ApplyCo
 }
 
 export function applySummary(r: Pick<ApplyCounts, "applied" | "stale">): string {
-  const head = `Updated fees on ${plural(r.applied, "order", "orders")}.`;
+  const head = `Updated fees on ${plural(r.applied, "order line", "order lines")}.`;
   return r.stale > 0
-    ? `${head} ${plural(r.stale, "order was", "orders were")} skipped — changed since the preview, or you can't edit orders.`
+    ? `${head} ${plural(r.stale, "order line was", "order lines were")} skipped — changed since the preview, or you can't edit orders.`
     : head;
 }

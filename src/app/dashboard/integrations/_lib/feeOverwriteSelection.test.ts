@@ -1,4 +1,5 @@
-import { addApplyCounts, applyPayload, applySummary, batchChanges, groupOverwriteRows, previewSkipNote, type FeeChangeDto } from "./feeOverwriteSelection";
+import { FEE_OVERWRITE_MAX_CHANGES } from "@/lib/utils/feeOverwriteAccess";
+import { APPLY_BATCH_ROWS, addApplyCounts, applyPayload, applySummary, batchRows, groupOverwriteRows, previewSkipNote, type FeeChangeDto } from "./feeOverwriteSelection";
 
 const c = (saleId: string, field: FeeChangeDto["field"], from: number | null, to: number): FeeChangeDto => ({
   saleId, externalOrderId: `${saleId}:L1`, currency: "EUR", date: "2026-10-01", field, from, to,
@@ -35,15 +36,18 @@ describe("previewSkipNote", () => {
 
 describe("applySummary", () => {
   it("reports updated and skipped orders", () => {
-    expect(applySummary({ applied: 1, stale: 0 })).toBe("Updated fees on 1 order.");
-    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 orders. 2 orders were skipped — changed since the preview, or you can't edit orders.");
+    expect(applySummary({ applied: 1, stale: 0 })).toBe("Updated fees on 1 order line.");
+    expect(applySummary({ applied: 4, stale: 2 })).toBe("Updated fees on 4 order lines. 2 order lines were skipped — changed since the preview, or you can't edit orders.");
   });
 });
 
-describe("batchChanges / addApplyCounts", () => {
+describe("batchRows / addApplyCounts", () => {
   it("splits into request-sized batches", () => {
-    expect(batchChanges([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
-    expect(batchChanges([], 2)).toEqual([]);
+    expect(batchRows([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+    expect(batchRows([], 2)).toEqual([]);
+  });
+  it("keeps every batch within the route's change cap (2 fees per row)", () => {
+    expect(APPLY_BATCH_ROWS * 2).toBeLessThanOrEqual(FEE_OVERWRITE_MAX_CHANGES);
   });
   it("sums batch results, treating missing fields as 0", () => {
     expect(addApplyCounts({ applied: 1, stale: 2, failed: 0 }, { applied: 3, failed: 1 })).toEqual({ applied: 4, stale: 2, failed: 1 });

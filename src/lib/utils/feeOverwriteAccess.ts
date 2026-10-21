@@ -8,3 +8,9 @@ import type { UserRole } from "@/types";
 export function canOverwriteEbayFees(role: UserRole | null | undefined): boolean {
   return role === "super_admin";
 }
+
+/**
+ * Max fee changes per apply request (server: parseFeeOverwriteApply; client:
+ * FeeOverwriteModal batches by it). Shared here so the two can't drift.
+ */
+export const FEE_OVERWRITE_MAX_CHANGES = 2000;

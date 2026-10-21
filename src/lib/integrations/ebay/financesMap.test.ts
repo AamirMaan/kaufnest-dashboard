@@ -1,7 +1,7 @@
 import {
   orderIdOf, orderChargeField, orderLinkedChargeFees, feeFieldFills,
   categoryForCharge, chargeToExpenseRow, feesByLineItem, isAdFeeType, refundFeeCredits, refundCreditToExpenseRow,
-  prefillFeesFor, withOrderLinkedAdFees, type EbayFinanceTransaction, type ChargeExpenseRow, type LineItemFees,
+  prefillFeesFor, withOrderLinkedAdFees, orderLinkedNetFees, type EbayFinanceTransaction, type ChargeExpenseRow, type LineItemFees,
 } from "./financesMap";
 
 const money = (value: string, currency = "EUR") => ({ value, currency });
@@ -338,5 +338,41 @@ describe("refundFeeCredits (P4)", () => {
       date: "2026-10-05", description: "Main shop — order O1", created_by: "user-1",
       external_ref: "ebay:r1", connection_id: "conn-1",
     });
+  });
+});
+
+describe("orderLinkedNetFees", () => {
+  const linked = (o: Partial<EbayFinanceTransaction> & { value: string; currency?: string }): EbayFinanceTransaction => ({
+    transactionId: `t-${Math.random()}`, transactionType: "NON_SALE_CHARGE", transactionDate: "2026-10-02T00:00:00Z",
+    bookingEntry: "DEBIT", feeType: "AD_FEE", references: [{ referenceId: "O1", referenceType: "ORDER_ID" }],
+    amount: money(o.value, o.currency ?? "EUR"), ...o,
+  });
+
+  it("nets fee-typed credits per field and excludes shipping labels", () => {
+    const out = orderLinkedNetFees([
+      linked({ value: "1.00" }),
+      linked({ value: "0.40", transactionType: "CREDIT", bookingEntry: undefined }),
+      linked({ value: "0.50", feeType: "REGULATORY_OPERATING_FEE" }),
+      linked({ value: "4.00", transactionType: "SHIPPING_LABEL", feeType: undefined }),
+    ]);
+    expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: 0.6, platform_fee: 0.5 });
+  });
+
+  it("ignores credits without a feeType and unsupported currencies", () => {
+    const out = orderLinkedNetFees([
+      linked({ value: "1.00" }),
+      linked({ value: "9.00", transactionType: "CREDIT", bookingEntry: undefined, feeType: undefined }),
+      linked({ value: "1.00", currency: "CHF" }),
+    ]);
+    expect([...(out.get("O1") ?? new Map()).entries()]).toEqual([["EUR", { advertising_fee: 1 }]]);
+  });
+
+  it("keeps a negative net when a charge is in the window", () => {
+    const out = orderLinkedNetFees([linked({ value: "1.00" }), linked({ value: "1.50", bookingEntry: "CREDIT" })]);
+    expect(out.get("O1")?.get("EUR")).toEqual({ advertising_fee: -0.5 });
+  });
+
+  it("drops a field (and the order) when only credits are in the window", () => {
+    expect(orderLinkedNetFees([linked({ value: "2.00", bookingEntry: "CREDIT" })]).has("O1")).toBe(false);
   });
 });

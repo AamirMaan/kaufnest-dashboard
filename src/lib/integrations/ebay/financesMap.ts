@@ -145,10 +145,13 @@ export type OrderNetFees = Partial<Record<"platform_fee" | "advertising_fee", nu
  * with a feeType (eBay refunding that fee) is subtracted, so a refunded ad fee nets
  * to 0 instead of the gross charge. Credits without a feeType aren't fee refunds and
  * are ignored; shipping labels are left out (the overwrite doesn't touch
- * shipping_cost). Results may be ≤ 0 — the caller clamps.
+ * shipping_cost). A field is returned only when at least one CHARGE for it is in the
+ * window — a credit alone means the charge fell before the window, so the net is
+ * unknown. Results may be ≤ 0 — the caller clamps.
  */
 export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, Map<string, OrderNetFees>> {
   const out = new Map<string, Map<string, OrderNetFees>>();
+  const charged = new Set<string>(); // `${orderId}|${currency}|${field}` with a debit in the window
   for (const txn of txns) {
     if (!(CHARGE_TRANSACTION_TYPES as readonly string[]).includes(txn.transactionType)) continue;
     const orderId = orderIdOf(txn);
@@ -164,8 +167,18 @@ export function orderLinkedNetFees(txns: EbayFinanceTransaction[]): Map<string, 
     const byCurrency = out.get(orderId) ?? new Map<string, OrderNetFees>();
     const fees = byCurrency.get(currency) ?? {};
     fees[field] = round2((fees[field] ?? 0) + (credit ? -value : value));
+    if (!credit) charged.add(`${orderId}|${currency}|${field}`);
     byCurrency.set(currency, fees);
     out.set(orderId, byCurrency);
+  }
+  for (const [orderId, byCurrency] of out) {
+    for (const [currency, fees] of byCurrency) {
+      for (const field of ["platform_fee", "advertising_fee"] as const) {
+        if (fees[field] !== undefined && !charged.has(`${orderId}|${currency}|${field}`)) delete fees[field];
+      }
+      if (Object.keys(fees).length === 0) byCurrency.delete(currency);
+    }
+    if (byCurrency.size === 0) out.delete(orderId);
   }
   return out;
 }

@@ -5,6 +5,7 @@ import { ensureValidAccessToken, IntegrationAccountError, requireActiveConnectio
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
 import { computeFeeOverwrites, loadOverwriteSales } from "@/lib/integrations/ebay/feeOverwrite";
+import { CHARGE_TRANSACTION_TYPES } from "@/lib/integrations/ebay/financesMap";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 
 const LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000; // same window as Review Orders / charge sync
@@ -41,7 +42,9 @@ export async function POST(req: NextRequest) {
     const txns = await fetchFinanceTransactions(token, {
       from: new Date(to.getTime() - LOOKBACK_MS).toISOString(),
       to: to.toISOString(),
-      types: ["SALE", "NON_SALE_CHARGE"],
+      // Every charge type: fee refunds arrive as transactionType CREDIT, which
+      // orderLinkedNetFees nets (shipping labels it ignores).
+      types: ["SALE", ...CHARGE_TRANSACTION_TYPES],
       marketplaceId: conn.marketplace_id,
     });
     const sales = await loadOverwriteSales(client, txns, conn.id);

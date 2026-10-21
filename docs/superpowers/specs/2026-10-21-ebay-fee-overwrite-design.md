@@ -215,3 +215,18 @@ compare-and-set apply).
    applying, and on a partial failure closes and asks the user to reopen.
 8. A 0-row update is reported as "changed since the preview, or you can't
    edit orders" (RLS can hide the row without a 42501).
+
+## Revisions (re-review, 2026-10-21)
+
+9. The preview fetches `["SALE", ...CHARGE_TRANSACTION_TYPES]` — fee refunds
+   arrive as `transactionType: "CREDIT"`, so a `NON_SALE_CHARGE`-only fetch
+   never netted them (review blocker).
+10. A fee field with only credits in the window (its charge fell before the
+    window) proposes nothing, instead of clamping to 0.
+11. Counts are **order lines**, not orders: the button reads "Apply N order
+    lines", and a line counts as applied if any fee wrote, stale only if none
+    did. The modal batches by row (half the shared
+    `FEE_OVERWRITE_MAX_CHANGES`) so a line's two fees stay in one request.
+12. Orders with only order-linked platform charges in the window are not
+    counted as "not imported" (they're never loaded — their SALE fees are
+    unknown).
