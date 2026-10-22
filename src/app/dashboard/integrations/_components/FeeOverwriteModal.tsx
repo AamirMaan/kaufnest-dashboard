@@ -9,7 +9,7 @@ import { Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
-import { overwriteFromBounds } from "@/lib/utils/feeOverwriteAccess";
+import { overwriteFromBounds } from "@/lib/utils/feeOverwriteWindow";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency } from "@/types";
 import {
@@ -47,11 +47,14 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
-  // `from` is the window the shown preview covers; `fromDraft` is the picker until "Check eBay".
+  // `from` is the window the shown preview covers (null = the route's 90-day default);
+  // `fromDraft` is the picker until "Check eBay". `checkKey` re-runs the same window.
   const bounds = useMemo(() => overwriteFromBounds(new Date()), []);
-  const [from, setFrom] = useState(bounds.fallback);
+  const [from, setFrom] = useState<string | null>(null);
   const [fromDraft, setFromDraft] = useState(bounds.fallback);
+  const [checkKey, setCheckKey] = useState(0);
   const isFromValid = fromDraft >= bounds.min && fromDraft <= bounds.max;
+  const canCheck = isFromValid && (fromDraft !== from || load.status === "error");
 
   useEffect(() => {
     if (!open) return;
@@ -61,12 +64,14 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         const res = await fetch("/api/integrations/ebay/fees/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ connectionId, from }),
+          body: JSON.stringify(from ? { connectionId, from } : { connectionId }),
         });
         const json = (await res.json().catch(() => ({}))) as FeeOverwritePreviewDto & { error?: string };
         if (cancelled) return;
         if (!res.ok) {
-          setLoad({ status: "error", message: integrationErrorMessage(json.error, json.error ?? "Please try again.") });
+          // A platform timeout (504) has no JSON body; on a long window that means "too much".
+          const code = res.status === 504 && from ? "INTEGRATION_FINANCES_WINDOW_TOO_LARGE" : json.error;
+          setLoad({ status: "error", message: integrationErrorMessage(code, json.error ?? "Please try again.") });
           return;
         }
         setLoad({ status: "ready", preview: json });
@@ -76,13 +81,14 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
       }
     })();
     return () => { cancelled = true; };
-  }, [open, connectionId, from]);
+  }, [open, connectionId, from, checkKey]);
 
   function handleCheck(e: React.FormEvent) {
     e.preventDefault();
-    if (!isFromValid || fromDraft === from) return;
+    if (!canCheck) return;
     setLoad({ status: "loading" });
-    setFrom(fromDraft);
+    if (fromDraft === from) setCheckKey((k) => k + 1);
+    else setFrom(fromDraft);
   }
 
   const rows = useMemo(() => (load.status === "ready" ? groupOverwriteRows(load.preview.changes) : []), [load]);
@@ -160,7 +166,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
           type="submit"
           form="fee-overwrite-window"
           variant="secondary"
-          disabled={applying || load.status === "loading" || !isFromValid || fromDraft === from}
+          disabled={applying || load.status === "loading" || !canCheck}
         >
           Check eBay
         </Button>
@@ -175,7 +181,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         <div className="space-y-4">
           {rows.length > 0 && (
             <p className="text-sm">
-              These order lines&apos; fees differ from eBay (since {formatDate(from)}). Ticked lines get eBay&apos;s values; untick any
+              These order lines&apos; fees differ from eBay ({from ? `since ${formatDate(`${from}T00:00:00`)}` : "last 90 days"}). Ticked lines get eBay&apos;s values; untick any
               you want to keep.
             </p>
           )}

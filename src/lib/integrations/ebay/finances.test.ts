@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "crypto";
-import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError, settleFinanceFetches } from "./finances";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError, FinancesTruncatedError, settleFinanceFetches } from "./finances";
 
 const originalFetch = global.fetch;
 afterEach(() => { global.fetch = originalFetch; });
@@ -44,6 +44,13 @@ describe("fetchFinanceTransactions", () => {
 
     expect(txns).toHaveLength(1500);
     expect(new URL(fetchMock.mock.calls[1][0]).searchParams.get("offset")).toBe("1000");
+  });
+
+  it("stops at the page cap: partial by default, FinancesTruncatedError when requireComplete", async () => {
+    global.fetch = jest.fn().mockImplementation(() => Promise.resolve(page(["x"], 1_000_000, 0))) as unknown as typeof fetch;
+
+    expect(await fetchFinanceTransactions("tok", opts)).toHaveLength(50);
+    await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
   });
 
   it("throws FinancesScopeError on 403", async () => {

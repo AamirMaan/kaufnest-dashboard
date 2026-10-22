@@ -3,11 +3,11 @@ import { requireIntegrationSuperAdmin } from "@/lib/integrations/authGuard";
 import { getAdapter } from "@/lib/integrations/registry";
 import { ensureValidAccessToken, IntegrationAccountError, requireActiveConnection } from "@/lib/integrations/tokenStore";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
-import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } from "@/lib/integrations/ebay/finances";
+import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError, FinancesTruncatedError } from "@/lib/integrations/ebay/finances";
 import { computeFeeOverwrites, loadOverwriteSales } from "@/lib/integrations/ebay/feeOverwrite";
 import { OVERWRITE_TRANSACTION_TYPES } from "@/lib/integrations/ebay/financesMap";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
-import { parseOverwriteFrom } from "@/lib/utils/feeOverwriteAccess";
+import { parseOverwriteFrom } from "@/lib/utils/feeOverwriteWindow";
 
 // Up to 50 Finances pages plus bounded sales lookups.
 export const maxDuration = 60;
@@ -47,12 +47,15 @@ export async function POST(req: NextRequest) {
       // Includes CREDIT (fee refunds arrive as transactionType CREDIT); no shipping labels.
       types: OVERWRITE_TRANSACTION_TYPES,
       marketplaceId: conn.marketplace_id,
+      // A partial list would propose confident-but-wrong fees; refuse instead.
+      requireComplete: true,
     });
     const sales = await loadOverwriteSales(client, txns, conn.id);
     return NextResponse.json(computeFeeOverwrites(sales, txns));
   } catch (err) {
     if (err instanceof IntegrationAccountError) return NextResponse.json({ error: err.code }, { status: 409 });
     if (err instanceof FinancesSignatureError) return NextResponse.json({ error: "INTEGRATION_FINANCES_SIGNATURE" }, { status: 409 });
+    if (err instanceof FinancesTruncatedError) return NextResponse.json({ error: "INTEGRATION_FINANCES_WINDOW_TOO_LARGE" }, { status: 422 });
     if (err instanceof FinancesScopeError) return NextResponse.json({ error: "INTEGRATION_FINANCES_SCOPE" }, { status: 409 });
     console.error("[ebay/fees/preview] failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Couldn't load fees from eBay. Please try again." }, { status: 502 });

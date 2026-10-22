@@ -26,6 +26,9 @@ export const INTEGRATION_ERRORS = {
   // Covers both "no key configured" and "key rejected" (expired, wrong JWE).
   INTEGRATION_FINANCES_SIGNATURE:
     "eBay rejected this app's request signature, which it requires to import fees for this account. Reconnecting won't help — please contact support.",
+  // Fee overwrite preview: the picked window held too many transactions (page cap) or timed out.
+  INTEGRATION_FINANCES_WINDOW_TOO_LARGE:
+    "eBay has too many transactions since that date to check at once. Pick a later \"Orders from\" date.",
   INTEGRATION_FINANCES_DB_PENDING:
     "eBay charge import isn't available yet — a database update is pending. Please try again later.",
   INTEGRATION_ACCOUNT_UNIDENTIFIED:

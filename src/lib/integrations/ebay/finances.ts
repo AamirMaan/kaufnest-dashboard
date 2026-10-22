@@ -15,6 +15,8 @@ export class FinancesScopeError extends Error {}
  * EBAY_SIGNING_PRIVATE_KEY / EBAY_SIGNING_JWE (see signature.ts).
  */
 export class FinancesSignatureError extends Error {}
+/** The window held more than MAX_PAGES pages and the caller asked for all or nothing. */
+export class FinancesTruncatedError extends Error {}
 
 /** True when eBay's error body carries a digital-signature errorId (215000–215999). */
 function isSignatureErrorBody(body: string): boolean {
@@ -38,6 +40,8 @@ export async function fetchFinanceTransactions(
     from: string; to: string; types: readonly string[]; marketplaceId?: string | null;
     /** Defaults to the env-configured key; null sends unsigned requests. */
     signing?: SigningConfig | null;
+    /** Throw FinancesTruncatedError instead of returning a partial list at MAX_PAGES. */
+    requireComplete?: boolean;
   }
 ): Promise<EbayFinanceTransaction[]> {
   const filter = `transactionDate:[${opts.from}..${opts.to}],transactionType:{${opts.types.join("|")}}`;
@@ -68,8 +72,9 @@ export async function fetchFinanceTransactions(
     const batch = json.transactions ?? [];
     out.push(...batch);
     offset += batch.length;
-    if (batch.length === 0 || offset >= (json.total ?? 0)) break;
+    if (batch.length === 0 || offset >= (json.total ?? 0)) return out;
   }
+  if (opts.requireComplete) throw new FinancesTruncatedError(`eBay finances: more than ${MAX_PAGES} pages`);
   return out;
 }
 
