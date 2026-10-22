@@ -81,6 +81,10 @@ tenant admin grants an exception via the Users feature).
   inputs from the `fees` the review route attaches to eBay orders (Finances
   API); `review/_lib/failedAccountCount.ts` (+ test) — counts failed accounts
   from `errors` only (never `warnings`).
+- `review/_lib/matchInventory.ts` (+ test) — pure `matchInventory(order, products)`:
+  exact SKU (trim/case-insensitive) then exact normalised name → `{ productId,
+  reason: "sku" | "name" }`; more than one candidate at a step → `null`.
+  Seeds the Review Orders "Inventory item" dropdown (2026-10-22).
 - `review/page.tsx` — "Review Orders" page at `/dashboard/integrations/review`.
   Fetches `GET /api/integrations/review` on mount (only when eligible), renders
   platform tabs (eBay / Amazon), an order table with checkbox selection
@@ -90,6 +94,20 @@ tenant admin grants an exception via the Users feature).
   `salesSlice`. Applies the same plan/`can("integrations", 2)` guards as
   `page.tsx` — redirects to
   `/dashboard/integrations` if not eligible.
+  **Expandable rows + inventory link (2026-10-22)**: each row has a chevron
+  (local `expanded` set, panel classes copied from `DataTable` — the page keeps
+  its hand-rolled table because imported rows have no checkbox and select-all
+  covers only unimported rows, which `DataTable`'s selection can't express).
+  The panel shows Variant, SKU, Marketplace, Buyer, Country, Order ID
+  (`NormalizedOrder.sku`/`variant`, carried through the review route's `...o`
+  spread). The "Inventory item" `Select` lists `state.inventory.selectorItems`
+  (hydrated app-wide by `StoreProvider`), pre-filled by `matchInventory` with an
+  "Auto-matched (SKU|name)" badge until the user changes it; `productLinks`
+  state holds `external_order_id → products.id` (`""` = explicit "Not linked",
+  never re-seeded). `handleImport` posts `productLinks` for the selected orders
+  only; the route validates the ids (`unknownProductIds`) and sets
+  `sales.product_id`, so the existing 047 stock triggers and 057 dispatcher
+  notification fire. "Sync Statuses" sends none (`product_id` is user-owned).
   **Accounts (multi-account)**: when the active tab's orders span more than one
   account, an "Account" `<select>` (All accounts / each account) sits above the
   fee toolbar and an "Account" column (`order.account_name`) appears after Order

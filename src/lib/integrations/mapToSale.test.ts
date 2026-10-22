@@ -82,6 +82,8 @@ describe("normalizedOrderToSaleRow", () => {
       buyer_email: null,
       marketplace: null,
       connection_id: null,
+      sku: null,
+      variant_text: null,
     });
   });
 
@@ -129,6 +131,8 @@ describe("normalizedOrderToSaleRow", () => {
       buyer_email: null,
       marketplace: null,
       connection_id: null,
+      sku: null,
+      variant_text: null,
     });
   });
 
@@ -237,5 +241,38 @@ describe("normalizedOrderToSaleRow — connection_id", () => {
   });
   it("defaults to null when no account is given", () => {
     expect(normalizedOrderToSaleRow(order, "ebay", "user-1").connection_id).toBeNull();
+  });
+
+  const ebayOrder: NormalizedOrder = {
+    external_order_id: "12-1:001",
+    product_name: "T-Shirt",
+    quantity: 1,
+    unit_price: 10,
+    total_amount: 10,
+    currency: "EUR",
+    date: "2026-06-01",
+    status: "delivered",
+    description: null,
+  };
+
+  it("writes sku and variant_text from the order, and product_id from the 6th argument", () => {
+    const row = normalizedOrderToSaleRow(
+      { ...ebayOrder, sku: "SKU-1", variant: "Size: M" },
+      "ebay",
+      "user-1",
+      undefined,
+      null,
+      "prod-9"
+    );
+    expect(row.sku).toBe("SKU-1");
+    expect(row.variant_text).toBe("Size: M");
+    expect(row.product_id).toBe("prod-9");
+  });
+
+  it("defaults sku, variant_text and product_id to null", () => {
+    const row = normalizedOrderToSaleRow(ebayOrder, "ebay", "user-1");
+    expect(row.sku).toBeNull();
+    expect(row.variant_text).toBeNull();
+    expect(row.product_id).toBeNull();
   });
 });

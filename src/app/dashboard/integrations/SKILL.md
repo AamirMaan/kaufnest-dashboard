@@ -59,6 +59,15 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
 
 ## Gotchas
 
+- **Review Orders inventory link is a suggestion, never a silent write.**
+  `matchInventory` proposes; the import only links what is in the `productLinks`
+  payload. Ambiguous SKU/name proposes nothing on purpose — a wrong link
+  deducts the wrong stock and emails the wrong location. To change the rule,
+  edit `review/_lib/matchInventory.ts` and its test only.
+- `sales.sku`/`variant_text` come from migration 059 (unapplied until the user
+  applies it): the import upsert writes both, so deploying before 059 fails
+  every import.
+
 - **Only the fee overwrite can look further back than 90 days** (2026-10-22).
   Its preview takes an optional `from` date — the fix for orders imported
   before fee sync existed, whose SALE transactions fall outside every other

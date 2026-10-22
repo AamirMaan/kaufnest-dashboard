@@ -205,6 +205,9 @@ export interface Sale {
   marketplace?: string | null;
   /** platform_connections.id the order came from (056). null/absent = Unassigned. */
   connection_id?: string | null;
+  /** Seller SKU / variation text from the platform order (059). null/absent = none. */
+  sku?: string | null;
+  variant_text?: string | null;
   // ─── Buyer shipping address (migration 041) ──────────────────────────────
   // Captured automatically on eBay sync (ebay.ts's fetchOrders), or entered/
   // corrected by hand via AddSaleModal/EditSaleModal's "Shipping Address

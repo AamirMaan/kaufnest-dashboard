@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { listConnections, updateConnection } from "@/lib/integrations/tokenStore";
-import { invalidImportItems } from "@/lib/integrations/reviewImport";
+import { invalidImportItems, unknownProductIds } from "@/lib/integrations/reviewImport";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     items: { platform: IntegrationPlatform; order: NormalizedOrder & { connection_id?: string } }[];
     purchaseCosts?: Record<string, { price: string; vendor: string }>;
     orderFees?: Record<string, { advertisingFee: string; platformFee: string }>;
+    /** external_order_id -> products.id chosen on the review page */
+    productLinks?: Record<string, string>;
   };
 
   if (!body.items?.length) {
@@ -46,6 +48,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "INTEGRATION_ACCOUNT_PAUSED" }, { status: 409 });
   }
 
+  const productLinks = Object.fromEntries(
+    Object.entries(body.productLinks ?? {}).filter(([, id]) => typeof id === "string" && id)
+  );
+  const linkedIds = [...new Set(Object.values(productLinks))];
+  if (linkedIds.length > 0) {
+    const { data: found, error: productError } = await client
+      .from("products")
+      .select("id")
+      .in("id", linkedIds);
+    if (productError) {
+      console.error("[integrations/import] product lookup failed:", productError.message);
+      return NextResponse.json({ error: "Import failed" }, { status: 500 });
+    }
+    const known = new Set((found ?? []).map((p: { id: string }) => p.id));
+    if (unknownProductIds(productLinks, known).length > 0) {
+      return NextResponse.json(
+        { error: "One of the selected inventory items no longer exists. Reload and try again." },
+        { status: 400 }
+      );
+    }
+  }
+
   const orderFees = body.orderFees ?? {};
   const incomingRows = body.items.map(({ platform, order }) => {
     const feeEntry = orderFees[order.external_order_id];
@@ -54,7 +78,7 @@ export async function POST(req: NextRequest) {
     return normalizedOrderToSaleRow(order, platform, userId, {
       advertisingFee: isNaN(advertisingFee) ? null : advertisingFee,
       platformFee: isNaN(platformFee) ? null : platformFee,
-    }, order.connection_id ?? null);
+    }, order.connection_id ?? null, productLinks[order.external_order_id] ?? null);
   });
 
   // Fetch existing rows so we can preserve user-owned fields on re-import
