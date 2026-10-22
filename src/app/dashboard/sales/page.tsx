@@ -341,14 +341,14 @@ export default function SalesPage() {
           <div className="max-w-xs space-y-0.5 tabular-nums">
             {fees.lines.map((line) => (
               <div key={line.label} className="flex justify-between gap-4">
-                <span className="text-[var(--color-text-muted)]">{line.label}</span>
-                <span className="text-[var(--color-text-base)]">
+                <span>{line.label}</span>
+                <span>
                   {line.amount == null ? "—" : formatCurrency(line.amount, s.currency)}
                 </span>
               </div>
             ))}
             <div className="flex justify-between gap-4 border-t border-[var(--color-border-subtle)] pt-0.5 font-semibold">
-              <span className="text-[var(--color-text-base)]">Total</span>
+              <span>Total</span>
               <span className="text-[var(--color-text-strong)]">{formatCurrency(fees.total, s.currency)}</span>
             </div>
           </div>

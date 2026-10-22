@@ -208,7 +208,7 @@ export function DataTable<T>({
                       ))}
                     </tr>
                     {isOpen && (
-                      <tr id={panelId} className="bg-(--color-surface-subtle) border-t-2 border-(--color-border-subtle)">
+                      <tr id={panelId} className="bg-(--color-surface-subtle) border-t border-(--color-border)">
                         <td colSpan={colSpan} className="px-6 py-5">
                           {detail.length > 0 && (
                             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
