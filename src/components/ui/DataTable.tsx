@@ -80,10 +80,14 @@ export function DataTable<T>({
   const allIds = sortedRows.map((r) => String(r[keyField]));
   const allSelected = selectable && allIds.length > 0 && allIds.every((id) => selectedIds?.has(id));
 
-  // Prune ids from a previous page on every toggle so the set stays bounded
-  // without a sync effect.
+  // Drop open rows that left `rows` (page/filter change) during render, so
+  // returning to a page shows it collapsed. pruneIds returns the same Set when
+  // nothing left, so this settles after one extra render — no sync effect.
+  const visibleExpandedIds = pruneIds(expandedIds, allIds);
+  if (visibleExpandedIds !== expandedIds) setExpandedIds(visibleExpandedIds);
+
   function toggleRow(id: string) {
-    setExpandedIds((prev) => toggleId(pruneIds(prev, allIds), id));
+    setExpandedIds((prev) => toggleId(prev, id));
   }
 
   function toggleAll() {

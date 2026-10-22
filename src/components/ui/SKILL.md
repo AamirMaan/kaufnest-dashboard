@@ -90,8 +90,11 @@ record here too (TS will error on the `Record<Enum, ...>` if you forget) — for
   instance (local `useState`), keyed by `String(row[keyField])`, multiple rows
   can be open, and it survives sorting. Pure logic lives in
   `dataTableColumns.ts` (+ `dataTableColumns.test.ts`).
-  - Gotcha: stale ids are pruned only when a row is toggled, so paging back to
-    a previously viewed page can show rows still open (accepted).
+  - Open rows that leave `rows` (page or filter change) are pruned during
+    render (`pruneIds` + conditional `setExpandedIds`, React's "adjust state
+    when props change" pattern), so paging back shows the page collapsed. A
+    row still present after a filter change stays open. Don't move this into
+    a `useEffect` — that renders a frame with the stale state first.
   - Gotcha: row ids (`String(row[keyField])`) must not contain whitespace; they
     form the panel's HTML id / the chevron's `aria-controls`.
 
