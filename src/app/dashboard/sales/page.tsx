@@ -301,14 +301,14 @@ export default function SalesPage() {
       header: "Qty",
       detail: true,
       render: (s: Sale) => (
-        <span className="text-sm text-[var(--color-text-base)] tabular-nums">{s.quantity}</span>
+        <span className="tabular-nums">{s.quantity}</span>
       ),
     },
     {
       header: "Unit Price",
       detail: true,
       render: (s: Sale) => (
-        <span className="text-sm text-[var(--color-text-base)] tabular-nums">{formatCurrency(s.unit_price, s.currency)}</span>
+        <span className="tabular-nums">{formatCurrency(s.unit_price, s.currency)}</span>
       ),
     },
     {
@@ -324,7 +324,7 @@ export default function SalesPage() {
       render: (s: Sale) =>
         s.vat_rate != null ? (
           <div className="tabular-nums">
-            <span className="text-sm text-[var(--color-text-base)]">{s.vat_rate}%</span>
+            <span>{s.vat_rate}%</span>
             <span className="block text-xs text-[var(--color-text-muted)]">{formatCurrency(s.vat_amount ?? 0, s.currency)}</span>
           </div>
         ) : (
@@ -338,7 +338,7 @@ export default function SalesPage() {
         const fees = feeBreakdown(s);
         if (!fees) return <span className="text-sm text-[var(--color-text-muted)]">—</span>;
         return (
-          <div className="space-y-0.5 text-sm tabular-nums">
+          <div className="max-w-xs space-y-0.5 tabular-nums">
             {fees.lines.map((line) => (
               <div key={line.label} className="flex justify-between gap-4">
                 <span className="text-[var(--color-text-muted)]">{line.label}</span>

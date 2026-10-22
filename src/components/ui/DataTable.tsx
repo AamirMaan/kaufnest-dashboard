@@ -208,14 +208,14 @@ export function DataTable<T>({
                       ))}
                     </tr>
                     {isOpen && (
-                      <tr id={panelId} className="bg-(--color-surface-subtle)">
-                        <td colSpan={colSpan} className="px-4 py-4">
+                      <tr id={panelId} className="bg-(--color-surface-subtle) border-t-2 border-(--color-border-subtle)">
+                        <td colSpan={colSpan} className="px-6 py-5">
                           {detail.length > 0 && (
-                            <dl className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+                            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
                               {detail.map((col) => (
                                 <div key={col.header} className="min-w-0">
-                                  <dt className="text-xs text-(--color-text-muted)">{col.header}</dt>
-                                  <dd className="mt-1 text-sm text-(--color-text-base)">{cellContent(col, row)}</dd>
+                                  <dt className="text-sm font-semibold text-(--color-text-strong)">{col.header}</dt>
+                                  <dd className="mt-1 text-sm text-(--color-text-muted)">{cellContent(col, row)}</dd>
                                 </div>
                               ))}
                             </dl>
