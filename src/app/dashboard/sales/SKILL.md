@@ -15,6 +15,10 @@ Supabase-write → slice-update → audit-log data flow every mutation follows.
   `page.tsx` only. Toggle `detail: true` on the column object (and drop its
   `sortValue` when it becomes detail, because detail columns aren't sortable).
   Fee breakdown copy and maths: `_lib/feeBreakdown.ts` (+ test).
+  Don't give a detail column's `render` its own text color/size — the
+  shared panel (`DataTable.tsx`) styles labels strong and values muted, and
+  a hardcoded `text-(--color-text-base)` overrides that. Only exception: a
+  multi-line breakdown's total (Fees' "Total" amount) may use `text-strong`.
 - **Add/change order-detail page content**: `[id]/page.tsx` only. For net-proceeds
   or gross-profit formula changes also touch `_components/orderMath.ts` + its test.
 - **Change the Cost of Goods / Gross Profit / "Fulfilled from" block**
