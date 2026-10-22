@@ -16,3 +16,15 @@ export function invalidImportItems(
   });
   return bad;
 }
+
+/**
+ * Product ids in `productLinks` that are not in `knownIds`. The client picks
+ * them from its own inventory list, but the server never trusts an id it has
+ * not looked up in `products`.
+ */
+export function unknownProductIds(
+  productLinks: Record<string, string>,
+  knownIds: Set<string>
+): string[] {
+  return [...new Set(Object.values(productLinks))].filter((id) => !knownIds.has(id));
+}

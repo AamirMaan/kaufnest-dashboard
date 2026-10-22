@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireIntegrationAdmin } from "@/lib/integrations/authGuard";
 import { listConnections, updateConnection } from "@/lib/integrations/tokenStore";
-import { invalidImportItems } from "@/lib/integrations/reviewImport";
+import { invalidImportItems, unknownProductIds } from "@/lib/integrations/reviewImport";
 import { getTenantEntitlements } from "@/lib/integrations/tenantPlan";
 import { resolveActiveAccounts } from "@/lib/utils/activeAccounts";
 import { normalizedOrderToSaleRow } from "@/lib/integrations/mapToSale";
@@ -9,6 +9,12 @@ import { mergeImportedSale } from "@/lib/integrations/mergeImportedSale";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
 import type { Currency, IntegrationPlatform, Purchase, Sale } from "@/types";
 import type { NormalizedOrder } from "@/lib/integrations/types";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const IN_CHUNK = 200;
+const PRODUCT_MISSING = {
+  error: "One of the selected inventory items no longer exists. Reload and try again.",
+};
 
 export async function POST(req: NextRequest) {
   const auth = await requireIntegrationAdmin();
@@ -30,6 +36,8 @@ export async function POST(req: NextRequest) {
     items: { platform: IntegrationPlatform; order: NormalizedOrder & { connection_id?: string } }[];
     purchaseCosts?: Record<string, { price: string; vendor: string }>;
     orderFees?: Record<string, { advertisingFee: string; platformFee: string }>;
+    /** external_order_id -> products.id chosen on the review page */
+    productLinks?: Record<string, string>;
   };
 
   if (!body.items?.length) {
@@ -46,6 +54,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "INTEGRATION_ACCOUNT_PAUSED" }, { status: 409 });
   }
 
+  const rawLinks = body.productLinks;
+  const productLinks: Record<string, string> = Object.fromEntries(
+    rawLinks && typeof rawLinks === "object"
+      ? Object.entries(rawLinks).filter(([, id]) => typeof id === "string" && id)
+      : []
+  );
+  const linkedIds = [...new Set(Object.values(productLinks))];
+  if (linkedIds.some((id) => !UUID_RE.test(id))) {
+    return NextResponse.json(PRODUCT_MISSING, { status: 400 });
+  }
+  if (linkedIds.length > 0) {
+    // Chunked: each .in() read is still capped by PostgREST Max Rows.
+    const known = new Set<string>();
+    for (let i = 0; i < linkedIds.length; i += IN_CHUNK) {
+      const { data: found, error: productError } = await client
+        .from("products")
+        .select("id")
+        .in("id", linkedIds.slice(i, i + IN_CHUNK));
+      if (productError) {
+        console.error("[integrations/import] product lookup failed:", productError.message);
+        return NextResponse.json({ error: "Import failed" }, { status: 500 });
+      }
+      for (const p of found ?? []) known.add((p as { id: string }).id);
+    }
+    if (unknownProductIds(productLinks, known).length > 0) {
+      return NextResponse.json(PRODUCT_MISSING, { status: 400 });
+    }
+  }
+
   const orderFees = body.orderFees ?? {};
   const incomingRows = body.items.map(({ platform, order }) => {
     const feeEntry = orderFees[order.external_order_id];
@@ -54,7 +91,7 @@ export async function POST(req: NextRequest) {
     return normalizedOrderToSaleRow(order, platform, userId, {
       advertisingFee: isNaN(advertisingFee) ? null : advertisingFee,
       platformFee: isNaN(platformFee) ? null : platformFee,
-    }, order.connection_id ?? null);
+    }, order.connection_id ?? null, productLinks[order.external_order_id] ?? null);
   });
 
   // Fetch existing rows so we can preserve user-owned fields on re-import

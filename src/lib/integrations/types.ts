@@ -48,6 +48,10 @@ export interface NormalizedOrder {
    * distinct from `null`, which means "asked and the platform had none".
    */
   shipping?: ShippingAddress | null;
+  /** Seller SKU of the listing/variation, when the platform returns one. */
+  sku?: string | null;
+  /** Variation aspects flattened for display ("Size: M · Colour: Red"); null = none. */
+  variant?: string | null;
 }
 
 export interface TokenSet {

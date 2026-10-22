@@ -224,3 +224,22 @@ describe("mergeImportedSale — connection_id is fill-only", () => {
     expect(merged.connection_id).toBe("conn-1");
   });
 });
+
+describe("mergeImportedSale — sku and variant_text are fill-only", () => {
+  it("fills them on a row that had none", () => {
+    const merged = mergeImportedSale(
+      { ...existingSale, sku: null, variant_text: null },
+      { ...existingSale, sku: "S-1", variant_text: "Size: M" }
+    );
+    expect(merged.sku).toBe("S-1");
+    expect(merged.variant_text).toBe("Size: M");
+  });
+  it("never overwrites stored values", () => {
+    const merged = mergeImportedSale(
+      { ...existingSale, sku: "OLD", variant_text: "Size: S" },
+      { ...existingSale, sku: "NEW", variant_text: "Size: L" }
+    );
+    expect(merged.sku).toBe("OLD");
+    expect(merged.variant_text).toBe("Size: S");
+  });
+});

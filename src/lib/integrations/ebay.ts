@@ -50,6 +50,16 @@ interface EbayLineItem {
   quantity: string | number;
   total?: EbayMoney;
   purchaseMarketplaceId?: string;
+  sku?: string;
+  variationAspects?: { name?: string; value?: string }[];
+}
+
+/** "Size: M · Colour: Red", or null when the line item has no variation aspects. */
+function formatVariant(aspects: EbayLineItem["variationAspects"]): string | null {
+  const parts = (aspects ?? [])
+    .filter((a) => a.name && a.value)
+    .map((a) => `${a.name}: ${a.value}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 interface EbayContactAddress {
@@ -242,6 +252,8 @@ export const ebayAdapter: PlatformAdapter = {
           description: `eBay order ${order.orderId}`,
           shipping,
           marketplace: normalizeMarketplace(item.purchaseMarketplaceId),
+          sku: item.sku?.trim() || null,
+          variant: formatVariant(item.variationAspects),
         });
       }
     }

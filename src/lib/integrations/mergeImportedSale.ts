@@ -45,5 +45,8 @@ export function mergeImportedSale(
     // Fill-only, like marketplace: a pre-056 row gains its account on the
     // next sync, but an existing link is never moved to another account.
     connection_id: existing.connection_id ?? incoming.connection_id ?? null,
+    // Fill-only (059): a manual correction to the SKU/variant wins.
+    sku: existing.sku ?? incoming.sku ?? null,
+    variant_text: existing.variant_text ?? incoming.variant_text ?? null,
   } as Sale;
 }

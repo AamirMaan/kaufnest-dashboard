@@ -406,3 +406,41 @@ describe("ebayAdapter.exchangeCode identity failure (review fix)", () => {
     expect((err as Error).message).not.toContain("SECRET-UPSTREAM-BODY");
   });
 });
+
+describe("ebayAdapter.fetchOrders — sku and variant", () => {
+  const order = (item: Record<string, unknown>) => ({
+    orders: [
+      {
+        orderId: "12-1",
+        creationDate: "2026-06-01T10:00:00.000Z",
+        orderFulfillmentStatus: "FULFILLED",
+        orderPaymentStatus: "PAID",
+        lineItems: [
+          { lineItemId: "001", title: "T-Shirt", quantity: "1", total: { value: "10.00", currency: "EUR" }, ...item },
+        ],
+      },
+    ],
+  });
+
+  it("carries the line item's sku and flattens variationAspects", async () => {
+    mockJsonResponse(
+      order({
+        sku: " TSHIRT-M-RED ",
+        variationAspects: [
+          { name: "Size", value: "M" },
+          { name: "Colour", value: "Red" },
+        ],
+      })
+    );
+    const [o] = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+    expect(o.sku).toBe("TSHIRT-M-RED");
+    expect(o.variant).toBe("Size: M · Colour: Red");
+  });
+
+  it("uses null when the line item has neither", async () => {
+    mockJsonResponse(order({}));
+    const [o] = await ebayAdapter.fetchOrders("token", "2026-01-01T00:00:00.000Z", null);
+    expect(o.sku).toBeNull();
+    expect(o.variant).toBeNull();
+  });
+});

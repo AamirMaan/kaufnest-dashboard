@@ -2,6 +2,10 @@ import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/tool
 import type { Product } from "@/types";
 import { createTenantClient } from "@/lib/supabase/client";
 import { rangeFor, DEFAULT_PAGE_SIZE } from "@/lib/utils/pagedQuery";
+import { fetchAllRowsOrThrow } from "@/lib/utils/fetchAllRows";
+
+// Upper bound on dropdown products; fetchAllRows warns when a tenant exceeds it.
+const SELECTOR_CAP = 20000;
 
 // Lightweight shape used by product-link dropdowns in Sales/Purchases modals —
 // does NOT go through pagination so every product is always available.
@@ -67,14 +71,20 @@ export const fetchInventorySelectors = createAsyncThunk(
   "inventory/fetchSelectors",
   async () => {
     const supabase = await createTenantClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select("id, name, current_stock, sku")
-      .order("name", { ascending: true });
-
-    if (error) throw error;
-
-    return (data ?? []) as ProductSelector[];
+    // Paged past PostgREST's Max Rows (a single request silently stops at 1000);
+    // a partial list would also hide duplicates from Review Orders' auto-match.
+    return fetchAllRowsOrThrow<ProductSelector>(
+      async (from, to) => {
+        const { data, error, count } = await supabase
+          .from("products")
+          .select("id, name, current_stock, sku")
+          .order("name", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to);
+        return { data: data as ProductSelector[] | null, error, count };
+      },
+      SELECTOR_CAP
+    );
   }
 );
 

@@ -36,12 +36,15 @@ export function normalizedOrderToSaleRow(
   platform: IntegrationPlatform,
   connectedBy: string,
   fees?: ReviewOrderFees,
-  connectionId?: string | null
+  connectionId?: string | null,
+  productId?: string | null
 ): SaleInsert {
   return {
     platform,
     product_name: order.product_name,
-    product_id: null,
+    product_id: productId ?? null,
+    sku: order.sku ?? null,
+    variant_text: order.variant ?? null,
     quantity: order.quantity,
     unit_price: order.unit_price,
     total_amount: order.total_amount,

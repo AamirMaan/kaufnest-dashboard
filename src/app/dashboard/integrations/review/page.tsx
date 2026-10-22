@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronDown, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { useAppDispatch } from "@/store/hooks";
+import { Select } from "@/components/ui/FormFields";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { useAccess } from "@/store/useAccess";
 import { addPurchase } from "@/app/dashboard/purchases/_store/purchasesSlice";
 import { hasPlatformIntegrations } from "@/lib/plans/entitlements";
@@ -19,6 +20,7 @@ import type { ReviewOrder, ReviewResponse } from "@/app/api/integrations/review/
 import { failedAccountCount } from "./_lib/failedAccountCount";
 import { seedOrderFees } from "./_lib/seedOrderFees";
 import { accountsInOrders, filterByAccount } from "./_lib/reviewAccounts";
+import { matchInventory } from "./_lib/matchInventory";
 
 const PLATFORM_LABELS: Record<IntegrationPlatform, string> = {
   ebay: "eBay",
@@ -49,6 +51,11 @@ export default function ReviewPage() {
   const [orderFees, setOrderFees] = useState<
     Record<string, { advertisingFee: string; platformFee: string }>
   >({});
+  // The user's explicit picks: external_order_id -> products.id ("" = "Not linked").
+  // An order with no entry here shows its auto-match suggestion instead.
+  const [productLinks, setProductLinks] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const products = useAppSelector((s) => s.inventory.selectorItems);
   const [bulkAdFeePct, setBulkAdFeePct] = useState("");
   const [bulkPlatformFeePct, setBulkPlatformFeePct] = useState("");
 
@@ -108,6 +115,38 @@ export default function ReviewPage() {
     });
   }
 
+  function changeProductLink(orderId: string, productId: string) {
+    setProductLinks((prev) => ({ ...prev, [orderId]: productId }));
+  }
+
+  function toggleExpanded(orderId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  }
+
+  // Suggested inventory item per not-yet-imported order (pure; the user's own
+  // pick in productLinks always wins, including an explicit "Not linked").
+  const suggestions = useMemo(() => {
+    const found: Record<string, { productId: string; reason: "sku" | "name" }> = {};
+    if (!data) return found;
+    for (const platform of ALL_PLATFORMS) {
+      for (const order of data[platform]?.orders ?? []) {
+        if (order.imported) continue;
+        const match = matchInventory(order, products);
+        if (match) found[order.external_order_id] = match;
+      }
+    }
+    return found;
+  }, [data, products]);
+
+  function linkedProductId(orderId: string): string {
+    return orderId in productLinks ? productLinks[orderId] : (suggestions[orderId]?.productId ?? "");
+  }
+
   // Computed once per render as a plain boolean — `can` is a fresh function
   // reference every render (useAccess() isn't memoized), so depending on it
   // directly in the effect below re-ran it on every render.
@@ -150,6 +189,18 @@ export default function ReviewPage() {
   // Falls back to "all" if the chosen account dropped out after a re-fetch.
   const effectiveAccount = tabAccounts.some((a) => a.id === accountFilter) ? accountFilter : "all";
   const activeOrders = filterByAccount(tabOrders, effectiveAccount);
+
+  // chevron + checkbox + 11 data columns (+ Account when shown)
+  const tableColSpan = showAccounts ? 14 : 13;
+
+  // Selected, not-yet-imported orders that will be linked on import (each one
+  // deducts stock and notifies the dispatcher via the sales triggers).
+  const linkedSelectedCount = activeOrders.filter(
+    (o) =>
+      !o.imported &&
+      selected.has(`${activeTab}:${o.external_order_id}`) &&
+      linkedProductId(o.external_order_id) !== ""
+  ).length;
 
   const unimportedOnTab = activeOrders.filter((o) => !o.imported);
 
@@ -200,11 +251,17 @@ export default function ReviewPage() {
       }
     }
 
+    const links: Record<string, string> = {};
+    for (const { order } of items) {
+      const productId = linkedProductId(order.external_order_id);
+      if (productId) links[order.external_order_id] = productId;
+    }
+
     try {
       const res = await fetch("/api/integrations/review/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, purchaseCosts, orderFees }),
+        body: JSON.stringify({ items, purchaseCosts, orderFees, productLinks: links }),
       });
       const result = (await res.json()) as {
         imported?: number;
@@ -512,6 +569,7 @@ export default function ReviewPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)]">
+                  <th className="px-2 py-3 w-10" aria-label="Row details" />
                   <th className="p-3 w-10">
                     <input
                       type="checkbox"
@@ -532,6 +590,9 @@ export default function ReviewPage() {
                     )
                   )}
                   <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
+                    Inventory item
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
                     Purchase Cost
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap">
@@ -549,7 +610,7 @@ export default function ReviewPage() {
                 {activeOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={showAccounts ? 12 : 11}
+                      colSpan={tableColSpan}
                       className="py-8 text-center text-sm text-[var(--color-text-muted)]"
                     >
                       No orders found in the last 90 days.
@@ -558,15 +619,30 @@ export default function ReviewPage() {
                 ) : (
                   activeOrders.map((order) => {
                     const key = `${activeTab}:${order.external_order_id}`;
+                    const isOpen = expanded.has(order.external_order_id);
                     return (
+                      <Fragment key={order.external_order_id}>
                       <tr
-                        key={order.external_order_id}
                         className={
                           order.imported
                             ? "opacity-40"
                             : "hover:bg-[var(--color-surface-subtle)] transition-colors"
                         }
                       >
+                        <td className="px-2 py-3 w-10">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpanded(order.external_order_id)}
+                            aria-expanded={isOpen}
+                            aria-label={isOpen ? "Collapse row" : "Expand row"}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-(--radius-btn) text-(--color-text-muted) hover:bg-(--color-border-subtle) hover:text-(--color-text-strong) cursor-pointer transition-colors duration-150"
+                          >
+                            <ChevronDown
+                              size={16}
+                              className={`transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        </td>
                         <td className="p-3">
                           {order.imported ? (
                             <span className="text-xs text-[var(--color-text-faint)]">
@@ -609,6 +685,35 @@ export default function ReviewPage() {
                         </td>
                         <td className="py-3 pr-4">
                           <Badge label={order.status} variant="default" />
+                        </td>
+                        <td className="px-3 py-2">
+                          {order.imported ? (
+                            <span className="text-xs text-[var(--color-text-faint)]">—</span>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <Select
+                                aria-label={`Inventory item for ${order.product_name}`}
+                                value={linkedProductId(order.external_order_id)}
+                                onChange={(e) =>
+                                  changeProductLink(order.external_order_id, e.target.value)
+                                }
+                                className="w-52 !py-1"
+                              >
+                                <option value="">Not linked</option>
+                                {products.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.sku ? `${p.name} · ${p.sku}` : p.name}
+                                  </option>
+                                ))}
+                              </Select>
+                              {!(order.external_order_id in productLinks) && suggestions[order.external_order_id] && (
+                                <Badge
+                                  label={`Auto-matched (${suggestions[order.external_order_id].reason === "sku" ? "SKU" : "name"})`}
+                                  variant="default"
+                                />
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <input
@@ -665,6 +770,30 @@ export default function ReviewPage() {
                           />
                         </td>
                       </tr>
+                      {isOpen && (
+                        <tr className="bg-(--color-surface-subtle) border-t border-(--color-border)">
+                          <td colSpan={tableColSpan} className="px-6 py-5">
+                            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
+                              {[
+                                ["Variant", order.variant],
+                                ["SKU", order.sku],
+                                ["Marketplace", order.marketplace],
+                                ["Buyer", order.shipping?.buyerName],
+                                ["Country", order.shipping?.country],
+                                ["Order ID", order.external_order_id],
+                              ].map(([label, value]) => (
+                                <div key={label} className="min-w-0">
+                                  <dt className="text-sm font-semibold text-(--color-text-strong)">{label}</dt>
+                                  <dd className="mt-1 text-sm text-(--color-text-muted) break-words">
+                                    {value || "—"}
+                                  </dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })
                 )}
@@ -673,6 +802,12 @@ export default function ReviewPage() {
           </div>
 
           {/* Sync + Import buttons */}
+          {linkedSelectedCount > 0 && (
+            <p className="text-right text-sm text-[var(--color-text-muted)]">
+              {linkedSelectedCount} selected order{linkedSelectedCount === 1 ? "" : "s"} will be
+              linked to inventory — stock is deducted and the dispatcher notified on import.
+            </p>
+          )}
           <div className="flex justify-end gap-3">
             <Button
               variant="secondary"
