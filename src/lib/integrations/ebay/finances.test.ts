@@ -53,16 +53,24 @@ describe("fetchFinanceTransactions", () => {
     await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
   });
 
-  it("requireComplete refuses an empty page before total, or a missing total", async () => {
+  it("requireComplete refuses an empty page before total, or rows with no total, as a plain error", async () => {
+    const strict = { ...opts, requireComplete: true };
     global.fetch = jest.fn()
       .mockResolvedValueOnce(page(["a"], 5, 0))
       .mockResolvedValueOnce(page([], 5, 1)) as unknown as typeof fetch;
-    await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
+    const emptyPage = fetchFinanceTransactions("tok", strict);
+    await expect(emptyPage).rejects.toThrow("empty page before total");
+    await expect(emptyPage).rejects.not.toBeInstanceOf(FinancesTruncatedError);
 
     global.fetch = jest.fn().mockResolvedValue({
       ok: true, status: 200, json: () => Promise.resolve({ transactions: [{ transactionId: "a" }] }),
     }) as unknown as typeof fetch;
-    await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
+    await expect(fetchFinanceTransactions("tok", strict)).rejects.toThrow("response has no total");
+  });
+
+  it("requireComplete treats an empty first page with no total as an empty window", async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) }) as unknown as typeof fetch;
+    expect(await fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).toEqual([]);
   });
 
   it("requireComplete still returns a complete list", async () => {

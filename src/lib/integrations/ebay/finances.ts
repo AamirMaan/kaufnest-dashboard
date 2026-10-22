@@ -74,9 +74,14 @@ export async function fetchFinanceTransactions(
     offset += batch.length;
     if (opts.requireComplete) {
       // All-or-nothing: only a reported total that we've reached counts as complete.
-      if (typeof json.total !== "number") throw new FinancesTruncatedError("eBay finances: response has no total");
+      // No total on an empty first page = nothing in the window. Other anomalies are a
+      // plain Error (generic 502), not FinancesTruncatedError ("pick a later date").
+      if (typeof json.total !== "number") {
+        if (out.length === 0) return out;
+        throw new Error("eBay finances: response has no total");
+      }
       if (offset >= json.total) return out;
-      if (batch.length === 0) throw new FinancesTruncatedError("eBay finances: empty page before total");
+      if (batch.length === 0) throw new Error("eBay finances: empty page before total");
       continue;
     }
     if (batch.length === 0 || offset >= (json.total ?? 0)) return out;
