@@ -205,6 +205,13 @@ body, `text-xs`/`text-[11px]` meta) — no new ad hoc sizes.
 Every icon-only button gets an accessible label. Follow existing
 back-link/breadcrumb patterns (`<ChevronLeft/>` + label).
 
+**Wide tables**: don't let a `DataTable` grow a horizontal scrollbar. Keep
+the columns needed to scan and act (date, name, status, headline amount,
+actions) inline and mark the rest `detail: true` — they render as a
+label/value grid in a chevron-expanded row panel (`DataTable.tsx`, logic in
+`dataTableColumns.ts`). Use `renderExpanded` for panel content that isn't a
+column. Orders (`dashboard/sales/page.tsx`) is the reference adoption.
+
 **Feedback**: this is what the "Form conventions" section below already
 enforces for mutations (busy-verb buttons, disabled-while-invalid) — every
 mutation also fires a `useToast()` call on both success and failure, never a

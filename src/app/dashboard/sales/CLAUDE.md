@@ -90,6 +90,10 @@ each with an order **status**, with add/edit/delete and PDF invoice generation.
   inserts so CSV imports never notify dispatchers), `isMissingDispatchColumn`
   (PGRST204 on that column = pre-057 tenant) and `withoutDispatchFields`
   (the one retry without the key).
+- `_lib/feeBreakdown.ts` (+ colocated `.test.ts`) — pure
+  `feeBreakdown(sale)` → `{ lines: [Shipping, Advertising, Platform fee], total }`
+  or `null` when all three are null. Rendered as the "Fees" field of the
+  Orders table's expanded row panel.
 - `_lib/salesSummaryTiles.ts` (+ colocated `.test.ts`) — pure
   `buildSalesTiles(rows: SalesSummaryRow[]): SummaryTile[]`, consumed by
   `page.tsx` to render the filtered summary tiles above the Orders table.
@@ -325,6 +329,11 @@ export always covers all matching records regardless of which page is shown.
 
 **DataTable sorting** sorts within the current page only (v1 behaviour) — noted
 in SKILL.md gotchas.
+
+**Expandable rows** (2026-10-21): the Orders table shows Date, Product,
+Platform, Status, Total and Actions inline. Marketplace, Account, Qty, Unit
+Price, VAT and Fees are `detail: true` columns that render in the shared
+`DataTable`'s chevron-expanded panel, so they are not header-sortable.
 
 ## Data flow (the pattern every mutation follows)
 
