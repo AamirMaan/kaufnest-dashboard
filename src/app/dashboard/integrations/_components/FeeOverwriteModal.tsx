@@ -5,9 +5,11 @@ import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
+import { Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
+import { overwriteFromBounds } from "@/lib/utils/feeOverwriteAccess";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency } from "@/types";
 import {
@@ -45,6 +47,11 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  // `from` is the window the shown preview covers; `fromDraft` is the picker until "Check eBay".
+  const bounds = useMemo(() => overwriteFromBounds(new Date()), []);
+  const [from, setFrom] = useState(bounds.fallback);
+  const [fromDraft, setFromDraft] = useState(bounds.fallback);
+  const isFromValid = fromDraft >= bounds.min && fromDraft <= bounds.max;
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +61,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         const res = await fetch("/api/integrations/ebay/fees/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ connectionId }),
+          body: JSON.stringify({ connectionId, from }),
         });
         const json = (await res.json().catch(() => ({}))) as FeeOverwritePreviewDto & { error?: string };
         if (cancelled) return;
@@ -69,7 +76,14 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
       }
     })();
     return () => { cancelled = true; };
-  }, [open, connectionId]);
+  }, [open, connectionId, from]);
+
+  function handleCheck(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isFromValid || fromDraft === from) return;
+    setLoad({ status: "loading" });
+    setFrom(fromDraft);
+  }
 
   const rows = useMemo(() => (load.status === "ready" ? groupOverwriteRows(load.preview.changes) : []), [load]);
 
@@ -130,6 +144,27 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   return (
     // Escape/backdrop can't dismiss the modal while a bulk write is in flight.
     <Modal title={`Overwrite fees from eBay — ${accountName}`} open={open} onClose={applying ? () => {} : onClose} footer={footer}>
+      <form id="fee-overwrite-window" onSubmit={handleCheck} className="mb-4 flex items-end gap-3">
+        <Field label="Orders from" required>
+          <Input
+            type="date"
+            required
+            min={bounds.min}
+            max={bounds.max}
+            value={fromDraft}
+            onChange={(e) => setFromDraft(e.target.value)}
+            disabled={applying}
+          />
+        </Field>
+        <Button
+          type="submit"
+          form="fee-overwrite-window"
+          variant="secondary"
+          disabled={applying || load.status === "loading" || !isFromValid || fromDraft === from}
+        >
+          Check eBay
+        </Button>
+      </form>
       {load.status === "loading" && (
         <p className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
           <Loader2 size={16} className="animate-spin" /> Checking eBay…
@@ -140,7 +175,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         <div className="space-y-4">
           {rows.length > 0 && (
             <p className="text-sm">
-              These order lines&apos; fees differ from eBay (last 90 days). Ticked lines get eBay&apos;s values; untick any
+              These order lines&apos; fees differ from eBay (since {formatDate(from)}). Ticked lines get eBay&apos;s values; untick any
               you want to keep.
             </p>
           )}

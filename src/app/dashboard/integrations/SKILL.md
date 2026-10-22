@@ -59,6 +59,13 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
 
 ## Gotchas
 
+- **Only the fee overwrite can look further back than 90 days** (2026-10-22).
+  Its preview takes an optional `from` date — the fix for orders imported
+  before fee sync existed, whose SALE transactions fall outside every other
+  path's fixed 90-day window. eBay caps one `transactionDate` range at 36
+  months (error 135014) and keeps 5 years; `overwriteFromBounds` sets the
+  earliest pickable day one day inside 36 months because the range runs to
+  *now*, not midnight. Review Orders and "Sync eBay charges" stay at 90 days.
 - **The fee overwrite is the ONLY path that replaces a non-null order fee.**
   "Sync eBay charges" and the Review prefill only fill empty fields. The
   overwrite never *clears* a fee (an eBay `null` is never proposed) and its

@@ -5,7 +5,7 @@ const SANDBOX = process.env.EBAY_SANDBOX === "true";
 // The Finances API is served from apiz.*, like the Identity API.
 const FINANCES_URL = `${SANDBOX ? "https://apiz.sandbox.ebay.com" : "https://apiz.ebay.com"}/sell/finances/v1/transaction`;
 const PAGE_LIMIT = 1000; // eBay's max page size for getTransactions
-const MAX_PAGES = 50;    // 50k transactions per 90-day window — a hard stop, not an expected size
+const MAX_PAGES = 50;    // 50k transactions per requested window — a hard stop, not an expected size
 
 /** 403 from Finances without a signature error = the connection pre-dates the sell.finances scope; reconnect fixes it. */
 export class FinancesScopeError extends Error {}

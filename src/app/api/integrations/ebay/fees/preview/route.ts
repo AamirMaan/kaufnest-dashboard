@@ -7,8 +7,7 @@ import { fetchFinanceTransactions, FinancesScopeError, FinancesSignatureError } 
 import { computeFeeOverwrites, loadOverwriteSales } from "@/lib/integrations/ebay/feeOverwrite";
 import { OVERWRITE_TRANSACTION_TYPES } from "@/lib/integrations/ebay/financesMap";
 import { hasPlatformIntegrations, type PlanEntitlements } from "@/lib/plans/entitlements";
-
-const LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000; // same window as Review Orders / charge sync
+import { parseOverwriteFrom } from "@/lib/utils/feeOverwriteAccess";
 
 // Up to 50 Finances pages plus bounded sales lookups.
 export const maxDuration = 60;
@@ -30,17 +29,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Platform integrations are not included in your plan." }, { status: 403 });
   }
 
-  const body = (await req.json().catch(() => null)) as { connectionId?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { connectionId?: unknown; from?: unknown } | null;
   const connectionId = typeof body?.connectionId === "string" ? body.connectionId : "";
   if (!connectionId) return NextResponse.json({ error: "connectionId is required" }, { status: 400 });
+  // Optional window start (YYYY-MM-DD); absent keeps the 90-day default, eBay allows up to 36 months.
+  const to = new Date();
+  const range = parseOverwriteFrom(body?.from, to);
+  if (!range.ok) return NextResponse.json({ error: range.error }, { status: 400 });
 
   try {
     const conn = await requireActiveConnection(client, connectionId, ent);
     if (conn.platform !== "ebay") return NextResponse.json({ error: "Not an eBay account" }, { status: 400 });
     const token = await ensureValidAccessToken(client, conn, getAdapter("ebay"));
-    const to = new Date();
     const txns = await fetchFinanceTransactions(token, {
-      from: new Date(to.getTime() - LOOKBACK_MS).toISOString(),
+      from: range.from,
       to: to.toISOString(),
       // Includes CREDIT (fee refunds arrive as transactionType CREDIT); no shipping labels.
       types: OVERWRITE_TRANSACTION_TYPES,
