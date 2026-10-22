@@ -55,7 +55,11 @@ tenant admin grants an exception via the Users feature).
   never imports the server-only `chargeSync.ts`.
 - `_components/FeeOverwriteModal.tsx` (2026-10-21) — the eBay fee overwrite
   review: POSTs `/api/integrations/ebay/fees/preview` on open ("Checking
-  eBay…" spinner), shows one `DataTable` row per order line with Platform/Ad
+  eBay…" spinner) for the last 90 days; an "Orders from" date (`<form>` +
+  secondary "Check eBay", bounds from `overwriteFromBounds` in
+  `lib/utils/feeOverwriteWindow.ts`) re-runs it for an earlier window, up to
+  eBay's 36-month limit (2026-10-22); "Check eBay" also retries the same date
+  after an error, and a 504 on a picked date shows the "pick a later date" copy, shows one `DataTable` row per order line with Platform/Ad
   Fee as `current → eBay` (all rows start ticked; "—" = that fee isn't
   changing), the skip note, then "Apply N order lines" POSTs
   `/api/integrations/ebay/fees/apply` in batches of `APPLY_BATCH_ROWS` rows
@@ -198,15 +202,19 @@ upsert them into `sales` and update `last_synced_at` per platform.
   `INTEGRATION_FINANCES_DB_PENDING` before migration 058). Rules and the
   refund-credit limitation: `src/lib/integrations/SKILL.md` "Gotchas — Finances".
 - **`/api/integrations/ebay/fees/preview/route.ts`** (`POST`, 2026-10-21) —
-  `{ connectionId }`; guard `requireIntegrationSuperAdmin()` (integrations ≥ 2
-  AND `profiles.role = super_admin`, else 403). Fetches 90 days of `SALE` +
+  `{ connectionId, from? }` (`from` = YYYY-MM-DD window start, validated by
+  `parseOverwriteFrom` in `lib/utils/feeOverwriteWindow.ts` — absent = 90 days,
+  max 36 months back, else 400); guard `requireIntegrationSuperAdmin()` (integrations ≥ 2
+  AND `profiles.role = super_admin`, else 403). Fetches `SALE` +
   `NON_SALE_CHARGE` + `CREDIT` (ad-fee refunds arrive as `CREDIT`; shipping labels not fetched), reads the touched sales (`loadOverwriteSales`) and returns
   `computeFeeOverwrites`' `{ changes: { saleId, externalOrderId, currency,
   date, field, from, to }[], currencyMismatch, notImported }` — order-linked charges and credits matched per feeType (ambiguous → nothing
   proposed), platform fee incl. order-linked charges (rules:
   `src/lib/integrations/SKILL.md`). **No writes.**
   Errors: 409 `INTEGRATION_ACCOUNT_*` / `INTEGRATION_FINANCES_SCOPE` /
-  `INTEGRATION_FINANCES_SIGNATURE`, 502 generic.
+  `INTEGRATION_FINANCES_SIGNATURE`, 422 `INTEGRATION_FINANCES_WINDOW_TOO_LARGE`
+  (more than 50 Finances pages — fetched with `requireComplete`, never partial),
+  502 generic.
 - **`/api/integrations/ebay/fees/apply/route.ts`** (`POST`, 2026-10-21) —
   `{ connectionId, changes: { saleId, field, from, to }[] }` validated by
   `parseFeeOverwriteApply` (400; max 2000). Same guard; checks the account is

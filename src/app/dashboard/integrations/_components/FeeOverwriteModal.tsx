@@ -5,9 +5,11 @@ import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { DataTable } from "@/components/ui/DataTable";
+import { Field, Input } from "@/components/ui/FormFields";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils/currency";
 import { formatDate } from "@/lib/utils/date";
+import { overwriteFromBounds } from "@/lib/utils/feeOverwriteWindow";
 import { integrationErrorMessage } from "@/lib/utils/integrationErrors";
 import type { Currency } from "@/types";
 import {
@@ -45,6 +47,15 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  // `from` is the window the shown preview covers (null = the route's 90-day default);
+  // `fromDraft` is the picker until "Check eBay". `checkKey` re-runs the same window.
+  const bounds = useMemo(() => overwriteFromBounds(new Date()), []);
+  const [from, setFrom] = useState<string | null>(null);
+  const [fromDraft, setFromDraft] = useState(bounds.fallback);
+  const [checkKey, setCheckKey] = useState(0);
+  const isFromValid = fromDraft >= bounds.min && fromDraft <= bounds.max;
+  // null = the default window, which the picker's initial date (bounds.fallback) stands for.
+  const canCheck = isFromValid && (fromDraft !== (from ?? bounds.fallback) || load.status === "error");
 
   useEffect(() => {
     if (!open) return;
@@ -54,12 +65,14 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         const res = await fetch("/api/integrations/ebay/fees/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ connectionId }),
+          body: JSON.stringify(from ? { connectionId, from } : { connectionId }),
         });
         const json = (await res.json().catch(() => ({}))) as FeeOverwritePreviewDto & { error?: string };
         if (cancelled) return;
         if (!res.ok) {
-          setLoad({ status: "error", message: integrationErrorMessage(json.error, json.error ?? "Please try again.") });
+          // A platform timeout (504) has no JSON body; on a long window that means "too much".
+          const code = res.status === 504 && from ? "INTEGRATION_FINANCES_WINDOW_TOO_LARGE" : json.error;
+          setLoad({ status: "error", message: integrationErrorMessage(code, json.error ?? "Please try again.") });
           return;
         }
         setLoad({ status: "ready", preview: json });
@@ -69,7 +82,15 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
       }
     })();
     return () => { cancelled = true; };
-  }, [open, connectionId]);
+  }, [open, connectionId, from, checkKey]);
+
+  function handleCheck(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canCheck) return;
+    setLoad({ status: "loading" });
+    if (fromDraft === (from ?? bounds.fallback)) setCheckKey((k) => k + 1);
+    else setFrom(fromDraft);
+  }
 
   const rows = useMemo(() => (load.status === "ready" ? groupOverwriteRows(load.preview.changes) : []), [load]);
 
@@ -130,6 +151,27 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   return (
     // Escape/backdrop can't dismiss the modal while a bulk write is in flight.
     <Modal title={`Overwrite fees from eBay — ${accountName}`} open={open} onClose={applying ? () => {} : onClose} footer={footer}>
+      <form id="fee-overwrite-window" onSubmit={handleCheck} className="mb-4 flex items-end gap-3">
+        <Field label="Orders from" required>
+          <Input
+            type="date"
+            required
+            min={bounds.min}
+            max={bounds.max}
+            value={fromDraft}
+            onChange={(e) => setFromDraft(e.target.value)}
+            disabled={applying}
+          />
+        </Field>
+        <Button
+          type="submit"
+          form="fee-overwrite-window"
+          variant="secondary"
+          disabled={applying || load.status === "loading" || !canCheck}
+        >
+          {load.status === "loading" ? "Checking…" : "Check eBay"}
+        </Button>
+      </form>
       {load.status === "loading" && (
         <p className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
           <Loader2 size={16} className="animate-spin" /> Checking eBay…
@@ -140,7 +182,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
         <div className="space-y-4">
           {rows.length > 0 && (
             <p className="text-sm">
-              These order lines&apos; fees differ from eBay (last 90 days). Ticked lines get eBay&apos;s values; untick any
+              These order lines&apos; fees differ from eBay ({from ? `since ${formatDate(`${from}T00:00:00`)}` : "last 90 days"}). Ticked lines get eBay&apos;s values; untick any
               you want to keep.
             </p>
           )}

@@ -5,7 +5,7 @@ const SANDBOX = process.env.EBAY_SANDBOX === "true";
 // The Finances API is served from apiz.*, like the Identity API.
 const FINANCES_URL = `${SANDBOX ? "https://apiz.sandbox.ebay.com" : "https://apiz.ebay.com"}/sell/finances/v1/transaction`;
 const PAGE_LIMIT = 1000; // eBay's max page size for getTransactions
-const MAX_PAGES = 50;    // 50k transactions per 90-day window — a hard stop, not an expected size
+const MAX_PAGES = 50;    // 50k transactions per requested window — a hard stop, not an expected size
 
 /** 403 from Finances without a signature error = the connection pre-dates the sell.finances scope; reconnect fixes it. */
 export class FinancesScopeError extends Error {}
@@ -15,6 +15,8 @@ export class FinancesScopeError extends Error {}
  * EBAY_SIGNING_PRIVATE_KEY / EBAY_SIGNING_JWE (see signature.ts).
  */
 export class FinancesSignatureError extends Error {}
+/** The window held more than MAX_PAGES pages and the caller asked for all or nothing. */
+export class FinancesTruncatedError extends Error {}
 
 /** True when eBay's error body carries a digital-signature errorId (215000–215999). */
 function isSignatureErrorBody(body: string): boolean {
@@ -38,6 +40,8 @@ export async function fetchFinanceTransactions(
     from: string; to: string; types: readonly string[]; marketplaceId?: string | null;
     /** Defaults to the env-configured key; null sends unsigned requests. */
     signing?: SigningConfig | null;
+    /** Throw FinancesTruncatedError instead of returning a partial list at MAX_PAGES. */
+    requireComplete?: boolean;
   }
 ): Promise<EbayFinanceTransaction[]> {
   const filter = `transactionDate:[${opts.from}..${opts.to}],transactionType:{${opts.types.join("|")}}`;
@@ -68,8 +72,21 @@ export async function fetchFinanceTransactions(
     const batch = json.transactions ?? [];
     out.push(...batch);
     offset += batch.length;
-    if (batch.length === 0 || offset >= (json.total ?? 0)) break;
+    if (opts.requireComplete) {
+      // All-or-nothing: only a reported total that we've reached counts as complete.
+      // No total on an empty first page = nothing in the window. Other anomalies are a
+      // plain Error (generic 502), not FinancesTruncatedError ("pick a later date").
+      if (typeof json.total !== "number") {
+        if (out.length === 0) return out;
+        throw new Error("eBay finances: response has no total");
+      }
+      if (offset >= json.total) return out;
+      if (batch.length === 0) throw new Error("eBay finances: empty page before total");
+      continue;
+    }
+    if (batch.length === 0 || offset >= (json.total ?? 0)) return out;
   }
+  if (opts.requireComplete) throw new FinancesTruncatedError(`eBay finances: more than ${MAX_PAGES} pages`);
   return out;
 }
 
