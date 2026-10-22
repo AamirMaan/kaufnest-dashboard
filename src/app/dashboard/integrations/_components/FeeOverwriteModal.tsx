@@ -54,7 +54,8 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
   const [fromDraft, setFromDraft] = useState(bounds.fallback);
   const [checkKey, setCheckKey] = useState(0);
   const isFromValid = fromDraft >= bounds.min && fromDraft <= bounds.max;
-  const canCheck = isFromValid && (fromDraft !== from || load.status === "error");
+  // null = the default window, which the picker's initial date (bounds.fallback) stands for.
+  const canCheck = isFromValid && (fromDraft !== (from ?? bounds.fallback) || load.status === "error");
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +88,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
     e.preventDefault();
     if (!canCheck) return;
     setLoad({ status: "loading" });
-    if (fromDraft === from) setCheckKey((k) => k + 1);
+    if (fromDraft === (from ?? bounds.fallback)) setCheckKey((k) => k + 1);
     else setFrom(fromDraft);
   }
 
@@ -168,7 +169,7 @@ export function FeeOverwriteModal({ open, connectionId, accountName, onClose }: 
           variant="secondary"
           disabled={applying || load.status === "loading" || !canCheck}
         >
-          Check eBay
+          {load.status === "loading" ? "Checking…" : "Check eBay"}
         </Button>
       </form>
       {load.status === "loading" && (

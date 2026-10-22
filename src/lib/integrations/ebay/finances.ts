@@ -72,6 +72,13 @@ export async function fetchFinanceTransactions(
     const batch = json.transactions ?? [];
     out.push(...batch);
     offset += batch.length;
+    if (opts.requireComplete) {
+      // All-or-nothing: only a reported total that we've reached counts as complete.
+      if (typeof json.total !== "number") throw new FinancesTruncatedError("eBay finances: response has no total");
+      if (offset >= json.total) return out;
+      if (batch.length === 0) throw new FinancesTruncatedError("eBay finances: empty page before total");
+      continue;
+    }
     if (batch.length === 0 || offset >= (json.total ?? 0)) return out;
   }
   if (opts.requireComplete) throw new FinancesTruncatedError(`eBay finances: more than ${MAX_PAGES} pages`);

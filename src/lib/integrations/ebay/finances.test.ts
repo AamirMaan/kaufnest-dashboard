@@ -53,6 +53,23 @@ describe("fetchFinanceTransactions", () => {
     await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
   });
 
+  it("requireComplete refuses an empty page before total, or a missing total", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(page(["a"], 5, 0))
+      .mockResolvedValueOnce(page([], 5, 1)) as unknown as typeof fetch;
+    await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true, status: 200, json: () => Promise.resolve({ transactions: [{ transactionId: "a" }] }),
+    }) as unknown as typeof fetch;
+    await expect(fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).rejects.toBeInstanceOf(FinancesTruncatedError);
+  });
+
+  it("requireComplete still returns a complete list", async () => {
+    global.fetch = jest.fn().mockResolvedValue(page(["a", "b"], 2, 0)) as unknown as typeof fetch;
+    expect(await fetchFinanceTransactions("tok", { ...opts, requireComplete: true })).toHaveLength(2);
+  });
+
   it("throws FinancesScopeError on 403", async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403, text: () => Promise.resolve("insufficient scope") }) as unknown as typeof fetch;
     await expect(fetchFinanceTransactions("tok", opts)).rejects.toBeInstanceOf(FinancesScopeError);

@@ -67,7 +67,8 @@ the API routes call into, read `src/lib/integrations/SKILL.md`.
   earliest pickable day one day inside 36 months because the range runs to
   *now*, not midnight. Review Orders and "Sync eBay charges" stay at 90 days.
   The preview fetches with `requireComplete: true`: past `MAX_PAGES` (50k
-  transactions) `fetchFinanceTransactions` throws `FinancesTruncatedError`
+  transactions), on an empty page before `total`, or with no `total` at all,
+  `fetchFinanceTransactions` throws `FinancesTruncatedError`
   (→ 422 `INTEGRATION_FINANCES_WINDOW_TOO_LARGE`) instead of returning a
   partial list, because a SALE without its later AD_FEE/CREDIT yields a
   confident wrong fee that Apply would write. Other callers keep the old
