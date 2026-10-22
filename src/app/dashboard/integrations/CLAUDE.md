@@ -107,7 +107,7 @@ tenant admin grants an exception via the Users feature).
   never re-seeded). `handleImport` posts `productLinks` for the selected orders
   only; the route validates the ids (`unknownProductIds`) and sets
   `sales.product_id`, so the existing 047 stock triggers and 057 dispatcher
-  notification fire. "Sync Statuses" sends none (`product_id` is user-owned).
+  notification fire; a line above Import counts the selected orders that will be linked (auto-matched ones included). The route validates `productLinks` (uuid shape, chunked `.in()` lookup). The selector list is paged with `fetchAllRowsOrThrow` so matching sees every product. "Sync Statuses" sends none (`product_id` is user-owned).
   **Accounts (multi-account)**: when the active tab's orders span more than one
   account, an "Account" `<select>` (All accounts / each account) sits above the
   fee toolbar and an "Account" column (`order.account_name`) appears after Order

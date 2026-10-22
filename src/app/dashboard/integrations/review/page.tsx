@@ -147,7 +147,6 @@ export default function ReviewPage() {
     return orderId in productLinks ? productLinks[orderId] : (suggestions[orderId]?.productId ?? "");
   }
 
-
   // Computed once per render as a plain boolean — `can` is a fresh function
   // reference every render (useAccess() isn't memoized), so depending on it
   // directly in the effect below re-ran it on every render.
@@ -190,6 +189,18 @@ export default function ReviewPage() {
   // Falls back to "all" if the chosen account dropped out after a re-fetch.
   const effectiveAccount = tabAccounts.some((a) => a.id === accountFilter) ? accountFilter : "all";
   const activeOrders = filterByAccount(tabOrders, effectiveAccount);
+
+  // chevron + checkbox + 11 data columns (+ Account when shown)
+  const tableColSpan = showAccounts ? 14 : 13;
+
+  // Selected, not-yet-imported orders that will be linked on import (each one
+  // deducts stock and notifies the dispatcher via the sales triggers).
+  const linkedSelectedCount = activeOrders.filter(
+    (o) =>
+      !o.imported &&
+      selected.has(`${activeTab}:${o.external_order_id}`) &&
+      linkedProductId(o.external_order_id) !== ""
+  ).length;
 
   const unimportedOnTab = activeOrders.filter((o) => !o.imported);
 
@@ -599,7 +610,7 @@ export default function ReviewPage() {
                 {activeOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={showAccounts ? 14 : 13}
+                      colSpan={tableColSpan}
                       className="py-8 text-center text-sm text-[var(--color-text-muted)]"
                     >
                       No orders found in the last 90 days.
@@ -761,7 +772,7 @@ export default function ReviewPage() {
                       </tr>
                       {isOpen && (
                         <tr className="bg-(--color-surface-subtle) border-t border-(--color-border)">
-                          <td colSpan={showAccounts ? 14 : 13} className="px-6 py-5">
+                          <td colSpan={tableColSpan} className="px-6 py-5">
                             <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
                               {[
                                 ["Variant", order.variant],
@@ -791,6 +802,12 @@ export default function ReviewPage() {
           </div>
 
           {/* Sync + Import buttons */}
+          {linkedSelectedCount > 0 && (
+            <p className="text-right text-sm text-[var(--color-text-muted)]">
+              {linkedSelectedCount} selected order{linkedSelectedCount === 1 ? "" : "s"} will be
+              linked to inventory — stock is deducted and the dispatcher notified on import.
+            </p>
+          )}
           <div className="flex justify-end gap-3">
             <Button
               variant="secondary"
