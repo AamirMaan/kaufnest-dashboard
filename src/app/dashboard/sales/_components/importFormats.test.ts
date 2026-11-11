@@ -6,6 +6,7 @@ import {
   normalizePlatform,
   validateRowForFormat,
   classifySkip,
+  convertRefundToBase,
 } from "./importFormats";
 
 const GENERIC = IMPORT_FORMATS.generic;
@@ -1000,5 +1001,62 @@ describe("validateRowForFormat honours the date order", () => {
       "mdy",
     );
     expect(row.data?.date).toBe("2026-10-04");
+  });
+});
+
+
+describe("convertRefundToBase", () => {
+  const refund = {
+    platform: "amazon" as const,
+    externalOrderId: "408-9213961-0766740",
+    amount: 171.99,
+    itemAmount: 171.99,
+    shippingAmount: 0,
+    vatAmount: 0,
+    currency: "SEK",
+  };
+
+  it("leaves a base-currency refund unchanged", () => {
+    const eur = { ...refund, currency: "EUR" };
+    expect(convertRefundToBase(eur, { original_currency: null, fx_rate: null }, "EUR")).toBe(eur);
+  });
+
+  it("leaves a refund with no currency column unchanged", () => {
+    const blank = { ...refund, currency: null };
+    expect(convertRefundToBase(blank, { original_currency: null, fx_rate: null }, "EUR")).toBe(blank);
+  });
+
+  it("converts at the sale's own fx_rate so a full refund cancels the sale exactly", () => {
+    // The sale stored 171.99 SEK × 0.08958968 = €15.41.
+    const out = convertRefundToBase(refund, { original_currency: "SEK", fx_rate: "0.08958968" }, "EUR");
+    expect(out).toMatchObject({ amount: 15.41, itemAmount: 15.41, shippingAmount: 0, vatAmount: 0, currency: "EUR" });
+  });
+
+  it("keeps item + shipping summing to the converted whole", () => {
+    const out = convertRefundToBase(
+      { ...refund, amount: 238.99, itemAmount: 189.99, shippingAmount: 49, vatAmount: null },
+      { original_currency: "SEK", fx_rate: 0.09161704 },
+      "EUR",
+    )!;
+    expect(out.amount).toBe(21.9);
+    expect(out.itemAmount).toBe(17.41);
+    expect(out.shippingAmount).toBe(4.49);
+    expect(out.vatAmount).toBeNull();
+  });
+
+  it("returns null when the sale was not converted from the refund's currency", () => {
+    expect(convertRefundToBase(refund, { original_currency: null, fx_rate: null }, "EUR")).toBeNull();
+    expect(convertRefundToBase(refund, { original_currency: "GBP", fx_rate: 1.16 }, "EUR")).toBeNull();
+  });
+});
+
+describe("Amazon REFUND rows carry their currency", () => {
+  it("records the sheet currency on the parsed refund", () => {
+    const result = validateRowForFormat(
+      IMPORT_FORMATS.amazon,
+      { status: "REFUND", order_id: "408-9213961-0766740", sku: "X", unit_price: "-171.99", total: "-171.99", currency: "sek" },
+      2,
+    );
+    expect(result.refund?.currency).toBe("SEK");
   });
 });

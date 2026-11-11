@@ -515,6 +515,21 @@ fixed — don't reintroduce them:
 
 ## Gotchas — FX rate review (currency conversion, 2026-09-17)
 
+- **Import is blocked until every foreign row is converted
+  (`hasPendingFxConversion`, `lib/fx/convert.ts`).** Gate on the ROWS, not
+  on `fxReviewOpen`: the review step only opens after `/api/fx/rates`
+  resolves, and before 2026-11-11 the Import button was live in that window
+  — two k2_textil imports (Aug/Sep 2026) inserted SEK amounts as EUR
+  (~€12k overstated). The button reads "Fetching exchange rates…" meanwhile.
+  Purchases and Expenses use the same gate.
+- **`applyRate` converts every money field the row carries** —
+  `unit_price`, `shipping_charged`, `shipping_cost`, `advertising_fee`,
+  `platform_fee` as well as `total_amount`/`vat_amount`. It used to convert
+  only the last two, leaving converted SEK sales with shipping in kronor
+  (49.00 SEK summed as €49.00). Add any new money column to
+  `EXTRA_MONEY_FIELDS`.
+- **In-file SALE merges sum `shipping_charged` too** (`dedupeImportRows`) —
+  the second line's shipping used to be dropped.
 - **Two-pass row lifecycle — parse recognizes, `applyRate` converts.**
   `validateRowForFormat` (`importFormats.ts`) calls `resolveSheetCurrency`
   (`@/lib/fx/convert.ts`) but does NOT convert a foreign-currency row's
@@ -559,6 +574,10 @@ fixed — don't reintroduce them:
   cannot be represented and is silently skipped as `refundsAlreadyApplied`.
   If partial/multiple refunds per order are ever needed, this needs a
   separate ledger table, not a second column on `sales`.
+  **Exception (2026-11-11): rows in the SAME file are summed** by
+  `mergeRefundRows` before matching, so Amazon's one-REFUND-row-per-unit
+  output lands as one full deduction. Only a refund arriving in a later
+  file is still skipped.
 
 ## Gotchas — "Specific period" date filter
 

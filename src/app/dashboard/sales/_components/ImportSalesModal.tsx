@@ -11,7 +11,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
-import { applyRate } from "@/lib/fx/convert";
+import { applyRate, hasPendingFxConversion } from "@/lib/fx/convert";
 import { fxReviewReducer, resolveRowRate } from "@/components/import/fxReviewState";
 import { FxRateReview, type FxRateReviewRow } from "@/components/import/FxRateReview";
 import {
@@ -28,10 +28,11 @@ import {
   resolveHeaders,
   canonicalizeRow,
   validateRowForFormat,
+  convertRefundToBase,
   type ImportFormatId,
   type ParsedRow,
 } from "./importFormats";
-import { dedupeImportRows } from "./dedupeImportRows";
+import { dedupeImportRows, mergeRefundRows } from "./dedupeImportRows";
 import { accountForImportRow, accountLabel, hasMultipleAccounts } from "@/lib/utils/platformAccounts";
 import { markExistingOrders, groupBackfills, type ExistingSaleRef } from "./marketplaceBackfill";
 import { IMPORT_DISPATCH_FIELDS, isMissingDispatchColumn, withoutDispatchFields } from "../_lib/importDispatch";
@@ -204,11 +205,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   // filling in the marketplace on existing orders (marketplaceBackfill.ts).
   const backfillCount = parsed.filter((r) => r.backfill).length;
   const actionableCount = importable.length + refundCount + backfillCount;
+  // Foreign-currency rows still waiting on their FX rate. Checked on the
+  // rows, not on `fxReviewOpen`: that only flips once the rate fetch
+  // resolves, and an Import click in that window used to insert SEK
+  // amounts as EUR (k2_textil Aug/Sep 2026).
+  const fxPending = hasPendingFxConversion(parsed);
   const canImport =
     parsed.length > 0 &&
     errors.length === 0 &&
     (importable.length > 0 || refundCount > 0 || backfillCount > 0) &&
-    !checking;
+    !checking &&
+    !fxPending;
 
   // Group skipped rows by reason (duplicate, blank row, summary row, not a
   // sale, unsupported currency, …) so the summary/all-skipped messages below
@@ -298,7 +305,9 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // sku) — see dedupeImportRows.ts for why this must rewrite external_order_id
     // itself, not just compare on it, given the DB's non-partial unique index on
     // sales(platform, external_order_id).
-    const withFileDupes = dedupeImportRows(rows);
+    // Refund rows for the same order line are summed first (Amazon writes
+    // one REFUND row per refunded unit — see mergeRefundRows).
+    const withFileDupes = dedupeImportRows(mergeRefundRows(rows));
 
     const byPlatform = new Map<Platform, string[]>();
     for (const r of withFileDupes) {
@@ -710,7 +719,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       `Re-select the file to continue.`;
 
     for (const r of refundRows) {
-      const target = r.refund!;
+      let target = r.refund!;
       const productId = r.sku ? (skuToProductId.get(r.sku.toLowerCase()) ?? null) : null;
       if (!productId) {
         unmatchedRefunds.push(target.externalOrderId);
@@ -755,6 +764,17 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
         alreadyRefunded.push(target.externalOrderId);
         continue;
       }
+
+      // The refund's amounts are in the SHEET currency; the sale is stored
+      // in base currency. Convert at the sale's own rate, or treat the
+      // refund as unmatched when that's impossible — never deduct SEK at
+      // face value from a EUR figure.
+      const inBase = convertRefundToBase(target, previous, baseCurrency);
+      if (!inBase) {
+        unmatchedRefunds.push(target.externalOrderId);
+        continue;
+      }
+      target = inBase;
 
       // A refund bigger than what the order actually holds means the match is
       // wrong or the sheet is malformed — skip the ROW and carry on, rather
@@ -944,7 +964,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
-              {loading ? "Importing…" : checking ? "Checking…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
+              {loading ? "Importing…" : checking ? "Checking…" : fxPending ? "Fetching exchange rates…" : canImport ?`Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
             </Button>
           </>
         )

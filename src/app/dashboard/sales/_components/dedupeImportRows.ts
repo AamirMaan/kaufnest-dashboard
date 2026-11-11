@@ -99,8 +99,65 @@ export function dedupeImportRows(rows: ParsedRow[]): ParsedRow[] {
         existing.data.vat_amount === null && row.data.vat_amount === null
           ? null
           : (existing.data.vat_amount ?? 0) + (row.data.vat_amount ?? 0),
+      // Summed like the other money fields — keeping only the first line's
+      // shipping silently dropped the second line's.
+      shipping_charged:
+        existing.data.shipping_charged == null && row.data.shipping_charged == null
+          ? null
+          : round2((existing.data.shipping_charged ?? 0) + (row.data.shipping_charged ?? 0)),
     };
   }
 
   return [...order.map((k) => merged.get(k)!), ...passthrough];
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Collapses REFUND rows that target the same order line (platform + order id
+ * + sku) into ONE refund carrying the summed amounts.
+ *
+ * Amazon writes one REFUND row per refunded unit: order
+ * 303-6005161-3164360 (16 units of one SKU) has 13 separate REFUND rows
+ * worth €350.86 in its September 2026 report. The refund matcher treats a
+ * sale's `refunded_amount` as its "already refunded" marker, so before this
+ * the first row was applied (€26.99) and the other twelve were reported as
+ * "already applied" and dropped. Merging in-file first means the whole
+ * month's refund for that line lands in one deduction.
+ *
+ * Refunds for the same line in a LATER file are still skipped by that
+ * marker — this only covers rows that arrive together.
+ *
+ * Non-refund rows, and refunds that are skipped or errored, pass through
+ * untouched and in their original order; a merged refund keeps the position
+ * (and rowNum) of its first row.
+ */
+export function mergeRefundRows(rows: ParsedRow[]): ParsedRow[] {
+  const byKey = new Map<string, ParsedRow>();
+  const out: ParsedRow[] = [];
+  for (const row of rows) {
+    const r = row.refund;
+    if (!row.isRefund || !r || row.skipped || row.error) {
+      out.push(row);
+      continue;
+    }
+    const key = `${r.platform}:${r.externalOrderId}:${row.sku?.trim().toLowerCase() ?? ""}:${r.currency ?? ""}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      const copy: ParsedRow = { ...row, refund: { ...r } };
+      byKey.set(key, copy);
+      out.push(copy);
+      continue;
+    }
+    const e = existing.refund!;
+    existing.refund = {
+      ...e,
+      amount: round2(e.amount + r.amount),
+      itemAmount: round2(e.itemAmount + r.itemAmount),
+      shippingAmount: round2(e.shippingAmount + r.shippingAmount),
+      vatAmount:
+        e.vatAmount === null && r.vatAmount === null ? null : round2((e.vatAmount ?? 0) + (r.vatAmount ?? 0)),
+    };
+  }
+  return out;
 }

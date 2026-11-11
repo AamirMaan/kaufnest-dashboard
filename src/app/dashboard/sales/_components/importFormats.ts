@@ -88,6 +88,48 @@ export interface ParsedRow {
     shippingAmount: number;
     /** Positive magnitude, or null when the sheet has no vat_amount column. */
     vatAmount: number | null;
+    /**
+     * The sheet's currency for this refund (uppercased ISO code), or null
+     * when the column is blank/absent. The amounts above are in THIS
+     * currency — `convertRefundToBase` turns them into the matched sale's
+     * base currency before they are deducted.
+     */
+    currency?: string | null;
+  };
+}
+
+/**
+ * Converts a refund's amounts into the matched sale's stored (base)
+ * currency, or returns null when that can't be done safely.
+ *
+ * - Refund in the base currency (or no currency column) → unchanged.
+ * - Refund in the sale's original currency (the sale was FX-converted on
+ *   import) → scaled by the sale's own `fx_rate`, so a refund of a whole
+ *   order cancels it exactly.
+ * - Anything else → null. Deducting 171.99 SEK as €171.99 from a €15.41
+ *   order is what happened before this existed (k2_textil, Sep 2026); the
+ *   caller must treat null as unmatched rather than guess.
+ */
+export function convertRefundToBase(
+  refund: NonNullable<ParsedRow["refund"]>,
+  sale: { original_currency?: string | null; fx_rate?: number | string | null },
+  baseCurrency: string,
+): NonNullable<ParsedRow["refund"]> | null {
+  const cur = refund.currency?.trim().toUpperCase() || null;
+  if (!cur || cur === baseCurrency.toUpperCase()) return refund;
+  const rate = sale.fx_rate == null ? NaN : Number(sale.fx_rate);
+  if (sale.original_currency?.toUpperCase() !== cur || !(rate > 0)) return null;
+  const conv = (n: number) => round2(n * rate);
+  const amount = conv(refund.amount);
+  const itemAmount = Math.min(amount, conv(refund.itemAmount));
+  return {
+    ...refund,
+    amount,
+    itemAmount,
+    // Derived, not converted separately, so the parts still sum to the whole.
+    shippingAmount: round2(amount - itemAmount),
+    vatAmount: refund.vatAmount === null ? null : conv(refund.vatAmount),
+    currency: baseCurrency,
   };
 }
 
@@ -401,6 +443,7 @@ export function validateRowForFormat(
         itemAmount,
         shippingAmount,
         vatAmount: parsedVat === null ? null : Math.abs(round2(parsedVat)),
+        currency: raw.currency?.trim().toUpperCase() || null,
       },
     };
   }

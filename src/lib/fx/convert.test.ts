@@ -1,4 +1,4 @@
-import { convertAmount, resolveSheetCurrency, applyRate } from "./convert";
+import { convertAmount, resolveSheetCurrency, applyRate, hasPendingFxConversion } from "./convert";
 
 describe("convertAmount", () => {
   it("multiplies amount by rate and rounds half-up to 2dp", () => {
@@ -69,5 +69,60 @@ describe("applyRate", () => {
     const input = { total_amount: 100, vat_amount: 10 };
     applyRate(input, "USD", 0.92, "2026-06-01");
     expect(input).toEqual({ total_amount: 100, vat_amount: 10 });
+  });
+
+  it("also converts unit_price, shipping and fee fields when present", () => {
+    // Real k2_textil row: 189.99 SEK item + 49.00 SEK shipping. Shipping used
+    // to stay at 49.00 and be summed into revenue as €49.00.
+    const result = applyRate(
+      {
+        total_amount: 189.99,
+        vat_amount: null,
+        unit_price: 189.99,
+        shipping_charged: 49,
+        shipping_cost: 10,
+        advertising_fee: 5,
+        platform_fee: null,
+      },
+      "SEK",
+      0.09161704,
+      "2026-05-13",
+    );
+    expect(result.total_amount).toBe(17.41);
+    expect(result.unit_price).toBe(17.41);
+    expect(result.shipping_charged).toBe(4.49);
+    expect(result.shipping_cost).toBe(0.92);
+    expect(result.advertising_fee).toBe(0.46);
+    expect(result.platform_fee).toBeNull(); // null stays null, never 0
+  });
+
+  it("leaves rows without the extra fields shaped as before", () => {
+    const result = applyRate({ total_amount: 100, vat_amount: 10 }, "USD", 0.92, "2026-06-01");
+    expect(Object.keys(result).sort()).toEqual(
+      ["fx_rate", "fx_rate_date", "original_currency", "original_total_amount", "total_amount", "vat_amount"],
+    );
+  });
+});
+
+describe("hasPendingFxConversion", () => {
+  const unconverted = { sheetCurrency: "SEK", data: { original_currency: null } };
+
+  it("is true while a foreign-currency row has not been converted", () => {
+    expect(hasPendingFxConversion([unconverted])).toBe(true);
+  });
+
+  it("is false once applyRate has stamped original_currency", () => {
+    expect(hasPendingFxConversion([{ sheetCurrency: "SEK", data: { original_currency: "SEK" } }])).toBe(false);
+  });
+
+  it("ignores base-currency, skipped, errored and data-less rows", () => {
+    expect(
+      hasPendingFxConversion([
+        { sheetCurrency: null, data: { original_currency: null } },
+        { ...unconverted, skipped: "duplicate in file" },
+        { ...unconverted, error: "Row 3: bad" },
+        { sheetCurrency: "SEK", data: null },
+      ]),
+    ).toBe(false);
   });
 });

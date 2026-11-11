@@ -292,7 +292,7 @@ allowlist) — a row whose `currency` column names a plausible ISO code
 other than the tenant's base currency sets `ParsedPurchaseRow.sheetCurrency`
 rather than erroring, ready for the FX rate review step.
 
-**FX rate review (Task 14, 2026-09-17)**: `handleFile`'s `.then` now calls
+**FX rate review (Task 14, 2026-09-17)**: Import stays disabled ("Fetching exchange rates…") while any foreign row is unconverted — `hasPendingFxConversion` (`lib/fx/convert.ts`, 2026-11-11); before that the button was live until the rate fetch resolved, letting unconverted amounts through. `applyRate` now also converts `unit_price` (and the Sales fee/shipping fields) when present. `handleFile`'s `.then` now calls
 `detectAndReviewFxRates` after parsing — groups any `sheetCurrency`-carrying
 rows, POSTs `/api/fx/rates`, and opens the shared `<FxRateReview>`
 component in place of the normal form; confirming applies the resolved
