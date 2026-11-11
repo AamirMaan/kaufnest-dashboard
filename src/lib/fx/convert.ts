@@ -52,9 +52,25 @@ export function resolveSheetCurrency(
 }
 
 /**
+ * Money fields besides total_amount/vat_amount that a row MAY carry. Every
+ * one present as a number is converted too. Before 2026-11-11 only
+ * total_amount/vat_amount were, so a converted SEK sale kept its
+ * `shipping_charged` (and `unit_price`) in kronor — 49.00 SEK of shipping was
+ * summed into revenue as €49.00 (k2_textil, May–July 2026).
+ */
+const EXTRA_MONEY_FIELDS = [
+  "unit_price",
+  "shipping_charged",
+  "shipping_cost",
+  "advertising_fee",
+  "platform_fee",
+] as const;
+
+/**
  * Applies a confirmed FX rate to one parsed row's money fields, returning a
- * NEW object (never mutates the input) with total_amount/vat_amount
- * converted to base currency and the original figures recorded for audit.
+ * NEW object (never mutates the input) with total_amount/vat_amount — and
+ * any of EXTRA_MONEY_FIELDS the row carries as a number — converted to base
+ * currency, and the original figures recorded for audit.
  */
 export function applyRate<T extends { total_amount: number; vat_amount: number | null }>(
   row: T,
@@ -67,8 +83,15 @@ export function applyRate<T extends { total_amount: number; vat_amount: number |
   fx_rate: number;
   fx_rate_date: string;
 } {
+  const extras: Record<string, number> = {};
+  const fields = row as unknown as Record<string, unknown>;
+  for (const key of EXTRA_MONEY_FIELDS) {
+    const value = fields[key];
+    if (typeof value === "number") extras[key] = convertAmount(value, rate);
+  }
   return {
     ...row,
+    ...extras,
     total_amount: convertAmount(row.total_amount, rate),
     vat_amount: row.vat_amount === null ? null : convertAmount(row.vat_amount, rate),
     original_currency: sheetCurrency,
@@ -76,4 +99,28 @@ export function applyRate<T extends { total_amount: number; vat_amount: number |
     fx_rate: rate,
     fx_rate_date: rateDate,
   };
+}
+
+/**
+ * True while any importable row still needs its FX rate applied — i.e. it
+ * carries a `sheetCurrency` but `applyRate` hasn't stamped
+ * `original_currency` on its data yet. Import buttons gate on this.
+ *
+ * Derived from the rows themselves rather than from "is the review step
+ * open" UI state, because that state only flips once the `/api/fx/rates`
+ * fetch resolves. In the window before it, the Import button was live and
+ * an import inserted SEK amounts as if they were EUR (k2_textil Aug/Sep
+ * 2026, ~€12k overstated).
+ */
+export function hasPendingFxConversion(
+  rows: ReadonlyArray<{
+    sheetCurrency?: string | null;
+    skipped?: string | null;
+    error?: string | null;
+    data: { original_currency?: string | null } | null;
+  }>,
+): boolean {
+  return rows.some(
+    (r) => !!r.sheetCurrency && !r.skipped && !r.error && !!r.data && !r.data.original_currency,
+  );
 }

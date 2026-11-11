@@ -1,4 +1,4 @@
-import { dedupeImportRows } from "./dedupeImportRows";
+import { dedupeImportRows, mergeRefundRows } from "./dedupeImportRows";
 import type { ParsedRow, SaleImportData } from "./importFormats";
 
 function row(
@@ -158,5 +158,97 @@ describe("dedupeImportRows", () => {
     expect(out).toHaveLength(1);
     expect(out[0].data?.marketplace).toBe("amazon.de");
     expect(out[0].data?.quantity).toBe(3);
+  });
+});
+
+
+describe("dedupeImportRows — merged lines keep every line's shipping", () => {
+  it("sums shipping_charged across merged same-sku lines", () => {
+    const out = dedupeImportRows([
+      row({ sku: "A", data: { shipping_charged: 3.99 } }),
+      row({ rowNum: 2, sku: "A", data: { shipping_charged: 1.5 } }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].data!.shipping_charged).toBe(5.49);
+  });
+
+  it("keeps shipping_charged null when neither line had shipping", () => {
+    const out = dedupeImportRows([row({ sku: "A" }), row({ rowNum: 2, sku: "A" })]);
+    expect(out[0].data!.shipping_charged).toBeNull();
+  });
+});
+
+function refundRow(
+  rowNum: number,
+  sku: string,
+  amounts: Partial<NonNullable<ParsedRow["refund"]>> = {},
+  extra: Partial<ParsedRow> = {},
+): ParsedRow {
+  return {
+    rowNum,
+    error: null,
+    data: null,
+    isRefund: true,
+    sku,
+    refund: {
+      platform: "amazon",
+      externalOrderId: "303-6005161-3164360",
+      amount: 26.99,
+      itemAmount: 26.99,
+      shippingAmount: 0,
+      vatAmount: 0,
+      currency: "EUR",
+      ...amounts,
+    },
+    ...extra,
+  };
+}
+
+describe("mergeRefundRows", () => {
+  it("sums every refund row for the same order line into one refund", () => {
+    // Real Sep 2026 shape: one REFUND row per refunded unit.
+    const rows = [
+      refundRow(2, "100-CNC-2226-25P"),
+      refundRow(3, "100-CNC-2226-25P", { amount: 26.98, itemAmount: 26.98 }),
+      refundRow(4, "100-CNC-2226-25P"),
+    ];
+    const out = mergeRefundRows(rows);
+    expect(out).toHaveLength(1);
+    expect(out[0].rowNum).toBe(2);
+    expect(out[0].refund).toMatchObject({ amount: 80.96, itemAmount: 80.96, shippingAmount: 0, vatAmount: 0 });
+  });
+
+  it("does not mutate the input rows", () => {
+    const rows = [refundRow(2, "A"), refundRow(3, "A")];
+    mergeRefundRows(rows);
+    expect(rows[0].refund!.amount).toBe(26.99);
+  });
+
+  it("keeps different skus, orders and currencies apart", () => {
+    const out = mergeRefundRows([
+      refundRow(2, "A"),
+      refundRow(3, "B"),
+      refundRow(4, "A", { externalOrderId: "other-order" }),
+      refundRow(5, "A", { currency: "SEK" }),
+    ]);
+    expect(out).toHaveLength(4);
+  });
+
+  it("sums shipping and vat, keeping vat null only when every row is null", () => {
+    const out = mergeRefundRows([
+      refundRow(2, "A", { amount: 12.48, itemAmount: 8.49, shippingAmount: 3.99, vatAmount: null }),
+      refundRow(3, "A", { amount: 8.49, itemAmount: 8.49, shippingAmount: 0, vatAmount: null }),
+    ]);
+    expect(out[0].refund).toMatchObject({ amount: 20.97, itemAmount: 16.98, shippingAmount: 3.99, vatAmount: null });
+  });
+
+  it("passes sale rows and skipped/errored refunds through untouched, in order", () => {
+    const sale = row({ sku: "A" });
+    const skipped = refundRow(3, "A", {}, { skipped: "unsupported currency" });
+    const out = mergeRefundRows([sale, refundRow(2, "A"), skipped, refundRow(4, "A")]);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBe(sale);
+    expect(out[1].refund!.amount).toBe(53.98);
+    expect(out[2]).toBe(skipped);
   });
 });

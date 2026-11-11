@@ -337,7 +337,7 @@ non-skipped rows must be valid; one audit log entry for the batch (omit
     format now selected.
   - **This is a deliberate divergence from `ImportSalesModal`** — see the
     SKILL.md gotcha before "aligning" the two.
-- **FX rate review (2026-09-17)**: a row whose `currency` column names a
+- **FX rate review (2026-09-17)**: Import stays disabled ("Fetching exchange rates…") while any foreign row is unconverted — `hasPendingFxConversion` (`lib/fx/convert.ts`, 2026-11-11); before that the button was live until the rate fetch resolved, letting unconverted amounts through. A row whose `currency` column names a
   plausible ISO code other than the tenant's base currency
   (`resolveSheetCurrency`, `lib/fx/convert.ts`) no longer errors or gets
   skipped — `validateExpenseRow` sets `ParsedExpenseRow.sheetCurrency` and

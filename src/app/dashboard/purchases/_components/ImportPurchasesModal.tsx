@@ -10,7 +10,7 @@ import { createTenantClient } from "@/lib/supabase/client";
 import { writeAuditLog } from "@/lib/utils/audit";
 import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
-import { applyRate } from "@/lib/fx/convert";
+import { applyRate, hasPendingFxConversion } from "@/lib/fx/convert";
 import { fxReviewReducer, resolveRowRate } from "@/components/import/fxReviewState";
 import { FxRateReview, type FxRateReviewRow } from "@/components/import/FxRateReview";
 import {
@@ -55,7 +55,11 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
 
   const validRows = parsed.filter((r) => r.data !== null);
   const errors = parsed.filter((r) => r.error !== null);
-  const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0;
+  // Blocks Import until every foreign-currency row has its FX rate applied —
+  // the review step only opens once the rate fetch resolves, and an Import
+  // click before that inserted unconverted amounts (see lib/fx/convert.ts).
+  const fxPending = hasPendingFxConversion(parsed);
+  const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0 && !fxPending;
 
   function reset() {
     setParsed([]);
@@ -257,7 +261,7 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
-              {loading ? "Importing…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
+              {loading ? "Importing…" : fxPending ? "Fetching exchange rates…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
             </Button>
           </>
         )

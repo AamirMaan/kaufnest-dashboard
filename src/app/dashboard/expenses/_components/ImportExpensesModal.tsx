@@ -13,7 +13,7 @@ import { parseCsvText, exportToCsv } from "@/lib/utils/csv";
 import { parseExcelBuffer } from "@/lib/utils/excel";
 import { resolveHeaders, canonicalizeRow } from "@/lib/utils/importAliases";
 import { hasOrderSensitiveDate } from "@/lib/utils/localeParse";
-import { applyRate } from "@/lib/fx/convert";
+import { applyRate, hasPendingFxConversion } from "@/lib/fx/convert";
 import { fxReviewReducer, resolveRowRate } from "@/components/import/fxReviewState";
 import { FxRateReview, type FxRateReviewRow } from "@/components/import/FxRateReview";
 import {
@@ -139,7 +139,11 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
   // amount padding and a trailing Total row, and erroring on those would make a
   // real quarterly export impossible to import. They carry `data: null`, so
   // they can never reach `validRows` either.
-  const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0;
+  // Blocks Import until every foreign-currency row has its FX rate applied —
+  // the review step only opens once the rate fetch resolves, and an Import
+  // click before that inserted unconverted amounts (see lib/fx/convert.ts).
+  const fxPending = hasPendingFxConversion(parsed);
+  const canImport = parsed.length > 0 && errors.length === 0 && validRows.length > 0 && !fxPending;
 
   // Group skipped rows by reason so the summary can name the real reasons
   // instead of reporting an undifferentiated count. Mirrors `skipReasonCounts`
@@ -453,7 +457,7 @@ export function ImportExpensesModal({ open, onClose, onSuccess }: Props) {
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
-              {loading ? "Importing…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
+              {loading ? "Importing…" : fxPending ? "Fetching exchange rates…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
             </Button>
           </>
         )

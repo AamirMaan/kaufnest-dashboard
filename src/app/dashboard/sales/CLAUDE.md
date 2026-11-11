@@ -993,9 +993,20 @@ existing sale instead:
 - **`refunded_amount` is the re-import idempotency marker.** A matched sale
   that already has one (`previous.refunded_amount != null`) is a no-op —
   counted as `refundsAlreadyApplied`. Consequence: a second, separate refund
-  against the same order is skipped rather than accumulated — one refund per
-  order is a hard limit of this column, not a v1 shortcut (see the SKILL.md
-  gotcha). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
+  against the same order **in a later file** is skipped rather than
+  accumulated — one refund per order *per import* is a hard limit of this
+  column (see the SKILL.md gotcha). Refund rows for the same order line
+  **within one file** are summed first by `mergeRefundRows`
+  (`dedupeImportRows.ts`, called from `markDuplicates`) — Amazon writes one
+  REFUND row per refunded unit (k2_textil Sep 2026: 13 rows, €350.86, of
+  which only the first €26.99 used to land).
+- **Foreign-currency refunds are converted at the matched sale's own
+  `fx_rate`** (`convertRefundToBase`, `importFormats.ts`) before any
+  deduction — the parsed `refund.currency` carries the sheet's code. A
+  refund whose currency is neither the base currency nor the sale's
+  `original_currency` returns `null` and is reported unmatched; it is
+  never deducted at face value (171.99 SEK used to be deducted as
+  €171.99). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
   applied to any tenant schema, so `previous.refunded_amount` reads as
   `undefined` there, and `undefined !== null` is `true` — a strict check
   would silently classify every refund as already-applied and deduct nothing
