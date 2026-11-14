@@ -559,7 +559,7 @@ export default function SalesPage() {
       <ImportSalesModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onSuccess={({ inserted, skippedRows, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied, marketplacesAdded, marketplaceBackfillFailed }) => {
+        onSuccess={({ inserted, skippedRows, refundsApplied, refundsSkipped, refundsExceeded, refundsAlreadyApplied, refundsCurrencyMismatch, marketplacesAdded, marketplaceBackfillFailed }) => {
           if (marketplacesAdded > 0) {
             // Backfilled rows were UPDATEd server-side — refetch so the table and tiles show them.
             dispatch(fetchSalesPage({ page, pageSize, filters }));
@@ -573,6 +573,7 @@ export default function SalesPage() {
           if (refundsSkipped > 0) parts.push(`${refundsSkipped} refund${refundsSkipped !== 1 ? "s" : ""} skipped — no matching order found.`);
           if (refundsExceeded > 0) parts.push(`${refundsExceeded} refund${refundsExceeded !== 1 ? "s" : ""} skipped — larger than the matched order, which was left unchanged.`);
           if (refundsAlreadyApplied > 0) parts.push(`${refundsAlreadyApplied} refund${refundsAlreadyApplied !== 1 ? "s" : ""} already applied — no change.`);
+          if (refundsCurrencyMismatch > 0) parts.push(`${refundsCurrencyMismatch} refund${refundsCurrencyMismatch !== 1 ? "s" : ""} skipped — different currency from the order.`);
           if (marketplacesAdded > 0) parts.push(`Marketplace added to ${marketplacesAdded} existing order${marketplacesAdded !== 1 ? "s" : ""}.`);
           if (skippedRows > 0) parts.push(`${skippedRows} row${skippedRows !== 1 ? "s" : ""} skipped.`);
           const description = parts.length > 0 ? parts.join(" ") : "Nothing to import.";

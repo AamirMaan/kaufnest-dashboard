@@ -1004,9 +1004,13 @@ existing sale instead:
   `fx_rate`** (`convertRefundToBase`, `importFormats.ts`) before any
   deduction — the parsed `refund.currency` carries the sheet's code. A
   refund whose currency is neither the base currency nor the sale's
-  `original_currency` returns `null` and is reported unmatched; it is
-  never deducted at face value (171.99 SEK used to be deducted as
-  €171.99). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
+  `original_currency` — or a blank-currency refund against a converted
+  sale — returns `null` and is reported as a **currency mismatch**
+  (`currencyMismatchRefunds` in the modal; `refundsCurrencyMismatch` on
+  `ImportSummary`; `refunds_currency_mismatch`/`currency_mismatch_order_ids`
+  in the refund batch audit entry; listed in the post-import acknowledgement
+  panel next to the unmatched ids). It is never deducted at face value
+  (171.99 SEK used to be deducted as €171.99). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
   applied to any tenant schema, so `previous.refunded_amount` reads as
   `undefined` there, and `undefined !== null` is `true` — a strict check
   would silently classify every refund as already-applied and deduct nothing

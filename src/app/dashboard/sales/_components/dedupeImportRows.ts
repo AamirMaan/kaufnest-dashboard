@@ -91,14 +91,20 @@ export function dedupeImportRows(rows: ParsedRow[]): ParsedRow[] {
       continue;
     }
     if (!existing.data || !row.data) continue; // type guard; both are non-null per the checks above
+    const quantity = existing.data.quantity + row.data.quantity;
+    // Rounded: 0.1 + 0.2-style float drift would otherwise reach the DB.
+    const totalAmount = round2(existing.data.total_amount + row.data.total_amount);
     existing.data = {
       ...existing.data,
-      quantity: existing.data.quantity + row.data.quantity,
-      total_amount: existing.data.total_amount + row.data.total_amount,
+      quantity,
+      total_amount: totalAmount,
+      // Re-derived for the merged line; keeping the first line's unit price
+      // breaks quantity × unit_price ≈ total_amount when the lines differ.
+      unit_price: round2(totalAmount / quantity),
       vat_amount:
         existing.data.vat_amount === null && row.data.vat_amount === null
           ? null
-          : (existing.data.vat_amount ?? 0) + (row.data.vat_amount ?? 0),
+          : round2((existing.data.vat_amount ?? 0) + (row.data.vat_amount ?? 0)),
       // Summed like the other money fields — keeping only the first line's
       // shipping silently dropped the second line's.
       shipping_charged:
@@ -128,6 +134,12 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Refunds for the same line in a LATER file are still skipped by that
  * marker — this only covers rows that arrive together.
  *
+ * Keyed by order LINE only, not currency: a blank-currency row and a SEK
+ * row for the same line are the same refund money, and splitting them left
+ * the second one to be dropped as "already applied". The merged refund takes
+ * whichever currency is set. Two DIFFERENT non-blank currencies on one line
+ * are never summed — those stay separate rows.
+ *
  * Non-refund rows, and refunds that are skipped or errored, pass through
  * untouched and in their original order; a merged refund keeps the position
  * (and rowNum) of its first row.
@@ -141,7 +153,12 @@ export function mergeRefundRows(rows: ParsedRow[]): ParsedRow[] {
       out.push(row);
       continue;
     }
-    const key = `${r.platform}:${r.externalOrderId}:${row.sku?.trim().toLowerCase() ?? ""}:${r.currency ?? ""}`;
+    const lineKey = `${r.platform}:${r.externalOrderId}:${row.sku?.trim().toLowerCase() ?? ""}`;
+    const cur = r.currency?.trim().toUpperCase() || null;
+    let key = lineKey;
+    const first = byKey.get(lineKey);
+    const firstCur = first?.refund?.currency?.trim().toUpperCase() || null;
+    if (first && cur && firstCur && cur !== firstCur) key = `${lineKey}:${cur}`;
     const existing = byKey.get(key);
     if (!existing) {
       const copy: ParsedRow = { ...row, refund: { ...r } };
@@ -152,6 +169,7 @@ export function mergeRefundRows(rows: ParsedRow[]): ParsedRow[] {
     const e = existing.refund!;
     existing.refund = {
       ...e,
+      currency: e.currency || r.currency || null,
       amount: round2(e.amount + r.amount),
       itemAmount: round2(e.itemAmount + r.itemAmount),
       shippingAmount: round2(e.shippingAmount + r.shippingAmount),

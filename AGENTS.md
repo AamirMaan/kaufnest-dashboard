@@ -470,7 +470,8 @@ owns it. Current shared locations:
   `src/app/dashboard/SKILL.md`'s gotcha)
 - `src/types/index.ts` — single source of truth for all domain types
 - `src/lib/fx/` (2026-09-17) — `convert.ts` (pure: `convertAmount`,
-  `resolveSheetCurrency`, `applyRate`, `isPlausibleIsoCode`), `ecb.ts`
+  `resolveSheetCurrency`, `applyRate`, `isPlausibleIsoCode`,
+  `hasPendingFxConversion` — the Import-button gate all three modals use), `ecb.ts`
   (server-only ECB daily reference rate fetch + `control.fx_rates` cache,
   weekend/holiday 7-day walk-back), `authGuard.ts` (`requireFxAccess`, backs
   `POST /api/fx/rates`). Used by all three import paths — Sales/Expenses/

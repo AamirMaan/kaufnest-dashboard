@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { parseExcelBuffer } from "./excel";
+import { parseLocaleNumber } from "./localeParse";
 
 /** Build an in-memory .xlsx buffer from an array-of-arrays (first row = headers). */
 function makeBuffer(rows: unknown[][]): ArrayBuffer {
@@ -20,6 +21,14 @@ describe("parseExcelBuffer", () => {
     expect(headers).toEqual(["date", "product_name", "quantity", "unit_price"]);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ date: "2024-01-15", product_name: "Blue Widget", quantity: "5", unit_price: "9.99" });
+  });
+
+  it("keeps 3-decimal number cells from reading as German thousands", () => {
+    const buf = makeBuffer([["rate", "price", "qty"], [1.234, 0.255, 1234]]);
+    const { rows } = parseExcelBuffer(buf);
+    expect(parseLocaleNumber(rows[0].rate)).toBe(1.234); // not 1234
+    expect(parseLocaleNumber(rows[0].price)).toBe(0.255);
+    expect(rows[0].qty).toBe("1234");
   });
 
   it("converts date cells to YYYY-MM-DD strings", () => {

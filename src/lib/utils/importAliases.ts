@@ -52,6 +52,9 @@ export const ALIASES: Record<string, string[]> = {
   total: ["total", "total_amount", "gesamt", "gesamtbetrag", "gesamtpreis", "brutto", "verkaufsbetrag", "summe"],
   status: ["status", "bestellstatus"],
   shipping_charged: ["shipping_charged", "shipping", "versand", "versandkosten"],
+  // Buyer-paid gift wrap. Amazon's VAT report folds it into the activity
+  // total but not into the item or shipping columns.
+  gift_wrap: ["gift_wrap", "giftwrap", "geschenkverpackung", "total_gift_wrap_amt_vat_incl"],
   shipping_cost: ["shipping_cost", "versandkosten_bezahlt", "eigene versandkosten"],
   advertising_fee: ["advertising_fee", "werbekosten", "anzeigenkosten", "werbegebühr", "werbegebuehr"],
   platform_fee: ["platform_fee", "plattformgebühr", "plattformgebuehr", "verkaufsprovision", "vermittlungsgebühr", "vermittlungsgebuehr"],

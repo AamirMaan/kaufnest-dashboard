@@ -172,6 +172,21 @@ describe("dedupeImportRows — merged lines keep every line's shipping", () => {
     expect(out[0].data!.shipping_charged).toBe(5.49);
   });
 
+  it("rounds merged money and re-derives unit_price from the merged line", () => {
+    const out = dedupeImportRows([
+      row({ sku: "A", data: { quantity: 1, unit_price: 0.1, total_amount: 0.1, vat_amount: 0.1 } }),
+      row({ rowNum: 2, sku: "A", data: { quantity: 2, unit_price: 0.1, total_amount: 0.2, vat_amount: 0.2 } }),
+    ]);
+    expect(out[0].data!.total_amount).toBe(0.3); // not 0.30000000000000004
+    expect(out[0].data!.vat_amount).toBe(0.3);
+    expect(out[0].data!.unit_price).toBe(0.1);
+    const uneven = dedupeImportRows([
+      row({ sku: "A", data: { quantity: 1, unit_price: 10, total_amount: 10 } }),
+      row({ rowNum: 2, sku: "A", data: { quantity: 1, unit_price: 12, total_amount: 12 } }),
+    ]);
+    expect(uneven[0].data!.unit_price).toBe(11);
+  });
+
   it("keeps shipping_charged null when neither line had shipping", () => {
     const out = dedupeImportRows([row({ sku: "A" }), row({ rowNum: 2, sku: "A" })]);
     expect(out[0].data!.shipping_charged).toBeNull();
@@ -232,6 +247,21 @@ describe("mergeRefundRows", () => {
       refundRow(5, "A", { currency: "SEK" }),
     ]);
     expect(out).toHaveLength(4);
+  });
+
+  it("merges a blank-currency row into the same line's SEK refund", () => {
+    const out = mergeRefundRows([
+      refundRow(2, "A", { currency: "SEK", amount: 100, itemAmount: 100 }),
+      refundRow(3, "A", { currency: null, amount: 50, itemAmount: 50 }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].refund).toMatchObject({ currency: "SEK", amount: 150 });
+    const blankFirst = mergeRefundRows([
+      refundRow(2, "A", { currency: null }),
+      refundRow(3, "A", { currency: "SEK" }),
+    ]);
+    expect(blankFirst).toHaveLength(1);
+    expect(blankFirst[0].refund!.currency).toBe("SEK");
   });
 
   it("sums shipping and vat, keeping vat null only when every row is null", () => {

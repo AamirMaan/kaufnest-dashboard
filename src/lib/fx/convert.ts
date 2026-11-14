@@ -89,10 +89,18 @@ export function applyRate<T extends { total_amount: number; vat_amount: number |
     const value = fields[key];
     if (typeof value === "number") extras[key] = convertAmount(value, rate);
   }
+  const totalAmount = convertAmount(row.total_amount, rate);
+  // unit_price is DERIVED from the converted total, not rounded on its own:
+  // converting each separately lets quantity × unit_price drift a cent or
+  // more away from total_amount on a multi-unit line.
+  const quantity = fields.quantity;
+  if (typeof extras.unit_price === "number" && typeof quantity === "number" && quantity > 0) {
+    extras.unit_price = Math.round((totalAmount / quantity) * 100) / 100;
+  }
   return {
     ...row,
     ...extras,
-    total_amount: convertAmount(row.total_amount, rate),
+    total_amount: totalAmount,
     vat_amount: row.vat_amount === null ? null : convertAmount(row.vat_amount, rate),
     original_currency: sheetCurrency,
     original_total_amount: row.total_amount,
