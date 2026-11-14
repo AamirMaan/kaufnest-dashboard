@@ -543,7 +543,11 @@ fixed — don't reintroduce them:
   when `total` exceeds items + shipping by exactly the gift wrap (±0.02). A
   sheet that already put it into shipping reconciles without it, so it is
   never added twice. With `unit_price` blank, the item total is backed out
-  as total − shipping − gift wrap, so the split is the same. Only the Amazon
+  as total − shipping − gift wrap. **Known limit:** with no `unit_price`
+  there's nothing to reconcile against, so a sheet that already put the
+  gift wrap into shipping gets it counted on the shipping side twice
+  (revenue still equals `total`; only the item/shipping split shifts —
+  pinned by a test). A bad `gift_wrap` value is a row error. Only the Amazon
   format declares the column (eBay/generic would map it and drop it).
   k2_textil Sep 2026 row 324 (16.39 + 2.99 = 19.38) used to fail "does not
   reconcile".

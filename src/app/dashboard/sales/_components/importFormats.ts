@@ -499,7 +499,11 @@ export function validateRowForFormat(
     // computes revenue as total_amount + shipping_charged.
     const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
     const giftWrapRaw = raw.gift_wrap?.trim();
-    const giftWrap = giftWrapRaw ? Math.max(0, parseLocaleNumber(giftWrapRaw) ?? 0) : 0;
+    const giftWrapParsed = giftWrapRaw ? parseLocaleNumber(giftWrapRaw) : null;
+    if (giftWrapRaw && (giftWrapParsed === null || giftWrapParsed < 0)) {
+      return fail(`"gift_wrap" must be a non-negative number`);
+    }
+    const giftWrap = giftWrapParsed ?? 0;
     const sheetTotal = totalRaw ? parseLocaleNumber(totalRaw) : null;
     if (totalRaw && (sheetTotal === null || sheetTotal <= 0)) {
       return fail(`"total" must be a positive number`);
@@ -513,8 +517,11 @@ export function validateRowForFormat(
       // total must be BACKED OUT of the sheet total — `total` includes shipping,
       // so using it raw would store a shipping-inclusive figure in total_amount
       // and double-count shipping in revenue.
-      // Gift wrap is backed out too, and moved to shipping below — same
-      // split as when unit_price is present.
+      // Gift wrap is backed out too, and moved to shipping below. Known
+      // limit: with no unit_price there is nothing to reconcile against, so
+      // a sheet that ALREADY put the gift wrap into shipping_charged gets it
+      // counted on the shipping side twice (revenue still equals `total`,
+      // only the item/shipping split shifts). Pinned by a test.
       itemTotal = round2(sheetTotal - ship - giftWrap);
       giftWrapCharge = round2(giftWrap);
     } else {

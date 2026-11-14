@@ -137,7 +137,8 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Keyed by order LINE only, not currency: a blank-currency row and a SEK
  * row for the same line are the same refund money, and splitting them left
  * the second one to be dropped as "already applied". The merged refund takes
- * whichever currency is set. Two DIFFERENT non-blank currencies on one line
+ * whichever currency is set. A blank row always joins the line's FIRST-seen
+ * bucket, even if the line also has a later bucket in another currency. Two DIFFERENT non-blank currencies on one line
  * are never summed — those stay separate rows.
  *
  * Non-refund rows, and refunds that are skipped or errored, pass through

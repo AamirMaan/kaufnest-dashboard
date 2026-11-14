@@ -444,6 +444,17 @@ describe("amazon line totals", () => {
     expect(derived.data?.total_amount).toBe(16.39);
     expect(derived.data?.shipping_charged).toBe(2.99);
 
+    // Known limit, pinned: no unit_price AND gift wrap already in shipping —
+    // nothing to reconcile against, so it is assumed separate. Revenue
+    // (items + shipping) still equals the sheet total.
+    const ambiguous = validateRowForFormat(amazon, { ...base, unit_price: "", shipping_charged: "2.99", gift_wrap: "2.99" }, 2);
+    expect(ambiguous.data?.total_amount).toBe(13.4);
+    expect(ambiguous.data?.shipping_charged).toBe(5.98);
+
+    // A non-numeric gift wrap is its own row error, not a reconcile error.
+    const bad = validateRowForFormat(amazon, { ...base, gift_wrap: "abc" }, 2);
+    expect(bad.error).toContain('"gift_wrap" must be a non-negative number');
+
     // Gift wrap that doesn't close the gap is still an error.
     const wrong = validateRowForFormat(amazon, { ...base, total: "25.00", shipping_charged: "0", gift_wrap: "2.99" }, 2);
     expect(wrong.error).toContain("does not reconcile");
