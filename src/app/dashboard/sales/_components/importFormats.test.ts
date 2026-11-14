@@ -415,6 +415,66 @@ describe("amazon line totals", () => {
     expect(row.error).toContain("does not reconcile");
   });
 
+  it("folds gift wrap into shipping when the total includes it", () => {
+    // Real k2_textil Sep 2026 row 324: 16.39 item + 2.99 gift wrap = 19.38.
+    const base = {
+      order_id: "028-2884059-0107530",
+      date: "18-09-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "16.39",
+      total: "19.38",
+      currency: "EUR",
+    };
+    const row = validateRowForFormat(amazon, { ...base, shipping_charged: "0", gift_wrap: "2.99" }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.total_amount).toBe(16.39);
+    expect(row.data?.shipping_charged).toBe(2.99);
+
+    // A sheet that already moved the gift wrap into shipping reconciles
+    // without it — no double count.
+    const edited = validateRowForFormat(amazon, { ...base, shipping_charged: "2.99", gift_wrap: "2.99" }, 2);
+    expect(edited.error).toBeNull();
+    expect(edited.data?.shipping_charged).toBe(2.99);
+
+    // No unit_price: the item total is backed out of the total, gift wrap
+    // included, so it lands in shipping exactly as above.
+    const derived = validateRowForFormat(amazon, { ...base, unit_price: "", shipping_charged: "0", gift_wrap: "2.99" }, 2);
+    expect(derived.error).toBeNull();
+    expect(derived.data?.total_amount).toBe(16.39);
+    expect(derived.data?.shipping_charged).toBe(2.99);
+
+    // Known limit, pinned: no unit_price AND gift wrap already in shipping —
+    // nothing to reconcile against, so it is assumed separate. Revenue
+    // (items + shipping) still equals the sheet total.
+    const ambiguous = validateRowForFormat(amazon, { ...base, unit_price: "", shipping_charged: "2.99", gift_wrap: "2.99" }, 2);
+    expect(ambiguous.data?.total_amount).toBe(13.4);
+    expect(ambiguous.data?.shipping_charged).toBe(5.98);
+
+    // A non-numeric gift wrap is its own row error, not a reconcile error.
+    const bad = validateRowForFormat(amazon, { ...base, gift_wrap: "abc" }, 2);
+    expect(bad.error).toContain('"gift_wrap" must be a non-negative number');
+
+    // Gift wrap that doesn't close the gap is still an error.
+    const wrong = validateRowForFormat(amazon, { ...base, total: "25.00", shipping_charged: "0", gift_wrap: "2.99" }, 2);
+    expect(wrong.error).toContain("does not reconcile");
+  });
+
+  it("accepts Finland's 25.5 % VAT rate written as 0.255", () => {
+    const row = validateRowForFormat(amazon, {
+      order_id: "304-9260408-3185101",
+      date: "24-09-2026",
+      product_name: "Widget",
+      quantity: "1",
+      unit_price: "10.53",
+      total: "10.53",
+      vat_rate: "0.255",
+      currency: "EUR",
+    }, 2);
+    expect(row.error).toBeNull();
+    expect(row.data?.vat_rate).toBe(25.5);
+  });
+
   it("still enforces quantity x unit_price for the generic format", () => {
     const row = validateRowForFormat(IMPORT_FORMATS.generic, {
       date: "2026-04-30",
@@ -1024,6 +1084,13 @@ describe("convertRefundToBase", () => {
   it("leaves a refund with no currency column unchanged", () => {
     const blank = { ...refund, currency: null };
     expect(convertRefundToBase(blank, { original_currency: null, fx_rate: null }, "EUR")).toBe(blank);
+  });
+
+  it("rejects a blank-currency refund against an FX-converted sale", () => {
+    // Blank normally means base currency, but the sale was SEK — deducting
+    // the refund at face value would mix kronor into a euro total.
+    const blank = { ...refund, currency: null };
+    expect(convertRefundToBase(blank, { original_currency: "SEK", fx_rate: 0.0896 }, "EUR")).toBeNull();
   });
 
   it("converts at the sale's own fx_rate so a full refund cancels the sale exactly", () => {

@@ -96,6 +96,20 @@ describe("applyRate", () => {
     expect(result.platform_fee).toBeNull(); // null stays null, never 0
   });
 
+  it("derives unit_price from the converted total when quantity is known", () => {
+    // 100 SEK for 3 units (unit 33.33). Converting unit_price on its own
+    // gives round(33.33 × 0.05925) = 1.97, and 3 × 1.97 = 5.91 — not the
+    // converted total 5.93. Derived: 5.93 / 3 = 1.98.
+    const result = applyRate(
+      { total_amount: 100, vat_amount: null, unit_price: 33.33, quantity: 3 },
+      "SEK",
+      0.05925,
+      "2026-05-13",
+    );
+    expect(result.total_amount).toBe(5.93);
+    expect(result.unit_price).toBe(1.98);
+  });
+
   it("leaves rows without the extra fields shaped as before", () => {
     const result = applyRate({ total_amount: 100, vat_amount: 10 }, "USD", 0.92, "2026-06-01");
     expect(Object.keys(result).sort()).toEqual(

@@ -891,11 +891,13 @@ has no per-unit price column — its `unit_price` column is really the item
 **line total** (VAT incl.), and its `total` is items + shipping combined.
 `validateRowForFormat` derives the item total from `unit_price` when present;
 when it's blank, the item total is backed out of the sheet `total` as
-`sheetTotal - shippingCharged` (never the raw sheet total — that would be
-shipping-inclusive). The row's `unit_price` is then stored as `itemTotal /
+`sheetTotal - shippingCharged - giftWrap` (never the raw sheet total — that
+would be shipping-inclusive). An optional `gift_wrap` column (Amazon format
+only) is folded into `shipping_charged` — see `SKILL.md`'s gift wrap gotcha. The row's `unit_price` is then stored as `itemTotal /
 quantity`, and `total_amount` stores the **item total only** — the sheet
 `total` itself is used only to validate `total ≈ total_amount +
-shipping_charged` (when both were supplied) and is otherwise discarded, never
+shipping_charged` (or `+ gift_wrap` when that closes the gap exactly; when
+both were supplied) and is otherwise discarded, never
 persisted. VAT rates are fractions on Amazon (`0.19`, not `19`) — scaled by
 the `vatRateIsFraction` flag before range-checking, never inferred from the
 value's magnitude (a genuine 100% rate would falsely trip an `if (rate < 1)`
@@ -1004,9 +1006,13 @@ existing sale instead:
   `fx_rate`** (`convertRefundToBase`, `importFormats.ts`) before any
   deduction — the parsed `refund.currency` carries the sheet's code. A
   refund whose currency is neither the base currency nor the sale's
-  `original_currency` returns `null` and is reported unmatched; it is
-  never deducted at face value (171.99 SEK used to be deducted as
-  €171.99). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
+  `original_currency` — or a blank-currency refund against a converted
+  sale — returns `null` and is reported as a **currency mismatch**
+  (`currencyMismatchRefunds` in the modal; `refundsCurrencyMismatch` on
+  `ImportSummary`; `refunds_currency_mismatch`/`currency_mismatch_order_ids`
+  in the refund batch audit entry; listed in the post-import acknowledgement
+  panel next to the unmatched ids). It is never deducted at face value
+  (171.99 SEK used to be deducted as €171.99). **The check is `!=`, not `!==`, on purpose**: migration `031_sales_refunded_amount.sql` is not yet
   applied to any tenant schema, so `previous.refunded_amount` reads as
   `undefined` there, and `undefined !== null` is `true` — a strict check
   would silently classify every refund as already-applied and deduct nothing
@@ -1092,8 +1098,8 @@ each **applied** refund (`action: "update"`, before/after
 status/total_amount/shipping_charged/vat_amount/refunded_amount diff), and —
 only when the file had refund rows — a second batch entry after the refund
 loop with `{ refunds_applied, refunds_unmatched, refunds_already_applied,
-refunds_exceeded, unmatched_order_ids, already_applied_order_ids,
-exceeded_order_ids }`. The insert entry is written before the refund loop can
+refunds_exceeded, refunds_currency_mismatch, unmatched_order_ids,
+already_applied_order_ids, exceeded_order_ids, currency_mismatch_order_ids }`. The insert entry is written before the refund loop can
 run so it survives a mid-loop abort; the refund-outcomes entry can only exist
 after the loop finishes.
 

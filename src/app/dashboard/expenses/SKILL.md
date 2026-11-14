@@ -120,6 +120,13 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 
 ## Gotchas
 
+- **Import stays disabled while any foreign-currency row is unconverted**
+  (`hasPendingFxConversion`, `lib/fx/convert.ts`, 2026-11-11). The label
+  "Fetching exchange rates…" reads a separate `fetchingRates` flag that is
+  only true while `/api/fx/rates` is in flight. A row the confirmed rates
+  can't resolve becomes a row error, never a silently unconverted row.
+  `applyRate` converts `unit_price` too and re-derives it as converted
+  total ÷ quantity. See `sales/SKILL.md` for the incident.
 - **Server-side pagination**: `page.tsx` dispatches `fetchExpensesPage` on every
   filter change and page navigation — do NOT call `filterExpenses` in memory.
   `state.expenses.items` is always the current page only; `state.expenses.total`

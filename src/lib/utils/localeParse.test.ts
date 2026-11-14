@@ -25,6 +25,8 @@ describe("parseLocaleNumber", () => {
     ["19", 19],
     ["0", 0],
     ["12,3456", 12.3456], // single comma is always decimal
+    ["0.255", 0.255], // leading "0." is never a thousands group (FI 25.5 % VAT)
+    ["-0.125", -0.125],
   ])("%s → %d", (input, expected) => {
     expect(parseLocaleNumber(input)).toBe(expected);
   });

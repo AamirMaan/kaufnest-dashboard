@@ -528,6 +528,40 @@ fixed — don't reintroduce them:
   only the last two, leaving converted SEK sales with shipping in kronor
   (49.00 SEK summed as €49.00). Add any new money column to
   `EXTRA_MONEY_FIELDS`.
+- **The button label reads `fetchingRates`, not `fxPending`.** `fxPending`
+  still gates Import, but rows can stay pending for other reasons (e.g.
+  `markDuplicates` threw), and the label used to stick on "Fetching
+  exchange rates…" then. A row `handleConfirmRates` can't resolve becomes a
+  visible row error instead of staying silently unconverted. Skipped rows
+  are excluded from that, since the review never listed their currency.
+  Every new parse run resets `fetchingRates`, because a superseded run
+  returns without clearing it. Same in Purchases/Expenses.
+- **`applyRate` derives `unit_price` = converted total ÷ `quantity`** when
+  the row has both, so quantity × unit_price stays on total_amount.
+- **Amazon gift wrap (`gift_wrap` column, alias
+  `total_gift_wrap_amt_vat_incl`) is folded into `shipping_charged`** — only
+  when `total` exceeds items + shipping by exactly the gift wrap (±0.02). A
+  sheet that already put it into shipping reconciles without it, so it is
+  never added twice. With `unit_price` blank, the item total is backed out
+  as total − shipping − gift wrap. **Known limit:** with no `unit_price`
+  there's nothing to reconcile against, so a sheet that already put the
+  gift wrap into shipping gets it counted on the shipping side twice
+  (revenue still equals `total`; only the item/shipping split shifts —
+  pinned by a test). A bad `gift_wrap` value is a row error. Only the Amazon
+  format declares the column (eBay/generic would map it and drop it).
+  k2_textil Sep 2026 row 324 (16.39 + 2.99 = 19.38) used to fail "does not
+  reconcile".
+- **`parseLocaleNumber("0.255")` is 0.255, not 255.** A leading `0.` is
+  never a German thousands group — Amazon writes Finland's 25.5 % VAT that
+  way and it failed "vat_rate must be between 0 and 100". Other dotted
+  3-decimal strings ("1.255") are still read as thousands — that is the
+  German rule, not fixed here. Don't "fix" it in `parseExcelBuffer` by
+  rewriting number cells: that runs on every column and would change a SKU
+  stored as a number (12.345 → "12.3450").
+- **`mergeRefundRows` keys by order line only** (platform + order + sku);
+  a blank-currency row merges into the line's SEK refund. Two different
+  non-blank currencies on one line stay separate.
+- **In-file SALE merges round total/vat and re-derive `unit_price`.**
 - **In-file SALE merges sum `shipping_charged` too** (`dedupeImportRows`) —
   the second line's shipping used to be dropped.
 - **Two-pass row lifecycle — parse recognizes, `applyRate` converts.**

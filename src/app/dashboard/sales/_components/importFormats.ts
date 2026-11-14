@@ -17,7 +17,7 @@
 
 import type { Platform, Currency, Sale } from "@/types";
 import { vatAmountFromGross } from "@/lib/utils/currency";
-import { resolveSheetCurrency, isPlausibleIsoCode } from "@/lib/fx/convert";
+import { resolveSheetCurrency, isPlausibleIsoCode, convertAmount } from "@/lib/fx/convert";
 import { normalizeMarketplace } from "@/lib/utils/marketplace";
 import { parseLocaleNumber, parseFlexibleDate, type DateOrder } from "@/lib/utils/localeParse";
 import {
@@ -102,13 +102,17 @@ export interface ParsedRow {
  * Converts a refund's amounts into the matched sale's stored (base)
  * currency, or returns null when that can't be done safely.
  *
- * - Refund in the base currency (or no currency column) → unchanged.
+ * - Refund in the base currency → unchanged.
+ * - No currency column, and the sale was NOT FX-converted → unchanged.
  * - Refund in the sale's original currency (the sale was FX-converted on
  *   import) → scaled by the sale's own `fx_rate`, so a refund of a whole
  *   order cancels it exactly.
- * - Anything else → null. Deducting 171.99 SEK as €171.99 from a €15.41
- *   order is what happened before this existed (k2_textil, Sep 2026); the
- *   caller must treat null as unmatched rather than guess.
+ * - Anything else → null: a refund in a third currency, or a blank-currency
+ *   refund against a converted sale (blank normally means base currency,
+ *   but the sale says the money was SEK — no safe reading). Deducting
+ *   171.99 SEK as €171.99 from a €15.41 order is what happened before this
+ *   existed (k2_textil, Sep 2026). The caller reports null as a currency
+ *   mismatch for the user to check, never guesses.
  */
 export function convertRefundToBase(
   refund: NonNullable<ParsedRow["refund"]>,
@@ -116,10 +120,12 @@ export function convertRefundToBase(
   baseCurrency: string,
 ): NonNullable<ParsedRow["refund"]> | null {
   const cur = refund.currency?.trim().toUpperCase() || null;
-  if (!cur || cur === baseCurrency.toUpperCase()) return refund;
+  const saleOriginal = sale.original_currency?.trim().toUpperCase() || null;
+  if (cur === baseCurrency.toUpperCase()) return refund;
+  if (!cur) return saleOriginal ? null : refund;
   const rate = sale.fx_rate == null ? NaN : Number(sale.fx_rate);
-  if (sale.original_currency?.toUpperCase() !== cur || !(rate > 0)) return null;
-  const conv = (n: number) => round2(n * rate);
+  if (saleOriginal !== cur || !(rate > 0)) return null;
+  const conv = (n: number) => convertAmount(n, rate);
   const amount = conv(refund.amount);
   const itemAmount = Math.min(amount, conv(refund.itemAmount));
   return {
@@ -215,7 +221,10 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     id: "amazon",
     label: "Amazon sheet",
     forcedPlatform: "amazon",
-    columns: RICH_COLUMNS,
+    // gift_wrap is read only by the priceColumnsAreLineTotals branch, so
+    // only this format accepts the column — anywhere else it would map and
+    // then be silently dropped.
+    columns: [...RICH_COLUMNS, col("gift_wrap", false)],
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
     templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "0,60", "shipped", "", "WIDGET-BLU", "amazon.de"],
@@ -479,12 +488,22 @@ export function validateRowForFormat(
   const shippingChargedRaw = raw.shipping_charged?.trim();
   let totalAmount: number;
   let unitPrice: number;
+  // Gift wrap the sheet total includes on top of items + shipping. Folded
+  // into shipping_charged below so revenue (total_amount + shipping_charged)
+  // still equals what the buyer paid.
+  let giftWrapCharge = 0;
 
   if (format.priceColumnsAreLineTotals) {
     // Amazon: `unit_price` is the item LINE total (VAT incl) and `total` is
     // items + shipping. `total_amount` must hold items only — aggregateSales
     // computes revenue as total_amount + shipping_charged.
     const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
+    const giftWrapRaw = raw.gift_wrap?.trim();
+    const giftWrapParsed = giftWrapRaw ? parseLocaleNumber(giftWrapRaw) : null;
+    if (giftWrapRaw && (giftWrapParsed === null || giftWrapParsed < 0)) {
+      return fail(`"gift_wrap" must be a non-negative number`);
+    }
+    const giftWrap = giftWrapParsed ?? 0;
     const sheetTotal = totalRaw ? parseLocaleNumber(totalRaw) : null;
     if (totalRaw && (sheetTotal === null || sheetTotal <= 0)) {
       return fail(`"total" must be a positive number`);
@@ -498,7 +517,13 @@ export function validateRowForFormat(
       // total must be BACKED OUT of the sheet total — `total` includes shipping,
       // so using it raw would store a shipping-inclusive figure in total_amount
       // and double-count shipping in revenue.
-      itemTotal = round2(sheetTotal - ship);
+      // Gift wrap is backed out too, and moved to shipping below. Known
+      // limit: with no unit_price there is nothing to reconcile against, so
+      // a sheet that ALREADY put the gift wrap into shipping_charged gets it
+      // counted on the shipping side twice (revenue still equals `total`,
+      // only the item/shipping split shifts). Pinned by a test.
+      itemTotal = round2(sheetTotal - ship - giftWrap);
+      giftWrapCharge = round2(giftWrap);
     } else {
       itemTotal = null;
     }
@@ -510,11 +535,20 @@ export function validateRowForFormat(
 
     // Reconcile only when BOTH were supplied. When the item total was derived
     // from the sheet total the identity holds by construction.
+    //
+    // Gift wrap only counts when items + shipping alone fall short: a sheet
+    // that already put the gift wrap into shipping_charged reconciles
+    // without it, and adding it again would double-count.
     if (unitPriceRaw && sheetTotal !== null) {
-      if (Math.abs(totalAmount + ship - sheetTotal) > 0.02) {
-        return fail(
-          `"total" (${round2(sheetTotal)}) does not reconcile with item total + shipping (${round2(totalAmount + ship)})`,
-        );
+      const gap = sheetTotal - (totalAmount + ship);
+      if (Math.abs(gap) > 0.02) {
+        if (giftWrap > 0 && Math.abs(gap - giftWrap) <= 0.02) {
+          giftWrapCharge = round2(giftWrap);
+        } else {
+          return fail(
+            `"total" (${round2(sheetTotal)}) does not reconcile with item total + shipping${giftWrap > 0 ? " + gift wrap" : ""} (${round2(totalAmount + ship + giftWrap)})`,
+          );
+        }
       }
     }
   } else if (totalRaw) {
@@ -632,7 +666,8 @@ export function validateRowForFormat(
       vat_rate: vatRate,
       vat_amount: vatAmount,
       shipping_cost: shippingCost.value,
-      shipping_charged: shippingCharged.value,
+      shipping_charged:
+        giftWrapCharge > 0 ? round2((shippingCharged.value ?? 0) + giftWrapCharge) : shippingCharged.value,
       advertising_fee: advertisingFee.value,
       platform_fee: platformFee.value,
       status: normalizeStatus(raw.status),
