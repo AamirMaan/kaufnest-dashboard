@@ -532,21 +532,28 @@ fixed — don't reintroduce them:
   still gates Import, but rows can stay pending for other reasons (e.g.
   `markDuplicates` threw), and the label used to stick on "Fetching
   exchange rates…" then. A row `handleConfirmRates` can't resolve becomes a
-  visible row error instead of staying silently unconverted. Same in
-  Purchases/Expenses.
+  visible row error instead of staying silently unconverted. Skipped rows
+  are excluded from that, since the review never listed their currency.
+  Every new parse run resets `fetchingRates`, because a superseded run
+  returns without clearing it. Same in Purchases/Expenses.
 - **`applyRate` derives `unit_price` = converted total ÷ `quantity`** when
   the row has both, so quantity × unit_price stays on total_amount.
 - **Amazon gift wrap (`gift_wrap` column, alias
   `total_gift_wrap_amt_vat_incl`) is folded into `shipping_charged`** — only
   when `total` exceeds items + shipping by exactly the gift wrap (±0.02). A
   sheet that already put it into shipping reconciles without it, so it is
-  never added twice. k2_textil Sep 2026 row 324 (16.39 + 2.99 = 19.38) used
-  to fail "does not reconcile".
+  never added twice. With `unit_price` blank, the item total is backed out
+  as total − shipping − gift wrap, so the split is the same. Only the Amazon
+  format declares the column (eBay/generic would map it and drop it).
+  k2_textil Sep 2026 row 324 (16.39 + 2.99 = 19.38) used to fail "does not
+  reconcile".
 - **`parseLocaleNumber("0.255")` is 0.255, not 255.** A leading `0.` is
   never a German thousands group — Amazon writes Finland's 25.5 % VAT that
-  way and it failed "vat_rate must be between 0 and 100". Excel number cells
-  that stringify like a thousands group (1.234) get a trailing zero in
-  `parseExcelBuffer` so they keep their value.
+  way and it failed "vat_rate must be between 0 and 100". Other dotted
+  3-decimal strings ("1.255") are still read as thousands — that is the
+  German rule, not fixed here. Don't "fix" it in `parseExcelBuffer` by
+  rewriting number cells: that runs on every column and would change a SKU
+  stored as a number (12.345 → "12.3450").
 - **`mergeRefundRows` keys by order line only** (platform + order + sku);
   a blank-currency row merges into the line's SEK refund. Two different
   non-blank currencies on one line stay separate.

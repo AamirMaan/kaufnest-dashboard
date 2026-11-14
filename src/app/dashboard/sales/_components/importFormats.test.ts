@@ -437,6 +437,13 @@ describe("amazon line totals", () => {
     expect(edited.error).toBeNull();
     expect(edited.data?.shipping_charged).toBe(2.99);
 
+    // No unit_price: the item total is backed out of the total, gift wrap
+    // included, so it lands in shipping exactly as above.
+    const derived = validateRowForFormat(amazon, { ...base, unit_price: "", shipping_charged: "0", gift_wrap: "2.99" }, 2);
+    expect(derived.error).toBeNull();
+    expect(derived.data?.total_amount).toBe(16.39);
+    expect(derived.data?.shipping_charged).toBe(2.99);
+
     // Gift wrap that doesn't close the gap is still an error.
     const wrong = validateRowForFormat(amazon, { ...base, total: "25.00", shipping_charged: "0", gift_wrap: "2.99" }, 2);
     expect(wrong.error).toContain("does not reconcile");

@@ -47,11 +47,7 @@ function cellToString(val: unknown): string {
   if (typeof val === "number") {
     // Use JS number-to-string (decimal point, no grouping) so parseLocaleNumber
     // parses it cleanly without needing to strip thousands separators.
-    const str = String(val);
-    // A number cell is never thousands-grouped, but its string can LOOK like
-    // German grouping: 1.234 → "1.234", which parseLocaleNumber reads as
-    // 1234. A trailing zero keeps the value and breaks the pattern.
-    return /^-?\d{1,3}(\.\d{3})+$/.test(str) ? `${str}0` : str;
+    return String(val);
   }
   return String(val).trim();
 }

@@ -89,6 +89,9 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
 
     const fileReadId = ++fileReadIdRef.current;
     const isCurrent = () => fileReadIdRef.current === fileReadId;
+    // A superseded run returns before clearing its own fetch flag; every
+    // new run starts from false and sets it again only if it fetches.
+    setFetchingRates(false);
 
     const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
     const load = isExcel
@@ -209,7 +212,9 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
   async function handleConfirmRates() {
     setApplyingRates(true);
     const updated = parsed.map((row) => {
-      if (!row.sheetCurrency || !row.data) return row;
+      // Errored rows were never in the review, so their currency may
+      // have no rate — leave them as they are rather than fail them.
+      if (!row.sheetCurrency || !row.data || row.error) return row;
       const resolved = resolveRowRate(row.sheetCurrency, row.data.date, fxState);
       // Shouldn't happen if isReviewComplete gated the button. Fail the row
       // visibly rather than leave it unconverted: an unconverted row keeps

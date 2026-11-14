@@ -179,7 +179,6 @@ const RICH_COLUMNS: ColumnSpec[] = [
   col("vat_rate", false),
   col("vat_amount", false),
   col("shipping_charged", false),
-  col("gift_wrap", false),
   col("shipping_cost", false),
   col("advertising_fee", false),
   col("platform_fee", false),
@@ -222,7 +221,10 @@ export const IMPORT_FORMATS: Record<ImportFormatId, ImportFormat> = {
     id: "amazon",
     label: "Amazon sheet",
     forcedPlatform: "amazon",
-    columns: RICH_COLUMNS,
+    // gift_wrap is read only by the priceColumnsAreLineTotals branch, so
+    // only this format accepts the column — anywhere else it would map and
+    // then be silently dropped.
+    columns: [...RICH_COLUMNS, col("gift_wrap", false)],
     templateHeaders: RICH_HEADERS,
     // German conventions on purpose — advertises that "15.01.2024" / "19,98" work.
     templateExample: ["302-1234567-1234567", "15.01.2024", "Blue Widget", "2", "19,98", "", "EUR", "19", "3,80", "4,99", "3,20", "1,50", "0,60", "shipped", "", "WIDGET-BLU", "amazon.de"],
@@ -496,6 +498,8 @@ export function validateRowForFormat(
     // items + shipping. `total_amount` must hold items only — aggregateSales
     // computes revenue as total_amount + shipping_charged.
     const ship = shippingChargedRaw ? (parseLocaleNumber(shippingChargedRaw) ?? 0) : 0;
+    const giftWrapRaw = raw.gift_wrap?.trim();
+    const giftWrap = giftWrapRaw ? Math.max(0, parseLocaleNumber(giftWrapRaw) ?? 0) : 0;
     const sheetTotal = totalRaw ? parseLocaleNumber(totalRaw) : null;
     if (totalRaw && (sheetTotal === null || sheetTotal <= 0)) {
       return fail(`"total" must be a positive number`);
@@ -509,7 +513,10 @@ export function validateRowForFormat(
       // total must be BACKED OUT of the sheet total — `total` includes shipping,
       // so using it raw would store a shipping-inclusive figure in total_amount
       // and double-count shipping in revenue.
-      itemTotal = round2(sheetTotal - ship);
+      // Gift wrap is backed out too, and moved to shipping below — same
+      // split as when unit_price is present.
+      itemTotal = round2(sheetTotal - ship - giftWrap);
+      giftWrapCharge = round2(giftWrap);
     } else {
       itemTotal = null;
     }
@@ -526,8 +533,6 @@ export function validateRowForFormat(
     // that already put the gift wrap into shipping_charged reconciles
     // without it, and adding it again would double-count.
     if (unitPriceRaw && sheetTotal !== null) {
-      const giftWrapRaw = raw.gift_wrap?.trim();
-      const giftWrap = giftWrapRaw ? (parseLocaleNumber(giftWrapRaw) ?? 0) : 0;
       const gap = sheetTotal - (totalAmount + ship);
       if (Math.abs(gap) > 0.02) {
         if (giftWrap > 0 && Math.abs(gap - giftWrap) <= 0.02) {
