@@ -52,6 +52,10 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
   const [fxState, fxDispatch] = useReducer(fxReviewReducer, { entries: {} });
   const [fxRows, setFxRows] = useState<FxRateReviewRow[]>([]);
   const [applyingRates, setApplyingRates] = useState(false);
+  // True only while /api/fx/rates is in flight. The button label reads
+  // this, not `fxPending`: rows can stay pending for other reasons (the
+  // duplicate check threw), and the label must not claim a fetch then.
+  const [fetchingRates, setFetchingRates] = useState(false);
 
   const validRows = parsed.filter((r) => r.data !== null);
   const errors = parsed.filter((r) => r.error !== null);
@@ -67,6 +71,7 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
     setImportError(null);
     setFxReviewOpen(false);
     setFxRows([]);
+    setFetchingRates(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -147,6 +152,7 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
       currencyGroups.set(row.sheetCurrency, g);
     }
     if (currencyGroups.size === 0) return;
+    setFetchingRates(true);
 
     const rowsSummary: FxRateReviewRow[] = Array.from(currencyGroups.entries()).map(
       ([currency, g]) => {
@@ -189,6 +195,7 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
       unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
     }
     if (!isCurrent()) return; // superseded while the FX rate fetch was in flight
+    setFetchingRates(false);
 
     fxDispatch({
       type: "init",
@@ -204,7 +211,16 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
     const updated = parsed.map((row) => {
       if (!row.sheetCurrency || !row.data) return row;
       const resolved = resolveRowRate(row.sheetCurrency, row.data.date, fxState);
-      if (!resolved) return row; // shouldn't happen if isReviewComplete gated the button; defensive no-op
+      // Shouldn't happen if isReviewComplete gated the button. Fail the row
+      // visibly rather than leave it unconverted: an unconverted row keeps
+      // Import disabled with nothing on screen saying why.
+      if (!resolved) {
+        return {
+          ...row,
+          data: null,
+          error: `Row ${row.rowNum}: no exchange rate confirmed for ${row.sheetCurrency} on ${row.data.date}`,
+        };
+      }
       return { ...row, data: applyRate(row.data, row.sheetCurrency, resolved.rate, resolved.rateDate) };
     });
     setParsed(updated);
@@ -261,7 +277,7 @@ export function ImportPurchasesModal({ open, onClose, onSuccess }: Props) {
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
-              {loading ? "Importing…" : fxPending ? "Fetching exchange rates…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
+              {loading ? "Importing…" : fetchingRates && fxPending ? "Fetching exchange rates…" : canImport ? `Import ${validRows.length} row${validRows.length !== 1 ? "s" : ""}` : "Import"}
             </Button>
           </>
         )

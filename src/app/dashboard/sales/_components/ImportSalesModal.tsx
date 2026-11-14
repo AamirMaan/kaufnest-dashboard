@@ -115,6 +115,9 @@ export interface ImportSummary {
   /** Refund larger than the matched order — that order was left unchanged. */
   refundsExceeded: number;
   refundsAlreadyApplied: number;
+  /** Matched an order, but in a currency that can't be converted to the
+   * order's stored figures (see `convertRefundToBase`) — left unchanged. */
+  refundsCurrencyMismatch: number;
   /** Existing orders that got a marketplace from this re-import (052). */
   marketplacesAdded: number;
   /** The backfill UPDATE failed; the rest of the import is committed. */
@@ -151,6 +154,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   const [fxState, fxDispatch] = useReducer(fxReviewReducer, { entries: {} });
   const [fxRows, setFxRows] = useState<FxRateReviewRow[]>([]);
   const [applyingRates, setApplyingRates] = useState(false);
+  // True only while /api/fx/rates is in flight. The button label reads
+  // this, not `fxPending`: rows can stay pending for other reasons (the
+  // duplicate check threw), and the label must not claim a fetch then.
+  const [fetchingRates, setFetchingRates] = useState(false);
   // Set once handleImport finishes writing (sales inserted, refunds
   // applied/skipped) if any refund found no matching order — the writes are
   // already committed at this point (a real Amazon report bundles a SALE
@@ -161,6 +168,8 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
   // acknowledges via "Import anyway".
   const [pendingUnmatchedRefunds, setPendingUnmatchedRefunds] = useState<{
     orderIds: string[];
+    /** Matched an order but couldn't be converted to its currency. */
+    currencyMismatchIds: string[];
     summary: ImportSummary;
   } | null>(null);
   // null = trust detection. A non-null value is the user forcing an order,
@@ -256,6 +265,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setOrderSensitiveDates(true);
     setFxReviewOpen(false);
     setFxRows([]);
+    setFetchingRates(false);
     setPendingUnmatchedRefunds(null);
     setAssignAccountId("");
     if (fileRef.current) fileRef.current.value = "";
@@ -284,6 +294,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     setOrderSensitiveDates(true);
     setFxReviewOpen(false);
     setFxRows([]);
+    setFetchingRates(false);
     setPendingUnmatchedRefunds(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -469,6 +480,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       currencyGroups.set(row.sheetCurrency, g);
     }
     if (currencyGroups.size === 0) return;
+    setFetchingRates(true);
 
     const rowsSummary: FxRateReviewRow[] = Array.from(currencyGroups.entries()).map(
       ([currency, g]) => {
@@ -513,6 +525,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       unresolved = pairs.map((p) => `${p.currency}:${p.date}`);
     }
     if (!isCurrent()) return; // superseded while the FX rate fetch was in flight
+    setFetchingRates(false);
 
     fxDispatch({
       type: "init",
@@ -528,7 +541,16 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const updated = parsed.map((row) => {
       if (!row.sheetCurrency || !row.data) return row;
       const resolved = resolveRowRate(row.sheetCurrency, row.data.date, fxState);
-      if (!resolved) return row; // shouldn't happen if isReviewComplete gated the button; defensive no-op
+      // Shouldn't happen if isReviewComplete gated the button. Fail the row
+      // visibly rather than leave it unconverted: an unconverted row keeps
+      // Import disabled with nothing on screen saying why.
+      if (!resolved) {
+        return {
+          ...row,
+          data: null,
+          error: `Row ${row.rowNum}: no exchange rate confirmed for ${row.sheetCurrency} on ${row.data.date}`,
+        };
+      }
       return { ...row, data: applyRate(row.data, row.sheetCurrency, resolved.rate, resolved.rateDate) };
     });
     setParsed(updated);
@@ -708,6 +730,10 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     const unmatchedRefunds: string[] = [];
     const alreadyRefunded: string[] = [];
     const exceededRefunds: string[] = [];
+    // Matched an order, but the refund's currency can't be turned into the
+    // order's stored currency. Its own bucket: "matched no order" would send
+    // the user hunting for an order that exists.
+    const currencyMismatchRefunds: string[] = [];
     // Counted as they happen rather than derived at the end, because the two
     // error bails below have to report how many were applied before the abort.
     let appliedRefunds = 0;
@@ -766,12 +792,12 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       }
 
       // The refund's amounts are in the SHEET currency; the sale is stored
-      // in base currency. Convert at the sale's own rate, or treat the
-      // refund as unmatched when that's impossible — never deduct SEK at
-      // face value from a EUR figure.
+      // in base currency. Convert at the sale's own rate, or report a
+      // currency mismatch when that's impossible — never deduct SEK at face
+      // value from a EUR figure.
       const inBase = convertRefundToBase(target, previous, baseCurrency);
       if (!inBase) {
-        unmatchedRefunds.push(target.externalOrderId);
+        currencyMismatchRefunds.push(target.externalOrderId);
         continue;
       }
       target = inBase;
@@ -906,9 +932,11 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           refunds_unmatched: unmatchedRefunds.length,
           refunds_already_applied: alreadyRefunded.length,
           refunds_exceeded: exceededRefunds.length,
+          refunds_currency_mismatch: currencyMismatchRefunds.length,
           unmatched_order_ids: unmatchedRefunds,
           already_applied_order_ids: alreadyRefunded,
           exceeded_order_ids: exceededRefunds,
+          currency_mismatch_order_ids: currencyMismatchRefunds,
         },
       });
       if (refundBatchLog) dispatch(addAuditLog(refundBatchLog));
@@ -921,6 +949,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
       refundsSkipped: unmatchedRefunds.length,
       refundsExceeded: exceededRefunds.length,
       refundsAlreadyApplied: alreadyRefunded.length,
+      refundsCurrencyMismatch: currencyMismatchRefunds.length,
       marketplacesAdded,
       marketplaceBackfillFailed,
     };
@@ -931,8 +960,14 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     // toast behind an explicit acknowledgement listing the unmatched order
     // ids, rather than letting them disappear into a single "8 unmatched"
     // count. The writes above are already committed either way.
-    if (unmatchedRefunds.length > 0) {
-      setPendingUnmatchedRefunds({ orderIds: unmatchedRefunds, summary });
+    // Currency mismatches get the same gate: the refund is real money the
+    // VAT figures are missing until someone corrects it by hand.
+    if (unmatchedRefunds.length > 0 || currencyMismatchRefunds.length > 0) {
+      setPendingUnmatchedRefunds({
+        orderIds: unmatchedRefunds,
+        currencyMismatchIds: currencyMismatchRefunds,
+        summary,
+      });
       return;
     }
     reset();
@@ -964,7 +999,7 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
           <>
             <Button variant="secondary" onClick={handleClose} disabled={loading}>Cancel</Button>
             <Button onClick={handleImport} disabled={!canImport || loading}>
-              {loading ? "Importing…" : checking ? "Checking…" : fxPending ? "Fetching exchange rates…" : canImport ?`Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
+              {loading ? "Importing…" : checking ? "Checking…" : fetchingRates && fxPending ? "Fetching exchange rates…" : canImport ? `Import ${actionableCount} row${actionableCount !== 1 ? "s" : ""}` : "Import"}
             </Button>
           </>
         )
@@ -972,21 +1007,41 @@ export function ImportSalesModal({ open, onClose, onSuccess }: Props) {
     >
       {pendingUnmatchedRefunds ? (
         <div className="space-y-4">
-          <p className="text-sm text-[var(--color-danger)]">
-            {pendingUnmatchedRefunds.orderIds.length} refund
-            {pendingUnmatchedRefunds.orderIds.length !== 1 ? "s" : ""} in this file matched no order —
-            the sales rows and any other refunds from this import have already been saved.
-          </p>
           <p className="text-sm text-[var(--color-text-muted)]">
-            These order ids weren&apos;t found (a different platform, an order outside this
-            file, or one this file didn&apos;t include). Leaving them unacknowledged
-            understates returns in your VAT figures — check them before continuing.
+            The sales rows and any other refunds from this import have already been saved.
+            Leaving the refunds below unacknowledged understates returns in your VAT
+            figures — check them before continuing.
           </p>
-          <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)] p-3 space-y-1 max-h-40 overflow-y-auto">
-            {pendingUnmatchedRefunds.orderIds.map((id) => (
-              <p key={id} className="text-xs text-[var(--color-danger)]">{id}</p>
-            ))}
-          </div>
+          {pendingUnmatchedRefunds.orderIds.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-[var(--color-danger)]">
+                {pendingUnmatchedRefunds.orderIds.length} refund
+                {pendingUnmatchedRefunds.orderIds.length !== 1 ? "s" : ""} matched no order
+                (a different platform, an order outside this file, or one this file
+                didn&apos;t include):
+              </p>
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)] p-3 space-y-1 max-h-40 overflow-y-auto">
+                {pendingUnmatchedRefunds.orderIds.map((id) => (
+                  <p key={id} className="text-xs text-[var(--color-danger)]">{id}</p>
+                ))}
+              </div>
+            </div>
+          )}
+          {pendingUnmatchedRefunds.currencyMismatchIds.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm text-[var(--color-danger)]">
+                {pendingUnmatchedRefunds.currencyMismatchIds.length} refund
+                {pendingUnmatchedRefunds.currencyMismatchIds.length !== 1 ? "s" : ""} matched an
+                order but are in a different currency from it, so they weren&apos;t applied.
+                Those orders are unchanged — enter these refunds by hand:
+              </p>
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-danger)] p-3 space-y-1 max-h-40 overflow-y-auto">
+                {pendingUnmatchedRefunds.currencyMismatchIds.map((id) => (
+                  <p key={id} className="text-xs text-[var(--color-danger)]">{id}</p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : fxReviewOpen ? (
         <FxRateReview

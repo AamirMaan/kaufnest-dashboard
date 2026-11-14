@@ -106,6 +106,13 @@ staleness in the `setFilter(key, value)` pattern this page already uses).
 
 ## Gotchas
 
+- **Import stays disabled while any foreign-currency row is unconverted**
+  (`hasPendingFxConversion`, `lib/fx/convert.ts`, 2026-11-11). The label
+  "Fetching exchange rates…" reads a separate `fetchingRates` flag that is
+  only true while `/api/fx/rates` is in flight. A row the confirmed rates
+  can't resolve becomes a row error, never a silently unconverted row.
+  `applyRate` converts `unit_price` too and re-derives it as converted
+  total ÷ quantity. See `sales/SKILL.md` for the incident.
 - `purchasesSlice` is registered centrally in `src/store/store.ts` and hydrated
   in `src/store/StoreProvider.tsx` — those two files import it via the
   `@/app/dashboard/purchases/_store/purchasesSlice` alias. If you rename the

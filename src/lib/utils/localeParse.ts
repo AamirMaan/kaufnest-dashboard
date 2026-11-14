@@ -12,7 +12,9 @@
  * - both "." and "," present → the LAST of the two is the decimal separator
  * - only "," present → decimal comma ("9,99" → 9.99)
  * - only "." present → thousands separator ONLY for the exact pattern
- *   `\d{1,3}(\.\d{3})+` ("1.234" → 1234), otherwise decimal ("9.99" → 9.99)
+ *   `\d{1,3}(\.\d{3})+` ("1.234" → 1234), otherwise decimal ("9.99" → 9.99).
+ *   A leading "0." is never a thousands group, so "0.255" → 0.255 (Amazon
+ *   writes Finland's 25.5 % VAT rate that way; it used to parse as 255)
  *
  * Returns `null` for blank/unparseable input — callers must treat `null`
  * on a required field as a row error, never as 0.
@@ -48,7 +50,7 @@ export function parseLocaleNumber(input: string | undefined): number | null {
     }
   } else if (lastDot !== -1) {
     // Only dots. German thousands only for the exact grouping pattern.
-    if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(s)) {
+    if (/^[+-]?\d{1,3}(\.\d{3})+$/.test(s) && !/^[+-]?0\./.test(s)) {
       normalized = s.replace(/\./g, "");
     } else if (s.split(".").length - 1 === 1) {
       normalized = s; // plain decimal point
